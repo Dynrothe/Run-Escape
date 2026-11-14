@@ -8,6 +8,7 @@ import { TextureLoader } from "../../texture/TextureLoader";
 import { SeqType } from "../seqtype/SeqType";
 import { SeqTypeLoader } from "../seqtype/SeqTypeLoader";
 import { LocModelType } from "./LocModelType";
+import { MODEL_SIMPLIFY } from "./LocOverrides";
 import { LocType } from "./LocType";
 import { LocTypeLoader } from "./LocTypeLoader";
 
@@ -20,6 +21,56 @@ export type ContourGroundInfo = {
     entityY: number;
     entityZ: number;
 };
+
+// A burnt loc's colours (LocType.charred): each face's lightness to CHAR_LIGHT of what it was and
+// its colour gone (saturation 0), so wood goes near black, stone a dark grey and paint (a
+// stall's awning) soot. Textured faces are lit, not coloured: see charColours.
+const CHAR_LIGHT = 0.42;
+
+export function charColour(hsl: number, light = CHAR_LIGHT): number {
+    const hue = (hsl >> 10) & 63;
+    const saturation = (hsl >> 7) & 7;
+    const lightness = hsl & 127;
+    return (hue << 10) | ((saturation >> 3) << 7) | Math.max(2, Math.round(lightness * light));
+}
+
+// A textured face is lit, not coloured, so a burnt one takes a dark texture instead: wood and
+// anything coloured the darkest planks (5), stone and anything grey a dark cobbled rock (119).
+// See-through textures keep their holes, so they'd go solid if swapped for one of those: green
+// leaves are swapped for scorched brown ones (33) instead, and the rest (bars, shingles) kept.
+const CHAR_WOOD_TEXTURE = 5;
+const CHAR_STONE_TEXTURE = 119;
+const CHAR_LEAVES_TEXTURE = 33;
+// Hues from yellow-green to green (HSL hue 0 to 63)
+const isGreen = (hsl: number) => {
+    const hue = (hsl >> 10) & 63;
+    return hue >= 8 && hue <= 22 && ((hsl >> 7) & 7) >= 1;
+};
+
+function charColours(model: ModelData, textures: TextureLoader, light?: number): void {
+    const colours = model.faceColors;
+    for (let i = 0; i < model.faceCount; i++) {
+        colours[i] = charColour(colours[i], light);
+    }
+    const faceTextures = model.faceTextures;
+    if (!faceTextures) {
+        return;
+    }
+    for (let i = 0; i < model.faceCount; i++) {
+        const texture = faceTextures[i];
+        if (texture === -1) {
+            continue;
+        }
+        if (textures.isTransparent(texture)) {
+            if (isGreen(textures.getAverageHsl(texture))) {
+                faceTextures[i] = CHAR_LEAVES_TEXTURE;
+            }
+            continue;
+        }
+        const saturation = (textures.getAverageHsl(texture) >> 7) & 7;
+        faceTextures[i] = saturation >= 2 ? CHAR_WOOD_TEXTURE : CHAR_STONE_TEXTURE;
+    }
+}
 
 export class LocModelLoader {
     static mergeLocModelsCache: ModelData[] = new Array(4);
@@ -50,6 +101,10 @@ export class LocModelLoader {
         if (!model) {
             model = this.modelLoader.getModel(id);
             if (model) {
+                const simplify = MODEL_SIMPLIFY.get(id);
+                if (simplify) {
+                    model.simplify(simplify.keep, simplify.seams);
+                }
                 if (mirrored) {
                     model.mirror();
                 }
@@ -144,7 +199,7 @@ export class LocModelLoader {
             model,
             true,
             rotation === 0 && !hasResize && !hasOffset,
-            !locType.recolorFrom,
+            !locType.recolorFrom && !locType.charred,
             false,
         );
 
@@ -177,6 +232,10 @@ export class LocModelLoader {
             for (let i = 0; i < locType.retextureFrom.length; i++) {
                 copy.retexture(locType.retextureFrom[i], locType.retextureTo[i]);
             }
+        }
+
+        if (locType.charred) {
+            charColours(copy, this.textureLoader, locType.charLight);
         }
 
         if (hasResize) {

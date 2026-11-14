@@ -53,6 +53,7 @@ function bake(anims: { frames: number; size: FakeFrame }[]) {
                     ranges,
                     segments: frameSegments,
                     frameLengths: new Uint16Array(frames).fill(1),
+                    positionStarts: new Int32Array(frames).fill(-1),
                     looping: true,
                 };
             }),

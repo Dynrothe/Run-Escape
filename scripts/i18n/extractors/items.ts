@@ -6,6 +6,7 @@ import { RARITIES, RARITY_ORDER } from "../../../src/game/content/rarity";
 import { SETS } from "../../../src/game/content/sets";
 import { SHOP_UPGRADES } from "../../../src/game/content/shop";
 import { TROPHIES } from "../../../src/game/content/trophies";
+import { BODY_COLOURS, BODY_PARTS, COSMETICS } from "../../../src/game/content/wardrobe";
 import { WEAPONS } from "../../../src/game/content/weapons";
 
 export default function extract(): Record<string, string> {
@@ -81,6 +82,13 @@ export default function extract(): Record<string, string> {
     for (const trophy of TROPHIES) {
         strings[`trophy.${trophy.id}.name`] = trophy.name;
         strings[`trophy.${trophy.id}.how`] = trophy.how;
+    }
+    for (const part of BODY_PARTS) strings[`wardrobe.part.${part.id}.name`] = part.name;
+    for (const colour of BODY_COLOURS) {
+        strings[`wardrobe.colour.${colour.id}.name`] = colour.name;
+    }
+    for (const cosmetic of COSMETICS) {
+        strings[`cosmetic.${cosmetic.objId}.name`] = cosmetic.name;
     }
 
     return strings;

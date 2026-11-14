@@ -2,8 +2,15 @@
    --rarity the item's (the burst). Phases come from data-phase. */
 
 .ui-chest {
+    /* The least the scene and the caption give way to a tall card, and so what the card leaves
+       them with the two gaps (its max-height here, and under co-op's countdown in GameUi.css) */
+    --chest-scene-least: 150px;
+    --chest-caption-least: 62px;
+    --chest-reserve: calc(var(--chest-scene-least) + var(--chest-caption-least) + 8px);
     flex-direction: column;
     gap: 4px;
+    /* Clear of the screen's edges, when the card's tall */
+    padding: 8px 0;
     overflow: hidden;
     cursor: pointer;
     background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
@@ -18,6 +25,9 @@
     position: relative;
     width: min(520px, calc(92vw / var(--ui-scale)));
     height: clamp(190px, calc(36vh / var(--ui-scale)), 320px);
+    /* A tall card (gear against the piece it'd replace, sets on both) takes
+       room from the scene, but leaves the item room to float */
+    min-height: var(--chest-scene-least);
     pointer-events: none;
 }
 
@@ -478,7 +488,7 @@
 /* Captions */
 
 .ui-chest-caption {
-    min-height: 62px;
+    min-height: var(--chest-caption-least);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -553,10 +563,25 @@
 /* The decision */
 
 .ui-chest-card {
+    display: flex;
+    flex-direction: column;
     width: min(460px, calc(94vw / var(--ui-scale)));
     box-sizing: border-box;
+    /* The scene gives way first, down to its least; past that (a short
+       window) the item's details scroll rather than going off the screen,
+       and the buttons under them stay in view */
+    flex-shrink: 0;
+    max-height: calc(100% - var(--chest-reserve));
     cursor: default;
     animation: chest-card-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+.ui-chest-card-body {
+    min-height: 0;
+    overflow-y: auto;
+    /* Its scrollbar in the card's padding, clear of the table's last column */
+    margin-right: -8px;
+    padding-right: 8px;
 }
 
 @keyframes chest-card-in {
@@ -631,15 +656,48 @@
     gap: 5px;
 }
 
-.ui-chest-changes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin-top: 4px;
+/* Gear against the piece it would replace, a row for each stat: a little
+   wider, so the piece's name and what it alchs for fit on one line */
+.ui-chest-card-compare {
+    width: min(540px, calc(94vw / var(--ui-scale)));
 }
 
-.ui-chest-changes .ui-stat-line {
-    display: inline-flex;
+.ui-chest-table {
+    width: 100%;
+    margin-top: 6px;
+    border-collapse: collapse;
+    color: var(--ui-white);
+}
+
+.ui-chest-table th,
+.ui-chest-table td {
+    padding: 1px 0 1px 12px;
+    font-weight: normal;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.ui-chest-table thead th {
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+.ui-chest-table thead .ui-icon {
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+/* The stat's name takes what's left, and wraps if it must */
+.ui-chest-table tbody th {
+    width: 100%;
+    padding-left: 0;
+    text-align: left;
+    white-space: normal;
+    color: var(--ui-text-dim);
+}
+
+.ui-chest-table tbody tr + tr {
+    border-top: 1px solid var(--ui-divider);
 }
 
 .ui-good {

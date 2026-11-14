@@ -26,6 +26,7 @@ import {
     isWebGL2Supported,
     pixelRatio,
 } from "../../util/DeviceUtil";
+import type { MapManager } from "../MapManager";
 import { MapViewer } from "../MapViewer";
 import { MapViewerRenderer } from "../MapViewerRenderer";
 import { MapViewerRendererType, WEBGL } from "../MapViewerRenderers";
@@ -753,8 +754,29 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
         };
     }
 
+    // The area a square's loaded for: a twin's (MapManager.twin) is where it's drawn, so moved
+    // to where the twin is
+    private getSquareKeepArea(mapX: number, mapY: number): vec4 | undefined {
+        const keep = this.keepArea;
+        const shift = (mapX - this.mapManager.drawnX(mapX, mapY)) * 64;
+        if (!keep || shift === 0) {
+            return keep;
+        }
+        return vec4.fromValues(keep[0] + shift, keep[1], keep[2] + shift, keep[3]);
+    }
+
+    // A twin of a set of squares, drawn in their place while shown (MapManager.twin)
+    setTwin(twin: MapManager<WebGLMapSquare>["twin"]): void {
+        this.mapManager.setTwin(twin);
+    }
+
+    setTwinShown(shown: boolean): void {
+        this.mapManager.setTwinShown(shown);
+    }
+
     override async queueLoadMap(mapX: number, mapY: number): Promise<void> {
         const customMapVersion = this.mapViewer.customMapVersion;
+        const keepArea = this.getSquareKeepArea(mapX, mapY);
         const mapData = await this.mapViewer.workerPool.queueLoad<
             SdMapLoaderInput,
             SdMapData | undefined,
@@ -770,7 +792,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             minimizeDrawCalls: !this.hasMultiDraw,
             cullCellSize: this.cullCellSize,
             skipMinimap: this.skipMinimap,
-            keepArea: this.keepArea && Array.from(this.keepArea),
+            keepArea: keepArea && Array.from(keepArea),
             loadedTextureIds: this.loadedTextureIds,
         });
 
@@ -809,24 +831,26 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
         }
 
         const frameCount = this.stats.frameCount;
-        this.mapManager.addMap(
-            mapX,
-            mapY,
-            WebGLMapSquare.load(
-                this.mapViewer,
-                this.app,
-                mainProgram,
-                mainAlphaProgram,
-                npcProgram,
-                textureArray,
-                textureMaterials,
-                sceneUniformBuffer,
-                mapData,
-                time,
-                frameCount,
-                this.lightMap,
-            ),
+        const square = WebGLMapSquare.load(
+            this.mapViewer,
+            this.app,
+            mainProgram,
+            mainAlphaProgram,
+            npcProgram,
+            textureArray,
+            textureMaterials,
+            sceneUniformBuffer,
+            mapData,
+            time,
+            frameCount,
+            this.lightMap,
         );
+        // A twin's drawn where the square it's the twin of is
+        const drawnX = this.mapManager.drawnX(mapX, mapY);
+        if (drawnX !== mapX) {
+            square.drawAt(drawnX, mapY);
+        }
+        this.mapManager.addMap(mapX, mapY, square);
 
         this.updateTextureArray(mapData.loadedTextures);
     }
@@ -840,7 +864,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             mapData.loadNpcs === this.loadNpcs &&
             mapData.smoothTerrain === this.smoothTerrain &&
             mapData.cullCellSize === this.cullCellSize &&
-            isSameArea(mapData.keepArea, this.keepArea)
+            isSameArea(mapData.keepArea, this.getSquareKeepArea(mapData.mapX, mapData.mapY))
         );
     }
 

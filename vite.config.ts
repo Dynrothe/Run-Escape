@@ -11,6 +11,7 @@ import { defineConfig } from "vitest/config";
 import { parseRange } from "./desktop/gameServer";
 import { SITE_FILES_NAME, makeSiteFiles } from "./desktop/siteFiles";
 import { LAUNCHER_VERSION, MIN_ANDROID_APP } from "./desktop/version";
+import { isTrailerFile, trailerServerPlugin } from "./scripts/dev/trailer-server";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
@@ -325,6 +326,7 @@ export default defineConfig({
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
         buildIdFilePlugin(),
+        trailerServerPlugin(),
         siteFilesPlugin(),
     ],
     define: {
@@ -360,7 +362,7 @@ export default defineConfig({
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
-        watch: { ignored: [isInClaudeDir] },
+        watch: { ignored: [isInClaudeDir, isTrailerFile] },
     },
     worker: {
         // The render data worker is spawned with `{ type: "module" }` and its

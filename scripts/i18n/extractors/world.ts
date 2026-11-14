@@ -1,18 +1,24 @@
 // The world's English (locales/en/world.json): what enemies, bosses, maps, raids, random events,
 // the pumpkins and the floors say. The texts stay in the content's .ts files; this reads them off
 // the definitions. Keys: enemy.*, boss.*, fun.*, map.*, raid.*, event.*, nightmare.*, phosani.*,
-// zachariah.*, tob.*, pumpkin.*, floor.*
+// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*, remix.*,
+// gauntlet.*
 //
 // The Sim emits these texts as they are in English and the drawing layer calls tl(text) on them,
 // so each one is here with the literal the Sim emits. Boss attacks' own names
 // (BossAttackDef.name) are keys in Sim.ts and aren't here.
 import { TURKEY_OUTCOMES } from "../../../src/game/content/TurkeyDay";
+import { ACTS, actSlotKey } from "../../../src/game/content/acts";
 import { ENEMIES } from "../../../src/game/content/enemies";
 import * as demos from "../../../src/game/content/floorDemos";
 import { FUN_MAPS } from "../../../src/game/content/fun/maps";
+import { BLESSINGS } from "../../../src/game/content/gauntlet";
+import { RUN_INVOCATIONS } from "../../../src/game/content/invocations";
 import { MAPS } from "../../../src/game/content/maps";
 import { RAID_MAPS, RAID_SUPPLIES, RAID_SUPPLY_CHEST } from "../../../src/game/content/raids";
 import { RANDOM_EVENTS } from "../../../src/game/content/randomEvents";
+import { RELICS } from "../../../src/game/content/relics";
+import { REMIXES } from "../../../src/game/content/remixes";
 import { PUMPKIN_OUTCOMES } from "../../../src/game/content/trickOrTreat";
 import type { EnemyDef, MapDef, RandomEventDef } from "../../../src/game/content/types";
 import { createWardensFloor } from "../../../src/game/content/wardensFloor";
@@ -231,6 +237,52 @@ function floorMessages(): Messages {
     return messages;
 }
 
+// An act's screen (content/acts.ts): its name, and each map's place on it, in the game or to come
+function actMessages(): Messages {
+    const messages: Messages = {};
+    for (const act of ACTS) {
+        put(messages, `act.${act.id}.name`, act.name);
+        for (const slot of act.slots) {
+            const key = actSlotKey(act, slot);
+            put(messages, `${key}.name`, slot.name);
+            put(messages, `${key}.boss`, slot.boss);
+        }
+        if (act.ending) {
+            put(messages, `act.${act.id}.ending.title`, act.ending.title);
+            act.ending.lines.forEach((line, i) => {
+                put(messages, `act.${act.id}.ending.line${i}`, line);
+            });
+        }
+    }
+    return messages;
+}
+
+// A run's invocations (content/invocations.ts, RUN_INVOCATIONS; the Tombs' board is English only
+// for now) and the relics (content/relics.ts): each one's name and what it does
+function invocationAndRelicMessages(): Messages {
+    const messages: Messages = {};
+    for (const invocation of RUN_INVOCATIONS) {
+        put(messages, `invocation.${invocation.id}.name`, invocation.name);
+        put(messages, `invocation.${invocation.id}.desc`, invocation.description);
+    }
+    for (const relic of RELICS) {
+        put(messages, `relic.${relic.id}.name`, relic.name);
+        put(messages, `relic.${relic.id}.desc`, relic.description);
+    }
+    // Remixes (content/remixes.ts): each one's word and what it does, and all four's
+    for (const remix of REMIXES) {
+        put(messages, `remix.${remix.id}.name`, remix.name);
+        put(messages, `remix.${remix.id}.description`, remix.description);
+    }
+    put(messages, "remix.fallen", "Fallen");
+    // The Forgotten Four's camp (content/gauntlet.ts): each blessing's name and what it does
+    for (const blessing of BLESSINGS) {
+        put(messages, `gauntlet.blessing.${blessing.id}.name`, blessing.name);
+        put(messages, `gauntlet.blessing.${blessing.id}.description`, blessing.description);
+    }
+    return messages;
+}
+
 export default function extract(): Messages {
     const messages: Messages = {
         ...enemyMessages(),
@@ -239,6 +291,8 @@ export default function extract(): Messages {
         ...pumpkinMessages(),
         ...turkeyMessages(),
         ...floorMessages(),
+        ...actMessages(),
+        ...invocationAndRelicMessages(),
     };
     for (const event of [...RANDOM_EVENTS, RAID_SUPPLY_CHEST]) {
         Object.assign(messages, eventMessages(event));

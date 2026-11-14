@@ -1,13 +1,26 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { tr } from "../i18n";
 import { CURSED_SANDS_ENEMIES } from "./cursedSands";
+import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
+import { GHORROCK_ENEMIES } from "./ghorrock";
+import { getInvaders } from "./invaders";
+import { KRIL_ENEMIES } from "./kril";
+import { LASSAR_ENEMIES } from "./lassar";
+import { LEVIATHAN_ENEMIES } from "./leviathan";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { SCAR_ENEMIES } from "./scar";
+import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
 import { THANKSGIVING_ENEMIES } from "./thanksgivingenemies";
 import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { VARDORVIS_ENEMIES } from "./vardorvis";
+import { VARROCK_ENEMIES } from "./varrockHordes";
+import { WHISPERER_ENEMIES } from "./whisperer";
+import { XARTH_ENEMIES } from "./xarth";
+import { YAMA_ENEMIES } from "./yama";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8400,6 +8413,20 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    // Yama, in burnt Varrock's palace (yama.ts), his generals (xarth.ts, kril.ts) and the city's
+    // hordes (varrockHordes.ts)
+    ...YAMA_ENEMIES,
+    ...XARTH_ENEMIES,
+    ...KRIL_ENEMIES,
+    ...VARROCK_ENEMIES,
+    ...STRANGLEWOOD_ENEMIES,
+    ...LASSAR_ENEMIES,
+    ...GHORROCK_ENEMIES,
+    ...SCAR_ENEMIES,
+    ...VARDORVIS_ENEMIES,
+    ...WHISPERER_ENEMIES,
+    ...DUKE_ENEMIES,
+    ...LEVIATHAN_ENEMIES,
     ...THANKSGIVING_ENEMIES,
 ];
 
@@ -8410,6 +8437,17 @@ ENEMIES.push(...CURSED_SANDS_ENEMIES);
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above
 ENEMIES.push(
     ...getTheatreBosses((id) => {
+        const def = ENEMIES.find((e) => e.id === id);
+        if (!def) {
+            throw new Error("Unknown enemy " + id);
+        }
+        return def;
+    }),
+);
+
+// Awakened invasions' bosses (content/invaders.ts), made from the Act II maps' own
+ENEMIES.push(
+    ...getInvaders((id) => {
         const def = ENEMIES.find((e) => e.id === id);
         if (!def) {
             throw new Error("Unknown enemy " + id);

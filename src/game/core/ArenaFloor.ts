@@ -103,7 +103,13 @@ export class ArenaFloor {
     private script: FloorBeatDef[];
     private loopSeconds: number;
     // Actions waiting for their delay, in the order they're due; and what to say next tick
-    private pending: { at: number; action: FloorActionDef }[] = [];
+    // Actions waiting on their delay, each aimed where it was when it was asked for (a boss's
+    // ripple out from the boss, not the floor's target)
+    private pending: {
+        at: number;
+        action: FloorActionDef;
+        origin: () => { x: number; y: number };
+    }[] = [];
     private messages: string[] = [];
     // Whether any tile's a pillar (they block shots and sight), or has an effect
     readonly hasPillars: boolean;
@@ -391,7 +397,8 @@ export class ArenaFloor {
             }
         }
         while (this.pending.length > 0 && this.pending[0].at <= tick) {
-            this.run(this.pending.shift()!.action, tick, origin);
+            const due = this.pending.shift()!;
+            this.run(due.action, tick, due.origin);
         }
         messages.push(...this.messages);
         this.messages = [];
@@ -507,7 +514,7 @@ export class ArenaFloor {
             while (k > 0 && this.pending[k - 1].at > at) {
                 k--;
             }
-            this.pending.splice(k, 0, { at, action });
+            this.pending.splice(k, 0, { at, action, origin });
             return;
         }
         this.run(action, tick, origin);
@@ -763,6 +770,59 @@ export class ArenaFloor {
                                   ? FLOOR_NORTH
                                   : FLOOR_SOUTH;
                         this.rise(x, y, first + ring * step, dir, tick);
+                    }
+                }
+                break;
+            }
+            case "lanes": {
+                const step = this.ticks(pattern.tileSeconds);
+                let ox = middle;
+                let oy = Math.floor((minY + maxY) / 2);
+                if (pattern.at === "player") {
+                    const at = origin();
+                    ox = Math.min(Math.max(Math.floor(at.x) - this.x0, minX), maxX);
+                    oy = Math.min(Math.max(Math.floor(at.y) - this.y0, minY), maxY);
+                }
+                const { spacing, width } = pattern;
+                const half = Math.floor(width / 2);
+                // On a lane lined up with o, width tiles wide round it, every spacing tiles
+                const onLane = (v: number, o: number) =>
+                    (((v - o + half) % spacing) + spacing) % spacing < width;
+                for (let y = minY; y <= maxY; y++) {
+                    for (let x = minX; x <= maxX; x++) {
+                        const down = pattern.axis !== "x" && onLane(x, ox);
+                        const across = pattern.axis !== "y" && onLane(y, oy);
+                        if (down) {
+                            this.rise(x, y, first + (maxY - y) * step, FLOOR_SOUTH, tick);
+                        } else if (across) {
+                            const dir = x >= middle ? FLOOR_EAST : FLOOR_WEST;
+                            this.rise(x, y, first + Math.abs(x - middle) * step, dir, tick);
+                        }
+                    }
+                }
+                break;
+            }
+            case "plus": {
+                const step = this.ticks(pattern.tileSeconds);
+                let ox = middle;
+                let oy = Math.floor((minY + maxY) / 2);
+                if (pattern.at === "player") {
+                    const at = origin();
+                    ox = Math.min(Math.max(Math.floor(at.x) - this.x0, minX), maxX);
+                    oy = Math.min(Math.max(Math.floor(at.y) - this.y0, minY), maxY);
+                }
+                this.rise(ox, oy, first, FLOOR_SOUTH, tick);
+                for (let d = 1; d <= pattern.arm; d++) {
+                    // Tipping away from the middle, the way it's going
+                    for (const [x, y, dir] of [
+                        [ox + d, oy, FLOOR_EAST],
+                        [ox - d, oy, FLOOR_WEST],
+                        [ox, oy + d, FLOOR_NORTH],
+                        [ox, oy - d, FLOOR_SOUTH],
+                    ]) {
+                        if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                            this.rise(x, y, first + d * step, dir, tick);
+                        }
                     }
                 }
                 break;

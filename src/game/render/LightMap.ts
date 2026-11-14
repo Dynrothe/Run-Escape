@@ -14,8 +14,10 @@ const MAX = 2;
 const CORE_SQ = 0.2;
 
 export class LightMap {
-    // Colour a texel, and the bytes it's uploaded as
+    // Colour a texel, how far it's in a pocket of the dark (its alpha, lights.glsl), and the bytes
+    // they're uploaded as
     readonly light = new Float32Array(LIGHT_MAP_SIZE * LIGHT_MAP_SIZE * 3);
+    readonly dark = new Float32Array(LIGHT_MAP_SIZE * LIGHT_MAP_SIZE);
     readonly bytes = new Uint8Array(LIGHT_MAP_SIZE * LIGHT_MAP_SIZE * 4);
     // World tiles of its south-west corner
     x0 = 0;
@@ -39,11 +41,61 @@ export class LightMap {
                 (ty * LIGHT_MAP_SIZE + w.x0) * 3,
                 (ty * LIGHT_MAP_SIZE + w.x1 + 1) * 3,
             );
+            this.dark.fill(0, ty * LIGHT_MAP_SIZE + w.x0, ty * LIGHT_MAP_SIZE + w.x1 + 1);
         }
     }
 
-    // A light at (x, y), world tiles: colour times strength, a channel
-    add(x: number, y: number, radius: number, r: number, g: number, b: number): void {
+    // A pocket of the dark round (x, y), world tiles: amount (0 to 1) of the way to it within
+    // radius less edge, fading out to nothing at radius
+    darken(x: number, y: number, radius: number, edge: number, amount: number): void {
+        if (radius <= 0 || amount <= 0) {
+            return;
+        }
+        const scale = TEXELS_PER_TILE;
+        const cx = (x - this.x0) * scale - 0.5;
+        const cy = (y - this.y0) * scale - 0.5;
+        const reach = radius * scale;
+        const inner = Math.max(0, radius - edge) * scale;
+        const tx0 = Math.max(1, Math.ceil(cx - reach));
+        const ty0 = Math.max(1, Math.ceil(cy - reach));
+        const tx1 = Math.min(LIGHT_MAP_SIZE - 2, Math.floor(cx + reach));
+        const ty1 = Math.min(LIGHT_MAP_SIZE - 2, Math.floor(cy + reach));
+        if (tx0 > tx1 || ty0 > ty1) {
+            return;
+        }
+        const d = this.dirty;
+        d.x0 = Math.min(d.x0, tx0);
+        d.y0 = Math.min(d.y0, ty0);
+        d.x1 = Math.max(d.x1, tx1);
+        d.y1 = Math.max(d.y1, ty1);
+        for (let ty = ty0; ty <= ty1; ty++) {
+            const dy = ty - cy;
+            for (let tx = tx0; tx <= tx1; tx++) {
+                const dx = tx - cx;
+                const at = Math.sqrt(dx * dx + dy * dy);
+                if (at >= reach) {
+                    continue;
+                }
+                const t = at <= inner ? 0 : (at - inner) / Math.max(1e-6, reach - inner);
+                const f = 1 - t * t * (3 - 2 * t);
+                const i = ty * LIGHT_MAP_SIZE + tx;
+                this.dark[i] = Math.min(1, this.dark[i] + amount * f);
+            }
+        }
+    }
+
+    // A light at (x, y), world tiles: colour times strength, a channel. shade: how much of it
+    // reaches a spot (world tiles), 0 to 1, when something can stand in its way (a gaze's
+    // shadows, client/GazeLight.ts)
+    add(
+        x: number,
+        y: number,
+        radius: number,
+        r: number,
+        g: number,
+        b: number,
+        shade?: (x: number, y: number) => number,
+    ): void {
         if (radius <= 0 || r + g + b <= 0) {
             return;
         }
@@ -77,7 +129,10 @@ export class LightMap {
                 }
                 // 1 - smoothstep(CORE_SQ, 1, q)
                 const t = q <= CORE_SQ ? 0 : (q - CORE_SQ) / (1 - CORE_SQ);
-                const f = 1 - t * t * (3 - 2 * t);
+                let f = 1 - t * t * (3 - 2 * t);
+                if (shade) {
+                    f *= shade(this.x0 + (tx + 0.5) / scale, this.y0 + (ty + 0.5) / scale);
+                }
                 const i = (ty * LIGHT_MAP_SIZE + tx) * 3;
                 light[i] += r * f;
                 light[i + 1] += g * f;
@@ -107,6 +162,7 @@ export class LightMap {
                 bytes[i * 4] = Math.min(255, light[i * 3] * k + 0.5);
                 bytes[i * 4 + 1] = Math.min(255, light[i * 3 + 1] * k + 0.5);
                 bytes[i * 4 + 2] = Math.min(255, light[i * 3 + 2] * k + 0.5);
+                bytes[i * 4 + 3] = this.dark[i] * 255 + 0.5;
             }
         }
         return true;

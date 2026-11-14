@@ -101,7 +101,9 @@ describe("the keris partisans", () => {
             ].sort(),
         );
         for (const weapon of keris) {
-            expect(weapon.style).toBe("melee");
+            // Offered to any adventurer, and its hits count as melee
+            expect(weapon.style).toBeUndefined();
+            expect(getWeaponStyle(weapon)).toBe("melee");
             const unlock = weapon.unlock!;
             if (unlock.kind === "raidChest") {
                 const trophy = TROPHY_BY_ID.get(unlock.trophyId)!;
@@ -204,7 +206,7 @@ describe("the keris partisans", () => {
         ]);
         expect(sim.reroll()).toBe(false);
         // Each card is the keris it becomes, the plain one's whole description too
-        const cards = sim.choices.map(describeChoice);
+        const cards = sim.choices.map((choice) => describeChoice(choice));
         expect(cards[0].text).toBe(getWeapon("keris_partisan").description);
         expect(cards[1]).toMatchObject({ title: "Keris partisan of corruption", iconObjId: 27287 });
         sim.choose(2);
@@ -413,11 +415,23 @@ describe("the Divine rune pouch", () => {
         expect(fitsWithPouch(whip, [...melee, weapon("fire_spells")], "melee", max)).toBe(true);
     });
 
-    test("offers a ranged adventurer magic weapons too, and no melee ones", () => {
+    test("offers a ranged adventurer magic weapons too, and no melee class weapons", () => {
         const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
         const offers = offered("ranged", ranged, [pouch], MAX_WEAPONS + 1);
         expect(offers.some((w) => w.style === "magic")).toBe(true);
         expect(offers.some((w) => w.style === "melee")).toBe(false);
+    });
+
+    test("fits the keris in a ranged or magic adventurer's own slots, not its magic one", () => {
+        const keris = getWeapon("keris_partisan");
+        const max = MAX_WEAPONS + 1;
+        const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
+        expect(fitsWithPouch(keris, ranged, "ranged", max)).toBe(true);
+        // Four held, none of them magic: the slot left is the pouch's
+        expect(fitsWithPouch(keris, [...ranged, weapon("twisted_bow")], "ranged", max)).toBe(false);
+        // A wizard's spells fill the pouch's slot, so the keris can have one of theirs
+        const magic = ["fire_spells", "ice_burst", "saradomin_strike", "elemental_runes"];
+        expect(fitsWithPouch(keris, magic.map(weapon), "magic", max)).toBe(true);
     });
 
     test("is one level, in endless too", () => {

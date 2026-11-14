@@ -3,15 +3,24 @@ import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
 import { ZEBAK } from "../content/tombs";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
-import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
+import {
+    FREEZE_SPOTANIM,
+    METEOR_FIT,
+    Sim,
+    TICKS_PER_SECOND,
+    meteorFallen,
+    yawFromVector,
+} from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
     BossWindup,
     Enemy,
     GroundHazard,
+    Lair,
     SimEvent,
     SurgeLane,
+    WardPillars,
 } from "../core/entities";
 import { tl } from "../i18n";
 import {
@@ -68,6 +77,19 @@ const GRAB_WARNING_TICK = 40;
 const LANE_CHEVRON_GAP = 4;
 // The line a wave or a thrown sword will take, at most this solid as it's let go
 const THROW_LINE_ALPHA = 0.3;
+// A meteor's shadow (BossAttackDef.meteor): tiles across it's drawn as the meteor starts and as it
+// lands (the meteor's own is the sim's METEOR_FIT, as it breaks there)
+const METEOR_SHADOW_FIT: [number, number] = [1.2, 4.5];
+// A boss's pillars against a gaze (BossDef.gazeWard): how far under the ground they come up from
+const PILLAR_SINK = 3;
+// A lair's pillars (LairDef.pillars): ticks they take to sink as they crumble, or to rise again
+const LAIR_PILLAR_TICKS = 40;
+// A blast's fireball (BossAttackDef.spotAnim on a blast) flies this long before it lands, from
+// this high, arcing this much higher on the way, and this big
+const FLIGHT_SECONDS = 0.45;
+const FLIGHT_FROM = 3;
+const FLIGHT_ARC = 1.5;
+const FLIGHT_FIT = 0.7;
 // The ring of a weapon's reach (MapDef.fight.strikeReach), while the boss is out of it
 const REACH_COLOUR = "rgba(255, 255, 255, 0.35)";
 // A gaze's shadows: this dark, this much darker as it lands, and gone this long after it does
@@ -95,7 +117,7 @@ export const OVERHEAD_SCALE = 1.5;
 export const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
-function locYaw(rotation = 0): number {
+export function locYaw(rotation = 0): number {
     return (rotation & 3) * 512;
 }
 
@@ -162,6 +184,8 @@ export class BossFightView {
     // how strong the light was when it was last drawn and when (ms), to fade out after it lands
     private gaze?: {
         windup: BossWindup;
+        // How many pieces of cover its outlines were made from
+        cover: number;
         outlines: { x: number; y: number }[][];
         strength: number;
         at: number;
@@ -205,6 +229,14 @@ export class BossFightView {
         this.drawStatues(actors, sim);
         this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
+        this.drawMeteors(actors, sim, alpha);
+        this.drawFlights(actors, sim, alpha);
+        for (const pillars of sim.wardPillars) {
+            this.drawWardPillars(actors, sim, pillars, alpha);
+        }
+        for (const lair of sim.lairs) {
+            this.drawLairPillars(actors, sim, lair, alpha);
+        }
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
             this.drawHazard(actors, sim, hazard);
@@ -543,6 +575,143 @@ export class BossFightView {
         }
     }
 
+    // A meteor coming down on where it's aimed, slowly and then fast (meteorFallen), and its
+    // shadow on the ground under it, spreading as it comes: the sky's the warning, not the floor
+    private drawMeteors(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const tick = sim.tick + alpha;
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const meteor = windup?.attack.meteor;
+            const at = windup?.targets[0];
+            if (!windup || !meteor || !at || enemy.dead) {
+                continue;
+            }
+            const fallen = meteorFallen(windup, tick);
+            const ground = this.ground(sim, at.x, at.y);
+            const since = tick - windup.startTick;
+            const shadow =
+                meteor.shadowSpotAnim === undefined
+                    ? undefined
+                    : this.assets.get("spot:" + meteor.shadowSpotAnim);
+            if (shadow) {
+                const anim = shadow.anims[0];
+                const fit = lerp(METEOR_SHADOW_FIT[0], METEOR_SHADOW_FIT[1], fallen);
+                actors.draw(shadow, anim, anim.getFrame(since), at.x, ground, at.y, 0, {
+                    scale: (fit * 128) / Math.max(1, shadow.radius),
+                });
+            }
+            const model = this.assets.get("spot:" + meteor.spotAnim);
+            if (model) {
+                const anim = model.anims[0];
+                const height = ground - meteor.height * (1 - fallen);
+                // Whole all the way down: the frames before it breaks, slowed to the fall (the sim
+                // plays the rest where it ends, Sim.shatterMeteor)
+                const span = Math.max(1, windup.landTick - windup.startTick);
+                const frame =
+                    meteor.breaksAt === undefined
+                        ? anim.getFrame(since)
+                        : anim.getFrame(
+                              (Math.min(since, span) / span) *
+                                  (meteor.breaksAt * TICKS_PER_SECOND - 1),
+                              false,
+                          );
+                actors.draw(model, anim, frame, at.x, height, at.y, 0, {
+                    scale: (METEOR_FIT * 128) / Math.max(1, model.radius),
+                    unlit: 1,
+                });
+            }
+        }
+    }
+
+    // A blast's fireball (its spotAnim), out of the boss's hands and arcing down onto where it
+    // lands for the last of its windup: what's coming, and from where
+    private drawFlights(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const tick = sim.tick + alpha;
+        const flight = FLIGHT_SECONDS * TICKS_PER_SECOND;
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const attack = windup?.attack;
+            if (
+                !windup ||
+                attack?.kind !== "blast" ||
+                attack.spotAnim === undefined ||
+                enemy.dead
+            ) {
+                continue;
+            }
+            const model = this.assets.get("spot:" + attack.spotAnim);
+            const left = windup.landTick - tick;
+            if (!model || left > flight || left < 0) {
+                continue;
+            }
+            const t = 1 - left / flight;
+            const anim = model.anims[0];
+            const options = { scale: (FLIGHT_FIT * 128) / Math.max(1, model.radius), unlit: 1 };
+            for (const to of windup.targets) {
+                const x = lerp(enemy.x, to.x, t);
+                const y = lerp(enemy.y, to.y, t);
+                const up = lerp(FLIGHT_FROM, 0, t) + FLIGHT_ARC * 4 * t * (1 - t);
+                const yaw = yawFromVector(to.x - enemy.x, to.y - enemy.y);
+                const frame = anim.getFrame(tick - windup.startTick);
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y) - up, y, yaw, options);
+            }
+        }
+    }
+
+    // A boss's pillars against a gaze, coming up out of the ground and going back down into it
+    private drawWardPillars(
+        actors: ActorRenderer,
+        sim: Sim,
+        pillars: WardPillars,
+        alpha: number,
+    ): void {
+        const model = this.assets.get("loc:" + pillars.locId);
+        if (!model) {
+            return;
+        }
+        const tick = sim.tick + alpha;
+        const up = Math.min(
+            clamp01((tick - pillars.startTick) / pillars.riseTicks),
+            1 - clamp01((tick - pillars.endTick) / pillars.riseTicks),
+        );
+        if (up <= 0) {
+            return;
+        }
+        const sink = (1 - smooth(up)) * PILLAR_SINK;
+        for (let k = 0; k < pillars.tiles.length; k += 2) {
+            const x = pillars.tiles[k] + 0.5;
+            const y = pillars.tiles[k + 1] + 0.5;
+            actors.draw(model, model.anims[0], 0, x, this.ground(sim, x, y) + sink, y, 0, {
+                early: true,
+            });
+        }
+    }
+
+    // A lair's pillars (LairDef.pillars), whole loc models on their tiles: standing, and sinking into
+    // the ground as they crumble
+    private drawLairPillars(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
+        const def = lair.def.pillars;
+        const model = def && this.assets.get("loc:" + def.locId);
+        if (!def || !model) {
+            return;
+        }
+        const tick = sim.tick + alpha;
+        for (const pillar of lair.pillars) {
+            const moved = clamp01((tick - pillar.changeTick) / LAIR_PILLAR_TICKS);
+            const up = pillar.standing ? moved : 1 - moved;
+            if (up <= 0) {
+                continue;
+            }
+            const x = pillar.x + def.size / 2;
+            const y = pillar.y + def.size / 2;
+            const sink = (1 - smooth(up)) * PILLAR_SINK;
+            actors.draw(model, model.anims[0], 0, x, this.ground(sim, x, y) + sink, y, 0, {
+                scale: def.scale ?? 1,
+                early: true,
+            });
+        }
+    }
+
     // Her petals drawing in on her before a spiral or a ring
     private drawGathering(actors: ActorRenderer, sim: Sim): void {
         for (const enemy of sim.enemies) {
@@ -805,7 +974,19 @@ export class BossFightView {
                 lines.push({ x, y, dirX: (target.x - x) / length, dirY: (target.y - y) / length });
             }
         } else {
-            lines.push({ x: enemy.x, y: enemy.y, dirX: windup.dirX, dirY: windup.dirY });
+            // A fan of them (count, spread), each its own line, as Sim.launchProjectiles throws
+            // them: the Awakened Whisperer's volley
+            const count = attack.count ?? 1;
+            const aim = Math.atan2(windup.dirY, windup.dirX);
+            for (let i = 0; i < count; i++) {
+                const angle = aim + (i - (count - 1) / 2) * (attack.spread ?? 0);
+                lines.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    dirX: Math.cos(angle),
+                    dirY: Math.sin(angle),
+                });
+            }
         }
         const ctx = overlay.ctx;
         for (const { x, y, dirX, dirY } of lines) {
@@ -838,13 +1019,16 @@ export class BossFightView {
         strength: number,
         now: number,
     ): void {
-        if (this.gaze?.windup !== windup) {
+        // Debris hides from it too (Sim.coverPillars), and can land or be smashed meanwhile
+        const cover = sim.coverPillars(enemy) ?? [];
+        if (this.gaze?.windup !== windup || this.gaze.cover !== cover.length) {
             const from = windup.at ?? { x: enemy.x, y: enemy.y };
             const arena = sim.bossArena;
             const far = Math.hypot(arena.maxX - arena.minX, arena.maxY - arena.minY);
             this.gaze = {
                 windup,
-                outlines: (sim.map.features?.pillars ?? []).map((pillar) =>
+                cover: cover.length,
+                outlines: cover.map((pillar) =>
                     clipToBox(shadowOutline(pillar, from.x, from.y, far), arena),
                 ),
                 strength,
@@ -853,7 +1037,7 @@ export class BossFightView {
         }
         this.gaze.strength = strength;
         this.gaze.at = now;
-        this.paintGaze(overlay, sim, this.gaze.outlines, strength);
+        this.paintGaze(overlay, sim, this.gaze.outlines, strength, windup.attack.coverWash);
     }
 
     // After it lands, its light and shadows fade out rather than go at once
@@ -867,7 +1051,13 @@ export class BossFightView {
             this.gaze = undefined;
             return;
         }
-        this.paintGaze(overlay, sim, gaze.outlines, gaze.strength * fade);
+        this.paintGaze(
+            overlay,
+            sim,
+            gaze.outlines,
+            gaze.strength * fade,
+            gaze.windup.attack.coverWash,
+        );
     }
 
     // The warm wash, and the shadows as one shape (so where two meet isn't darker), its edges
@@ -879,9 +1069,10 @@ export class BossFightView {
         sim: Sim,
         outlines: { x: number; y: number }[][],
         strength: number,
+        wash?: { rgb: string; alpha: number },
     ): void {
         const ctx = overlay.ctx;
-        ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * strength})`;
+        ctx.fillStyle = `rgba(${wash?.rgb ?? GAZE_WASH}, ${(wash?.alpha ?? GAZE_WASH_ALPHA) * strength})`;
         ctx.fillRect(0, 0, overlay.width, overlay.height);
         const player = sim.player;
         const ground = this.ground(sim, player.x, player.y);
@@ -937,6 +1128,10 @@ export class BossFightView {
         const boss = sim.shownBoss;
         const player = sim.player;
         if (reach === undefined || !boss || boss.dead || sim.intro) {
+            return;
+        }
+        // Out of reach in this world whatever the distance (EnemyDef.hurtIn): no ring
+        if (boss.def.hurtIn !== undefined && boss.def.hurtIn !== sim.layer) {
             return;
         }
         if (Math.hypot(boss.x - player.x, boss.y - player.y) <= reach) {
@@ -1157,6 +1352,19 @@ export class BossFightView {
         const vignette = boss?.def.boss?.look?.vignette;
         if (boss?.def.boss?.intro && !boss.dead && !sim.intro && vignette !== null) {
             this.vignette(ctx, width, height, vignette ?? "rgba(10, 0, 20, 0.5)");
+        }
+        // Low on sanity in the Shadow Realm (RealmRuleDef.sanity.low): the edges close in, darker
+        // the lower it is, and breathing
+        const realm = sim.realm;
+        if (realm?.layer === 1) {
+            const low = realm.def.sanity.low;
+            const sanity = realm.sanityOf(sim.focus);
+            if (sanity < low) {
+                const depth = 1 - sanity / low;
+                const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * 2.4);
+                const alpha = 0.3 + 0.4 * depth + 0.1 * pulse;
+                this.vignette(ctx, width, height, `rgba(20, 0, 40, ${alpha.toFixed(3)})`);
+            }
         }
         const curse = sim.curse;
         if (curse) {

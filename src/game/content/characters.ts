@@ -1,6 +1,7 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
+import { JUSTICIAR_ZACHARIAH } from "./justiciarKit";
 import { CharacterDef } from "./types";
 
 // The first three are there from the start. Each map brings two more: one for
@@ -440,6 +441,149 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { area: 0.15 },
         unlock: { kind: "killBoss", mapId: "inferno", enemyId: "jaltok_jad" },
     },
+    // Act II's (content/acts.ts): adventurers with a trait, a way to play, rather than a bonus
+    {
+        id: "forester",
+        name: "Forester",
+        description:
+            "Starts with a bronze 2h sword. **Timber!** Every 25 kills, his next swing fells a " +
+            "Strangled Tree along the ground ahead, for four times its damage. His swings cut " +
+            "roots 2 tiles further out.",
+        style: "melee",
+        startingWeapon: "two_handed_sword",
+        // The lumberjack outfit
+        equipment: {
+            [EquipSlot.HEAD]: 10941,
+            [EquipSlot.TORSO]: 10939,
+            [EquipSlot.LEGS]: 10940,
+            [EquipSlot.FEET]: 10933,
+        },
+        bonus: {},
+        trait: {
+            kind: "timber",
+            name: "Timber!",
+            every: 25,
+            length: 8,
+            width: 2.2,
+            damage: 4,
+            cutReach: 2,
+            // A Strangled Tree, the wood's commonest
+            locId: 48358,
+            // The Sepulchre's dust thrown up where it lands, and along it
+            impact: {
+                spots: [{ spotAnim: 2699, fit: 1.5 }],
+                trail: { spotAnim: 2184 },
+                shake: 0.3,
+            },
+        },
+        unlock: { kind: "beatMap", mapId: "stranglewood" },
+    },
+    {
+        id: "shadow_walker",
+        name: "Shadow walker",
+        description:
+            "Starts with Shadow Burst. **Step between.** Once every 30 seconds, a hit that would " +
+            "take over a fifth of her hitpoints takes her into the shadows instead: a moment out " +
+            "of reach, and out 3 tiles on. In Lassar, a step in the city takes her to the realm.",
+        style: "magic",
+        startingWeapon: "shadow_burst",
+        // The ancient robes
+        equipment: {
+            [EquipSlot.HEAD]: 12203,
+            [EquipSlot.TORSO]: 12193,
+            [EquipSlot.LEGS]: 12195,
+            [EquipSlot.CAPE]: 12197,
+        },
+        bonus: {},
+        trait: {
+            kind: "step",
+            name: "Step between",
+            every: 30,
+            share: 0.2,
+            seconds: 1.5,
+            distance: 3,
+            // The dark that ripples out as Lassar's world turns
+            spotAnim: 2450,
+        },
+        unlock: { kind: "beatMap", mapId: "lassar_undercity" },
+    },
+    {
+        id: "treasure_hunter",
+        name: "Treasure hunter",
+        description:
+            "Starts with bronze throwing knives. **Dig site.** A casket left on the ground buries " +
+            "itself. Dug up again (walk back over it) after 20 seconds, it's a tier better; " +
+            "after 60 seconds it's gone.",
+        style: "ranged",
+        startingWeapon: "throwing_knives",
+        // A pith helmet, an explorer's backpack and desert clothes
+        equipment: {
+            [EquipSlot.HEAD]: 12516,
+            [EquipSlot.CAPE]: 12514,
+            [EquipSlot.TORSO]: 1833,
+            [EquipSlot.LEGS]: 1835,
+        },
+        bonus: {},
+        trait: { kind: "dig", name: "Dig site", buries: 3, ready: 20, gone: 60 },
+        unlock: { kind: "realmCaskets", mapId: "lassar_undercity", count: 5 },
+    },
+    {
+        id: "snow_ranger",
+        name: "Snow ranger",
+        description:
+            "Starts with a shortbow. **Shatter.** Every fourth hit chills what it hits for a " +
+            "second, and anything killed frozen or chilled shatters, its shards hitting " +
+            "everything within 3 tiles for a quarter of its hitpoints (a tenth for elites and " +
+            "bosses). On ice she never slides, and her cold rises 40% slower.",
+        style: "ranged",
+        startingWeapon: "shortbow",
+        // Polar camouflage and a Fremennik helm
+        equipment: {
+            [EquipSlot.HEAD]: 3748,
+            [EquipSlot.TORSO]: 10065,
+            [EquipSlot.LEGS]: 10067,
+        },
+        bonus: {},
+        trait: {
+            kind: "shatter",
+            name: "Shatter",
+            every: 4,
+            chill: 1,
+            reach: 3,
+            share: 0.25,
+            eliteShare: 0.1,
+            coldRise: 0.6,
+            // Ice Barrage's shards
+            spotAnim: 369,
+        },
+        unlock: { kind: "beatMap", mapId: "ghorrock" },
+    },
+    {
+        id: "lantern_bearer",
+        name: "Lantern-bearer",
+        description:
+            "Starts with Fire Strike. **Lantern.** Enemies within 3 tiles of her, in her " +
+            "lantern's glow, take 20% more from every hit and are 10% slower. Where it's dark, " +
+            "her light's twice the size.",
+        style: "magic",
+        startingWeapon: "fire_spells",
+        // Ancient d'hide coif and body, the Abyssal lantern in her hand
+        equipment: {
+            [EquipSlot.HEAD]: 12496,
+            [EquipSlot.TORSO]: 12492,
+            [EquipSlot.SHIELD]: 26822,
+        },
+        bonus: {},
+        trait: {
+            kind: "lantern",
+            name: "Lantern",
+            reach: 3,
+            damage: 0.2,
+            slow: 0.1,
+            light: 2,
+        },
+        unlock: { kind: "beatMap", mapId: "scar" },
+    },
     // The fun maps' adventurers, one for a task on each
     {
         id: "scammer",
@@ -589,6 +733,8 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    // Justiciar Zachariah himself, in the Battle for Varrock (justiciarKit.ts)
+    JUSTICIAR_ZACHARIAH,
     {
         id: "sands_delver",
         name: "Sands Delver",

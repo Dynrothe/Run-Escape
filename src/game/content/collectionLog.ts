@@ -1,6 +1,9 @@
 import { SaveData } from "../core/save";
-import { t, tr } from "../i18n";
-import { FIGHT_MAPS } from "./maps";
+import { t, tp, tr } from "../i18n";
+import { isMapOut } from "./acts";
+import { INVADERS } from "./invaders";
+import { invaderName } from "./invasions";
+import { FIGHT_MAPS, MAP_BY_ID, getMap } from "./maps";
 import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
@@ -13,13 +16,16 @@ import { WEAPONS } from "./weapons";
 // The log's sentences, for locales/en/gen.json: {task} is describeUnlockTask's
 export const LOG_MESSAGES: Record<string, string> = {
     "log.bring_in": "{task} to bring it in.",
+    "log.invasion": "Kill it when it invades an older map, from the Desert on.",
+    "log.invasion_kills.one": "Killed invading an older map once.",
+    "log.invasion_kills.other": "Killed invading an older map {n} times.",
 };
 
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
 
 // The map a trophy's from: a pumpkin's are the Hallowed Night's, a turkey's Thanksgiving, the
 // Tombs' chest the raid.
-function trophyMap(trophy: TrophyDef): string {
+export function getTrophyMap(trophy: TrophyDef): string {
     if (trophy.from.kind === "pumpkin") return "halloween";
     if (trophy.from.kind === "turkey") return "thanksgiving";
     if (trophy.from.kind === "tombs") return "tombs_of_amascut";
@@ -34,13 +40,16 @@ function bringsIn(mapId: string): boolean {
 }
 
 // Every map with trophies or a boss fight's weapon to find, in the order they're listed, each a
-// tab
+// tab, but for a map that isn't out yet (isMapOut)
 export const REWARD_MAPS: string[] = [
     ...new Set([
-        ...TROPHIES.map(trophyMap),
+        ...TROPHIES.map(getTrophyMap),
         ...FIGHT_MAPS.filter((map) => bringsIn(map.id)).map((map) => map.id),
     ]),
-];
+].filter((mapId) => {
+    const map = MAP_BY_ID.get(mapId);
+    return !map || isMapOut(map);
+});
 
 // A map's rewards: the weapons it brings in (its boss's drops, its chest's), then its trophies
 export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
@@ -60,7 +69,7 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
         how: t("log.bring_in", { task: describeUnlockTask(weapon.unlock!) }),
         found: save.unlockedItems.includes(weapon.id),
     }));
-    const trophies = TROPHIES.filter((trophy) => trophyMap(trophy) === mapId).map(
+    const trophies = TROPHIES.filter((trophy) => getTrophyMap(trophy) === mapId).map(
         ({ id, name, objId, how }) => ({
             id,
             name,
@@ -69,5 +78,16 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
             found: save.trophies.includes(id),
         }),
     );
-    return [...weapons, ...trophies];
+    // An Act II map's boss as an Awakened invader (content/invasions.ts): a line counting each kill
+    const invasions = INVADERS.filter((invader) => invader.mapId === mapId).map((invader) => {
+        const kills = save.invasions?.[invader.id] ?? 0;
+        return {
+            id: invader.id,
+            name: invaderName(invader.id),
+            objId: getMap(mapId).iconObjId,
+            how: kills > 0 ? tp("log.invasion_kills", kills) : t("log.invasion"),
+            found: kills > 0,
+        };
+    });
+    return [...weapons, ...trophies, ...invasions];
 }

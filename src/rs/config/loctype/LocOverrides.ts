@@ -3,18 +3,100 @@
 // thread reads this, which is why it's a constant and not sent to them. Only use ids that are
 // placed nowhere in the real world (world-index.ts), or that scenery changes too.
 export type LocOverride = {
+    // A loc of our own (an id from DERIVED_LOCS on): the cache's loc base, with the changes below.
+    // Only what's set changes, unlike an override of a cache id, whose size goes to 128 unset.
+    base?: number;
     models?: number[];
     // 128 is as the model was made
     size?: number;
     // Blocks walking, not projectiles, whatever the loc did (false: blocks nothing)
     solid?: boolean;
+    // Blocks nothing, whatever the loc did (a loc of our own: rubble to walk over)
+    walkable?: boolean;
     // Keeps the model's own size, rather than 128 (or size) on every axis
     ownSize?: boolean;
     // Lifts the model this far off the ground, in scene units (128 to a tile), for what floats
     // (below 0, sinks it)
     height?: number;
+    // Its tiles across and deep, and the animation it plays where it stands (a loc of our own)
+    sizeX?: number;
+    sizeY?: number;
+    seq?: number;
+    // Burnt: every colour of its models darkened and greyed (see CHARRED_LOCS), to charLight of
+    // its lightness if set (a pale stone burnt as dark as a darker one)
+    charred?: boolean;
+    charLight?: number;
 };
 
+// Locs of our own, past every id the cache has. They're placed by ScapeRune maps only, so nothing
+// in the real world changes. Ids stay under 2^21: the model caches key a loc by its id << 10.
+// CHARRED_LOCS + id is that cache loc burnt (getCharredLoc): the same in every way but its
+// colours, for a map in ruins (scaperune/ruins.ts).
+export const CHARRED_LOCS = 1 << 20;
+// Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base
+export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
+// WALKABLE_LOCS + id is that cache loc blocking nothing (getWalkableLoc), and
+// WALKABLE_CHARRED_LOCS + id the same burnt: the Battle for Varrock's fires and dead, walked
+// through (scaperune/maps/battleForVarrock.ts)
+export const WALKABLE_LOCS = CHARRED_LOCS + (1 << 19);
+export const WALKABLE_CHARRED_LOCS = WALKABLE_LOCS + (1 << 18);
+const LAST_LOC = (1 << 21) - 1;
+// Every cache loc id is under this, so each range of ours has room for all of them
+const CACHE_LOCS = 1 << 18;
+// A ruined city wall's breach (scaperune/ruins.ts), from Falador's: its west wall's broken gap
+// (the Crumbling wall shortcut, 24222, at 2935, 3355), whose jagged ends and fallen bricks are its
+// pale stone burnt to the dark of a burnt grey wall (Varrock's, 23795, comes out at about 15 of
+// 127). The bricks block nothing, so a breach is still a way through. Each comes in a mirrored
+// pair, as Falador places them: the jagged end 24220 is whole at its north end at rotation 0, and
+// 24221 (its model mirrored) at its south, each with the bricks Falador lays in front of it (24219
+// and 24218).
+export const BROKEN_CITY_WALL: [number, number] = [DERIVED_LOCS, DERIVED_LOCS + 2];
+export const BREACH_BRICKS: [number, number] = [DERIVED_LOCS + 1, DERIVED_LOCS + 3];
+const FALADOR_STONE_BURNT = 0.18;
+
+export function getCharredLoc(id: number): number {
+    return CHARRED_LOCS + id;
+}
+
+// A cache loc, or a charred one (getCharredLoc), that blocks nothing
+export function getWalkableLoc(id: number): number {
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return WALKABLE_CHARRED_LOCS + (id - CHARRED_LOCS);
+    }
+    if (id < 0 || id >= CACHE_LOCS) {
+        throw new Error(
+            `Loc ${id} isn't the cache's: give one of our own walkable in LOC_OVERRIDES`,
+        );
+    }
+    return WALKABLE_LOCS + id;
+}
+
+// What a loc id's data is read from: its own, or for a loc of ours, the cache loc it's made from
+export function getLocBase(id: number): number {
+    if (id >= WALKABLE_CHARRED_LOCS && id <= LAST_LOC) {
+        return id - WALKABLE_CHARRED_LOCS;
+    }
+    if (id >= WALKABLE_LOCS && id <= LAST_LOC) {
+        return id - WALKABLE_LOCS;
+    }
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return id - CHARRED_LOCS;
+    }
+    return LOC_OVERRIDES.get(id)?.base ?? id;
+}
+
+export function getLocOverride(id: number): LocOverride | undefined {
+    if (id >= WALKABLE_CHARRED_LOCS && id <= LAST_LOC) {
+        return { base: getLocBase(id), charred: true, walkable: true };
+    }
+    if (id >= WALKABLE_LOCS && id <= LAST_LOC) {
+        return { base: getLocBase(id), walkable: true };
+    }
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return { base: getLocBase(id), charred: true };
+    }
+    return LOC_OVERRIDES.get(id);
+}
 // The Wardens' room's floor (the Tombs of Amascut): the plane under the room's, which is what
 // OSRS shows through its hidden floor, brought up to it (maps/tombsOfAmascut.ts). The room's own
 // tiles say what's walkable, so they block nothing; the tall ones stand under the room's raised
@@ -44,6 +126,37 @@ const AKKHA_FLOOR: [number, LocOverride][] = [
         { height: -876, ownSize: true, solid: false },
     ]),
 ];
+
+// Models drawn with fewer triangles (ModelData.simplify), by model id: the share of faces kept,
+// and whether the model's a piece that meets others at its tile's edges. The Scar's brain
+// (maps/scar.ts) is thousands of one-tile pieces of 340 to 520 triangles each, lumps painted in
+// face colours: a view of its rift's island was 180k triangles, for a phone's 69k all in. A
+// quarter of them, its smallest edges gone, reads the same in the dark. The walls (types 0, 1 and
+// 9 of 49223, and 49224's) and the rims' tops (49225 to 49227, 49232 to 49235); its black filler
+// (49236), unlit, to a fifth whatever its edges do. Its kit, at two fifths: nerves (49357 to 49368), brain matter (49351
+// to 49356), broken pillars (49239, 49240) and the Closed Passage (49206)
+export const MODEL_SIMPLIFY: Map<number, { keep: number; seams: boolean }> = new Map([
+    ...[48881, 48885, 48876, 48884, 48889, 48877].map(
+        (id): [number, { keep: number; seams: boolean }] => [id, { keep: 0.2, seams: true }],
+    ),
+    ...[48891, 48878, 48882, 48880].map((id): [number, { keep: number; seams: boolean }] => [
+        id,
+        { keep: 0.12, seams: true },
+    ]),
+    [48875, { keep: 0.2, seams: false }],
+    ...[
+        49177, 49176, 49170, 49180, 49181, 49173, 49171, 48469, 48466, 49172, 49182, 49178, 48879,
+        49179,
+    ].map((id): [number, { keep: number; seams: boolean }] => [id, { keep: 0.4, seams: false }]),
+    // Ghorrock Prison's room wall pieces, salt deposits and vats, along the Awakened Duke's room's walls
+    // (scaperune/maps/dukesRoom.ts): about 2,500 triangles each, eight of them in a phone's view
+    ...[47013, 48738, 48751, 49081].map((id): [number, { keep: number; seams: boolean }] => [
+        id,
+        { keep: 0.3, seams: false },
+    ]),
+    // The prison's statue, there and on Ghorrock
+    [49043, { keep: 0.5, seams: false }],
+]);
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     ...AKKHA_FLOOR,
@@ -77,4 +190,12 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // units up from the floor, one in a plane with the raised edge of the stone tile under it
     // (38198, 6 units up), so they z-fought (check-coplanar.ts). An odd lift keeps every step off it.
     [38542, { height: 1 }],
+    ...BROKEN_CITY_WALL.map((id, i): [number, LocOverride] => [
+        id,
+        { base: [24220, 24221][i], charred: true, charLight: FALADOR_STONE_BURNT },
+    ]),
+    ...BREACH_BRICKS.map((id, i): [number, LocOverride] => [
+        id,
+        { base: [24219, 24218][i], charred: true, charLight: FALADOR_STONE_BURNT, walkable: true },
+    ]),
 ]);

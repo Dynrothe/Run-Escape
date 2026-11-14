@@ -1,0 +1,338 @@
+/* The Forgotten Four (Gauntlet.tsx): its order screen, the camp, its badge and its results */
+
+.ui-gauntlet {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(860px, calc(94vw / var(--ui-scale)));
+    max-height: calc((100vh - 16px) / var(--ui-scale));
+    max-height: calc((100dvh - 16px) / var(--ui-scale));
+    overflow-y: auto;
+}
+
+.ui-gauntlet .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-gauntlet-help,
+.ui-gauntlet-rules {
+    font-size: 14px;
+}
+
+.ui-gauntlet-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+/* A fight's card: its place, boss, adventurer and climb, stacked */
+.ui-gauntlet-card {
+    position: relative;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 6px 6px;
+    text-align: center;
+    min-width: 0;
+    /* Dragged by a finger without scrolling the page */
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+}
+
+.ui-gauntlet-card:focus-visible {
+    outline: 2px solid var(--ui-yellow);
+    outline-offset: 1px;
+}
+
+.ui-gauntlet-card-static {
+    cursor: default;
+    touch-action: auto;
+}
+
+.ui-gauntlet-dragging {
+    cursor: grabbing;
+    box-shadow: inset 0 0 0 2px var(--ui-yellow);
+    opacity: 0.85;
+}
+
+.ui-gauntlet-place {
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
+.ui-gauntlet-fight-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 14px;
+    color: var(--ui-orange);
+    line-height: 1.1;
+}
+
+.ui-gauntlet-fight-line,
+.ui-gauntlet-climb {
+    font-size: 13px;
+    color: #b8aa8a;
+}
+
+.ui-gauntlet-climb {
+    color: var(--ui-yellow);
+}
+
+.ui-gauntlet-arrows {
+    display: flex;
+    gap: 6px;
+    margin-top: 3px;
+}
+
+.ui-gauntlet-arrows .ui-button {
+    padding: 2px 12px;
+}
+
+.ui-gauntlet-record {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--ui-yellow);
+    text-align: center;
+}
+
+.ui-gauntlet-order {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.ui-gauntlet-heading {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    color: var(--ui-orange);
+}
+
+/* The camp: what the last fight paid and the next fight on the left, the blessings on the right */
+.ui-camp-body {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 14px;
+}
+
+.ui-camp-side,
+.ui-camp-shop {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.ui-camp-side .ui-gauntlet-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+        "icon name"
+        "icon line"
+        "icon climb";
+    column-gap: 8px;
+    padding: 4px 8px;
+    text-align: left;
+}
+
+.ui-camp-side .ui-gauntlet-place {
+    display: none;
+}
+
+.ui-camp-side .ui-icon {
+    grid-area: icon;
+}
+
+.ui-gauntlet-wounds {
+    font-size: 13px;
+    color: #b8aa8a;
+}
+
+.ui-camp-points {
+    display: flex;
+    justify-content: space-between;
+    color: var(--ui-yellow);
+}
+
+.ui-camp-timer {
+    color: #b8aa8a;
+}
+
+.ui-camp-blessings {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-camp-blessing {
+    gap: 8px;
+    padding: 3px 8px;
+}
+
+.ui-camp-blessing-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ui-camp-blessing-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 14px;
+    color: var(--ui-orange);
+}
+
+.ui-camp-blessing-line {
+    font-size: 12px;
+    color: #b8aa8a;
+    line-height: 1.1;
+}
+
+.ui-camp-price {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+}
+
+.ui-camp-blessing:disabled {
+    opacity: 0.5;
+}
+
+.ui-gauntlet-points {
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.ui-gauntlet-points td {
+    padding: 0 6px 0 0;
+}
+
+.ui-gauntlet-points td:last-child {
+    text-align: right;
+}
+
+.ui-gauntlet-points-total td {
+    border-top: 1px solid var(--ui-divider);
+    color: var(--ui-yellow);
+}
+
+.ui-gauntlet-result {
+    width: min(560px, calc(94vw / var(--ui-scale)));
+    align-items: center;
+}
+
+.ui-gauntlet-fights {
+    margin: 0 auto 8px;
+}
+
+.ui-gauntlet-rewards {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.ui-gauntlet-reward {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ui-yellow);
+}
+
+.ui-gauntlet-gold-swatch {
+    display: inline-block;
+    width: 24px;
+    height: 16px;
+    border: 2px solid #e8b830;
+    box-shadow:
+        0 0 6px #e8b830,
+        inset 0 0 0 1px #fff2b0;
+}
+
+/* On the run's HUD, on the left under the slots (the boss's bars have the top's middle) */
+.ui-gauntlet-badge {
+    position: absolute;
+    top: 140px;
+    left: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 3px 8px;
+    font-size: 14px;
+    color: var(--ui-yellow);
+    background: rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ui-gauntlet-badge-wounds {
+    color: #e08070;
+}
+
+.ui-gauntlet-badge-blessing {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: #b8e0a0;
+}
+
+/* The act's middle card, gold once the Forgotten Four's had a clean clear */
+.ui-act-middle.ui-act-gold {
+    border-color: #e8b830;
+    box-shadow:
+        inset 0 0 0 1px #fff2b0,
+        0 0 8px rgba(232, 184, 48, 0.6);
+}
+
+.ui-act-gauntlet {
+    margin-top: 3px;
+    padding: 1px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+/* A phone held sideways: tighter */
+@media (max-height: 460px) {
+    .ui-gauntlet {
+        padding: 8px 12px;
+    }
+
+    .ui-gauntlet h2 {
+        margin-bottom: 2px;
+        font-size: 18px;
+    }
+
+    .ui-gauntlet .ui-subtle {
+        margin-bottom: 4px;
+        font-size: 12px;
+    }
+
+    .ui-gauntlet .ui-row {
+        margin-top: 6px;
+    }
+
+    .ui-gauntlet .ui-button {
+        padding: 4px 12px;
+    }
+
+    .ui-gauntlet-card {
+        padding: 4px 4px 4px;
+    }
+
+    .ui-camp-blessing {
+        padding: 1px 6px;
+    }
+
+    .ui-camp-blessing-line {
+        font-size: 11px;
+    }
+
+    .ui-gauntlet-badge {
+        top: 96px;
+        font-size: 12px;
+    }
+}

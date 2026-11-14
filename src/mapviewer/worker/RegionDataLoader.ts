@@ -108,7 +108,7 @@ function getFootprint(
 export function buildRegionData(
     sceneBuilder: SceneBuilder,
     varManager: VarManager,
-    { baseX, baseY, sizeX, sizeY, plane = 0, glowLocs }: RegionDataInput,
+    { baseX, baseY, sizeX, sizeY, plane = 0, glowLocs, burnLocs }: RegionDataInput,
 ): RegionData {
     const sceneBaseX = baseX - BORDER;
     const sceneBaseY = baseY - BORDER;
@@ -171,22 +171,37 @@ export function buildRegionData(
         }
         collisionLocs.push({ map, numbers });
     };
-    // The glowing scenery asked for, in the region
+    // The glowing scenery asked for, in the region, and the tiles of what burns
     const glowIds = glowLocs && new Set(glowLocs);
     const glowing: number[] = [];
-    if (glowIds) {
+    const burnIds = burnLocs && new Set(burnLocs);
+    const burnTiles = burnIds && new Uint8Array(sizeX * sizeY);
+    if (glowIds || burnIds) {
         sceneBuilder.onLoc = (level, tileX, tileY, locSizeX, locSizeY, id) => {
+            if (level !== plane) {
+                return;
+            }
             const x = sceneBaseX + tileX + locSizeX / 2;
             const y = sceneBaseY + tileY + locSizeY / 2;
             if (
-                level === plane &&
-                glowIds.has(id) &&
+                glowIds?.has(id) &&
                 x >= baseX &&
                 y >= baseY &&
                 x < baseX + sizeX &&
                 y < baseY + sizeY
             ) {
                 glowing.push(id, x, y);
+            }
+            if (burnTiles && burnIds!.has(id)) {
+                for (let ty = 0; ty < locSizeY; ty++) {
+                    for (let tx = 0; tx < locSizeX; tx++) {
+                        const rx = sceneBaseX + tileX + tx - baseX;
+                        const ry = sceneBaseY + tileY + ty - baseY;
+                        if (rx >= 0 && ry >= 0 && rx < sizeX && ry < sizeY) {
+                            burnTiles[rx + ry * sizeX] = 1;
+                        }
+                    }
+                }
             }
         };
     }
@@ -269,6 +284,7 @@ export function buildRegionData(
         overlays,
         collisionLocs: locs,
         glowLocs: glowIds ? new Float32Array(glowing) : undefined,
+        burnTiles,
     };
 }
 
@@ -289,6 +305,7 @@ export class RegionDataLoader implements RenderDataLoader<RegionDataInput, Regio
                 data.overlays.buffer,
                 data.collisionLocs.buffer,
                 ...(data.glowLocs ? [data.glowLocs.buffer] : []),
+                ...(data.burnTiles ? [data.burnTiles.buffer] : []),
             ],
         };
     }

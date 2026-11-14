@@ -101,6 +101,56 @@
         touch-action: none;
     }
 
+    /* A hero's own buttons (KitButtons): the first big in the items' corner, the others in
+       an arc round it, up and to its left */
+    .ui-hud-actions .ui-kit {
+        display: none;
+    }
+
+    .ui-touch-kit {
+        position: absolute;
+        display: block;
+        right: calc(var(--safe-right) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px);
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-ability {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        touch-action: none;
+    }
+
+    .ui-touch-kit .ui-touch-kit-0 {
+        right: 0;
+        bottom: 0;
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-1 {
+        right: 84px;
+        bottom: 0;
+    }
+
+    .ui-touch-kit .ui-touch-kit-2 {
+        right: 74px;
+        bottom: 58px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-3 {
+        right: 26px;
+        bottom: 88px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-4 {
+        right: 140px;
+        bottom: 0;
+    }
+
     /* Keys don't mean anything here */
     .ui-choice-key,
     .ui-inv-key,
@@ -133,6 +183,11 @@
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
+    }
+
+    /* and under a level up, a casket and the pause menu */
+    .ui-modal {
+        z-index: 2;
     }
 
     /* Big enough to tap */
@@ -297,7 +352,8 @@
     .ui-result,
     .ui-result-columns,
     .ui-choice,
-    .ui-chest-card {
+    .ui-chest-card,
+    .ui-chest-card-body {
         overscroll-behavior: contain;
         touch-action: pan-y;
     }
@@ -632,6 +688,12 @@
         flex-shrink: 0;
     }
 
+    /* The relics' row as the pet's: one line */
+    .ui-relic-row {
+        flex-shrink: 0;
+        padding: 0 2px;
+    }
+
     .ui-map-pages {
         flex: 1 1 0;
     }
@@ -647,6 +709,13 @@
         min-height: 34px;
         padding: 2px 4px;
         font-size: 15px;
+    }
+
+    /* The act's middle card is short: its button a line high, in the row of icons */
+    .ui-act-ending-again {
+        min-height: 28px;
+        padding: 0 6px;
+        font-size: 13px;
     }
 
     .ui-style-name {
@@ -931,7 +1000,8 @@
         font-size: 14px;
     }
 
-    .ui-boss-warning {
+    .ui-boss-warning,
+    .ui-map-objective {
         top: calc(var(--safe-top) + 42px);
         font-size: 16px;
     }
@@ -1034,6 +1104,12 @@
         height: 170px;
     }
 
+    /* The card's max-height keeps it clear of the edges here (co-op's countdown has its own) */
+    .ui-chest {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
     .ui-chest[data-phase="reveal"] {
         display: grid;
         grid-template-columns: 230px minmax(0, 520px);
@@ -1062,11 +1138,27 @@
         align-self: center;
         width: 100%;
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
-        overflow-y: auto;
     }
 
     .ui-chest-actions {
         margin-top: 6px;
+    }
+
+    /* Gear against the worn piece: a tighter table, so the usual one fits
+       under co-op's countdown too */
+    .ui-chest-card-compare .ui-chest-compare {
+        margin-top: 4px;
+        padding-top: 4px;
+    }
+
+    .ui-chest-table {
+        margin-top: 2px;
+    }
+
+    .ui-chest-table th,
+    .ui-chest-table td {
+        padding-top: 0;
+        padding-bottom: 0;
     }
 
     /* Pause and results: their columns scroll under the buttons */
@@ -1196,8 +1288,81 @@
 /* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
    scrolls, so Reset All and Done stay in view */
 @media (pointer: coarse) and (max-height: 520px) {
+    .ui-relic-picker {
+        width: min(460px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
     .ui-invocations {
         width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+}
+
+/* The Wardrobe on a phone held sideways: its panel as tall as the screen, clear of the notch,
+   and its store scrolling as one (the filters go up out of the way), with the adventurer's
+   controls on one line under them. Under the screen's class, as WardrobeScreen.css loads later. */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-wardrobe-screen {
+        padding-left: calc(var(--safe-left) + 6px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe {
+        width: min(560px, 58vw);
+        height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe > h2,
+    .ui-wardrobe-screen .ui-wardrobe-list > .ui-subtle {
+        display: none;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store {
+        overflow-y: auto;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store-body {
+        flex: none;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-grid-wrap,
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        max-height: none;
+        overflow: visible;
+    }
+
+    /* The piece picked over the pieces, so its Buy is in view */
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        order: -1;
+    }
+
+    .ui-wardrobe-screen .ui-card.ui-wardrobe-tile {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-swatch {
+        width: 28px;
+        height: 28px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview {
+        left: auto;
+        right: calc(var(--safe-right) + 6px);
+        bottom: calc(var(--safe-bottom) + 6px);
+        margin: 0;
+        flex-direction: row;
+        padding: 4px 6px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview .ui-wardrobe-stepper-value {
+        min-width: 0;
+        max-width: 90px;
+    }
+
+    /* The arrows say it */
+    .ui-wardrobe-screen .ui-wardrobe-turn-label {
+        display: none;
     }
 }

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 
 import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
+import { FALLEN_EMPIRE, isActOut } from "../content/acts";
 import { getCharacter } from "../content/characters";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
@@ -289,7 +290,7 @@ function renderMaps(mapId = "lumbridge") {
 test("the map screen opens on the picked map's tab, and a map on another tab can be picked", () => {
     expect.hasAssertions();
     const actions = renderMaps();
-    expect(screen.getByRole("tab", { name: "Campaign" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Act I" })).toHaveAttribute("aria-selected", "true");
     // The other tabs' maps are laid out, but out of reach
     expect(screen.getByRole("button", { name: "Lumbridge" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Theatre of Blood" })).toBeNull();
@@ -305,13 +306,15 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
 
 test("Thanksgiving map selection has its autumn theme", () => {
     renderMaps();
+    // Seasonal maps are on the Fun tab, under the fun maps
+    fireEvent.click(screen.getByRole("tab", { name: "Fun" }));
     const thanksgiving = screen.getByRole("button", { name: "Thanksgiving Harvest" });
     const mapPanel = document.querySelector(".ui-select-maps")!;
     expect(thanksgiving).toHaveClass("ui-map-tile-thanksgiving");
     fireEvent.mouseMove(thanksgiving);
     expect(mapPanel).toHaveClass("ui-select-maps-thanksgiving");
     expect(document.querySelector(".ui-select-details-thanksgiving")).not.toBeNull();
-    fireEvent.mouseMove(screen.getByRole("button", { name: "Lumbridge" }));
+    fireEvent.mouseMove(screen.getByRole("button", { name: "Hallowed Night" }));
     expect(mapPanel).not.toHaveClass("ui-select-maps-thanksgiving");
     expect(document.querySelector(".ui-select-details-thanksgiving")).toBeNull();
 });
@@ -320,6 +323,7 @@ test("the Avian Assaulter is only Thanksgiving's, and shown there with what they
     renderMaps();
     // Not in the roster, to pick or to count
     expect(screen.queryByRole("button", { name: "Avian Assaulter" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Fun" }));
     fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
     expect(document.querySelector(".ui-select-adventurers .ui-card-title")).toHaveTextContent(
         "Avian Assaulter",
@@ -334,11 +338,13 @@ test("the Avian Assaulter is only Thanksgiving's, and shown there with what they
 test("Thanksgiving fixes the adventurer as the Avian Assaulter, and other maps don't", () => {
     const actions = renderMaps();
     const enter = () => screen.getByRole("button", { name: /Enter / });
+    fireEvent.click(screen.getByRole("tab", { name: "Fun" }));
     fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
     expect(enter()).toBeEnabled();
     expect(document.querySelector(".ui-select-fixed-note")).toHaveTextContent("Avian Assaulter");
     fireEvent.click(enter());
     expect(actions.startRun).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("tab", { name: "Act I" }));
     fireEvent.click(screen.getByRole("button", { name: "Lumbridge" }));
     expect(document.querySelector(".ui-select-fixed-note")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Warrior" }));
@@ -369,7 +375,7 @@ test("the favourite button is the shown adventurer's, and stays as focus moves t
     fireEvent.click(favourite);
     expect(actions.toggleFavouriteCharacter).toHaveBeenCalledExactlyOnceWith("ranger");
     // Leaving the panel goes back to the one picked
-    fireEvent.focusOut(favourite, { relatedTarget: screen.getByRole("tab", { name: "Campaign" }) });
+    fireEvent.focusOut(favourite, { relatedTarget: screen.getByRole("tab", { name: "Act I" }) });
     expect(shown()).toBe("Warrior");
     // None for one who isn't open yet
     fireEvent.focus(document.querySelector(".ui-select-adventurers .ui-card-locked")!);
@@ -388,14 +394,16 @@ test("a map's own adventurer has no favourite button", () => {
 test("map tabs support arrow keys and wrap", () => {
     expect.hasAssertions();
     renderMaps();
-    const campaign = screen.getByRole("tab", { name: "Campaign" });
-    campaign.focus();
-    fireEvent.keyDown(campaign, { key: "ArrowRight" });
-    const bosses = screen.getByRole("tab", { name: "Bosses" });
-    expect(bosses).toHaveFocus();
-    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Bosses");
-    fireEvent.keyDown(bosses, { key: "ArrowLeft" });
-    fireEvent.keyDown(campaign, { key: "ArrowLeft" });
+    const actOne = screen.getByRole("tab", { name: "Act I" });
+    actOne.focus();
+    fireEvent.keyDown(actOne, { key: "ArrowRight" });
+    // Act II is beside Act I, once it's out (ActDef.released); Bosses until then
+    const next = isActOut(FALLEN_EMPIRE) ? "Act II" : "Bosses";
+    const beside = screen.getByRole("tab", { name: next });
+    expect(beside).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName(next);
+    fireEvent.keyDown(beside, { key: "ArrowLeft" });
+    fireEvent.keyDown(actOne, { key: "ArrowLeft" });
     expect(screen.getAllByRole("tab").at(-1)).toHaveFocus();
 });
 
@@ -568,5 +576,35 @@ describe("cloud save's choice on the title", () => {
         fireEvent.click(screen.getByRole("button", { name: "Settings" }));
         act(() => setChoice(false));
         expect(asking()).toBeInTheDocument();
+    });
+});
+
+describe("the Wardrobe", () => {
+    // An old save keeps the retired Dwarf unlocked, and the game has no adventurer for it
+    test("steps through the roster's adventurers, never a retired one", () => {
+        expect.hasAssertions();
+        const save = createSave();
+        save.unlockedCharacters.push("dwarf");
+        const store = new GameStore(save);
+        store.set({ screen: "wardrobe" });
+        const picked: string[] = [];
+        const client = new Proxy(
+            {
+                selectCharacter: vi.fn((id: string) => {
+                    picked.push(id);
+                    store.set({ characterId: id });
+                }),
+            },
+            { get: (target, key) => target[key as keyof typeof target] ?? vi.fn() },
+        );
+        render(<GameUi store={store} client={client as unknown as GameClient} />);
+        const next = screen.getByRole("button", { name: "Next adventurer" });
+        for (let i = 0; i < save.unlockedCharacters.length + 1; i++) {
+            fireEvent.click(next);
+        }
+        expect(picked).not.toContain("dwarf");
+        // Round them all and back to the first
+        expect(new Set(picked).size).toBe(save.unlockedCharacters.length - 1);
+        expect(screen.getByRole("button", { name: "Next adventurer" })).toBeInTheDocument();
     });
 });

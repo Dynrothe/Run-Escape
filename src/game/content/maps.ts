@@ -1,16 +1,65 @@
 import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { DUKES_ROOM_RECIPE } from "../scaperune/maps/dukesRoom";
+import {
+    GHORROCK_BOSS_ARENA,
+    GHORROCK_DUKE,
+    GHORROCK_PILLARS,
+    GHORROCK_RECIPE,
+    ghorrockWorld,
+} from "../scaperune/maps/ghorrock";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
+import { LASSAR_CATHEDRAL, LASSAR_RECIPE, TWIN_SQUARES } from "../scaperune/maps/lassarUndercity";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
+import { SCAR_BOSS_ARENA, SCAR_RECIPE, scarWorld } from "../scaperune/maps/scar";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
+import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import { isMapOut } from "./acts";
+import { CHARACTERS } from "./characters";
+import {
+    AWAKENED_DUKE_ID,
+    DUKE_BOSS_ARENA,
+    DUKE_BOW_LEVEL,
+    DUKE_COLD,
+    DUKE_FEATURES,
+    DUKE_HITPOINTS,
+    DUKE_KINDLE,
+    DUKE_SPOT_WORLD,
+    DUKE_START_DISTANCE,
+} from "./duke";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
+import { GHORROCK_COLD, GHORROCK_EVENTS, GHORROCK_WAVES } from "./ghorrock";
+import { LASSAR_EVENTS, LASSAR_REALM, LASSAR_WAVES } from "./lassar";
+import {
+    AWAKENED_LEVIATHAN_ID,
+    LEVIATHAN_BOSS_ARENA,
+    LEVIATHAN_FEATURES,
+    LEVIATHAN_FIRE_LEVEL,
+    LEVIATHAN_HITPOINTS,
+    LEVIATHAN_LIGHTING,
+    LEVIATHAN_SHADOW,
+    LEVIATHAN_SPOT_WORLD,
+    LEVIATHAN_START_DISTANCE,
+} from "./leviathan";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
-import { CinematicDef, EnemyDef, MapDef } from "./types";
+import { SCAR_EVENTS, SCAR_LIGHTING, SCAR_POOL_WORLD, SCAR_WAVES } from "./scar";
+import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
+import { CharacterDef, CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
+import {
+    AWAKENED_VARDORVIS_ID,
+    VARDORVIS_BOSS_ARENA,
+    VARDORVIS_CHOP,
+    VARDORVIS_FEATURES,
+    VARDORVIS_HITPOINTS,
+    VARDORVIS_ROOTS,
+    VARDORVIS_START_DISTANCE,
+    VARDORVIS_SWORD_LEVEL,
+} from "./vardorvis";
 import { THANKSGIVING_EVENTS, THANKSGIVING_WAVES } from "./waves";
 import {
     BARROWS_EVENTS,
@@ -41,12 +90,30 @@ import {
     WILDERNESS_WAVES,
 } from "./waves";
 import {
+    AWAKENED_WHISPERER_ID,
+    WHISPERER_BLACKSTONE,
+    WHISPERER_BOSS_ARENA,
+    WHISPERER_BURST_AREA,
+    WHISPERER_BURST_LEVEL,
+    WHISPERER_BURST_REACH,
+    WHISPERER_HITPOINTS,
+    WHISPERER_REALM,
+    WHISPERER_START_DISTANCE,
+} from "./whisperer";
+import {
     OWLS_COURT_FEATURES,
     ZACHARIAH_HITPOINTS,
     ZACHARIAH_SMITE,
     ZACHARIAH_STRIKE_LEVEL,
     ZACHARIAH_STRIKE_REACH,
 } from "./zachariah";
+
+// The Leviathan's fight's square, in world tiles
+const SCAR_ARENA_WORLD = scarWorld(SCAR_BOSS_ARENA);
+
+// The Awakened fights' hits: through armour, which would stop most of each of them with the
+// shop's every upgrade, and a fifth harder than the bots' tuning (awakened-vardorvis.md 10)
+export const AWAKENED_HITS = { scale: 1.2, throughArmor: true };
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
 // are world-tile rectangles, usually aligned to 64-tile map squares. Seasonal
@@ -317,6 +384,172 @@ export const MAPS: MapDef[] = [
         finalBossWarning: "The lava churns... three JalTok-Jads are rising!",
         victoryText: "The JalTok-Jads are slain! You are the champion of the Inferno!",
     },
+    // Act II's (content/acts.ts): open once the Inferno's beaten, outside the campaign's chain
+    {
+        id: "stranglewood",
+        name: "The Stranglewood",
+        description:
+            "The Strangled, their boars and lynxes, and the Strangled Bear. Roots creep in " +
+            "from the wood: they slow and hurt you, and quicken the Strangled. Your hits cut " +
+            "them back, and killing a root heart clears a patch. Kasonde and a great Strangled " +
+            "Bear come one by one, and Vardorvis rises in his clearing at the end.",
+        // The Executioner's axe head, Vardorvis's
+        iconObjId: 28319,
+        // The real wood round Vardorvis's arena, its undergrowth opened up for a crowd
+        // (scaperune/maps/stranglewood.ts)
+        arena: getRecipeArena(STRANGLEWOOD_RECIPE),
+        // Six tiles south of the clearing's middle, where he rises
+        spawn: getRecipeWorldTile(
+            STRANGLEWOOD_RECIPE,
+            STRANGLEWOOD_RECIPE.spawn.x,
+            STRANGLEWOOD_RECIPE.spawn.y,
+        ),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: STRANGLEWOOD_WAVES,
+        events: STRANGLEWOOD_EVENTS,
+        finalBossWarning: "The roots shudder... Vardorvis is waking!",
+        victoryText: "Vardorvis is slain! The Stranglewood is quiet.",
+        // His clearing: he rises in its middle
+        bossArena: {
+            baseX: Math.floor(STRANGLEWOOD_CLEARING.x) - 10,
+            baseY: Math.floor(STRANGLEWOOD_CLEARING.y) - 10,
+            size: 20,
+        },
+        scaperune: true,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: STRANGLEWOOD_ROOTS,
+        // The wood's own track; the recording goes in src/media/music (see GameClient)
+        music: "Strangled",
+        // Vardorvis's, from 15:00
+        bossMusic: "Blood Rush",
+    },
+    {
+        id: "lassar_undercity",
+        name: "The Lassar Undercity",
+        description:
+            "Crawling hands, ghosts, leeches and the city's ancient guardians. Black puddles open " +
+            "into the Shadow Realm: walk in and the city waits while you're there, with other " +
+            "enemies, richer drops and your sanity draining. Catch three lost souls to get back. " +
+            "The Shadow Keeper and the Forsaken Assassin come one by one, and the Whisperer " +
+            "rises in her cathedral at the end.",
+        // The Siren's staff, the Whisperer's
+        iconObjId: 28323,
+        // The real sunken city, its streets cleared of clutter (scaperune/maps/lassarUndercity.ts)
+        arena: getRecipeArena(LASSAR_RECIPE),
+        // The cathedral's forecourt, at the top of the causeway to her island
+        spawn: getRecipeWorldTile(LASSAR_RECIPE, LASSAR_RECIPE.spawn.x, LASSAR_RECIPE.spawn.y),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: LASSAR_WAVES,
+        events: LASSAR_EVENTS,
+        finalBossWarning: "The cathedral's bells toll... The Whisperer is waking!",
+        victoryText: "The Whisperer is silenced! Lassar sleeps again.",
+        // Her cathedral: she rises in its middle
+        bossArena: {
+            baseX: Math.floor(LASSAR_CATHEDRAL.x) - 10,
+            baseY: Math.floor(LASSAR_CATHEDRAL.y) - 10,
+            size: 20,
+        },
+        scaperune: true,
+        // Its floors are the cache's dark slate and navy: drawn brighter, as the game's lighting
+        // shows them
+        brightness: 1.6,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: LASSAR_REALM,
+        // Its Shadow Realm, drawn in the city's place while the party's there
+        twin: { dx: TWIN_SQUARES * 64 },
+        // The city's track; the realm's quiet is its own (RealmRuleDef.look)
+        music: "The Fallen Empire",
+        // The Whisperer's, from 15:00
+        bossMusic: "Song of the Silent Choir",
+    },
+    {
+        id: "ghorrock",
+        name: "Ghorrock",
+        description:
+            "Ice warriors, spiders, wolves, icefiends and giants in the frozen yard of Ghorrock " +
+            "Prison. The cold rises all the time: it slows you, and at its worst freezes you " +
+            "solid. Stay by the braziers, relight them, and kill the fire elites for their " +
+            "embers. Gas vents puff and the pools are ice. Ketla and Jhallan come one by one, " +
+            "and Duke Sucellus wakes in the prison's mouth at the end.",
+        // The Eye of the Duke, his
+        iconObjId: 28321,
+        // A frozen prison yard, built by hand with the prison's own kit (scaperune/maps/ghorrock.ts)
+        arena: getRecipeArena(GHORROCK_RECIPE),
+        spawn: getRecipeWorldTile(
+            GHORROCK_RECIPE,
+            GHORROCK_RECIPE.spawn.x,
+            GHORROCK_RECIPE.spawn.y,
+        ),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: GHORROCK_WAVES,
+        events: GHORROCK_EVENTS,
+        finalBossWarning: "The ground shudders... Duke Sucellus is waking!",
+        victoryText: "Duke Sucellus is slain! Ghorrock's cold lifts.",
+        // The yard in front of the prison: he wakes in its mouth, at the square's north edge
+        bossArena: (({ x, y }) => ({ baseX: x, baseY: y, size: GHORROCK_BOSS_ARENA.size }))(
+            ghorrockWorld(GHORROCK_BOSS_ARENA),
+        ),
+        features: {
+            rise: ghorrockWorld({
+                x: GHORROCK_DUKE.x + Math.floor(GHORROCK_DUKE.size / 2),
+                y: GHORROCK_DUKE.y + Math.floor(GHORROCK_DUKE.size / 2),
+            }),
+            // The Ice Columns his gaze can't see through
+            pillars: GHORROCK_PILLARS.map((tile) => ({ ...ghorrockWorld(tile), size: 2 })),
+        },
+        scaperune: true,
+        // Its snow drawn as white as it is
+        brightness: 1.3,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: GHORROCK_COLD,
+        // The prison's track; the recording goes in src/media/music (see GameClient)
+        music: "Prison Break",
+        // The Duke's, from 15:00
+        bossMusic: "Eye See You",
+    },
+    {
+        id: "scar",
+        name: "The Scar",
+        description:
+            "Imps, leeches, walkers and the Scar's demons and hellhounds in the dark of the " +
+            "Leviathan's lair. There's a light round you, and your weapons only aim at what's " +
+            "lit: carry the light to them. Pick up lanterns, kill light leeches for the light " +
+            "they leave, and fight by the fires. Abyssal leeches dim your light. The Scarred " +
+            "black demon and Persten the Deceitful come one by one, and the Leviathan rises in " +
+            "its pool at the end.",
+        // The Leviathan's lure, its
+        iconObjId: 28325,
+        // The real Scar, its sea drained to the flesh under it (scaperune/maps/scar.ts)
+        arena: getRecipeArena(SCAR_RECIPE),
+        spawn: getRecipeWorldTile(SCAR_RECIPE, SCAR_RECIPE.spawn.x, SCAR_RECIPE.spawn.y),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: SCAR_WAVES,
+        events: SCAR_EVENTS,
+        finalBossWarning: "The sludge stirs... The Leviathan is rising!",
+        victoryText: "The Leviathan sinks into its pool! The Scar is still.",
+        // The ground round his pool: he rises in its middle
+        bossArena: {
+            baseX: SCAR_ARENA_WORLD.x,
+            baseY: SCAR_ARENA_WORLD.y,
+            size: SCAR_BOSS_ARENA.size,
+        },
+        features: { rise: SCAR_POOL_WORLD },
+        scaperune: true,
+        act: { id: "fallen_empire", requires: "inferno" },
+        lighting: SCAR_LIGHTING,
+        // The Scar's track; the recording goes in src/media/music (see GameClient)
+        music: "Scar Tissue",
+        // The Leviathan's, from 15:00
+        bossMusic: "Colossus of the Deep",
+    },
     {
         id: "halloween",
         name: "Hallowed Night",
@@ -415,6 +648,184 @@ export const MAPS: MapDef[] = [
         },
         music: "Blade of Forgotten Justice",
     },
+    {
+        id: "awakened_vardorvis",
+        name: "Awakened Vardorvis",
+        description:
+            "Vardorvis, awakened, in his clearing in the Stranglewood. No waves, no picks and no " +
+            "items: the Forester, his 2h sword and Chop. The roots close in from the wood, his " +
+            "dart roots the ground it crosses and his captors heal him: cut them back, and make " +
+            "his dart miss.",
+        // Butch, his pet
+        iconObjId: 28248,
+        arena: getRecipeArena(STRANGLEWOOD_RECIPE),
+        // South of his spot, as the Stranglewood starts you
+        spawn: {
+            x: STRANGLEWOOD_CLEARING.x,
+            y: STRANGLEWOOD_CLEARING.y - VARDORVIS_START_DISTANCE,
+        },
+        // His hitpoints come from the event, his hits are tuned to the Forester's hitpoints with
+        // the shop's every upgrade (AWAKENED_HITS)
+        difficulty: { hp: 1, damage: 1 },
+        hits: AWAKENED_HITS,
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_VARDORVIS_ID,
+                hp: VARDORVIS_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "Awakened Vardorvis falls, and the Stranglewood is still.",
+        bossArena: VARDORVIS_BOSS_ARENA,
+        features: VARDORVIS_FEATURES,
+        scaperune: true,
+        rule: VARDORVIS_ROOTS,
+        // Opened by beating his map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "stranglewood",
+            character: "forester",
+            weaponLevel: VARDORVIS_SWORD_LEVEL,
+            ability: VARDORVIS_CHOP,
+        },
+        music: "Blood Rush",
+    },
+    {
+        id: "awakened_whisperer",
+        name: "Awakened Whisperer",
+        description:
+            "The Whisperer, awakened, on her island in the Lassar Undercity. No waves, no picks " +
+            "and no items: the Shadow walker, Shadow Burst and Blackstone, which turns you " +
+            "between the city and the Shadow Realm. She can only be hurt in the city; her Soul " +
+            "Siphon can only be stopped in the realm, where your sanity drains. Her screech " +
+            "can't be outrun, only left behind.",
+        // The Wisp, her pet
+        iconObjId: 28246,
+        arena: getRecipeArena(LASSAR_RECIPE),
+        // South of her spot, as Vardorvis's fight starts you
+        spawn: {
+            x: LASSAR_CATHEDRAL.x,
+            y: LASSAR_CATHEDRAL.y - WHISPERER_START_DISTANCE,
+        },
+        // Her hitpoints come from the event, her hits are tuned to the Shadow walker's hitpoints with
+        // the shop's every upgrade (AWAKENED_HITS)
+        difficulty: { hp: 1, damage: 1 },
+        hits: AWAKENED_HITS,
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_WHISPERER_ID,
+                hp: WHISPERER_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "The Awakened Whisperer is silenced, and Lassar sleeps.",
+        bossArena: WHISPERER_BOSS_ARENA,
+        scaperune: true,
+        // The island's floor is the cache's near-black navy, as the map's
+        brightness: 1.6,
+        rule: WHISPERER_REALM,
+        twin: { dx: TWIN_SQUARES * 64 },
+        // Opened by beating her map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "lassar_undercity",
+            character: "shadow_walker",
+            weaponLevel: WHISPERER_BURST_LEVEL,
+            strikeReach: WHISPERER_BURST_REACH,
+            // Shadow Burst wider, to reach her from outside her lash
+            stats: { auraArea: WHISPERER_BURST_AREA },
+            ability: WHISPERER_BLACKSTONE,
+        },
+        music: "Song of the Silent Choir",
+    },
+    {
+        id: "awakened_duke",
+        name: "Awakened Duke Sucellus",
+        description:
+            "Duke Sucellus, awakened, in his room in Ghorrock Prison. No waves, no picks and no " +
+            "items: the Snow ranger, her shortbow and Kindle, which lights the brazier you're " +
+            "beside. The cold rises all the time and only the braziers hold it off. His gas finds " +
+            "the vent by you, and his freezing gaze puts out every brazier it can see: hide " +
+            "behind the statues.",
+        // Baron, his pet
+        iconObjId: 28250,
+        arena: getRecipeArena(DUKES_ROOM_RECIPE),
+        // South of him, as the other fights start you
+        spawn: { x: DUKE_SPOT_WORLD.x, y: DUKE_SPOT_WORLD.y - DUKE_START_DISTANCE },
+        // His hitpoints come from the event, his hits are tuned to the Snow ranger's hitpoints with
+        // the shop's every upgrade (AWAKENED_HITS)
+        difficulty: { hp: 1, damage: 1 },
+        hits: AWAKENED_HITS,
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [{ at: 0, kind: "finalBoss", enemyId: AWAKENED_DUKE_ID, hp: DUKE_HITPOINTS }],
+        finalBossWarning: "",
+        victoryText: "Awakened Duke Sucellus falls, and Ghorrock's cold breaks.",
+        bossArena: DUKE_BOSS_ARENA,
+        features: DUKE_FEATURES,
+        scaperune: true,
+        rule: DUKE_COLD,
+        // Opened by beating his map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "ghorrock",
+            character: "snow_ranger",
+            weaponLevel: DUKE_BOW_LEVEL,
+            ability: DUKE_KINDLE,
+        },
+        music: "Eye See You",
+    },
+    {
+        id: "awakened_leviathan",
+        name: "Awakened Leviathan",
+        description:
+            "The Leviathan, awakened, in its pool in the Scar. No waves, no picks and no items: " +
+            "the Lantern-bearer, her Fire spells and Shadow, which stuns it from close by. In " +
+            "the dark your spells only find what's lit, and once its glow goes out only your " +
+            "light finds it. Its torrent can only be hidden from behind debris, and the debris " +
+            "that hides you is smashed. At the last, only the pathfinder's light is left.",
+        // Lil'viathan, its pet
+        iconObjId: 28252,
+        arena: getRecipeArena(SCAR_RECIPE),
+        // South of its pool, as the other fights start you
+        spawn: {
+            x: LEVIATHAN_SPOT_WORLD.x,
+            y: LEVIATHAN_SPOT_WORLD.y - LEVIATHAN_START_DISTANCE,
+        },
+        // Its hitpoints come from the event, its hits are tuned to the Lantern-bearer's hitpoints
+        // with the shop's every upgrade (AWAKENED_HITS)
+        difficulty: { hp: 1, damage: 1 },
+        hits: AWAKENED_HITS,
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_LEVIATHAN_ID,
+                hp: LEVIATHAN_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "The Awakened Leviathan sinks into its pool, and the Scar is dark and still.",
+        bossArena: LEVIATHAN_BOSS_ARENA,
+        features: LEVIATHAN_FEATURES,
+        scaperune: true,
+        lighting: LEVIATHAN_LIGHTING,
+        // Opened by beating its map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "scar",
+            character: "lantern_bearer",
+            weaponLevel: LEVIATHAN_FIRE_LEVEL,
+            ability: LEVIATHAN_SHADOW,
+        },
+        music: "Colossus of the Deep",
+    },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,
     {
@@ -445,9 +856,37 @@ export const MAPS: MapDef[] = [
 ];
 
 // The maps that open one after another
-export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter((map) => !map.seasonal && !map.fight);
+export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
+    (map) => !map.seasonal && !map.fight && !map.act,
+);
 
-// Open from the start, between the campaign and the fun maps
+// The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
+export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
+
+// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign maps from the Desert on, on
+// the acts' maps, and on any campaign map with a remix on (content/remixes.ts): `remixed`. Boss
+// fights, raids, the Tombs (their own board), quests in parts, the seasonal and fun maps don't.
+const FIRST_INVOCATION_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
+export function takesInvocations(map: MapDef, remixed = false): boolean {
+    if (map.act) {
+        return true;
+    }
+    const index = CAMPAIGN_MAPS.indexOf(map);
+    return index >= 0 && (remixed || index >= FIRST_INVOCATION_MAP) && isPlainRun(map);
+}
+
+// Relics (content/relics.ts) are on every campaign map and the acts' maps (and remixes), and off in
+// boss fights, raids, the Tombs and the rest (act-2-fallen-empire.md, 9.2)
+export function takesRelics(map: MapDef): boolean {
+    return (map.act !== undefined || CAMPAIGN_MAPS.includes(map)) && isPlainRun(map);
+}
+
+// A survival run: waves and a final boss, not a fight, a raid or a quest's parts
+function isPlainRun(map: MapDef): boolean {
+    return !map.fight && !map.raid && !map.tombs && !map.stages && !map.fun && !map.dev;
+}
+
+// Open from the start, listed under the fun maps on the map screen
 export const SEASONAL_MAPS: MapDef[] = MAPS.filter((map) => map.seasonal);
 
 // Boss fights on their own, each open once its map has been beaten
@@ -524,8 +963,26 @@ export function isSeasonalMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.seasonal === true;
 }
 
+export function isActMap(mapId: string): boolean {
+    return MAP_BY_ID.get(mapId)?.act !== undefined;
+}
+
 export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
+}
+
+// The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
+// the start. With more than one, a retry starts the map over: the run that ended had beaten
+// whichever came before.
+export function getRetryLair(map: MapDef): LairDef | undefined {
+    const lairs = map.lairs;
+    return lairs?.length === 1 && !lairs[0].requires ? lairs[0] : undefined;
+}
+
+// A map to walk round with nothing on it (FunMapDef.explore, and no waves): nothing hurts but a
+// lair's boss, and the HUD's only what it takes to walk it
+export function isPeaceful(map: MapDef): boolean {
+    return map.fun?.explore === true && map.waves.length === 0;
 }
 
 // Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
@@ -533,10 +990,18 @@ export function isCoopMap(map: MapDef): boolean {
     return map.fight?.solo !== true;
 }
 
-// Every cinematic a map can play: its opening (MapDef.cinematic) and each part's of a fight in
-// parts (MapDef.stages), for what bakes and loads them
+// Every cinematic a map can play, for what bakes, loads and hears them: its opening
+// (MapDef.cinematic), each part's of a fight in parts (MapDef.stages), and its lairs'
+// (LairDef.opening, and a lair's unsealing as the ones before it fall)
 export function getMapCinematics(map: MapDef): CinematicDef[] {
-    const all = [map.cinematic, ...(map.stages ?? []).map((stage) => stage.cinematic)];
+    const all = [
+        map.cinematic,
+        ...(map.stages ?? []).map((stage) => stage.cinematic),
+        ...(map.lairs ?? []).flatMap((lair) => [
+            lair.opening?.cinematic,
+            lair.requires?.unsealing?.cinematic,
+        ]),
+    ];
     return all.filter((def): def is CinematicDef => def !== undefined);
 }
 
@@ -551,6 +1016,20 @@ export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
+// Whether an adventurer is out for players: not one brought in on a map that isn't (isMapOut,
+// the Forester of an act still to come)
+export function isCharacterOut(character: CharacterDef): boolean {
+    const map = character.unlock && MAP_BY_ID.get(character.unlock.mapId);
+    return !map || isMapOut(map);
+}
+
+// The adventurers to pick from: not one played on one map alone (CharacterDef.only), or one who
+// isn't out yet. Never a retired one an old save still has unlocked (the Dwarf), as the game has
+// no CharacterDef for it
+export function getRoster(): CharacterDef[] {
+    return CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
+}
+
 export function getMap(id: string): MapDef {
     const map = MAP_BY_ID.get(id);
     if (!map) {
@@ -560,15 +1039,17 @@ export function getMap(id: string): MapDef {
 }
 
 // The part of the world a map's collision, heights and scenery come from: its
-// arena, on its plane
+// arena, on its plane, and where what burns stands (MapDef.burns)
 export function getArenaRegion(map: MapDef): {
     baseX: number;
     baseY: number;
     sizeX: number;
     sizeY: number;
     plane: number;
+    burnLocs?: number[];
 } {
-    return { ...map.arena, plane: map.plane ?? 0 };
+    const region = { ...map.arena, plane: map.plane ?? 0 };
+    return map.burns ? { ...region, burnLocs: map.burns.locs } : region;
 }
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or

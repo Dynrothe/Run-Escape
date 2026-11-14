@@ -1,4 +1,4 @@
-import { cleanAction, cleanMove as gameCleanMove } from "../src/game/core/lockstep";
+import { CoopAction, cleanAction, cleanMove as gameCleanMove } from "../src/game/core/lockstep";
 import {
     RunWatch,
     actionKey,
@@ -9,6 +9,23 @@ import {
     heroIdsOf,
     runOf,
 } from "./coop-checks.mjs";
+
+// One of every kind of action the game sends (CoopAction), so a kind the relay's copy doesn't know
+// fails here rather than flagging the run each time a guest takes it
+const EVERY_KIND: Record<CoopAction["kind"], CoopAction> = {
+    choose: { kind: "choose", index: 2 },
+    reroll: { kind: "reroll" },
+    skip: { kind: "skip" },
+    keep: { kind: "keep" },
+    takeKept: { kind: "takeKept" },
+    banish: { kind: "banish", index: 1 },
+    banishChest: { kind: "banishChest" },
+    chest: { kind: "chest", action: "take" },
+    item: { kind: "item", index: 0 },
+    event: { kind: "event", index: 1 },
+    leaveEvent: { kind: "leaveEvent" },
+    ability: { kind: "ability" },
+};
 
 describe("the relay's copy of the host's checks", () => {
     it("cleans a move and an action as the game does", () => {
@@ -24,16 +41,22 @@ describe("the relay's copy of the host's checks", () => {
             expect(cleanMove(move)).toEqual(gameCleanMove(move));
         }
         for (const action of [
-            { kind: "choose", index: 2 },
+            ...Object.values(EVERY_KIND),
             { kind: "choose", index: 64 },
             { kind: "chest", action: "alch" },
             { kind: "chest", action: "steal" },
             { kind: "reroll", index: 3 },
+            { kind: "ability", index: 2 },
+            { kind: "ability", index: 64 },
             { kind: "nope" },
         ]) {
             const clean = cleanAction(action);
             expect(actionKey(action)).toBe(clean && actionKey(clean));
             expect(actionKey(action) === undefined).toBe(clean === undefined);
+        }
+        // Every kind the game sends has a key: one without would flag every time it's taken
+        for (const action of Object.values(EVERY_KIND)) {
+            expect(actionKey(action)).toBeDefined();
         }
     });
 

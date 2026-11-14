@@ -6,7 +6,13 @@ import { describeMissing, parseRoomCode } from "../client/coop/CoopLobby";
 import { RoomListing, RoomView } from "../client/coop/protocol";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
-import { cleanInvocations, getRaidBand, getRaidLevel } from "../content/invocations";
+import {
+    HARD_PRESET,
+    cleanInvocations,
+    getInvocationPoints,
+    getRaidBand,
+    getRaidLevel,
+} from "../content/invocations";
 import {
     FUN_MAPS,
     MAPS,
@@ -15,6 +21,7 @@ import {
     getMap,
     getMapCharacter,
     isCoopMap,
+    takesInvocations,
 } from "../content/maps";
 import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
@@ -22,7 +29,12 @@ import { useConfirm } from "./ConfirmDialog";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import { AdventurerPanel, Toggle, getStartingWeaponIcon } from "./GameUi";
-import { InvocationBoard, InvocationsButton } from "./Invocations";
+import {
+    InvocationBoard,
+    InvocationsButton,
+    RunInvocationBoard,
+    RunInvocationsButton,
+} from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
 
 // Co-op: finding a room or making one, then the room itself, where everyone
@@ -319,6 +331,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
         : undefined;
+    // A run's: the host's invocation points, hard mode's preset with them when the room's on hard
+    const runBoard = takesInvocations(map);
+    const invocationPoints = runBoard
+        ? getInvocationPoints([
+              ...(Array.isArray(hostInvocations) ? hostInvocations : []),
+              ...(room.hard ? HARD_PRESET : []),
+          ])
+        : undefined;
     // The invocation board, closed whenever the map changes, so it doesn't come back by itself
     // when the Tombs is picked again
     const [board, setBoard] = useState(false);
@@ -533,6 +553,13 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                         })}
                                     </div>
                                 )}
+                                {invocationPoints !== undefined && invocationPoints > 0 && (
+                                    <div className="ui-card-style">
+                                        {t("coop.invocation_points_host", {
+                                            points: invocationPoints,
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -554,6 +581,13 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 {isHost && map.tombs && (
                     // The Tombs go by the host's invocations instead of endless and hard mode
                     <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                )}
+                {isHost && runBoard && (
+                    <RunInvocationsButton
+                        ui={ui}
+                        room={{ mapId: map.id, hard: room.hard }}
+                        onOpen={() => setBoard(true)}
+                    />
                 )}
                 {isHost && !map.fun && !map.tombs && (
                     <div
@@ -628,6 +662,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             </div>
             {board && isHost && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
+            {board && isHost && runBoard && (
+                <RunInvocationBoard
+                    ui={ui}
+                    client={client}
+                    room={{ mapId: map.id, hard: room.hard }}
+                    onClose={() => setBoard(false)}
+                />
             )}
             {confirmDialog}
         </div>

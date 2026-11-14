@@ -39,6 +39,8 @@ go stale. Add anything that cost you time to work out.
 | Level up choices, and when a weapon can evolve         | `src/game/core/Upgrades.ts`                                            |
 | Evolution recipes, for the UI                          | `src/game/content/evolutions.ts`                                       |
 | Hard mode's numbers (each map's are on its `MapDef`)   | `src/game/content/hard.ts`                                             |
+| A run's invocations, hard mode's preset, coin bonuses  | `content/invocations.ts` (`RUN_SET`), `maps.ts` (`takesInvocations`)   |
+| Relics: tiers, picks, each one's rule on its hero      | `content/relics.ts`, `Sim.ts` (Relics), `ui/Relics.tsx`                |
 | Co-op's numbers: the party's scaling, boss copies      | `src/game/content/coop.ts`                                             |
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
@@ -46,14 +48,53 @@ go stale. Add anything that cost you time to work out.
 | Thanksgiving Harvest: its enemies, turkeys, the Avian  | `content/thanksgivingenemies.ts`, `TurkeyDay.ts`, `characters.ts`      |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| Yama's generals in Varrock, and its demon hordes       | `content/xarth.ts`, `kril.ts`, `varrockHordes.ts`                      |
+| The generals' design and what the bot found            | `docs/design/varrock-generals.md`                                      |
+| The Battle for Varrock: burnt Varrock, to explore      | `content/fun/maps.ts`, `scaperune/maps/battleForVarrock.ts`            |
+| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
+| A boss's cinematic as it wakes (`LairDef.opening`)     | `fun/yamaWakes.ts`, `Sim.stepLair`, `GameClient.startLairOpening`      |
+| A lair's seal going out (`requires.unsealing`)         | `fun/palaceUnsealed.ts`, `Sim.stepLockedLair`, `drawLairSeal`          |
+| A map's objective on the HUD (`MapDef.objectives`)     | `GameClient.getObjectiveView`, `GameUi.tsx` (`BossBar`)                |
+| The shot editor for cinematics (`?director=<map id>`)  | `client/CinematicDirector.ts`, `ui/DirectorPanel.tsx`                  |
+| Recording a cinematic as a trailer MP4 (ffmpeg)        | `client/TrailerRecorder.ts`, `scripts/dev/trailer-server.ts`           |
+| Yama's fight in burnt Varrock, and its design          | `content/yama.ts`, `docs/design/yama.md`                               |
+| Bosses asleep on a map to walk round (`MapDef.lairs`)  | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
+| Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |
+| Zachariah as the player: his model and his buttons     | `src/game/content/justiciarKit.ts`, `Sim.useKitAbility`                |
+| Blessings in place of items, level by level (Varrock)  | `content/blessings.ts`, `Sim.bless`, `client/BlessingViews.ts`         |
 | A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
+| Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
+| An act still to come, hidden (`ActDef.released`)       | `content/acts.ts` (`isActOut`), `content/maps.ts` (`isCharacterOut`)   |
+| A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
+| The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
+| The Lassar Undercity: its enemies, bosses, the realm   | `content/lassar.ts`, `scaperune/maps/lassarUndercity.ts`               |
+| A map of two worlds (the realm), its twin on screen    | `core/rules/RealmRule.ts`, `Sim.turnWorld`, `MapManager.twin`          |
+| Ghorrock: its enemies, bosses, the yard and its cold   | `content/ghorrock.ts`, `scaperune/maps/ghorrock.ts`                    |
+| The cold: braziers, embers, vents, each player's cold  | `core/rules/ColdRule.ts`, `Sim.stepCold`, `GameView.drawCold`          |
+| The effect mask: tile effects on any map (ice)         | `core/world/EffectMask.ts`                                             |
+| The Scar: its enemies, bosses, the drained sea         | `content/scar.ts`, `scaperune/maps/scar.ts`                            |
+| A dimmed light, the only light, a boss's debris        | `PlayerEffectDef` dim, `EnemyDef.onlyLight`, `BossAttackDef.debris`    |
+| Remixes: Act II rules on older maps, stacked, records  | `content/remixes.ts`, `core/rules/remix.ts`, `RuleSet` in `RunRule.ts` |
+| The Soulreaper axe: souls, Harvest, its pieces         | `WeaponDef.souls`, `Sim.harvest`, `UnlockTask` pieces                  |
+| Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
+| Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
+| The Awakened Whisperer: Blackstone, siphon, screech    | `content/whisperer.ts`, `docs/design/awakened-whisperer.md`            |
+| Awakened Duke Sucellus: his room, Kindle, the cold     | `content/duke.ts`, `scaperune/maps/dukesRoom.ts`, `awakened-duke.md`   |
+| The Awakened Leviathan: Shadow, the wreck, the torrent | `content/leviathan.ts`, `docs/design/awakened-leviathan.md`            |
+| Fighting pets (Butch, the Wisp, Baron, Lil'viathan)    | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| An act's ending: told once, its card, the save         | `ActDef.ending`, `takeActEnding` in `save.ts`, `ActEndingModal`        |
+| The Forgotten Four gauntlet: climb, camp, records      | `content/gauntlet.ts`, `core/gauntlet.ts`, `ui/Gauntlet.tsx`           |
+| Awakened invasions: who invades, their pockets         | `content/invasions.ts`, `invaders.ts`, `core/rules/invasion.ts`        |
+| Awakener's orbs on a final boss, the weekly Vault      | `AWAKENED` in `Sim.ts`, `canAwaken`, `vault.ts`, `ui/Vault.tsx`        |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
-| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
-| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
+| Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
+| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
+| The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
@@ -63,6 +104,7 @@ go stale. Add anything that cost you time to work out.
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
+| Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
 | Touch screens: the stick, its buttons, phone layouts   | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
@@ -100,6 +142,7 @@ go stale. Add anything that cost you time to work out.
 | Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
 | Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
+| Which enemies are baked when (the Tombs room by room)  | `content/mapEnemies.ts`, `GameAssets.loadEnemies`, `npcLooks.ts`       |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
@@ -186,6 +229,10 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
 - Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
   Theatre's): sim a change to those with it.
+- With `DODGE=1` the bot steps out of a windup the tick it starts, so a shorter warning costs it
+  next to nothing. Sim a boss fight's warnings with `REACT=0.25` too, each step taken a quarter of
+  a second late, as a person reacts: the Awakened fights' hardening left the bot 1 win in 25, and
+  none at all with it. A boss fight's hundreds of seeds can be split across processes with `FROM=`.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
 - **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
@@ -211,6 +258,7 @@ bun run tsx scripts/cache/check-items.ts          # casket items are the items t
 bun run tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
 bun run tsx scripts/cache/sprites.ts check        # the game's interface sprites are in the cache
 bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
+bun run tsx scripts/game/check-lairs.ts           # every lair's boss has room where it rises
 ```
 
 ## Tests on the release build
@@ -266,9 +314,14 @@ desktop build.
 
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
+- `sim.equip(id)` wears a piece, and `sim.openCasket(tier)` opens a casket at once: set
+  `sim.chests[0].itemId` to choose its item, with `upgradedFrom = undefined` and `upgrades = 0`
+  (or the rolled item's stay), then call `game.syncOverlay()` (private, but callable there), or
+  its window never shows (nothing in a run's tick asks for it).
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
 - `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
-  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
+  any boss or the Wardens), and an act that isn't out yet (`ActDef.released`). Without it the
+  dev server plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the
@@ -284,6 +337,8 @@ desktop build.
   "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
+- A player kept invulnerable from the console (`player.invulnerable` over 30) blinks white every 5
+  ticks, as after a hit, so a screenshot can catch them pale grey. Keep their hitpoints up instead.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,
   and the failed load can leave a bad cache in the browser profile for that port.
 - A slow first load after the dev server starts, or a page that reloads itself mid-load, is

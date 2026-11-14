@@ -855,7 +855,8 @@ src/game/
             above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
             (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
-            off), CoopScreen (the rooms, the lobby, the party in a run),
+            off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
+            checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -1029,7 +1030,11 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       that way: the camera moves north only as far as keeps the boss and its overhead prayer below
       the boss bar, and not at all for a boss more than `RAID_LEAN_MAX` tiles' lean off
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
-      strike to its targets within that reach, and the boss bar says when it's out of it.
+      strike to its targets within that reach, and the boss bar says when it's out of it. An aura
+      ignores it: there it's only the ring, the boss bar's "Out of reach!" and the bot's spacing,
+      so keep it the aura's radius. `MapDef.fight.stats` adds to the fight's adventurer's stats
+      (the Awakened Whisperer's: `auraArea`, Shadow Burst wider, to reach her from outside her
+      lash).
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
       it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
       (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
@@ -1061,6 +1066,36 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
       `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
       it's first used, and a pulsing ring with a tag while the guard's down.
+    - A fight on a map of two worlds (the Awakened Whisperer's, `MapDef.rule` a `RealmRuleDef`
+      with no souls of its own, `souls.count` 0, so no portal): `FightAbilityDef.turn`
+      (Blackstone) turns the party at the rule's turn of the tick (`fireTurn`, then
+      `turnWithAbility` from `stepRule`), every hero's button waiting its cooldown, and coming out
+      into the city it hits the boss in reach (`abilityTarget`). `EnemyDef.hurtIn` keeps a boss
+      of both worlds out of reach in the other (`damageEnemy` shows it blocked); `caughtIn`
+      catches a soul only in one world; `BossAttackDef.world` is begun only while the party's in
+      that world and finds no one once it's gone into the other (with `opens`, the guard drops);
+      `BossDef.siphon` stuns the boss when the last of its siphon's souls (`siphonLeft`, both
+      worlds) is caught with none of them reaching it (`siphonSoulGone`, `BossState.siphonLost`).
+    - A fight under the cold (the Awakened Duke's, `MapDef.rule` a `ColdRuleDef` with
+      `braziers.stayLit`, so they don't all go out as the boss is up from the start):
+      `FightAbilityDef.kindle` (Kindle) is taken only beside a brazier (`kindleBrazier`), lights it
+      at once for its full burn (`ColdRule.kindle`), and one that was out or guttering, within
+      `flare` of the boss, hits it (`fireKindle`). `BossAttackDef.rule.snuff` on a `cover` swing
+      puts out every lit brazier the boss can see (`ColdRule.snuffSeen`, `behindPillar` from where
+      it gazes), and `rule.chills` adds cold to whoever it hits (`bossHit`). The camera can lean
+      a set share of the way to a boss, up to a set distance (`BossLookDef.lean` as an object),
+      to frame one that never moves at the end of a small room.
+    - A fight in the dark on another map's ground (the Awakened Leviathan's, on the Scar's recipe
+      through `MapRecipe.fights`, with its own `lighting`): `ArenaFeatures.wreckage` stands as
+      debris from the start and never goes (`Sim.debris` entries with `wreck`; `glows` ones are
+      fires, drawn unlit and lit by the map's `lights`, and neither block nor hide). A `cover`
+      swing reads the debris and the wreck as pillars too (`Sim.coverPillars`, each
+      `DEBRIS_COVER` across), and with `smashes` the debris (not the wreck) that hid someone goes
+      as it lands (`smashDebris`); `coverWash` gives its windup a wash of its own for the shadows to
+      show against. `FightAbilityDef.stun` stuns the boss it lands on (`dropGuard`, its
+      `stunGrace` holding). `EnemyDef.light.phases` puts a boss's own light out in its other
+      phases (`lightInPhase` in `stepLights`), so only what the players carry lights it then, and
+      `BossLookDef.darkGlow` draws a faint glow on it meanwhile that weapons don't aim by.
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
@@ -1174,6 +1209,210 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### A hero of their own (the Battle for Varrock)
+
+Justiciar Zachariah is the player on the Battle for Varrock (`content/justiciarKit.ts`), a fun map
+with `fun.explore`: no waves, an empty boss pool (`firstAt: Infinity`), no random events
+(`stepRandomEvents`), nothing hurts (`damagePlayer`), and no item bar. Its pieces are fields any
+adventurer can have:
+
+- **`CharacterDef.npcLook`**: the hero's drawn as an NPC (`GameView.drawHeroNpc`): its idle and
+  walk, its abilities' animations (held on their first frame until they're due, then played out,
+  on the move too), and `swingSeq` for a weapon's swing, a player animation it hasn't got. It's
+  baked as the map that has everyone play it is travelled to (`GameAssets.loadHeroLook`, like a
+  pet's), and the slim cache keeps it with the pets (`getHeroLookRequests`). Its sim is a
+  player's: the same radius and movement, so `scale` keeps it near a player's size.
+- **`CharacterDef.abilities`** (`HeroAbilityDef`): buttons of the hero's own, in place of a fight's
+  one. `Sim.useAbility(slot)` goes to `useKitAbility`, which goes off where the hero faces with
+  or without anything to hit: `lunge` (a dash down a strip, `KIT_DASH_SPEED`), `wave` (a spot
+  animation flying along the ground), `square`, `checker` (cells of the world's grid of the colour
+  the hero isn't on, marked from the press) and `gaze` (all round). Each lands `windup` seconds
+  after the press (`KitCast`, `stepKit`), hits each enemy once, and `freeze` holds them. Its
+  cooldowns are the hero's (`Hero.kitReadyTicks`, `kitSecondsLeft`). Co-op's `ability` action
+  carries the slot as `index` (`cleanAction`; the relay's `actionKey` too), and a fight's own
+  button still has none. Keys: Space and 1 to 4 (the item keys, as an explore map has no items),
+  a pad's bottom button and its four shoulders, and on a touch screen `KitButtons`, the first
+  big in the items' corner and the others round it. The HUD's `HudNumbers.abilities` are their
+  charge.
+    - From the press to its strike the hero's rooted (`Sim.isCasting`: `stepPlayer` and co-op's
+      prediction take it as frozen), facing the way it goes. A lunge's dash after its windup
+      moves them by itself, and the floor's rising slabs don't hurt them on the way
+      (`Sim.isLunging`), so it's a way through Yama's ripples and lanes.
+    - A `gaze` can't see through the map: `core/gazeSight.ts` takes every wall and object that
+      stops a shot (the cache's projectile-blocking collision flags) within its reach as
+      segments, and the sim spares what's hidden behind one (`hiddenFrom`, the enemy's middle).
+      The view lights it from the same segments, per frame: `client/GazeLight.ts`'s shadow map
+      (how far the light gets in each of 1024 directions) shades a blue-white light added to the
+      light map (`LightMap.add`'s `shade`), soft over 0.35 tiles either side of each edge and half
+      on the line the sim uses, with the map's ambient dimmed as it winds up
+      (`SceneLights.updateGaze`). It's drawn on a lit map only (`MapDef.lighting`). Zachariah's
+      boss fight's gaze is unchanged: its arena's pillars (`BossAttackDef.cover`, `inShadow`).
+- **`MapDef.blessings`** (`BlessingsDef`, `content/blessings.ts`): a map with no items, and a
+  blessing for each level instead, Saradomin's in Varrock. Each level up offers every hero
+  `BLESSING_CHOICES` (three) to choose from in the `levelUp` state, in place of picks
+  (`Sim.rollBlessings`, `blessing` choices, which `describeChoice` and the level up screen show
+  with the map's `BlessingsDef`): none twice, by weight on the run's `rng` (so co-op's copies
+  agree), never past a blessing's `max`, and the `fallback` beside them once fewer are left, as
+  often as it comes. A reroll rolls three more and a skip passes them up; banishes don't reach
+  them. The one taken (`Sim.bless`) adds its `stats` times how often it's been had
+  (`updateStats`), a level to the
+  starting weapon (`weaponLevel`), a weapon or a level of it once it's held (`weapon`: the
+  staff's Saradomin Strike, Zilyana's Armadyl crossbow), a share of the hitpoints back (`heal`)
+  and changes to the hero's buttons (`kit`, for the abilities it names or all of them).
+  `Sim.kitAbility(slot)` is a button as blessed (`blessAbility`), and `useKitAbility`, the HUD's
+  buttons and the bot all go
+  by it; a wave's `fan` throws more waves either side (`BLESSED_FAN_ANGLE`, `KitCast.fanned`,
+  silent). Nothing gives an item there: `dropLoot` drops bones, coins and food (its chance the
+  map's `BlessingsDef.food`, over `FOOD_DROP_CHANCE`), never a casket or a power-up, `dropCasketOfTier` drops nothing, and visitors who'd give one stay away
+  (`givesItems`, for a blessed map with random events). The HUD has the weapon and a row of
+  blessings for passives, gear and the bag (`client/BlessingViews.ts`), the pause menu lists
+  them, and taking one plays the `blessing` event, with the map's `spotAnim` and `sound`, which
+  `getSpotAnimIds` and `getGameSoundIds` collect. Blessings' icons are items, which the slim
+  cache keeps from `ALL_MAPS` as it does any `iconObjId`. The bot takes them in the order of
+  `BLESSING_RANK` in `simulate-run.ts`.
+- **`WeaponDef.heavy`**: blows that land heavy, the Saradomin sword's (a sweep's or a slash's,
+  in `meleeHits`). A swing that hits shakes the camera once (a `bossImpact` event, so the
+  Screen shake setting turns it off), plays `hit` if there is one (an `ImpactSpotDef`) on the
+  first `HEAVY_HIT_SPOTS` it hits, and staggers the rest of what it hits for `stagger` seconds,
+  longer with `meleeKnockback`: `Enemy.staggered` holds an enemy from walking and striking, as
+  `frozen` does, but its knockback still carries it. Bosses and stationary enemies don't
+  stagger. `getSpotAnimIds` collects `hit`. The `meleeSpeed` stat speeds melee weapons only,
+  on top of the sets' speed (`Sim.weaponSpeed`, capped with the rest in `cooldownTicks`):
+  Saradomin bracers give it, and a Saradomin platebody `meleeKnockback`.
+- **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
+  as a loc can't play a skeletal animation, and the map opens with a cinematic
+  (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening
+  cinematics, below.
+- An explore map with no waves (`isPeaceful` in `content/maps.ts`) has a HUD of the minimap,
+  the hitpoints and the hero's buttons: no level, clock, kills, coins, round, damage panel, quests
+  or bag (`Hud` in `ui/GameUi.tsx`). With waves (the Battle for Varrock's hordes,
+  `content/varrockHordes.ts`) it's a run as any, with the run's HUD, still with no clock to end
+  it, no boss pool and no random events.
+- **`MapDef.levelXp`** (`LevelXpDef`): levels past `from` need more experience than anywhere
+  else, more for each, up to `times` as much from level `to` on (`stretchedXp` in `core/xp.ts`,
+  for `Sim.xpForLevel` and `levelForXp`, which counts up from the run's level). Varrock's
+  (`VARROCK_LEVEL_XP`) keeps its first few as they are: with nothing but blessings, a hero who
+  got none in the first minutes didn't live through them, in the bot's hands, even with the
+  buttons' old cooldowns. After that a blessing's worth more than a pick, and the hordes are
+  twice the crowd.
+- **`MapDef.burns`**: scenery that burns whoever walks into it. The worker marks every tile of a
+  placed loc in `locs` (`RegionDataInput.burnLocs`, `RegionData.burnTiles`, from
+  `getArenaRegion`), `ArenaGrid.burnsAt` reads it, and `Sim.stepBurningScenery` takes `share`
+  of a hero's hitpoints at once and every `every` seconds while they're in it, through armour
+  and with no grace (`BURN_SOURCE`, `Hero.burnNext`). Enemies walk through unharmed. Varrock's
+  fires, and its dead, are walkable copies of the cache's (`getWalkableLoc` in
+  `rs/config/loctype/LocOverrides.ts`), so they block nothing. The bot walks round them
+  (`firesToAvoid`, and `blastDodge` steps it out of one in a fight).
+- **`MapDef.lairs`** (`LairDef`): bosses asleep on a map to walk round, one fought at a time
+  (`Sim.lair`): Yama on his throne (`content/yama.ts`, `docs/design/yama.md`) and his generals,
+  Xarth and K'ril Tsutsaroth (`content/xarth.ts`, `content/kril.ts`,
+  `docs/design/varrock-generals.md`). `Sim.stepLair` wakes one when a hero's in it: the map's floor
+  (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's pad).
+  `wakeLair` drops every tile beside a way out (`findLairExits`, `ArenaGrid.dropTile`, kept in
+  `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`; a seal's `spacing` draws a flame only
+  every so many tiles, for a long rim on a phone, while every tile stays sealed), and the boss's
+  intro plays, rising at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). What's
+  about runs straight away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not
+  to the map's nearest edge as off a lair, which on a city that goes on round its arena sent
+  everything north. Beaten, the seal lifts
+  (`liftSeal`) with the `victory` notice and the `shout`, each hero still up gets `heals.share`
+  of their hitpoints back with its `spotAnim` (`healOnVictory`: a general's, all of them, with
+  the blessings' bolt), its pools go out (a pool that
+  `spreads` would burn on for good), and any lair `empowered` by it is from
+  then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its
+  `BossAttackDef.empowered` attacks usable). A `final` lair's boss wins the run, endless or not.
+  One that `requires` others is sealed from the start (`Lair.locked`) until they're beaten, and
+  with `requires.unsealing` (`LairUnsealingDef`, the palace's in `fun/palaceUnsealed.ts`) a
+  cinematic plays first, on the sim's clock from `Lair.unsealTick` as an opening is: everyone's
+  held and unhurt (`Sim.unsealing`, `introHolds`), what's about is sent off and nothing spawns,
+  the seal lifts `liftAt` seconds in (`unsealLiftTick`), its flames going out one by one from
+  `from` in a puff of `seal.smoke`, and it opens with the `requires.message` once it's over
+  (`unsealEndTick`). `GameClient.startLairOpening` plays it and pins the squares it flies over; a
+  solo skip lifts it at once (`skipLairOpening`). `MapDef.objectives` (`MapObjectiveDef`) puts a
+  line of what the map wants at the top of the HUD, the first whose lairs aren't all beaten, with
+  how many are (`getObjectiveView`). It's up for six seconds (`MapObjective` in `GameUi.tsx`,
+  fading in and out): as the HUD comes up after a cinematic, as a boss's bar goes, and as it
+  changes (keyed by its text and count). On a
+  map with nothing coming (`isPeaceful`), hits land only while one's fought (`damagePlayer`), and
+  no wave comes while one's on (`stepDirector`). Nor does the waves' clock run: `Sim.heldTicks`
+  counts the ticks a lair's woken, fought or unsealed, and `mapSeconds` (the waves, events and
+  enemies' toughness) and `clockSeconds` (the HUD's timer) leave them out, so the hordes take up
+  where they were. `seconds` is still the run's whole time. A death in one ends the run, as any death does,
+  and a retry (as any solo run has) on a map whose only lair is open from the start
+  starts the hero at its `start` (`getRetryLair`, `GameClient.startRun`'s `atLair`), so
+  it wakes on the first tick; with more than one (the Battle for Varrock's), it starts the map over. `MapPropDef.lair` ties a prop
+  to its lair: hidden once its boss is up, or swapped for `awake` (Yama's empty throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
+  wakes, before its intro. Stepping onto the floor then puts the lair in `waking` (`Lair.wakeTick`),
+  which holds every player where they stand, turned to `at` (`Sim.introHolds`, `introFacing`), with
+  nothing sealed and nothing hurting; `introAt` seconds later (`Lair.introTick`) `wakeLair` seals it
+  and the intro starts. `GameClient.startLairOpening` plays the cinematic as it sees `waking`, once
+  per wake, on the sim's clock (`CinematicPlayer.onSim`, `advanceTo`: it never holds the run), so
+  every co-op player sees it in step. Its first shot can be `{ player: true }`, setting off from the
+  run's camera (or its first few, to hold there a moment, as the unsealing does while a general
+  falls), and its last comes during the intro, whose camera pan it hands back to. A skip ends
+  it for that player; solo, `Sim.skipLairOpening` brings the intro on at the next tick. A run that
+  starts on the floor (a retry) has no opening (`Sim.lairOpens`). A cast member standing in for a
+  prop shows it again once they're `gone` (Yama, gone from his throne). `getMapCinematics` (`content/maps.ts`) gives a
+  map's cinematics, this, an unsealing's, a fight part's and `MapDef.cinematic`, for baking their cast and collecting their spot
+  animations and sounds. His fight's own pieces are fields any boss can have:
+    - `BossDef.home` keeps it within so many tiles of where it rose.
+    - `BossAttackDef.meteor` is a swing drawn as something falling from `height` tiles onto where
+      the player stood (`BossFightView.drawMeteors`, `meteorFallen`), its shadow growing under it,
+      and the scene dimmed to `dark` (`Sim.dimTo`). The swing's radius is what it hits. The
+      attack's `light` glows where it'll land: on the burnt floor, its shadow alone didn't show.
+      `breaksAt` is where its spot animation starts to break up: it falls on the frames before,
+      slowed to the windup, and `Sim.shatterMeteor` plays the rest where it ends, landed or
+      stopped in the sky, as an effect started that far back. Left looping, Yama's (3271) burst
+      halfway down and came round whole again.
+    - `BossAttackDef.interruptedBy` lets a hero's button (a `HeroAbilityDef`, by id) stop the
+      attack by landing on the boss during its windup (`interruptBoss`). `broken` plays where it
+      would have landed, the boss is stunned, and its guard's down for `open` seconds.
+    - `BossDef.critical` puts an attack on a clock of its own (`timeCritical`,
+      `BossState.criticalAt`). It comes first at a share of the boss's hitpoints and at every
+      phase change, then every so many seconds. It's put off while no hero's button that stops it
+      is ready within `ready` seconds, so it can always be answered.
+    - `BossDef.gazeWard`: outside an interrupt, the gaze does nothing to it. Cast at it, pillars
+      rise between them (`Sim.wardPillars`, `stepWardPillars`, `BossFightView.drawWardPillars`).
+      They're grid pillars (`ArenaGrid.dropTile` with `pillar`, so `isPillar`), and so real
+      occluders for the gaze's sight and light. It says one of its `shouts`. Cast from within
+      `tooClose.reach` of its edge, where no pillar could come up between them, it drops what it
+      was winding up and does `tooClose.attack` instead (`Sim.swatGaze`: Yama's Swat), saying
+      one of its own shouts. Not while it's stunned, kneeling or calling down what the gaze
+      stops: the meteor's answer works at any range.
+    - `BossAttackDef.push` knocks whoever it hits straight away from the boss, as far as open
+      ground goes (`Sim.pushFrom`, a `Hero.drag`), and out of a cast of their own.
+    - `BossAttackDef.floorAt: "boss"` aims its floor action at the boss (a ripple from his stomp).
+      `ImpactSpotDef.height` lifts an impact's spot off the ground (the meteor breaking in the sky).
+    - `EnemyDef.bursts` is his Voidflare: a summon nothing hurts (`damageEnemy` blocks it, and
+      `nearestEnemies` and the kit's aims pass it by) that bursts (`Sim.burst`) when its fuse
+      runs out (`Enemy.burstTick`), or on touching a hero once it's `arm` seconds old, hurting
+      whoever's in its radius and starting its floor action where it is (the `plus` pattern).
+      `shatter` is the way to beat it: `kitHit` sends the hero's buttons to `flareHit`, where
+      `frozenBy` holds it (its fuse waits a tick for each it's held) and `shatteredBy` breaks a
+      held one, dropping the game's food for `heal`. The square aims at a flare first
+      (`nearestFlare`). `summon.toward` brings summons out on the boss's side towards the hero
+      it's after, so a flare comes from his hands rather than behind him.
+    - The balance bot plays it with the hero's own buttons (`kitPlan` in `simulate-run.ts`).
+      `GAZE=never` and `GAZE=waste` check that the meteor is fair. With `LAIR=<id>` it farms the
+      hordes for `FARM` seconds, kept out of every lair (`lairsToAvoid`), then fights that lair,
+      `EMPOWERED=1` as if its rival fell first; Yama's generals are beaten for him.
+      His generals' pieces are any boss's too:
+    - `LairDef.pillars` stand from the run's start, solid (`raisePillars`), and are the cover for
+      its boss's `cover` attacks (`Sim.coverPillars`, the gaze's shadows too). One that spares
+      someone from a `crumbles` attack comes down (`crumbleShelter`), and all of them at
+      `crumbleAt`. `BossFightView.drawLairPillars` draws the loc, sinking as it goes.
+    - A debuff's `burn` (`Sim.stepBurns`) hits that many hitpoints a second for each stack,
+      through armour (`BURN_SOURCE`).
+    - A pool's `spreads` lights another a step off every so often, inside the fight, up to `most`
+      of its kind (`spreadPools`). `dousedBy` names a hero's button that puts it out where its
+      wave passes or its square lands (`dousePools`).
+    - `walkTo.heals`: each walker that gets there heals the boss that share of its hitpoints.
+    - `BossDef.pact`: it takes `taken` of each hit while any of those enemies is up
+      (`pactShare`), K'ril's bodyguards.
+    - `BossAttackDef.breakable`: hit for `share` of its hitpoints during the windup, it's
+      interrupted as `interruptedBy` is (`BossWindup.taken`). `heal` heals the boss that share
+      as it lands.
+
 ### Collection log rewards
 
 - **`TrophyDef`** (`content/trophies.ts`): its `id` is stored in `SaveData.trophies`, so never
@@ -1208,9 +1447,10 @@ adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy 
 
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
-  such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
-  the map's travelled to (`GameAssets.loadProps`), each NPC once, with what every map plays on
-  it, as the slim cache keeps them (with the pets): a model has one key, whichever map baked it.
+  such as a person standing guard (Vardhelm's two knights at the keep's door) or someone playing
+  a skeletal animation (Yama on his throne). They're baked as the map's travelled to
+  (`GameAssets.loadProps`), each NPC once, with what every map plays on it, as the slim cache
+  keeps them (with the pets): a model has one key, whichever map baked it.
 - **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
   map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
   NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
@@ -1222,9 +1462,11 @@ adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy 
   to a stop, and turns the short way round from one shot's yaw to the next; `CinematicPlayer` is
   the clock, which `GameClient.updateCinematic` moves on (100 ms
   a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
-  their spot animations, overhead chat and the bars, and `GameView` hides the props it stands in
-  for. The cast is baked with the props (`getPropRequests`, so the slim cache keeps them), its
-  spot animations and sounds with the game's.
+  their spot animations (lit through `SPOT_LIGHTS` on a lit map), overhead chat and the bars,
+  and `GameView` hides the props it stands in for. The cast is baked with the props
+  (`getPropRequests`, so the slim cache keeps them), its spot animations and sounds with the
+  game's. A lair's cinematic as its boss wakes (`LairDef.opening`) is one too, on the sim's
+  clock: see `MapDef.lairs` above.
     - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
       can't fall out of step over it. Input's held while it plays: any key or controller button
       (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
@@ -1242,8 +1484,8 @@ adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy 
       everyone watching (the host waits 20 s at most for a guest, as for its map). They're
       unpinned as it ends or is skipped, and stream as usual from there.
     - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
-      isn't its head. `MapDef.spawnFacing` turns the player as the run starts (south if it's left
-      out), to face the way the cinematic's camera ends looking.
+      isn't its head (Yama's is his throne's back). `MapDef.spawnFacing` turns the player as the
+      run starts (south if it's left out), to face the way the cinematic's camera ends looking.
     - **A phone has to draw every shot.** A camera low and level sees much further than the play
       camera, and a city costs far more than a phone's 69k triangles. Vardhelm's close shots look
       down at a pitch of 240 to 320, so the city beyond stays out of the picture, and its flight
@@ -1264,6 +1506,67 @@ adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy 
     - **In the dark.** On a map with `lighting`, a cast member's `light` (`CinematicActorDef`) is
       on them while they're drawn, and a spot animation in `SPOT_LIGHTS` lights them while it
       plays (`CinematicView.getLights`, offered to `SceneLights` as `KIND_CINEMATIC`).
+
+#### The shot editor
+
+Shots are easier placed by eye than typed. `?director=<map id>` on the dev server (or
+`game.direct()` mid-run, `game.direct("battle_for_varrock", 1)` from anywhere) starts a run on the
+map and opens the shot editor (`client/CinematicDirector.ts`, its panel `ui/DirectorPanel.tsx`) on
+one of its cinematics: its opening, a new one if it hasn't got one, or a lair's (the panel's list,
+`getDirectorChoices`). The run never steps while it's open, nothing pauses it, and no run is
+recorded: Exit leaves it for the title.
+
+- The cinematic's held at the playhead (`CinematicPlayer.held`, so there's no skip hint), its cast,
+  cues, bars and sounds just as they play. Play (Space) plays on from there; the timeline moves the
+  playhead, shows the cues along its top (hover one for what it is) and the shots as diamonds, the
+  run's camera as a square, which drag in time.
+- Your own camera starts from wherever the path is: drag to turn it, right or Shift drag to move it,
+  the wheel to zoom, WASD and Q E to fly (Shift faster), the arrows to turn. Enter adds a shot
+  there at the playhead (or sets the shot already there, rounded to a tenth of a second), U sets
+  the selected shot to it, H holds a shot, Delete takes one out (never the first, nor the run's
+  camera at the end), R puts the camera back on the path and V hides the panel to see the frame as
+  a player does. A shot added at the end pushes the run's camera 2 s on; a new shot's yaw is the
+  way round nearest the one before, so the camera doesn't spin the long way.
+- Copy code (or Show code) gives `seconds` and `shots` to paste over the def's own, or a whole
+  `cinematic: { ... }` for a map without one, in world tiles: constants like `YX` come out as
+  numbers. Prettier wraps the long lines. The cast and cues are left as they are in the file.
+- The shots are kept as a draft in the browser (`run-escape-director-drafts` in localStorage, by
+  map and cinematic) as they change, so a reload doesn't lose them, and come back the next time
+  it's opened. Revert drops the draft for the file's shots; a draft that matches the file goes by
+  itself.
+- What the shots will see is pinned as they settle (`MapManager.setPinned`, a quarter second after
+  the last change), so playing back doesn't wait on squares. A lair's opening plays on the editor's
+  clock, not the sim's, so its boss doesn't rise: only the cast does what it does.
+- It's a mouse and keyboard tool on the dev server, and never in a player's game.
+
+#### Trailers
+
+The shot editor's Trailer row records its cinematic to an MP4 in `trailers/` (gitignored):
+`client/TrailerRecorder.ts` in the page, and `scripts/dev/trailer-server.ts` on the dev server at
+`/__trailer`, which needs [ffmpeg](https://ffmpeg.org/) on the PATH, or `FFMPEG` set to it before
+the server starts. From the console, `game.recordTrailer({ ... })` takes everything
+`TrailerOptions` has: `width`, `height`, `fps`, `from` and `to` (seconds, which can go past the
+end, the camera resting there), `live`, `warmup`, `sound`, `volume`, `music` and `name`.
+
+- It's frame-exact, however slowly the frames draw. The renderer's own loop stops and each frame
+  is drawn by hand (`Renderer.frameCallback`) on a clock of its own (`VirtualClock`, in place of
+  `performance.now`), a frame's time apart, so actors' animations, hitsplats and the camera's shake
+  keep time too. The game's loop and clock come back however it ends.
+- Both canvases are drawn at the trailer's size, whatever the window's, by sizing them on the page
+  and shrinking them to fit with a transform (the renderer and `Overlay` go by `offsetWidth`, which a
+  transform doesn't change). The 3D canvas isn't kept once it's shown, so each frame's read back in
+  the same task it's drawn in, with the overlay over it, and sent as raw RGBA to ffmpeg's stdin.
+  Only the canvases are in it: no HUD, toasts or panel.
+- Sounds aren't played while it records. `GameAudio.startRecording` keeps what's asked for, with its
+  time (each sound's gap and the voice limit go by the trailer's clock), and the music as it
+  changes. They're rendered after the frames (`renderRecording`, an `OfflineAudioContext`) at fixed
+  levels, not the player's settings, and ffmpeg adds them, brought up to a video site's loudness.
+- What the camera will see is loaded first, with real frames, before the clock's taken over.
+- `live: true` lets the run play on behind the cinematic, the player stood still: no one's hurt
+  enough to die, level ups take the first choice, caskets are taken and visitors sent off.
+  `warmup` plays that many seconds unseen first, so there's a fight on when it starts.
+- Escape or Cancel stops it, and nothing's kept. Headless, on a software renderer, a 1080p frame
+  takes a second or so: a short `from` and `to` is enough to check it works.
 
 ### Raids
 
@@ -1394,6 +1697,16 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
   `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
   which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+  The `lanes` pattern raises lanes through the player, down the floor, across it or both: where
+  they cross, the lane down wins (Yama's shadow lanes). The `plus` pattern raises a tile and then
+  `arm` tiles out from it each way, one step at a time (where a Voidflare bursts).
+- **A floor over the ground** (`FloorDef.onGround`, the Battle for Varrock's palace) is laid a
+  whisker over the map's own ground, with no pit. Nothing under it can show, so `FloorView` draws
+  no light under its tiles and no cut edge beside what isn't floor. A tile is drawn as its top
+  alone (`topOnly`) unless it's coming up, cued or trembling as well as at rest, since its sides
+  are a whisker. Without that, Yama's patterns on its paving (110 triangles a tile whole, 38 as a
+  top) took a phone from 57k to 101k. They now peak at about 60k, and `floorLint` counts it the
+  same way.
 - Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
   silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
   raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top
@@ -1405,9 +1718,32 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
-never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
+never sees where one is: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
 `GameClient.update`, and `GameView` only draws it (on the menus, `GameClient.submitActors` stands
-it beside the character). So a pet can't change a run, and co-op's copies agree without it.
+it beside the character). So a looks-only pet can't change a run, and co-op's copies agree without
+it.
+
+- **Fighting pets** (`PetDef.power`, Act II's Awakened fights' pets, Butch first) are the
+  exception. The pet's id goes in as `SimOptions.pet` (solo) or `HeroOptions.pet` (each co-op
+  player's, from their `Loadout.pet`, kept only if the game has that pet), and `Sim.stepPets`
+  plays its power on the sim's ticks for that hero: Butch's leap onto the nearest enemy within
+  `reach` every `every` seconds, a cleave where he lands scaled as power-ups' damage is
+  (`pet:butch` in `damageBySource`). It emits `petLeap`, and `PetFollowers.leap` flies the
+  follower there and walks it back. Not on a boss fight map (`MapDef.fight`). A run with a
+  looks-only pet or none plays as before (`Vardorvis.test.ts`). The bot takes one with `PET=butch`.
+  The Wisp's power is a `call` (`Sim.stepCallingPet`): every `every` seconds the bones and coins
+  within `reach` of its hero are set `attracted` (as a magnet does), and every `soul` seconds that
+  its hero's hurt, a heal of `heal` of their hitpoints lands `travel` seconds later
+  (`Hero.petSoulTick`, `petSoulLands`), with the soul's glow on them. It emits nothing.
+  Baron's is `gas` (`Sim.stepGasPet`): once `crowd` enemies are within `reach` of its hero, a cloud
+  `size` tiles across lands round them for `seconds` (`Hero.petCloud`), slowing what's in it
+  (`Enemy.slowed`, `slowPace`) and poisoning it (`envenom`, `pet:baron`), the Duke's gas spot
+  animation kept up over it; then it sleeps `every` seconds. It emits `petGas`.
+  Lil'viathan's is `bubble`: every `every` seconds without one, a bubble round its hero
+  (`Hero.petBubble`, drawn as the Leviathan's magic orb round them by `GameView.drawPetBubble`).
+  The next enemy's hit on them (`damagePlayer`, after Step between) takes up to `share` of their
+  most hitpoints off it and pops it (`popBubble`), knocking back what's within `push` tiles as a
+  weapon's knockback does, and the wait starts again. It emits `petBubble`.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks
@@ -1427,6 +1763,70 @@ it beside the character). So a pet can't change a run, and co-op's copies agree 
   animations. The cache has two NPCs for each pet: `scripts/cache/find-npcs.ts` marks the one
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
+
+### An act's ending
+
+An act (`content/acts.ts`) can have an ending (`ActDef.ending`): a title and a few lines of story,
+told once every one of its slots' Awakened fights (`ActSlotDef.fightId`) is beaten, whichever was
+last (`isActEnded`). As a win is banked (`GameClient`, after `recordRun`), `takeActEnding` returns
+an act whose ending is due and marks it told in the save (`SaveData.actEndings`), and the store's
+`actEnding` puts `ActEndingModal` over whatever's up, a line at a time (a click shows the rest).
+Once the act's ended its middle card on the map screen says so and plays it again
+(`GameClient.showActEnding`); the card fills in a pet's icon for each Awakened fight beaten. The
+lines are in `world.json` (`act.<id>.ending.*`, from the extractor). What opens once the act's
+ended (the Forgotten Four gauntlet, build order step 15) goes by `isActEnded` too.
+
+### The Wardrobe
+
+The Wardrobe (`ui/WardrobeScreen.tsx`, a tile on the title screen) is the player's look: a body
+(body type A or B, a kit for each body part and the five body colours, as character creation
+picks them) and an outfit, slot by slot, worn on every adventurer. It's looks only, like a pet:
+the sim never sees it.
+
+- **What's in it:** `content/cosmeticItems.ts` is generated from the cache by
+  `scripts/cache/cosmetics.ts`: every item worn outside the weapon slot that both bodies can wear,
+  one of each look (items with the same worn models and colours are one piece), with a rarity by
+  its value in the cache (and the discontinued holiday rares made Very rare). The same script
+  lists the kits character creation offers. Run it again after moving to a newer cache. A body
+  always has a jaw: it's the chin and mouth (the hair kits have none), so there's no "none", and
+  body type B's default is its clean-shaven one (296, the counterpart of type A's 14). Prices
+  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, except 3rd Age's dearer
+  `THIRD_AGE_PRICE` (by name), paid from banked coins like the Armoury. An unlocked adventurer's own pieces are the player's for nothing
+  (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
+  Collection log finds are never sold: `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts` names the
+  trophies whose pieces are worn once the trophy's in the save (`getPieceTrophy`): the trophy's
+  own item if it's worn, and any others listed with it (what it makes in OSRS, as the hilt's
+  defender, or other looks of it, as Masori (f) or the Chompy bird hat's). `ownsCosmetic` goes by
+  the trophy alone for those, and `buyCosmetic` and loading a save's `cosmetics` refuse them. The
+  Store still lists them, to try on, with where they're found in place of a price. A trophy
+  that's a worn item belongs in the list, or the store sells it.
+- **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
+  `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
+  `SaveData.outfits` are outfits kept by name (`SavedOutfit`: the pieces and `overGear`, not the
+  body), saved over one of the same name, cleaned by `cleanSavedOutfits`.
+- **Worn:** `getCharacterAppearance(characterId, look)` puts the body on and the outfit over the
+  adventurer's own pieces; a slot set to -1 shows the body. In a run (`getRunAppearance`) gear
+  from passives and caskets goes over the outfit, unless `look.overGear` keeps it on top. The
+  weapon slot is always the run's. Adventurers who look like someone (`wearsWardrobe`: a fixed
+  outfit, or kits of their own) keep their look.
+- **Trying on:** a piece picked in the store is shown on the menus' adventurer
+  (`GameClient.previewLook`) until the Wardrobe's left. On the Appearance tab the adventurer
+  stands in the body alone (`showBareBody`, `getBareAppearance`: nothing worn, no weapon) so
+  what's changing can be seen. The Wardrobe holds the title camera still in front of the
+  adventurer and turns them instead (`turnWardrobeModel`, the actor's yaw), with its arrows or
+  by dragging the courtyard: `useDragToTurn` takes a press that lands on the game's canvas, as
+  the screen lets everything but its panels through, so it needs no area of its own on any
+  layout. Random (`randomBody`) is any kit and colour of either body.
+- **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
+  cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
+  and beards' streaks, made in pink), recoloured by every choice, the first included: without
+  it they come out pink.
+- **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
+  so it needed no relay change; `beginCoopRun` cleans each hero's.
+- **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
+  slot at once (shields one at a time, as a piece covering the shield slot would hide one), and
+  every worn item and power-up look on body type B too. That's what lets a deployed game draw a
+  body type B at all: before the Wardrobe, nothing in the game wore items' female models.
 
 ### What gets drawn
 
@@ -1448,6 +1848,13 @@ gets from the model's origin in any frame of any animation, so bosses' big swing
 puts the actors on the same frame of the same animation together and each run of them is one
 instanced draw: a crowd of one enemy is a few draws, not hundreds. The shader finds an actor's data
 by `DRAW_ID + gl_InstanceID`.
+
+A face's priority (OSRS's 0-11, `faceRenderPriorities`) is 4 bits of each vertex
+(`VertexBuffer.addVertex`): 1-12, after terrain's 0. OSRS paints a model's faces in priority order
+(10 and 11 among the rest by depth, so over what they're in front of), and the shaders get the same
+by pulling a higher priority a little towards the camera, which only matters where faces touch. It
+was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
+into the hair or the helm. Alpha has 7 bits to make room.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
@@ -1472,13 +1879,30 @@ place of the last map's: they're most of the actors' memory, and a map uses few 
 the enemy ids it finds in the map's waves, events and bosses, and in those enemies, so a new way for
 an enemy to bring on another needs nothing added. An enemy that isn't baked anyway (the console's
 `spawnBoss`) gets baked when it's first drawn, and shows up a moment later. The last map's enemies
-stay on the menus, so playing it again starts at once; a run on another map drops them before
-its own bake starts, so the two lots are never in memory together.
+stay on the menus, so playing it again starts at once; a run on another map frees what it doesn't
+want before its own bake starts, so the two lots are never in memory together, and keeps what
+both maps have (the goblins). A key already being baked isn't baked again, and a bake that lands
+after the run's stopped wanting it never goes on the GPU.
+
+The Tombs of Amascut bakes a room at a time (`getTombsStageEnemies`, `GameClient.followTombs`):
+the Wardens alone were most of the raid's memory. A path's room is baked from the start and freed
+once the path's done; the Wardens' are baked once one path's left, while it's played, or at once
+when they're fought (the devtools' way there). What's no single room's own (`getTombsRooms`:
+what two rooms share, the random events', a remix's) stays the whole raid. A room's enemies are found
+from its puzzle's content (`TOMBS_ROOM_CONTENT` in `tombs.ts`) and its boss. An enemy that one
+room's content brings on and another room spawns only by its id in `Sim.ts` would go with the
+first room: list it in the second's content too. Each player's game follows its own sim, so co-op
+needs nothing more.
 
 Enemies that would bake the same model are baked once (`GameAssets.mergeRequests`): the same NPC
 with the same first animation (Nex's four phases), the same outfit, the same scenery. The merged
 model has all of their animations, and the other enemies' keys point to it. A request's body is
 everything its bake reads (`getRequestBody`), so a new field on a bake request goes in there too.
+NPCs of their own that look the same, the same models, colours, size and first animation (a
+boss's other forms, Akkha's styles, an Awakened boss and its plain self), go by the lowest id
+among them (`SAME_NPC_LOOK` in `content/npcLooks.ts`). That file's made from the cache by
+`scripts/cache/npc-looks.ts`: run it after adding an enemy, and a test with the cache checks it's
+up to date.
 
 A bake is cut into small tasks (`getBakeTasks`: an NPC or player model each, the spot animations,
 items and scenery a batch at a time), and each goes on the GPU as it lands, as a page of its own.
@@ -1516,10 +1940,29 @@ keeps: the legs and the body's root. A skeletal swing or stance, or any run fram
 together that way, means no pose is baked and the run shows, and so does an interleave order gone
 from the cache (the swing would take the legs too).
 
-A baked animation is a posed copy of the model per frame, so what an enemy costs is its triangles
-times its frames. A skeletal animation (the Colosseum's bosses, the gryphon, the naguas) has a pose
-for every client tick, and baking each one made Varlamore's enemies several times any other map's,
-too much for a phone. `ActorBakeLoader` samples those every `SKELETAL_TICK_STEP` ticks instead.
+What an enemy costs is its vertices times its frames. A skeletal animation (the Colosseum's
+bosses, the gryphon, the naguas) has a pose for every client tick, and baking each one made
+Varlamore's enemies several times any other map's, too much for a phone. `ActorBakeLoader` samples
+those every `SKELETAL_TICK_STEP` ticks instead.
+
+Most frames only move the model's vertices, so they're baked as their positions alone
+(`ActorBakeFrames.ts`). A set (a model and its animations) bakes one mesh of the model's faces,
+each corner holding its vertex's number where its position would be, and each frame adds its
+positions (6 bytes a vertex) to the page's positions texture. `actor.vert.glsl` reads a corner's
+position from there by that number, starting where the instance's fifth texel says (-1 for a frame
+baked whole). A posed copy of the frame was 12 bytes a vertex and its indices besides, so the
+bakes are under a third of what they were. A frame whose faces aren't the mesh's (a fade changes
+their colours or alpha) gets a mesh of its own, up to `MESHES_PER_SET` in a set, and past that
+it's baked whole. So is a frame that would need a new mesh for itself alone (an animation's last),
+and every frame once the page's texture is full (2048 by 2048 texels). Instances of different
+frames with the same mesh are one instanced draw. `?wholeFrames` bakes every frame whole, as
+before, to compare against or to rule this out if a GPU draws actors wrong.
+`scripts/cache/check-actor-frames.ts` bakes every actor the game bakes and checks that each frame
+draws exactly the corners its model would baked whole; a test runs it on the heroes and a few
+enemies when there's a cache. It found `VertexBuffer`'s de-duplication reusing the wrong vertex in
+a shared mesh (the cow's): its key is the product of the vertex's three words, which rounds (or
+is 0), so it now checks that the vertex it finds is the same one. No frame baked whole, nor any
+map square of the few checked, had come across it.
 
 Indices are 16-bit, which halves the index buffer, about a quarter of a bake. WebGL2 has no base
 vertex for a draw, so `ActorBakeSegments` cuts a bake's vertices into segments of up to 65,536,
@@ -1585,6 +2028,13 @@ colour added. So a pixel costs the same however many lights there are. `GameWebG
 changes the programs over as a run starts (the first time, it builds the lit set and the light
 map's texture; changing over loads the map squares again and remakes the actors' draw calls).
 
+**A pocket of the dark** (an invading Leviathan's, `Sim.darkPocket`): a run that'll have one is lit
+from the start (`POCKET_LIGHTING`, ambient 1), as the programs are picked as a run starts. The pocket
+is the light map's alpha (`LightMap.darken`), and `u_ambient.w` its ambient: with that over 0 the
+shader mixes from the map's ambient to the pocket's by the alpha, and only adds lights by it too, so
+out of the pocket the map's drawn exactly as unlit. The alpha's only in the light map's 64 tiles round
+the view, so a pocket further off than that would be drawn lit.
+
 **Drawn at full brightness** (`ActorDrawOptions.unlit`): projectiles, spot animations, power-ups and
 caskets on the ground, power-ups' effects, bosses' hazards and everything the boss fight's view draws
 (`ActorRenderer.unlitAtLeast`). A hit's flash shows too. The overlay (hitsplats, health bars,
@@ -1614,6 +2064,16 @@ windups, loot beams) was never lit.
   on a boss lights it while its guard's down (a core exposed).
 - **The scene getting darker**: `phases: [{ ... }, { ..., light: 0.1 }]` on a boss, or
   `sim.dimTo(0.1, 2)` and back with `sim.dimTo(sim.baseAmbient, 2)`.
+- **A player's light smaller for a while**: a `dim` effect (`PlayerEffectDef`), on an enemy's
+  `touches` or a boss attack's `effect`: `tiles` off it a dose, stacking to `stacks` (the Scar's
+  Abyssal leeches), or `to` a cap (its black demon's roar). It's shown with the debuffs
+  (`Debuff.light`), and a light's never under 1.5 tiles. The Lantern-bearer's trait
+  (`CharacterTraitDef` lantern) makes her own `light` times the size.
+- **One light and nothing else**: `onlyLight: { inside, outside }` on an enemy with a `light`.
+  While it's up `stepLights` makes only its light, so the players', the map's and what's left go
+  dark; hits from inside it do `inside` times, and a boss's hits on anyone out of it `outside`
+  times. With `circles: { radius, speed }` it goes round the final boss (the Leviathan's
+  pathfinder). A boss bigger than two tiles counts as lit by its edge, not its middle.
 
 `scaperune_dark` is a dark map with the rule, fires and lanterns; `scaperune_glow` is a map at its
 usual brightness with glowing scenery, a blue light of its own and the wizard's fire spells.
@@ -1658,6 +2118,9 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   hasn't changed the same object, so the `memo`'d parts skip drawing, and nothing is told at all
   when nothing's changed. Something new that changes often goes in `HudNumbers`, and its numbers
   are rounded as they're shown (whole seconds), so they don't change when nothing on screen does.
+  Hitpoints aren't whole: regeneration (`regen`, hitpoints a minute) heals a sliver every tick in
+  `stepPlayer`, so `hp` is rounded for the number and `hpShare` (`getHpShare`, to a thousandth)
+  fills the bar.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
   `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
@@ -1683,6 +2146,8 @@ scripts/cache/find-npcs.ts goblin        NPC ids, levels and idle/walk animation
 scripts/cache/find-objs.ts "rune .*"     item ids, wear slots and worn models
 scripts/cache/check-items.ts             every casket item's id is the item it's named after
 scripts/cache/check-fun-outfits.ts       every item the fun maps' players wear is the one named, in its slot
+scripts/cache/check-actor-frames.ts      every actor's frames draw just as their model would baked whole
+                                         (a regex for some of them; see What gets drawn)
 scripts/cache/find-locs.ts multicannon   scenery ids
 scripts/cache/find-npc-seqs.ts 655 1173  animations built on an NPC's skeleton
 scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death animations apart
@@ -1690,6 +2155,8 @@ scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an older cache, in what the
                                          game reads (see A newer cache)
+scripts/cache/npc-looks.ts               which enemies' NPCs look the same, baked once (content/npcLooks.ts;
+                                         check to only say whether it's up to date)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
 scripts/cache/sprite-sheet.ts out.png 5000 5199   a range of sprites on one sheet, each over its id
@@ -1708,6 +2175,8 @@ scripts/scaperune/grid-hash.ts halloween a hash of what a recipe writes, to prov
 scripts/scaperune/research/              measures real places and made maps the same way
 scripts/scaperune/check-prefabs.ts       every prefab, in every rotation: its whole floor, a way out
 scripts/scaperune/check-palette.ts       the palette map reads all that generated maps read
+scripts/game/check-lairs.ts              every lair's boss fits where it rises, and on the way to
+                                         its fight's start if it moves (MapDef.lairs)
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything
@@ -1718,6 +2187,8 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         map, FRESH=1 straight at it, SAFE_WAVES=1
                                                         with what a run earned, FLAT=1 with no
                                                         walls, DODGE=1 dodging a boss's attacks,
+                                                        REACT=0.25 each step that late, as a
+                                                        person reacts, FROM=101 from that seed,
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
@@ -1756,7 +2227,11 @@ opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
 `?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
-Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens). F3
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens) and an
+act that isn't out yet (`ActDef.released`),
+`?director=battle_for_varrock` (dev only) opens the shot editor on a map's cinematics (see Props
+and opening cinematics), `?wholeFrames` bakes actors' frames as posed copies of their models, not
+as positions (see What gets drawn). F3
 shows collision and stats.
 
 ### A newer cache
@@ -1776,7 +2251,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    compare an entry with the same one in the old cache. Gate the fix on the revision.
 3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
    `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
-   map used then.
+   map used then. `npc-looks.ts check` too, and `npc-looks.ts` if it says the NPCs that look the
+   same have changed.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
    kept, the ones the game reads: the map squares, models and so on that changed or went, and each
    npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.
@@ -1788,7 +2264,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed
    reshuffle their seeds, so give those 6.
-7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+7. `scripts/cache/cosmetics.ts`, for the Wardrobe's pieces and kits (The Wardrobe, above).
+8. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
    `slim-cache` makes new chunks only where the groups changed, so returning players download
    just those.
 

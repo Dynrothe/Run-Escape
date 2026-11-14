@@ -85,6 +85,11 @@ export class MapManager<T extends MapSquare> {
     // pops in as it flies (the game's GameClient.enterRun)
     pinned: ReadonlySet<number> = new Set();
 
+    // A twin of a set of squares (the game's MapDef.twin): squares x0 to x1 by y0 to y1, and
+    // their twins dx squares along. Both are kept loaded; while shown, each square in the set is
+    // drawn as its twin, in its place.
+    twin?: { x0: number; y0: number; x1: number; y1: number; dx: number; shown: boolean };
+
     constructor(
         readonly maxQueuedTasks: number,
         readonly loadMapFunction: LoadMapFunction,
@@ -152,16 +157,56 @@ export class MapManager<T extends MapSquare> {
         }
         this.loadArea = area && vec4.clone(area);
         for (const map of Array.from(this.mapSquares.values())) {
-            if (
-                !isSquareInside(last, map.mapX, map.mapY) ||
-                !isSquareInside(area, map.mapX, map.mapY)
-            ) {
+            const x = this.drawnX(map.mapX, map.mapY);
+            if (!isSquareInside(last, x, map.mapY) || !isSquareInside(area, x, map.mapY)) {
                 this.removeMap(map.mapX, map.mapY);
             }
         }
         // What's on its way was asked for with the last area
         this.loadingMapIds.clear();
         this.renderBounds = vec4.fromValues(-1, -1, -1, -1);
+    }
+
+    setTwin(twin: MapManager<T>["twin"]): void {
+        const last = this.twin;
+        if (
+            last?.x0 !== twin?.x0 ||
+            last?.y0 !== twin?.y0 ||
+            last?.x1 !== twin?.x1 ||
+            last?.y1 !== twin?.y1 ||
+            last?.dx !== twin?.dx
+        ) {
+            this.renderBounds = vec4.fromValues(-1, -1, -1, -1);
+        }
+        this.twin = twin && { ...twin };
+    }
+
+    setTwinShown(shown: boolean): void {
+        if (this.twin) {
+            this.twin.shown = shown;
+        }
+    }
+
+    // Whether a square's one of the twins (drawn dx squares back from where it is)
+    isTwinSquare(mapX: number, mapY: number): boolean {
+        const twin = this.twin;
+        return (
+            !!twin &&
+            mapX >= twin.x0 + twin.dx &&
+            mapX <= twin.x1 + twin.dx &&
+            mapY >= twin.y0 &&
+            mapY <= twin.y1
+        );
+    }
+
+    // Where a square's drawn: a twin in its city's place
+    drawnX(mapX: number, mapY: number): number {
+        return this.isTwinSquare(mapX, mapY) ? mapX - this.twin!.dx : mapX;
+    }
+
+    // A square's in the load area where it's drawn
+    private inLoadArea(mapX: number, mapY: number): boolean {
+        return isSquareTouching(this.loadArea, this.drawnX(mapX, mapY), mapY);
     }
 
     setPinned(ids: Iterable<number>): void {
@@ -174,10 +219,7 @@ export class MapManager<T extends MapSquare> {
         let total = 0;
         let left = 0;
         for (const mapId of this.pinned) {
-            if (
-                this.invalidMapIds.has(mapId) ||
-                !isSquareTouching(this.loadArea, mapId >> 8, mapId & 0xff)
-            ) {
+            if (this.invalidMapIds.has(mapId) || !this.inLoadArea(mapId >> 8, mapId & 0xff)) {
                 continue;
             }
             total++;
@@ -275,7 +317,8 @@ export class MapManager<T extends MapSquare> {
 
             for (const map of this.mapSquares.values()) {
                 const { mapX, mapY } = map;
-                if (this.pinned.has(getMapSquareId(mapX, mapY))) {
+                // A twin's kept as long as it is, to be shown at once
+                if (this.pinned.has(getMapSquareId(mapX, mapY)) || this.isTwinSquare(mapX, mapY)) {
                     continue;
                 }
                 if (
@@ -309,13 +352,35 @@ export class MapManager<T extends MapSquare> {
             if (!this.isMapVisible(camera, mapX, mapY)) {
                 continue;
             }
-            const mapSquare = this.mapSquares.get(mapId);
+            // A square of the twinned set, while its twin's shown, is drawn as its twin
+            const twin = this.twin;
+            const twinned =
+                twin?.shown &&
+                mapX >= twin.x0 &&
+                mapX <= twin.x1 &&
+                mapY >= twin.y0 &&
+                mapY <= twin.y1;
+            const drawnId = twinned ? getMapSquareId(mapX + twin.dx, mapY) : mapId;
+            const mapSquare = this.mapSquares.get(drawnId);
             if (mapSquare) {
                 if (mapSquare.canRender(frameCount)) {
                     this.visibleMaps[this.visibleMapCount++] = mapSquare;
                 }
             } else {
-                this.loadMap(mapX, mapY);
+                this.loadMap(drawnId >> 8, drawnId & 0xff);
+            }
+        }
+
+        // Both sets of a twin are loaded wherever the camera is, so either can be shown at once
+        const twin = this.twin;
+        if (twin) {
+            for (let x = twin.x0; x <= twin.x1; x++) {
+                for (let y = twin.y0; y <= twin.y1; y++) {
+                    if (this.inLoadArea(x, y)) {
+                        this.loadMap(x, y);
+                        this.loadMap(x + twin.dx, y);
+                    }
+                }
             }
         }
 

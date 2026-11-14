@@ -134,7 +134,15 @@ export function cleanMove(value) {
 }
 
 const INDEXED = new Set(["choose", "item", "event", "banish"]);
-const PLAIN = new Set(["reroll", "skip", "banishChest", "leaveEvent", "ability"]);
+const PLAIN = new Set([
+    "reroll",
+    "skip",
+    "keep",
+    "takeKept",
+    "banishChest",
+    "leaveEvent",
+    "ability",
+]);
 const CHEST_ACTIONS = new Set(["take", "use", "alch"]);
 
 // cleanAction's, as a key to compare by
@@ -144,6 +152,10 @@ export function actionKey(value) {
     }
     const { kind, index, action } = value;
     if (INDEXED.has(kind)) {
+        return Number.isInteger(index) && index >= 0 && index < 64 ? `${kind}:${index}` : undefined;
+    }
+    // A hero's own button by its place (CharacterDef.abilities); the fight's has none
+    if (kind === "ability" && index !== undefined) {
         return Number.isInteger(index) && index >= 0 && index < 64 ? `${kind}:${index}` : undefined;
     }
     if (PLAIN.has(kind)) {
