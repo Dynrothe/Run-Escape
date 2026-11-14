@@ -476,7 +476,10 @@ export function CardFace({
                 <span className="ui-tcg-name">{card.name()}</span>
                 {copies > 1 && <span className="ui-tcg-copies">x{fmtNum(copies)}</span>}
             </span>
-            <span className={`ui-tcg-art ui-tcg-art-${card.kind}`}>
+            {/* A foil's shimmer is its picture's background, behind the item */}
+            <span
+                className={`ui-tcg-art ui-tcg-art-${card.kind}` + (foil ? " ui-tcg-art-holo" : "")}
+            >
                 <ItemIcon
                     objId={card.objId}
                     spriteId={card.spriteId}
@@ -484,9 +487,8 @@ export function CardFace({
                     // Drawn from its model at this size, smooth, not the small icon blown up
                     large
                 />
-                {/* A foil's shimmer, over its picture only, and sparkles where it's shown
-                    moving (big, or turned over on the mat), never in the album's grid */}
-                {foil && <span className="ui-tcg-holo" aria-hidden="true" />}
+                {/* A foil's sparkles where it's shown moving (big, or turned over on the mat),
+                    never in the album's grid */}
                 {foil && moving && (
                     <span className="ui-tcg-sparkles" aria-hidden="true">
                         {SPARKLES.map((at, i) => (

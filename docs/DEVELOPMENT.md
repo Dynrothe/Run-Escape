@@ -1549,10 +1549,10 @@ involved.
 - **Foils** (`CARD_FOIL_CHANCE`, a pack's own `PackDef.foil`): each card from a pack can roll a foil
   after its card and version, on the same numbers. A foil's a copy of its version, so it counts for
   Cards only as any copy does, and `SaveData.cardFoils` keeps how many of those copies are foils, by
-  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: a holographic shimmer over
-  the picture only (`ui-tcg-holo`), drifting where the card's big, on the mat or under a pointer,
+  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: a holographic shimmer behind
+  the item, its picture's own background (`ui-tcg-art-holo`), drifting where the card's big, on the mat or under a pointer,
   with twinkling sparkles where it's big or turned over on the mat but never in the album's grid,
-  and neither moving with `prefers-reduced-motion`; "Foil" is written on it. The album has a Foils
+  and neither moving with `prefers-reduced-motion`; screen readers hear "Foil". The album has a Foils
   tab and shows a card at its best foil when one's owned; a foil dealt from a pack flashes once and
   chimes. The Collection log's Cards tab counts them.
 - **What Cards only needs** (`ui/CardNeeds.tsx`): the window the details' card button opens (and the

@@ -157,20 +157,24 @@
     height: 136px;
 }
 
+.ui-tcg-art {
+    background: var(--ui-tcg-art-bg);
+}
+
 .ui-tcg-art-weapon {
-    background: radial-gradient(circle at 50% 45%, #6a645a, #34302a 70%, #24211d);
+    --ui-tcg-art-bg: radial-gradient(circle at 50% 45%, #6a645a, #34302a 70%, #24211d);
 }
 
 .ui-tcg-art-passive {
-    background: radial-gradient(circle at 50% 45%, #4f6276, #283442 70%, #1b232c);
+    --ui-tcg-art-bg: radial-gradient(circle at 50% 45%, #4f6276, #283442 70%, #1b232c);
 }
 
 .ui-tcg-art-gear {
-    background: radial-gradient(circle at 50% 45%, #4f6a52, #28362a 70%, #1b241c);
+    --ui-tcg-art-bg: radial-gradient(circle at 50% 45%, #4f6a52, #28362a 70%, #1b241c);
 }
 
 .ui-tcg-art-trophy {
-    background: radial-gradient(circle at 50% 45%, #7a6430, #3d3118 70%, #2a2111);
+    --ui-tcg-art-bg: radial-gradient(circle at 50% 45%, #7a6430, #3d3118 70%, #2a2111);
 }
 
 .ui-tcg-new {
@@ -235,14 +239,11 @@
         inset 0 0 0 2px var(--card-rarity);
 }
 
-/* A foil copy: a holographic shimmer over its picture only (the frame, title and text stay plain),
-   a rainbow in a soft light blend, drifting slowly where the card's shown big, on the mat or under
-   a pointer, and still with prefers-reduced-motion; "Foil" is written on it too, so it isn't only
-   the colour */
-.ui-tcg-holo {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
+/* A foil copy: a holographic shimmer behind its item, the picture's own background (the frame,
+   title and text stay plain, and the item's drawn over it in its own colours), drifting slowly
+   where the card's shown big, on the mat or under a pointer, and still with
+   prefers-reduced-motion. Screen readers hear "Foil" (ui-tcg-foil-mark). */
+.ui-tcg-art.ui-tcg-art-holo {
     background:
         linear-gradient(
             115deg,
@@ -254,33 +255,23 @@
             rgba(255, 80, 200, 0.32) 83%,
             rgba(255, 70, 70, 0.32)
         ),
-        repeating-linear-gradient(65deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 7px);
+        repeating-linear-gradient(65deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 7px),
+        var(--ui-tcg-art-bg);
+    background-blend-mode: color-dodge, normal, normal;
     /* Wide enough that a still card shows the whole spectrum, not one colour of it */
     background-size:
         160% 160%,
+        auto,
         auto;
     background-position:
         0% 50%,
+        0 0,
         0 0;
-    mix-blend-mode: color-dodge;
-    opacity: 0.85;
 }
 
-/* The item sits above a foil's shimmer, so the rainbow is its background, not over it; the
-   sparkles and the "New" mark stay on top */
-.ui-tcg-art > .ui-icon {
-    position: relative;
-    z-index: 1;
-}
-
-.ui-tcg-sparkles,
-.ui-tcg-new {
-    z-index: 2;
-}
-
-.ui-tcg-moving .ui-tcg-holo,
-.ui-cards-slot:hover .ui-tcg-holo,
-.ui-cards-slot:focus-visible .ui-tcg-holo {
+.ui-tcg-moving .ui-tcg-art-holo,
+.ui-cards-slot:hover .ui-tcg-art-holo,
+.ui-cards-slot:focus-visible .ui-tcg-art-holo {
     /* A few slow drifts, then still: never an animation that runs for good */
     animation: ui-tcg-holo 9s linear 3;
 }
@@ -289,16 +280,19 @@
     0% {
         background-position:
             0% 50%,
+            0 0,
             0 0;
     }
     50% {
         background-position:
             100% 50%,
-            40px 0;
+            40px 0,
+            0 0;
     }
     100% {
         background-position:
             0% 50%,
+            0 0,
             0 0;
     }
 }
@@ -387,9 +381,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .ui-tcg-moving .ui-tcg-holo,
-    .ui-cards-slot:hover .ui-tcg-holo,
-    .ui-cards-slot:focus-visible .ui-tcg-holo {
+    .ui-tcg-moving .ui-tcg-art-holo,
+    .ui-cards-slot:hover .ui-tcg-art-holo,
+    .ui-cards-slot:focus-visible .ui-tcg-art-holo {
         animation: none;
     }
 
