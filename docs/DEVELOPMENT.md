@@ -1856,6 +1856,27 @@ by pulling a higher priority a little towards the camera, which only matters whe
 was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
 into the hair or the helm. Alpha has 7 bits to make room.
 
+That pull is too small for a decal that sits a unit or two behind its cloth, which painting by
+priority shows anyway: a skill cape's emblem, a chainbody's rings. So a worn item's model
+(`PlayerModelLoader.getWornModel`) goes through `liftDecals` as it loads. A face drawn over a
+lower-priority one but behind it, with no corner on a lower-priority face, comes out along its
+normal to a unit in front, up to 6 units. One hidden deeper (an eye set in a mask) keeps its
+corners still, as does any face the move would turn over, so the rest settles round them.
+NPCs' models don't go through it.
+
+A platebody pokes a few units through the cape over it, and the client paints the cape over it
+anyway. So a player is drawn in layers (`BakedSet.layered`, set on every player bake, and
+`LAYER_DEPTH` in `ActorRenderer`): each priority up to 7 is pulled 3 units nearer the camera, and 10
+and 11 (sleeves, hands, what's held) sit at 4, over the body and under a cape. The pull is in depth
+only, after projection: moving the vertex nearer moves it on screen too, and opens cracks between
+faces of different layers. It's only seen from behind (`seenFromBehind` in `actor.vert.glsl`, from
+the view matrix), and from the front or side a player draws as before. From the front, depth alone
+keeps the body over the cape's sides, which layers bring out down the torso, and over the cape the
+arms that the client draws over it (it puts 10 and 11 among the rest by depth, against each
+priority group's average). Doing that per vertex, by lines through the body or the cape, made new
+seams at the shoulders and collar. At most a face comes 21 units (0.16 tiles) nearer, which doesn't
+bring a player through a wall in front of them.
+
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
 play area once it's left it, so what's past the fade and further out than the camera can get is

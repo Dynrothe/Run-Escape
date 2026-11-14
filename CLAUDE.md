@@ -96,6 +96,8 @@ go stale. Add anything that cost you time to work out.
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
 | The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
+| A cape's emblem and other decals behind their cloth    | `src/rs/model/player/liftDecals.ts`, `docs/DEVELOPMENT.md`             |
+| A player in layers: a cape over armour poking through  | `actor/actor.vert.glsl` (`seenFromBehind`), `docs/DEVELOPMENT.md`      |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
