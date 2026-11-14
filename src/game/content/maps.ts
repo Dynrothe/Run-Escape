@@ -17,6 +17,7 @@ import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/st
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { isMapOut } from "./acts";
+import { CHARACTERS } from "./characters";
 import {
     AWAKENED_DUKE_ID,
     DUKE_BOSS_ARENA,
@@ -1020,6 +1021,13 @@ export function getMapCharacter(map: MapDef): string | undefined {
 export function isCharacterOut(character: CharacterDef): boolean {
     const map = character.unlock && MAP_BY_ID.get(character.unlock.mapId);
     return !map || isMapOut(map);
+}
+
+// The adventurers to pick from: not one played on one map alone (CharacterDef.only), or one who
+// isn't out yet. Never a retired one an old save still has unlocked (the Dwarf), as the game has
+// no CharacterDef for it
+export function getRoster(): CharacterDef[] {
+    return CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
 }
 
 export function getMap(id: string): MapDef {

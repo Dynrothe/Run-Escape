@@ -578,3 +578,33 @@ describe("cloud save's choice on the title", () => {
         expect(asking()).toBeInTheDocument();
     });
 });
+
+describe("the Wardrobe", () => {
+    // An old save keeps the retired Dwarf unlocked, and the game has no adventurer for it
+    test("steps through the roster's adventurers, never a retired one", () => {
+        expect.hasAssertions();
+        const save = createSave();
+        save.unlockedCharacters.push("dwarf");
+        const store = new GameStore(save);
+        store.set({ screen: "wardrobe" });
+        const picked: string[] = [];
+        const client = new Proxy(
+            {
+                selectCharacter: vi.fn((id: string) => {
+                    picked.push(id);
+                    store.set({ characterId: id });
+                }),
+            },
+            { get: (target, key) => target[key as keyof typeof target] ?? vi.fn() },
+        );
+        render(<GameUi store={store} client={client as unknown as GameClient} />);
+        const next = screen.getByRole("button", { name: "Next adventurer" });
+        for (let i = 0; i < save.unlockedCharacters.length + 1; i++) {
+            fireEvent.click(next);
+        }
+        expect(picked).not.toContain("dwarf");
+        // Round them all and back to the first
+        expect(new Set(picked).size).toBe(save.unlockedCharacters.length - 1);
+        expect(screen.getByRole("button", { name: "Next adventurer" })).toBeInTheDocument();
+    });
+});

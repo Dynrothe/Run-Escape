@@ -49,12 +49,7 @@ import {
     isActEnded,
     isActOut,
 } from "../content/acts";
-import {
-    CHARACTERS,
-    characterDescription,
-    characterName,
-    getCharacter,
-} from "../content/characters";
+import { characterDescription, characterName, getCharacter } from "../content/characters";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
@@ -72,7 +67,7 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
-    isCharacterOut,
+    getRoster,
     isPeaceful,
     mapDescription,
     mapFinalBossWarning,
@@ -1552,9 +1547,7 @@ export function AdventurerPanel({
 }: ScreenProps & { fixed?: string }): JSX.Element {
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    // The roster: not an adventurer played on one map alone (CharacterDef.only), or one who
-    // isn't out yet (isCharacterOut)
-    const roster = CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
+    const roster = getRoster();
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
     return (

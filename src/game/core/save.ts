@@ -987,7 +987,8 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         const id = run.invasion.id;
         save.invasions = { ...save.invasions, [id]: (save.invasions?.[id] ?? 0) + 1 };
     }
-    if (run.vault) {
+    // The Vault's records are the same for everyone: relic-free
+    if (run.vault && isRelicFree(run)) {
         recordVault(save, run.vault, run);
     }
     if (run.victory && beatsMap(run)) {

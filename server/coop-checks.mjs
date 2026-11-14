@@ -134,7 +134,15 @@ export function cleanMove(value) {
 }
 
 const INDEXED = new Set(["choose", "item", "event", "banish"]);
-const PLAIN = new Set(["reroll", "skip", "banishChest", "leaveEvent", "ability"]);
+const PLAIN = new Set([
+    "reroll",
+    "skip",
+    "keep",
+    "takeKept",
+    "banishChest",
+    "leaveEvent",
+    "ability",
+]);
 const CHEST_ACTIONS = new Set(["take", "use", "alch"]);
 
 // cleanAction's, as a key to compare by

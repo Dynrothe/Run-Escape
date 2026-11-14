@@ -7,7 +7,7 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
-import { CHARACTERS, getCharacter } from "../content/characters";
+import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
@@ -584,6 +584,12 @@ export function getHpShare(hp: number, maxHp: number): number {
     return maxHp > 0 ? Math.round(Math.min(1, Math.max(0, hp / maxHp)) * 1000) / 1000 : 0;
 }
 
+// The hitpoints the HUD says, whole: never 0 while there are any left, as regeneration's slivers
+// can leave a hero alive on less than half of one
+export function getShownHp(hp: number): number {
+    return hp > 0 ? Math.max(1, Math.round(hp)) : 0;
+}
+
 // The first of the map's objectives that isn't done (MapDef.objectives), with how many of its
 // lairs are beaten
 export function getObjectiveView(sim: Sim): HudNumbers["objective"] {
@@ -1021,7 +1027,11 @@ export class GameClient implements GameFrameHandler {
     }
 
     selectCharacter(characterId: string): void {
-        if (!this.save.unlockedCharacters.includes(characterId)) {
+        // Unlocked, and one the game has: an old save keeps the retired Dwarf unlocked
+        if (
+            !this.save.unlockedCharacters.includes(characterId) ||
+            !CHARACTER_BY_ID.has(characterId)
+        ) {
             return;
         }
         this.store.set({ characterId });
@@ -2247,6 +2257,8 @@ export class GameClient implements GameFrameHandler {
             characterId: hero.characterId,
             metaStats: loadoutStats(hero.loadout),
             ...cleanLoadout(hero.loadout),
+            // The weekly Vault is played without relics, as on your own (startVault)
+            ...(game.vault !== undefined && { relics: [] }),
         }));
         const sim = new Sim({
             grid: this.grid,
@@ -2743,8 +2755,10 @@ export class GameClient implements GameFrameHandler {
         // just now, plays that part's entrance
         const played = this.sim?.stage;
         const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
+        // The Vault's run again, not a plain run of its map
+        const vault = this.runVault !== undefined ? getVault(this.runVault) : undefined;
         this.leaveRun();
-        void this.startRun(mapId, onward, undefined, undefined, true);
+        void this.startRun(mapId, onward, undefined, vault, true);
     }
 
     leaveRun(show = true): void {
@@ -4791,7 +4805,7 @@ export class GameClient implements GameFrameHandler {
                 sim.map.tombs?.wardens !== undefined &&
                 !sim.tombsPath &&
                 !sim.tombsWardens,
-            hp: Math.max(0, Math.round(sim.player.hp)),
+            hp: getShownHp(sim.player.hp),
             maxHp: sim.player.maxHp,
             hpShare: getHpShare(sim.player.hp, sim.player.maxHp),
             sanity: sim.realm && Math.ceil(sim.realm.sanityOf(sim.focus)),
@@ -4889,7 +4903,7 @@ export class GameClient implements GameFrameHandler {
                 .map((hero) => ({
                     name: hero.name,
                     characterId: hero.characterId,
-                    hp: Math.max(0, Math.round(hero.player.hp)),
+                    hp: getShownHp(hero.player.hp),
                     maxHp: hero.player.maxHp,
                     down: hero.down,
                     left: hero.left,

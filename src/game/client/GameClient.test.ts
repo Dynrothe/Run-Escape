@@ -34,6 +34,7 @@ import {
     getHpShare,
     getObjectiveView,
     getPhaseBarFraction,
+    getShownHp,
     loadoutStats,
 } from "./GameClient";
 import { padHints } from "./GamePad";
@@ -1891,6 +1892,14 @@ describe("the hitpoints bar", () => {
         expect(getHpShare(-2, 38)).toBe(0);
         expect(getHpShare(40, 38)).toBe(1);
         expect(getHpShare(0, 0)).toBe(0);
+    });
+
+    test("says a whole number of hitpoints, never 0 while some are left", () => {
+        expect(getShownHp(37.6)).toBe(38);
+        expect(getShownHp(19.2)).toBe(19);
+        expect(getShownHp(0.3)).toBe(1);
+        expect(getShownHp(0)).toBe(0);
+        expect(getShownHp(-2)).toBe(0);
     });
 });
 

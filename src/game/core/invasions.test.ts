@@ -441,5 +441,19 @@ describe("the weekly Vault", () => {
             vault: "2026-W46",
         });
         expect(other.vault?.["2026-W46"]?.kills).toBe(200);
+        // A run with relics on sets none (only a modified host's could have them)
+        const relics = createSave();
+        recordRun(relics, {
+            mapId: "desert",
+            victory: false,
+            seconds: 300,
+            level: 10,
+            kills: 200,
+            coins: 10,
+            bossesKilled: [],
+            vault: "2026-W46",
+            relics: ["trickster"],
+        });
+        expect(relics.vault?.["2026-W46"]).toBeUndefined();
     });
 });

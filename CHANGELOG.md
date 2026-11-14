@@ -122,6 +122,8 @@ the version in the corner).
   Play as Justiciar Zachariah, with his Saradomin sword and his moves on buttons of your own, and
   choose a blessing of Saradomin at each level instead of items. Slay Yama's two generals, Xarth
   on the Grand Exchange and K'ril Tsutsaroth in the church, and the palace opens for Yama himself.
+- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
+  that heal you for half the damage they deal.
 
 ### Changed
 
@@ -131,7 +133,7 @@ the version in the corner).
   maps start sooner and run lighter, most of all on phones. They look just the same.
 - A run's coin bonuses (hard mode, Act II's steps, invocations) add together now, up to +300%,
   rather than multiplying.
-- Right clicking in the game no longer opens the browser's menu.
+- Right clicking in the game no longer opens the browser's menu, but for text boxes, to paste.
 - Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
   a whole hitpoint at a time.
 - The Armoury's key, by Jp66600: the Weapons and Passives tabs show it too, where a "?" marks a
@@ -140,13 +142,11 @@ the version in the corner).
   Their stabs still count as melee for style bonuses like Chivalry and the rings.
 - Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
   with the difference, and both pieces' set bonuses show.
-- The Tombs of Amascut starts sooner and uses much less memory: each room's enemies are loaded
-  as the raid gets there, and let go once its path is done.
+- The Tombs of Amascut starts sooner and uses much less memory: the Wardens are loaded as you near
+  them, and each path's enemies are let go once it's done.
 
 ### Fixed
 
-- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
-  that heal you for half the damage they deal.
 - An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
   lands.
 - On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or

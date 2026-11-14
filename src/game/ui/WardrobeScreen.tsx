@@ -6,7 +6,7 @@ import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
 import { characterName, getCharacter } from "../content/characters";
 import { getTrophyMap } from "../content/collectionLog";
-import { getMap, mapName } from "../content/maps";
+import { getMap, getRoster, mapName } from "../content/maps";
 import { RARITIES, RARITY_ORDER, Rarity } from "../content/rarity";
 import { trophyName } from "../content/trophies";
 import {
@@ -159,7 +159,10 @@ export function WardrobeScreen({ ui, client }: Props): JSX.Element {
 
 // Beside the adventurer: who's wearing it, and which way they face
 function PreviewControls({ ui, client }: Props): JSX.Element {
-    const unlocked = ui.save.unlockedCharacters;
+    // The adventurer screen's roster, those unlocked: the save's own list can hold a retired one
+    const unlocked = getRoster()
+        .filter((c) => ui.save.unlockedCharacters.includes(c.id))
+        .map((c) => c.id);
     const at = unlocked.indexOf(ui.characterId);
     const step = (by: number) => {
         if (unlocked.length > 0) {

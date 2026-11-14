@@ -390,7 +390,9 @@ version and how to run it.
   hard mode's) and an adventurer (lent, unlocked or not). No relics, never hard or endless, no
   invasions or orbs; the shop's upgrades are the player's own. Its best each week is kept (a win
   beats a fall, then the quicker win or the longer fall, then kills), for the last 12 weeks. A host
-  can make it the room's run: everyone plays the Vault's adventurer on its seed.
+  can make it the room's run: everyone plays the Vault's adventurer on its seed, relics off for all
+  (a run with relics on sets no Vault record). Retry on its results plays the same week's Vault
+  again.
 - **Hard mode**: the switch beside Endless, open once you've beaten the map (from the start on fun
   maps). Enemies have more hitpoints and hit harder, more of them come at once, every elite is two,
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's
