@@ -1875,9 +1875,9 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
                 maps: FUN_MAPS.filter((map) => !map.fun?.explore),
             },
             {
-                id: "explore",
-                name: "To explore",
-                hint: "nothing to fight, open from the start",
+                id: "memories",
+                name: "Memories",
+                hint: "open from the start",
                 maps: FUN_MAPS.filter((map) => map.fun?.explore),
             },
             { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
