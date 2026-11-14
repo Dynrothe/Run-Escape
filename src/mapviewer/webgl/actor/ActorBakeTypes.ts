@@ -123,6 +123,8 @@ export type BakedSet = {
     // its animations, in model units: what its culling goes by
     reach: number;
     anims: BakedAnim[];
+    // Drawn in layers by face priority, as the client paints a player (actor.vert.glsl)
+    layered?: boolean;
 };
 
 export type ActorBakeResult = {

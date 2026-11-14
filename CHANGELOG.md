@@ -9,6 +9,7 @@ the version in the corner).
 
 - Emblems and patterns on clothing show again where they were hidden in their cloth: the
   skill capes' emblems on their backs, chainbodies' rings and more.
+- Armour no longer pokes through a cape on a player's back.
 
 ## 0.32.0 - 2026-11-14
 
