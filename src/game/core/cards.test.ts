@@ -130,6 +130,7 @@ describe("buying packs", () => {
         expect(lastCardRarities(PACK_BY_ID.get("raids")!.odds)).toEqual(["rare", "veryRare"]);
     });
 
+    // 6,000 packs: about 1.5 s alone, past 5 s on a busy machine (its own timeout)
     it("comes out at the pack's odds of each version, never a card below its own rarity", () => {
         for (const pack of [BASIC_PACK, PACK_BY_ID.get("champion")!]) {
             const save = { ...createSave(), platinum: pack.price * 3000 };
@@ -152,7 +153,7 @@ describe("buying packs", () => {
                 ).toBeLessThan(0.02);
             }
         }
-    });
+    }, 30_000);
 
     it("picks a version's card only from those that come in it", () => {
         // A pool of a Common and a Very rare thing: a Common version roll can only be the Common

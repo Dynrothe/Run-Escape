@@ -92,10 +92,9 @@ version and how to run it.
 - **Cards** (the title's Cards tile): a card for every weapon, passive, reward casket gear and
   Collection log trophy, each in versions from its own rarity up to Very rare. Runs earn platinum
   tokens beside their coins, scaled as coins are, twice over, and three times that in a Cards
-  only run, and the Card shop sells
-  packs for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
-  weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one likelier to
-  be rare. Each offer says what it holds, what its last card is at least (where that's better than
+  only run, and the Card shop sells packs for platinum tokens (never coins): one of any weapon,
+  passive or trophy card, one each of weapons, passives, casket gear and trophies, one of the
+  raids' finds, and a dearer one likelier to be rare. Each offer says what it holds, what its last card is at least (where that's better than
   its commonest) and how many of its cards you've collected. Packs only hold cards of what you've
   unlocked, and the strongest things are rarer pulls. A pack's Preview lists its cards on a tab for
   each rarity, each with its chance per pack for your save, or Locked with the map to unlock it in;
@@ -108,10 +107,9 @@ version and how to run it.
   card of, no rarer than your best version of it, and a weapon whose levels are metals (Bronze to
   Dragon, Strike to Wave) only up to the best metal you have a card of; each metal is a card of its
   own, rarer up the metals, and a higher one brings the lower ones you haven't got. Reward caskets
-  give only gear you have a card
-  of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
-  your collection has enough cards to fill a level up (the godswords count as one weapon, since
-  only one is ever held), nor as an adventurer whose starting weapon's
+  give only gear you have a card of; its pet row takes a pet whose card you have, found or not. A
+  run from it can't start until your collection has enough cards to fill a level up (the godswords
+  count as one weapon, since only one is ever held), nor as an adventurer whose starting weapon's
   card you haven't got (their portrait is dimmed with a padlock). Either way, a card button beside
   their favourite star shows what's still needed, with the Card shop's pack for it. In co-op the
   host's tab sets it for the whole room; the weekly Vault and the Gauntlet are never Cards only. A
