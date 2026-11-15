@@ -25,6 +25,7 @@ the version in the corner).
 
 ### Changed
 
+- Casket gear comparisons show compact stat differences again instead of a Wearing/New table, by braiansmarzaro.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
   and Settings as pages of it. It opens on the tab you left it on.
 - Settings are in sections with the game's own icons, by Iakee, a card for each setting. The

@@ -579,7 +579,7 @@
 .ui-chest-card-body {
     min-height: 0;
     overflow-y: auto;
-    /* Its scrollbar in the card's padding, clear of the table's last column */
+    /* Its scrollbar stays in the card's padding */
     margin-right: -8px;
     padding-right: 8px;
 }
@@ -656,48 +656,15 @@
     gap: 5px;
 }
 
-/* Gear against the piece it would replace, a row for each stat: a little
-   wider, so the piece's name and what it alchs for fit on one line */
-.ui-chest-card-compare {
-    width: min(540px, calc(94vw / var(--ui-scale)));
+.ui-chest-changes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 4px;
 }
 
-.ui-chest-table {
-    width: 100%;
-    margin-top: 6px;
-    border-collapse: collapse;
-    color: var(--ui-white);
-}
-
-.ui-chest-table th,
-.ui-chest-table td {
-    padding: 1px 0 1px 12px;
-    font-weight: normal;
-    text-align: right;
-    white-space: nowrap;
-}
-
-.ui-chest-table thead th {
-    font-size: 14px;
-    color: var(--ui-text-dim);
-}
-
-.ui-chest-table thead .ui-icon {
-    margin-right: 3px;
-    vertical-align: middle;
-}
-
-/* The stat's name takes what's left, and wraps if it must */
-.ui-chest-table tbody th {
-    width: 100%;
-    padding-left: 0;
-    text-align: left;
-    white-space: normal;
-    color: var(--ui-text-dim);
-}
-
-.ui-chest-table tbody tr + tr {
-    border-top: 1px solid var(--ui-divider);
+.ui-chest-changes .ui-stat-line {
+    display: inline-flex;
 }
 
 .ui-good {
