@@ -154,7 +154,14 @@ describe("dropped power-up timers", () => {
     });
 
     // An item's model, in model units (1/128 tile)
-    const model = { key: "obj:1", height: 32, radius: 0 };
+    const model = {
+        key: "obj:1",
+        height: 32,
+        radius: 0,
+        anims: [
+            new ActorAnim(-1, new Int32Array(4), new Uint16Array(1), new Uint16Array([1]), false),
+        ],
+    };
 
     function setup() {
         const sim = new Sim({
@@ -181,7 +188,10 @@ describe("dropped power-up timers", () => {
         };
         sim.pickups = [pickup];
         sim.tick = pickup.spawnTick;
-        const assets = { get: vi.fn((): typeof model | undefined => model) };
+        const assets = {
+            get: vi.fn((): typeof model | undefined => model),
+            getPlayer: () => undefined,
+        };
         const view = new GameView(assets as unknown as GameAssets);
         const ctx = {
             beginPath: vi.fn(),
@@ -301,6 +311,40 @@ describe("dropped power-up timers", () => {
         draw();
         expect(flat - ctx.arc.mock.lastCall![1]).toBeGreaterThanOrEqual(16);
     });
+
+    test.each(["giant_essence", "drill_demon"])(
+        "%s is enlarged without moving the pickup, and its timer clears the larger model",
+        (powerUp) => {
+            const { sim, pickup, assets, view, ctx, project, draw } = setup();
+            assets.get.mockReturnValue({ ...model, radius: 64 });
+            project.mockImplementation((x, height) => ({
+                x: 100 + (x - pickup.x) * 32,
+                y: 100 + height * 32,
+                visible: true,
+            }));
+            const actorDraw = vi.fn<ActorRenderer["draw"]>();
+            const actors = { draw: actorDraw } as unknown as ActorRenderer;
+            view.submitActors(actors, sim, 1);
+            const normalScale = actorDraw.mock.lastCall![7]!.scale!;
+            draw();
+            const normalTimerY = ctx.arc.mock.lastCall![1];
+
+            pickup.powerUp = powerUp;
+            const before = { ...pickup };
+            view.submitActors(actors, sim, 1);
+            const enlarged = actorDraw.mock.lastCall!;
+            const enlargedScale = enlarged[7]!.scale!;
+            expect(enlargedScale).toBeGreaterThan(normalScale);
+            expect(enlargedScale).toBeLessThanOrEqual(normalScale * 2);
+            expect(enlarged[7]!.unlit).toBe(1);
+            draw();
+            expect(ctx.arc.mock.lastCall![1]).toBeLessThan(normalTimerY);
+            const modelTop = enlarged[4] - (model.height * enlargedScale) / 128;
+            const modelEdge = 100 + modelTop * 32 - (64 * enlargedScale * 32) / 128;
+            expect(ctx.arc.mock.lastCall![1] + ctx.arc.mock.lastCall![2]).toBeLessThan(modelEdge);
+            expect(pickup).toEqual(before);
+        },
+    );
 
     test("scales on small screens and stays visible during the final blinking seconds", () => {
         const { sim, pickup, ctx, draw } = setup();

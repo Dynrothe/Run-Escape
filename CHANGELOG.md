@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Giant rune essence and Drill Demon drops are larger, making them easier to spot on the ground.
+- The Drill Demon's dropped helmet is centred on its pickup as it rotates.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed

@@ -49,6 +49,8 @@ export type ObjBakeRequest = {
     key: string;
     objId: number;
     count: number;
+    // Centre its horizontal bounds on the origin without changing the cached model
+    center?: boolean;
 };
 
 // A scenery model (e.g. the dwarf multicannon), static unless animated asks for
