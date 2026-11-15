@@ -29,7 +29,7 @@ export const SOUNDS = {
     revealUncommon: 3929, // ge_increment_plop
     revealRare: 3925, // ge_add_offer_dingaling
     revealVeryRare: 3813, // town_crier_bell_ding
-    alch: 2115, // coins
+    alch: 97, // high_alchemy
     // Utility items
     potion: 2671, // prayer_boost
     bonecrusher: 2738, // bury_bones

@@ -74,6 +74,7 @@ import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
+    HIGH_ALCH_SPOTANIM,
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
     getEnemyModelKey,
@@ -114,6 +115,7 @@ const SOULS_HEIGHT = 1.6;
 const SOULS_MAX = 5;
 // Drawn this big (a rune's model is about a tile across)
 const SOULS_SCALE = 0.5;
+const HIGH_ALCH_HEIGHT = 100 / 128;
 const VENT_PUFFS = [
     [0, 0],
     [-0.9, -0.9],
@@ -507,6 +509,7 @@ export class GameView {
     private swings: SwingFx[] = [];
     private shouts: Shout[] = [];
     private escapees: EscapeeFx[] = [];
+    private alchs = new Map<number, number>();
     private flash?: FlashFx;
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
@@ -555,6 +558,7 @@ export class GameView {
         this.swings = [];
         this.shouts = [];
         this.escapees = [];
+        this.alchs.clear();
         this.flash = undefined;
     }
 
@@ -575,6 +579,12 @@ export class GameView {
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
+                case "alch":
+                case "equip":
+                    if (event.type === "alch" || event.replacedId) {
+                        this.alchs.set(event.hero ?? sim.focus, now);
+                    }
+                    break;
                 case "petLeap":
                     this.pets.leap(event.owner, event.x, event.y, sim.tick);
                     break;
@@ -2518,6 +2528,19 @@ export class GameView {
         }
         const player = sim.heroes[hero].player;
         const tick = sim.tick;
+        // Keep the cast and its sound together even while another casket holds the run.
+        const alchStart = this.alchs.get(hero);
+        const alchTicks =
+            alchStart === undefined
+                ? -1
+                : ((performance.now() - alchStart) / 1000) * TICKS_PER_SECOND;
+        const alch = alchTicks >= 0 ? model.getAnim(PLAYER_SEQS.alch) : undefined;
+        const alchEffect =
+            alchTicks >= 0 ? this.assets.get("spot:" + HIGH_ALCH_SPOTANIM) : undefined;
+        const alchEffectAnim = alchEffect?.anims[0];
+        if (alch && alchTicks >= Math.max(alch.totalTicks, alchEffectAnim?.totalTicks ?? 0)) {
+            this.alchs.delete(hero);
+        }
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
@@ -2542,6 +2565,13 @@ export class GameView {
             // long as they stand there
             anim = model.getAnim(REVIVE_SEQ);
             frame = anim.getFrame(reviving);
+        } else if (alch?.seqId === PLAYER_SEQS.alch && alchTicks < alch.totalTicks) {
+            const castFrame = alch.getFrame(alchTicks, false);
+            const running = pose.moving
+                ? model.runCasts.get(PLAYER_SEQS.alch)?.[castFrame]
+                : undefined;
+            anim = running ?? alch;
+            frame = running ? running.getFrame(pose.moveTicks) : castFrame;
         } else if (runPose && runPoseFrame !== -1) {
             anim = runPose;
             frame = runPoseFrame;
@@ -2587,6 +2617,24 @@ export class GameView {
             flash,
             ...(big !== 1 && { scale: big }),
         });
+        if (
+            alchEffect &&
+            alchEffectAnim &&
+            alchTicks < alchEffectAnim.totalTicks &&
+            player.deathTick === -1 &&
+            !lookModel
+        ) {
+            actors.draw(
+                alchEffect,
+                alchEffectAnim,
+                alchEffectAnim.getFrame(alchTicks, false),
+                x,
+                this.ground(sim, x, y) - HIGH_ALCH_HEIGHT,
+                y,
+                pose.yaw,
+                UNLIT,
+            );
+        }
         const overhead = getCharacter(sim.heroes[hero].characterId).overheadSpotAnim;
         const effect = overhead === undefined ? undefined : this.assets.get("spot:" + overhead);
         if (effect) {

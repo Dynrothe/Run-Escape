@@ -33,7 +33,13 @@ export type PlayerBakeRequest = {
     // body over every frame of runSeqId on the legs, split where maskSeqId's
     // interleave order splits a body. Baked as anims with `runPose` set,
     // under the attack's seqId and timed as the run, after the rest.
-    runPoses?: { poses: { seqId: number; frame: number }[]; runSeqId: number; maskSeqId: number };
+    runPoses?: {
+        poses: { seqId: number; frame: number }[];
+        // Full upper-body casts: each cast frame over every run frame.
+        casts?: number[];
+        runSeqId: number;
+        maskSeqId: number;
+    };
 };
 
 // One animation: the spot anim's own sequence
@@ -111,6 +117,7 @@ export type BakedAnim = {
     // A frame of seqId over the run (PlayerBakeRequest.runPoses), not seqId
     // itself
     runPose?: boolean;
+    runCastFrame?: number;
 };
 
 export type BakedSet = {

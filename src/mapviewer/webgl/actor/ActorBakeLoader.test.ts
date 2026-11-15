@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { SeqType } from "../../../rs/config/seqtype/SeqType";
 import type { Model } from "../../../rs/model/Model";
 import type { FrameAdder } from "./ActorBakeFrames";
-import { bakeRunPose, getMovementGroups } from "./ActorBakeLoader";
+import { bakeRunCast, bakeRunPose, getMovementGroups } from "./ActorBakeLoader";
 
 describe("a weapon's run pose", () => {
     // A run of three frames, the last with no length of its own
@@ -50,5 +50,42 @@ describe("a weapon's run pose", () => {
         expect(getMovementGroups([0, 1, 7, 9999999])).toEqual([0, 1, 7]);
         expect(getMovementGroups([9999999])).toEqual([]);
         expect(getMovementGroups(undefined)).toEqual([]);
+    });
+
+    test("bakes every cast frame over the full stride, keeping the two clocks independent", () => {
+        const { segments: into } = segments();
+        const castState = {
+            seqTypeLoader: {
+                ...state.seqTypeLoader,
+                load: (id: number) =>
+                    id === 713
+                        ? ({ frameIds: [4, 5], isSkeletalSeq: () => false } as SeqType)
+                        : state.seqTypeLoader.load(id),
+            },
+        };
+        const posed: number[][] = [];
+        const baked = bakeRunCast(
+            castState,
+            into,
+            (cast, run) => {
+                posed.push([cast, run]);
+                return model;
+            },
+            713,
+            824,
+        )!;
+        expect(posed).toEqual([
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [1, 0],
+            [1, 1],
+            [1, 2],
+        ]);
+        expect(baked.anims.map((anim) => anim.runCastFrame)).toEqual([0, 1]);
+        expect(baked.anims.map((anim) => [...anim.frameLengths])).toEqual([
+            [5, 4, 1],
+            [5, 4, 1],
+        ]);
     });
 });

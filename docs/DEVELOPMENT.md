@@ -2350,6 +2350,15 @@ Wiki's [list of in-game sound IDs](https://oldschool.runescape.wiki/w/List_of_in
 A sound's samples are let go once it's first played and its `AudioBuffer` holds them
 (`GameAudio.getBuffer`), so each sound is only in memory once.
 
+High alching (including replaced gear and Auto alch) plays the cache's player cast, spot
+animation and sound. `GameView` keeps the cast per hero on the presentation clock, so another
+casket pausing the sim doesn't freeze it or interrupt combat. `GameAssets.getLookRequest` includes
+the cast in every normal player look; `PLAYER_SEQS`, `getSpotAnimIds` and `getGameSoundIds` also
+keep these assets in the slim cache. While moving, each cast frame is baked over the weapon
+stance's run frames using the player's interleave mask (`PlayerBakeRequest.runPoses.casts`).
+The upper body follows the cast clock while the legs keep the displayed movement's stride, even
+when starting or stopping during the cast.
+
 ### Keeping it light on a phone
 
 - **Frame cap**: `GameClient.update` sets `Renderer.fpsLimit` every frame from the Frame rate

@@ -94,7 +94,10 @@ export const PLAYER_SEQS = {
     walk: 819,
     run: 824,
     death: 836,
+    alch: 713,
 };
+
+export const HIGH_ALCH_SPOTANIM = 113;
 
 // Eating, whose interleave order is the cache's usual split of a player for
 // doing something while walking: the legs (and the body's root) from the
@@ -244,6 +247,7 @@ export function getSpotAnimIds(): number[] {
         BLOOD_FURY_SPOTANIM,
         VISITOR_SPOTANIM,
         REVIVE_SPOTANIM,
+        HIGH_ALCH_SPOTANIM,
         // GALLERY-TEMP
         318,
         713,
@@ -1781,6 +1785,7 @@ export class GameAssets {
             stance.idle,
             stance.run,
             PLAYER_SEQS.death,
+            PLAYER_SEQS.alch,
             ...attackSeqs,
         ].filter((id, i, all) => all.indexOf(id) === i);
         // The held weapon's aim over the run, for a moment after each shot on the move
@@ -1790,10 +1795,12 @@ export class GameAssets {
             key: "player",
             appearance,
             seqIds,
-            runPoses:
-                poses.length > 0
-                    ? { poses, runSeqId: stance.run, maskSeqId: PLAYER_INTERLEAVE_SEQ }
-                    : undefined,
+            runPoses: {
+                poses,
+                casts: [PLAYER_SEQS.alch],
+                runSeqId: stance.run,
+                maskSeqId: PLAYER_INTERLEAVE_SEQ,
+            },
         };
         return { request, stance };
     }

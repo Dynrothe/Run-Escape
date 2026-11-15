@@ -30,7 +30,9 @@ import { makeGrid } from "../core/world/testGrid";
 import {
     GAME_VIEW_SPRITES,
     GameAssets,
+    HIGH_ALCH_SPOTANIM,
     HINT_ARROW_SPRITE,
+    PLAYER_SEQS,
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
     getCharacterAppearance,
@@ -341,6 +343,19 @@ describe("a run's enemies, baked and freed", () => {
 });
 
 describe("player bakes", () => {
+    test("keep the alchemy cast with every player look and its effect and sound for deployment", () => {
+        for (const character of CHARACTERS.filter((character) => !character.npcLook)) {
+            const { request } = GameAssets.getLookRequest(getCharacterAppearance(character.id), []);
+            expect(request.seqIds).toContain(PLAYER_SEQS.alch);
+            expect(request.runPoses?.casts).toContain(PLAYER_SEQS.alch);
+            expect(request.runPoses?.runSeqId).toBe(
+                GameAssets.getLookRequest(getCharacterAppearance(character.id), []).stance.run,
+            );
+        }
+        expect(getSpotAnimIds()).toContain(HIGH_ALCH_SPOTANIM);
+        expect(getGameSoundIds()).toContain(SOUNDS.alch);
+    });
+
     function createRun(party: number, hero = CHARACTERS[0].id): Sim {
         return new Sim({
             grid: makeGrid(["....", "....", "....", "...."], 1000, 1000),

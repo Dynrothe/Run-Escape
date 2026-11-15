@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- High alching plays the original spell's animation, glow and sound, including for replaced gear,
+  with legs continuing to run while casting on the move. Fixed by Deivid Smarzaro.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed
