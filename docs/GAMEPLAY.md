@@ -1287,8 +1287,15 @@ version and how to run it.
   the Forgotten Four's gauntlet, the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
   endless rounds they'd already done, without the coins. The screen has an overview of the tiers
   and every task, with filters by tier, type and map. Some take more than one run: wins with a
-  melee, a ranged and a magic adventurer. One of the Theatre of Blood's takes all its perfect room
-  tasks in the same run. Pin up to five tasks there: in a run, the pinned ones the map has get a
+  melee, a ranged and a magic adventurer, every Act II map beaten, one of each Awakened invader
+  killed. One of the Theatre of Blood's takes all its perfect room tasks in the same run. Act II's
+  maps, the Awakened fights (a phase reached, the kill, an attack dodged, the fight's button used
+  well, a speed kill), Beneath Cursed Sands and the Thanksgiving Harvest have their own. So does
+  the Tombs of Amascut: a path cleared, the raid beaten at raid levels from 150 to 500, without
+  dying or without the Helpful Spirit's supplies, each path boss's attack dodged, and each puzzle
+  room without a mistake (Perfect Apmeken, Crondis, Het and Scabaras). Some ask for a win set up a
+  certain way: with a remix on, all four, 100 to 300 invocation points, or a final boss awakened
+  by an Awakener's orb. Pin up to five tasks there: in a run, the pinned ones the map has get a
   row under the quests, which turns red with a toast saying what did it ("hit by Lunge") once
   they're spoilt. The pause menu lists every task the run is following, and how each is going.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last

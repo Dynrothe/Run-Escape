@@ -3275,7 +3275,8 @@ preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
 balance's label says as much.
 
 Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
-(task id to kills so far, or `task:map` to 1 for each map a beat-them-all task has had beaten). A
+(task id to kills so far, `task:map` to 1 for each map a beat-them-all task has had beaten, or
+`task:enemy` to 1 for each enemy a one-of-each kill count has had killed). A
 save from before it gets the kill counts, wins and endless rounds its records show, once, without
 coins; later saves never look at those records for them, since co-op runs add to them and co-op
 doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which

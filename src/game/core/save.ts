@@ -729,6 +729,10 @@ export function getStartingCharacter(save: SaveData): string {
 function getProgressMax(key: string): number {
     const [id, mapId] = key.split(":");
     const goal = COMBAT_TASK_BY_ID.get(id)?.goal;
+    // One of each: a key for each of them killed (task:enemy)
+    if (goal?.kind === "killCount" && goal.each) {
+        return goal.enemyIds.includes(mapId) ? 1 : 0;
+    }
     if (goal?.kind === "killCount" && mapId === undefined) {
         return goal.count;
     }
@@ -781,6 +785,14 @@ function applyRetroCombatTasks(save: SaveData): void {
                 break;
             }
             case "killCount": {
+                if (goal.each) {
+                    for (const id of goal.enemyIds) {
+                        if ((save.enemyKills[id] ?? 0) > 0) {
+                            save.combatProgress[`${task.id}:${id}`] = 1;
+                        }
+                    }
+                    break;
+                }
                 const kills = goal.enemyIds.reduce(
                     (sum, id) => sum + (save.enemyKills[id] ?? 0),
                     0,
@@ -813,6 +825,12 @@ export function getCombatProgress(
     runKills?: Record<string, number>,
 ): QuestProgress | undefined {
     const goal = task.goal;
+    if (goal.kind === "killCount" && goal.each) {
+        const killed = goal.enemyIds.filter(
+            (id) => save.combatProgress[`${task.id}:${id}`] || (runKills?.[id] ?? 0) > 0,
+        );
+        return { done: killed.length, of: goal.enemyIds.length };
+    }
     if (goal.kind === "killCount") {
         const kills = goal.enemyIds.reduce((sum, id) => sum + (runKills?.[id] ?? 0), 0);
         const done = (save.combatProgress[task.id] ?? 0) + kills;
@@ -908,7 +926,13 @@ function bankCombatTasks(save: SaveData, run: RunSummary): CombatTaskDef[] {
         if (save.combatTasks.includes(task.id)) {
             continue;
         }
-        if (goal.kind === "killCount") {
+        if (goal.kind === "killCount" && goal.each) {
+            for (const id of goal.enemyIds) {
+                if ((run.enemyKills?.[id] ?? 0) > 0) {
+                    save.combatProgress[`${task.id}:${id}`] = 1;
+                }
+            }
+        } else if (goal.kind === "killCount") {
             const progress = getCombatProgress(save, task, run.enemyKills)!;
             if (progress.done > 0) {
                 save.combatProgress[task.id] = progress.done;

@@ -10,6 +10,9 @@ the version in the corner).
 - Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
   Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
   Your kill counts, wins and endless rounds so far already count, without the coins.
+- Combat Achievements reach Act II's maps, the Awakened fights, Beneath Cursed Sands and the Tombs
+  of Amascut (raid levels, no deaths, a perfect run of each puzzle room), along with remixes,
+  invocations, invaders and an awakened final boss.
 - Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
   says what spoilt one. The pause menu shows how every task the run is following is going.
 

@@ -1,6 +1,8 @@
 import { list, tl, tr } from "../i18n";
 import { ENEMY_BY_ID, enemyName } from "./enemies";
 import { formatTime } from "./format";
+import { INVADERS, INVADER_BY_ID } from "./invaders";
+import { takesInvasions } from "./invasions";
 import { getMapEnemyIds } from "./mapEnemies";
 import { CAMPAIGN_MAPS, MAP_BY_ID, isDevMap, isFunMap } from "./maps";
 import { CombatGoal, CombatTaskDef, CombatTaskType, CombatTier, MapDef } from "./types";
@@ -50,8 +52,14 @@ export const COMBAT_SPEED_SECONDS = {
     tripleJads: 10,
     phosani: 300,
     zachariah: 180,
+    awakenedVardorvis: 60,
+    awakenedWhisperer: 45,
+    awakenedDuke: 110,
+    awakenedLeviathan: 150,
 };
 
+const ACT_II = ["stranglewood", "lassar_undercity", "ghorrock", "scar"];
+const INVADER_IDS = INVADERS.map((invader) => invader.id);
 const NEX = ["nex", "nex_shadow", "nex_blood", "nex_ice"];
 const TOB_VERZIK = ["tob_verzik_vitur", "tob_verzik_vitur_risen", "tob_verzik_vitur_spider"];
 const ZACHARIAH = ["justiciar_zachariah"];
@@ -67,6 +75,8 @@ const PHOSANI_LAST_STAND = [
     "The dream's lattice",
 ];
 const TOB = "theatre_of_blood";
+const TOMBS = "tombs_of_amascut";
+const SANDS = "beneath_cursed_sands";
 
 // In the list's order: all over first, then map by map
 export const COMBAT_TASKS: CombatTaskDef[] = [
@@ -185,6 +195,70 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         type: "stamina",
         goal: { kind: "endlessRound", round: 3, hard: true },
     },
+    {
+        id: "remixed",
+        name: "Remixed",
+        description: "Beat a map with a remix on.",
+        tier: "medium",
+        type: "restriction",
+        goal: { kind: "win", maps: "any", remixes: 1 },
+    },
+    {
+        id: "uninvited_guest",
+        name: "Uninvited Guest",
+        description: "Kill an Awakened invader.",
+        tier: "medium",
+        type: "killCount",
+        goal: { kind: "killCount", enemyIds: INVADER_IDS, count: 1 },
+    },
+    {
+        id: "invoker",
+        name: "Invoker",
+        description: "Beat a map with 100 or more invocation points.",
+        tier: "hard",
+        type: "restriction",
+        goal: { kind: "win", maps: "any", points: 100 },
+    },
+    {
+        id: "four_on_the_floor",
+        name: "Four on the Floor",
+        description: "Beat a map with all four remixes on at once.",
+        tier: "elite",
+        type: "restriction",
+        goal: { kind: "win", maps: "any", remixes: 4 },
+    },
+    {
+        id: "raising_the_stakes",
+        name: "Raising the Stakes",
+        description: "Beat a map with 200 or more invocation points.",
+        tier: "elite",
+        type: "restriction",
+        goal: { kind: "win", maps: "any", points: 200 },
+    },
+    {
+        id: "rude_awakening",
+        name: "Rude Awakening",
+        description: "Beat a campaign map with its final boss awakened by an Awakener's orb.",
+        tier: "elite",
+        type: "killCount",
+        goal: { kind: "win", maps: { campaignFrom: "lumbridge" }, awakened: true },
+    },
+    {
+        id: "home_guard",
+        name: "Home Guard",
+        description: "Kill each of the four Awakened invaders.",
+        tier: "elite",
+        type: "killCount",
+        goal: { kind: "killCount", enemyIds: INVADER_IDS, count: INVADER_IDS.length, each: true },
+    },
+    {
+        id: "all_in",
+        name: "All In",
+        description: "Beat a map with 300 invocation points: every one of them on.",
+        tier: "master",
+        type: "restriction",
+        goal: { kind: "win", maps: "any", points: 300 },
+    },
 
     // The campaign
     {
@@ -300,6 +374,110 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: { kind: "win", maps: ["inferno"], hard: true, hpAbove: 0.5 },
     },
 
+    // Act II, the Fallen Empire
+    {
+        id: "empire_breaker",
+        name: "Empire Breaker",
+        description: "Beat every map of Act II, the Fallen Empire.",
+        tier: "hard",
+        type: "killCount",
+        goal: { kind: "beatMap", maps: ACT_II, all: true },
+    },
+    {
+        id: "imperial_grit",
+        name: "Imperial Grit",
+        description: "Beat every map of Act II on hard mode.",
+        tier: "elite",
+        type: "killCount",
+        goal: { kind: "beatMap", maps: ACT_II, all: true, hard: true },
+    },
+    {
+        id: "nowhere_to_run",
+        name: "Nowhere to Run",
+        description: "Kill Kasonde the Craven without him hitting you.",
+        tier: "medium",
+        type: "perfection",
+        mapId: "stranglewood",
+        goal: { kind: "kill", bossIds: ["kasonde"], without: ["hits"] },
+    },
+    {
+        id: "axe_dodger",
+        name: "Axe Dodger",
+        description: "Kill Vardorvis in the Stranglewood without being hit by his swinging axes.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "stranglewood",
+        goal: { kind: "kill", bossIds: ["vardorvis"], without: [{ attacks: ["Swinging axes"] }] },
+    },
+    {
+        id: "out_of_the_shadows",
+        name: "Out of the Shadows",
+        description: "Kill the Shadow Keeper without it hitting you.",
+        tier: "medium",
+        type: "perfection",
+        mapId: "lassar_undercity",
+        goal: { kind: "kill", bossIds: ["shadow_keeper_boss"], without: ["hits"] },
+    },
+    {
+        id: "arms_length",
+        name: "Arm's Length",
+        description:
+            "Kill the Whisperer in the Lassar Undercity without being hit by her tentacles.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "lassar_undercity",
+        goal: { kind: "kill", bossIds: ["whisperer"], without: [{ attacks: ["Tentacles"] }] },
+    },
+    {
+        id: "unworthy_opponent",
+        name: "Unworthy Opponent",
+        description: "Kill Ketla the Unworthy without a single hit landing on you.",
+        tier: "medium",
+        type: "perfection",
+        mapId: "ghorrock",
+        goal: { kind: "kill", bossIds: ["ketla"], without: ["hits"] },
+    },
+    {
+        id: "averted_eyes",
+        name: "Averted Eyes",
+        description: "Kill Duke Sucellus in Ghorrock without being caught by his freezing gaze.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "ghorrock",
+        goal: {
+            kind: "kill",
+            bossIds: ["duke_sucellus"],
+            without: [{ attacks: ["Freezing gaze"] }],
+        },
+    },
+    {
+        id: "warm_blooded",
+        name: "Warm Blooded",
+        description: "Beat Ghorrock without ever freezing solid.",
+        tier: "elite",
+        type: "restriction",
+        mapId: "ghorrock",
+        goal: { kind: "win", maps: ["ghorrock"], rules: { noFreezing: true } },
+    },
+    {
+        id: "unscarred",
+        name: "Unscarred",
+        description: "Kill the Scarred black demon without it hitting you.",
+        tier: "medium",
+        type: "perfection",
+        mapId: "scar",
+        goal: { kind: "kill", bossIds: ["scarred_black_demon"], without: ["hits"] },
+    },
+    {
+        id: "watch_your_head",
+        name: "Watch Your Head",
+        description: "Kill the Leviathan in the Scar without being hit by its debris.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "scar",
+        goal: { kind: "kill", bossIds: ["the_leviathan"], without: [{ attacks: ["Debris"] }] },
+    },
+
     // Hallowed Night
     {
         id: "sweet_dreams",
@@ -324,6 +502,36 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
             bossIds: ["the_nightmare"],
             without: ["hurtCursed"],
             except: UNDODGEABLE,
+        },
+    },
+
+    // Thanksgiving Harvest
+    {
+        id: "lab_safety",
+        name: "Lab Safety",
+        description: "Kill Professor Oddenstein without being hit by a chemical splash.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "thanksgiving",
+        goal: {
+            kind: "kill",
+            bossIds: ["professor_oddenstein"],
+            without: [{ attacks: ["Chemical Splash"] }],
+        },
+    },
+    {
+        id: "plucked",
+        name: "Plucked",
+        description:
+            "Kill the Freaky Forester, his last stand too, without being hit by the Feathered " +
+            "Apocalypse.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "thanksgiving",
+        goal: {
+            kind: "kill",
+            bossIds: ["freaky_forester", "freaky_forester_final"],
+            without: [{ attacks: ["Feathered Apocalypse"] }],
         },
     },
 
@@ -658,6 +866,481 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         mapId: TOB,
         goal: { kind: "beatMap", maps: [TOB], expert: true },
     },
+
+    // Beneath Cursed Sands
+    {
+        id: "below_the_sands",
+        name: "Below the Sands",
+        description: "Kill the Menaphite Akh, Beneath Cursed Sands' last fight.",
+        tier: "medium",
+        type: "killCount",
+        mapId: SANDS,
+        goal: { kind: "killCount", enemyIds: ["menaphite_akh"], count: 1 },
+    },
+    {
+        id: "off_the_hook",
+        name: "Off the Hook",
+        description: "Kill Coenus without being caught by his harpoon.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: SANDS,
+        goal: { kind: "kill", bossIds: ["coenus"], without: [{ attacks: ["Harpoon"] }] },
+    },
+    {
+        id: "shadow_boxer",
+        name: "Shadow Boxer",
+        description: "Kill the Champion of Scabaras without your shadow betraying you.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: SANDS,
+        goal: {
+            kind: "kill",
+            bossIds: ["champion_of_scabaras"],
+            without: [{ attacks: ["Your shadow betrays you", "Your shadow betrays you (first)"] }],
+        },
+    },
+    {
+        id: "no_diving",
+        name: "No Diving",
+        description: "Kill the Menaphite Akh without being hit by a dive.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: SANDS,
+        goal: {
+            kind: "kill",
+            bossIds: ["menaphite_akh"],
+            without: [
+                {
+                    attacks: [
+                        "Dive",
+                        "Dives",
+                        "Dive flurry",
+                        "Dive (following)",
+                        "Dive (last stand)",
+                    ],
+                },
+            ],
+        },
+    },
+
+    // The Tombs of Amascut
+    {
+        id: "pathfinder",
+        name: "Pathfinder",
+        description: "Clear a path of the Tombs of Amascut: its room and its boss.",
+        tier: "easy",
+        type: "killCount",
+        mapId: TOMBS,
+        goal: { kind: "clearPath" },
+    },
+    {
+        id: "tomb_explorer",
+        name: "Tomb Explorer",
+        description: "Beat the Tombs of Amascut.",
+        tier: "hard",
+        type: "killCount",
+        mapId: TOMBS,
+        goal: { kind: "beatMap", maps: [TOMBS] },
+    },
+    {
+        id: "movin_on_up",
+        name: "Movin' on up",
+        description: "Beat the Tombs of Amascut at raid level 150 or above.",
+        tier: "hard",
+        type: "restriction",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], raidLevel: 150 },
+    },
+    {
+        id: "spiritless",
+        name: "Spiritless",
+        description:
+            "Beat the Tombs of Amascut without using any of the Helpful Spirit's supplies.",
+        tier: "hard",
+        type: "restriction",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], rules: { noSupplies: true } },
+    },
+    {
+        id: "roll_with_it",
+        name: "Roll With It",
+        description: "Kill Ba-Ba without being hit by a rolling boulder.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: { kind: "kill", bossIds: ["ba_ba"], without: [{ attacks: ["Rolling boulders"] }] },
+    },
+    {
+        id: "stable_footing",
+        name: "Stable Footing",
+        description: "Kill Akkha without being hit by his unstable orbs.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: {
+            kind: "kill",
+            bossIds: ["akkha", "akkha_enraged"],
+            without: [{ attacks: ["Unstable orbs"] }],
+        },
+    },
+    {
+        id: "stampede_survivor",
+        name: "Stampede Survivor",
+        description: "Kill Kephri without being caught in a scarab stampede.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: {
+            kind: "kill",
+            bossIds: ["kephri", "kephri_final"],
+            without: [{ attacks: ["Scarab stampede", "Scarab stampedes"] }],
+        },
+    },
+    {
+        id: "acid_test",
+        name: "Acid Test",
+        description: "Kill Zebak without being hit by his acid spray.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: { kind: "kill", bossIds: ["zebak"], without: [{ attacks: ["Acid spray"] }] },
+    },
+    {
+        id: "hardcore_tombs",
+        name: "Hardcore Tombs",
+        description: "Beat the Tombs of Amascut without dying.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], rules: { noDeaths: true } },
+    },
+    {
+        id: "confident_raider",
+        name: "Confident Raider",
+        description: "Beat the Tombs of Amascut at raid level 300 or above.",
+        tier: "elite",
+        type: "restriction",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], raidLevel: 300 },
+    },
+    {
+        id: "perfect_apmeken",
+        name: "Perfect Apmeken",
+        description: "Beat the Apmeken room without letting a pillar fall or a vent burst.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOMBS,
+        goal: { kind: "perfectRoom", path: "apmeken" },
+    },
+    {
+        id: "perfect_crondis",
+        name: "Perfect Crondis",
+        description: "Beat the Crondis room without a trap or a crocodile catching you.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOMBS,
+        goal: { kind: "perfectRoom", path: "crondis" },
+    },
+    {
+        id: "perfect_het",
+        name: "Perfect Het",
+        description: "Beat the Het room without being hurt by its beam or an Orb of Darkness.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOMBS,
+        goal: { kind: "perfectRoom", path: "het" },
+    },
+    {
+        id: "perfect_scabaras",
+        name: "Perfect Scabaras",
+        description: "Beat the Scabaras room without a wrong step bringing the ceiling down.",
+        tier: "elite",
+        type: "perfection",
+        mapId: TOMBS,
+        goal: { kind: "perfectRoom", path: "scabaras" },
+    },
+    {
+        id: "something_of_an_expert_myself",
+        name: "Something of an expert myself",
+        description: "Beat the Tombs of Amascut at raid level 350 or above without dying.",
+        tier: "master",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], raidLevel: 350, rules: { noDeaths: true } },
+    },
+    {
+        id: "amascuts_remnant",
+        name: "Amascut's Remnant",
+        description: "Beat the Tombs of Amascut at raid level 500 or above without dying.",
+        tier: "grandmaster",
+        type: "mechanical",
+        mapId: TOMBS,
+        goal: { kind: "win", maps: [TOMBS], raidLevel: 500, rules: { noDeaths: true } },
+    },
+
+    // Awakened Vardorvis
+    {
+        id: "deeper_cuts",
+        name: "Deeper Cuts",
+        description: "Reach Awakened Vardorvis's third phase.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "awakened_vardorvis",
+        goal: { kind: "reachPhase", bossId: "awakened_vardorvis", phase: 3 },
+    },
+    {
+        id: "vardorvis_sleeper",
+        name: "Vardorvis Sleeper",
+        description: "Kill Awakened Vardorvis.",
+        tier: "hard",
+        type: "killCount",
+        mapId: "awakened_vardorvis",
+        goal: { kind: "beatMap", maps: ["awakened_vardorvis"] },
+    },
+    {
+        id: "pillar_talk",
+        name: "Pillar Talk",
+        description: "In one fight, make Awakened Vardorvis dart into his pillars three times.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "awakened_vardorvis",
+        goal: { kind: "guardDown", bossId: "awakened_vardorvis", causes: ["Pillar"], count: 3 },
+    },
+    {
+        id: "bloodless",
+        name: "Bloodless",
+        description: "Kill Awakened Vardorvis without a blood captor healing him.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_vardorvis",
+        goal: { kind: "kill", bossIds: ["awakened_vardorvis"], without: ["heals"] },
+    },
+    {
+        id: "breathing_room",
+        name: "Breathing Room",
+        description: "Kill Awakened Vardorvis without being caught by his strangle.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_vardorvis",
+        goal: {
+            kind: "kill",
+            bossIds: ["awakened_vardorvis"],
+            without: [{ attacks: ["Strangle", "Strangling blows"] }],
+        },
+    },
+    {
+        id: "clean_cut",
+        name: "Clean Cut",
+        description: `Kill Awakened Vardorvis in under ${formatTime(COMBAT_SPEED_SECONDS.awakenedVardorvis)}.`,
+        tier: "master",
+        type: "speed",
+        mapId: "awakened_vardorvis",
+        goal: {
+            kind: "win",
+            maps: ["awakened_vardorvis"],
+            within: COMBAT_SPEED_SECONDS.awakenedVardorvis,
+        },
+    },
+
+    // The Awakened Whisperer
+    {
+        id: "the_third_verse",
+        name: "The Third Verse",
+        description: "Reach the Awakened Whisperer's third phase.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "awakened_whisperer",
+        goal: { kind: "reachPhase", bossId: "awakened_whisperer", phase: 3 },
+    },
+    {
+        id: "whispered",
+        name: "Whispered",
+        description: "Kill the Awakened Whisperer.",
+        tier: "hard",
+        type: "killCount",
+        mapId: "awakened_whisperer",
+        goal: { kind: "beatMap", maps: ["awakened_whisperer"] },
+    },
+    {
+        id: "unlashed",
+        name: "Unlashed",
+        description: "Kill the Awakened Whisperer without being hit by her lash.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "awakened_whisperer",
+        goal: { kind: "kill", bossIds: ["awakened_whisperer"], without: [{ attacks: ["Lash"] }] },
+    },
+    {
+        id: "soul_saver",
+        name: "Soul Saver",
+        description: "In one fight, break all three of the Awakened Whisperer's Soul Siphons.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_whisperer",
+        // Not only stunned: one caught whole soon after a stun only drops her guard
+        goal: {
+            kind: "guardDown",
+            bossId: "awakened_whisperer",
+            causes: ["Soul Siphon"],
+            count: 3,
+        },
+    },
+    {
+        id: "hush",
+        name: "Hush",
+        description: "Kill the Awakened Whisperer without being hit by her screech.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_whisperer",
+        goal: {
+            kind: "kill",
+            bossIds: ["awakened_whisperer"],
+            without: [{ attacks: ["Screech", "Drowning screech"] }],
+        },
+    },
+    {
+        id: "short_song",
+        name: "Short Song",
+        description: `Kill the Awakened Whisperer in under ${formatTime(COMBAT_SPEED_SECONDS.awakenedWhisperer)}.`,
+        tier: "master",
+        type: "speed",
+        mapId: "awakened_whisperer",
+        goal: {
+            kind: "win",
+            maps: ["awakened_whisperer"],
+            within: COMBAT_SPEED_SECONDS.awakenedWhisperer,
+        },
+    },
+
+    // Awakened Duke Sucellus
+    {
+        id: "deep_freeze",
+        name: "Deep Freeze",
+        description: "Reach Awakened Duke Sucellus's third phase.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "awakened_duke",
+        goal: { kind: "reachPhase", bossId: "awakened_duke", phase: 3 },
+    },
+    {
+        id: "duke_sucellus_sleeper",
+        name: "Duke Sucellus Sleeper",
+        description: "Kill Awakened Duke Sucellus.",
+        tier: "hard",
+        type: "killCount",
+        mapId: "awakened_duke",
+        goal: { kind: "beatMap", maps: ["awakened_duke"] },
+    },
+    {
+        id: "look_away",
+        name: "Look Away",
+        description: "Kill Awakened Duke Sucellus without being caught by his gaze.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "awakened_duke",
+        goal: {
+            kind: "kill",
+            bossIds: ["awakened_duke"],
+            without: [{ attacks: ["Freezing gaze", "Awakened gaze"] }],
+        },
+    },
+    {
+        id: "fresh_air",
+        name: "Fresh Air",
+        description: "Kill Awakened Duke Sucellus without being hurt by his gas.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_duke",
+        goal: { kind: "kill", bossIds: ["awakened_duke"], without: [{ attacks: ["Gas"] }] },
+    },
+    {
+        id: "kindled_spirit",
+        name: "Kindled Spirit",
+        description:
+            "In one fight, catch Awakened Duke Sucellus in Kindle's flare three times while his " +
+            "guard's down.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_duke",
+        goal: { kind: "abilityHits", abilityId: "kindle", count: 3, opened: true },
+    },
+    {
+        id: "cold_snap",
+        name: "Cold Snap",
+        description: `Kill Awakened Duke Sucellus in under ${formatTime(COMBAT_SPEED_SECONDS.awakenedDuke)}.`,
+        tier: "master",
+        type: "speed",
+        mapId: "awakened_duke",
+        goal: { kind: "win", maps: ["awakened_duke"], within: COMBAT_SPEED_SECONDS.awakenedDuke },
+    },
+
+    // The Awakened Leviathan
+    {
+        id: "out_of_the_depths",
+        name: "Out of the Depths",
+        description: "Reach the Awakened Leviathan's third phase.",
+        tier: "medium",
+        type: "mechanical",
+        mapId: "awakened_leviathan",
+        goal: { kind: "reachPhase", bossId: "awakened_leviathan", phase: 3 },
+    },
+    {
+        id: "leviathan_sleeper",
+        name: "Leviathan Sleeper",
+        description: "Kill the Awakened Leviathan.",
+        tier: "hard",
+        type: "killCount",
+        mapId: "awakened_leviathan",
+        goal: { kind: "beatMap", maps: ["awakened_leviathan"] },
+    },
+    {
+        id: "tail_dodger",
+        name: "Tail Dodger",
+        description: "Kill the Awakened Leviathan without being hit by its tail.",
+        tier: "hard",
+        type: "mechanical",
+        mapId: "awakened_leviathan",
+        goal: { kind: "kill", bossIds: ["awakened_leviathan"], without: [{ attacks: ["Tail"] }] },
+    },
+    {
+        id: "high_and_dry",
+        name: "High and Dry",
+        description: "Kill the Awakened Leviathan without being caught in its torrent.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_leviathan",
+        goal: {
+            kind: "kill",
+            bossIds: ["awakened_leviathan"],
+            without: [{ attacks: ["Torrent", "Deep torrent"] }],
+        },
+    },
+    {
+        id: "grounded",
+        name: "Grounded",
+        description: "Kill the Awakened Leviathan without being struck by its lightning.",
+        tier: "elite",
+        type: "mechanical",
+        mapId: "awakened_leviathan",
+        goal: {
+            kind: "kill",
+            bossIds: ["awakened_leviathan"],
+            without: [{ attacks: ["Lightning"] }],
+        },
+    },
+    {
+        id: "shallow_waters",
+        name: "Shallow Waters",
+        description: `Kill the Awakened Leviathan in under ${formatTime(COMBAT_SPEED_SECONDS.awakenedLeviathan)}.`,
+        tier: "master",
+        type: "speed",
+        mapId: "awakened_leviathan",
+        goal: {
+            kind: "win",
+            maps: ["awakened_leviathan"],
+            within: COMBAT_SPEED_SECONDS.awakenedLeviathan,
+        },
+    },
 ];
 
 export const COMBAT_TASK_BY_ID: Map<string, CombatTaskDef> = new Map(
@@ -740,13 +1423,19 @@ export function canTrackOn(task: CombatTaskDef, map: MapDef): boolean {
         case "win":
             return getGoalMaps(goal.maps).includes(map.id);
         case "killCount": {
+            // An Awakened invader isn't one of its map's own, but comes to any map invaded
             const here = getMapEnemyIds(map);
-            return goal.enemyIds.some((id) => here.has(id));
+            return goal.enemyIds.some(
+                (id) => here.has(id) || (INVADER_BY_ID.has(id) && takesInvasions(map)),
+            );
         }
         case "endlessRound":
             return !map.fight && !map.raid;
         case "evolve":
             // A boss fight has no picks
+            return !map.fight;
+        case "coinsBack":
+            // Nor visitors: no one drops by while a phased boss is up
             return !map.fight;
         default:
             return true;
@@ -808,7 +1497,11 @@ export type CombatReason =
               | "passive"
               | "takeBacks"
               | "teleporter"
-              | "supplies";
+              | "supplies"
+              | "usedSupply"
+              | "died"
+              | "frozen"
+              | "puzzleMistake";
       };
 
 // Combat Achievements' sentences, for locales/en/gen.json (scripts/i18n/extractors/gen.ts)
@@ -833,6 +1526,10 @@ export const COMBAT_MESSAGES: Record<string, string> = {
     "combat.reason.takeBacks": "rerolled, skipped or banished",
     "combat.reason.teleporter": "used a teleporter",
     "combat.reason.supplies": "spent raid points",
+    "combat.reason.usedSupply": "used a supply",
+    "combat.reason.died": "died",
+    "combat.reason.frozen": "froze solid",
+    "combat.reason.puzzleMistake": "made a mistake in the room",
 };
 
 function message(key: string, params?: Record<string, string | number>): string {

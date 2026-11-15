@@ -7,6 +7,7 @@ import {
     getGoalMaps,
 } from "../content/combatTasks";
 import { ENEMY_BY_ID } from "../content/enemies";
+import { ITEM_BY_ID } from "../content/items";
 import { isDevMap, isFunMap } from "../content/maps";
 import { CombatGoal, CombatStyle, CombatTaskDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -191,7 +192,11 @@ export class CombatTracker {
                     !sim.endless &&
                     (!goal.hard || sim.hard) &&
                     getGoalMaps(goal.maps).includes(sim.map.id) &&
-                    (!goal.rules?.noUpgrades || !this.upgraded)
+                    (!goal.rules?.noUpgrades || !this.upgraded) &&
+                    (!goal.awakened || sim.awakened) &&
+                    sim.remixes.length >= (goal.remixes ?? 0) &&
+                    sim.invocationPoints >= (goal.points ?? 0) &&
+                    sim.raidLevel >= (goal.raidLevel ?? 0)
                 );
             case "beatWithEach":
                 return (
@@ -391,15 +396,34 @@ export class CombatTracker {
                 return (watch.count ?? 0) >= goal.count;
             case "abilityHits":
                 for (const e of events) {
+                    // Only the ones that landed on the boss: a Kindle whose flare caught no one,
+                    // or a Shadow into the realm, names no one
                     if (
                         e.type === "ability" &&
                         e.abilityId === goal.abilityId &&
+                        e.enemyId !== "" &&
                         (e.opened || !goal.opened)
                     ) {
                         watch.count = (watch.count ?? 0) + 1;
                     }
                 }
                 return (watch.count ?? 0) >= goal.count;
+            case "clearPath":
+                return goal.path === undefined
+                    ? sim.tombsPathsDone.length > 0
+                    : sim.tombsPathsDone.includes(goal.path);
+            case "perfectRoom":
+                // Its room's the one there while the party's on its path (entering one starts
+                // it afresh). A mistake in the tick it's beaten still counts.
+                if (sim.tombsPath !== goal.path) {
+                    return false;
+                }
+                if (events.some((e) => e.type === "tombsMistake" && e.path === goal.path)) {
+                    watch.failed = true;
+                    watch.reason = { kind: "puzzleMistake" };
+                    return false;
+                }
+                return sim.tombsRoom?.doneTick !== undefined;
             case "allOf": {
                 const parts = watch.parts!;
                 for (const part of parts) {
@@ -468,6 +492,21 @@ export class CombatTracker {
         }
         if (rules.noSupplies && hero.raidPoints !== hero.raidPointsEarned) {
             return { kind: "supplies" };
+        }
+        if (
+            rules.noSupplies &&
+            events.some((e) => e.type === "itemUsed" && this.isMine(e, sim) && isSupply(e.itemId))
+        ) {
+            return { kind: "usedSupply" };
+        }
+        if (rules.noDeaths && sim.tombsDeaths > 0) {
+            return { kind: "died" };
+        }
+        if (
+            rules.noFreezing &&
+            events.some((e) => e.type === "frozenSolid" && this.isMine(e, sim))
+        ) {
+            return { kind: "frozen" };
         }
         return undefined;
     }
@@ -738,6 +777,12 @@ function lastHit(
         }
     }
     return undefined;
+}
+
+// A raid's supply (the Tombs of Amascut's, the Helpful Spirit's), as an item in the inventory
+function isSupply(itemId: string): boolean {
+    const item = ITEM_BY_ID.get(itemId);
+    return item?.kind === "utility" && item.use.kind === "supply";
 }
 
 // What they've taken, less what these attacks did: what a damage goal counts

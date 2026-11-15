@@ -1515,6 +1515,40 @@ describe("Combat Achievements", () => {
         expect(migrateSave(save).combatTasks).toEqual([]);
     });
 
+    test("one of each adds up over solo runs, from old records too, and the last pays", () => {
+        const save = createSave();
+        const killed = (id: string) =>
+            recordRun(save, run("desert", { enemyKills: { [id]: 1 }, combatTasks: [] }));
+        killed("invading_duke");
+        killed("invading_duke");
+        expect(save.combatProgress["home_guard:invading_duke"]).toBe(1);
+        const guard = COMBAT_TASK_BY_ID.get("home_guard")!;
+        expect(getCombatProgress(save, guard)).toEqual({ done: 1, of: 4 });
+        // The first was Uninvited Guest's
+        expect(save.combatTasks).toEqual(["uninvited_guest"]);
+        killed("invading_vardorvis");
+        killed("invading_whisperer");
+        const coins = save.coins;
+        const quests = killed("invading_leviathan");
+        expect(save.combatTasks).toContain("home_guard");
+        expect(save.combatProgress).toEqual({});
+        // Its tier's coins, besides any quest's
+        expect(save.coins - coins - quests.reduce((sum, q) => sum + q.coins, 0)).toBe(1000);
+
+        // An old save's kills, and a key for no enemy of the task's, which goes
+        const old = migrateSave({
+            ...version11(),
+            enemyKills: { invading_duke: 1, invading_whisperer: 3 },
+        });
+        expect(old.combatTasks).toContain("uninvited_guest");
+        expect(getCombatProgress(old, guard)).toEqual({ done: 2, of: 4 });
+        const loaded = migrateSave({
+            ...createSave(),
+            combatProgress: { "home_guard:invading_duke": 1, "home_guard:goblin": 1 },
+        });
+        expect(loaded.combatProgress).toEqual({ "home_guard:invading_duke": 1 });
+    });
+
     test("a tier's hilt comes with its points, and stays", () => {
         const save = createSave();
         const easy = [
@@ -1525,6 +1559,7 @@ describe("Combat Achievements", () => {
             "bad_dream",
             "court_in_session",
             "opening_night",
+            "pathfinder",
         ];
         const needed = getTierThresholds().easy;
         recordRun(save, run("lumbridge", { combatTasks: easy.slice(0, needed - 1) }));

@@ -1,8 +1,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { CombatReason, describeCombatReason } from "../content/combatTasks";
+import {
+    COMBAT_TASK_BY_ID,
+    CombatReason,
+    canTrackOn,
+    describeCombatReason,
+} from "../content/combatTasks";
 import { getEnemy } from "../content/enemies";
+import { HARD_PRESET } from "../content/invocations";
+import { TOMBS_SUPPLY_ITEMS } from "../content/items";
+import { MAP_BY_ID } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { CombatTracker } from "./CombatTracker";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
@@ -96,6 +104,9 @@ describe("which runs it follows", () => {
         expect(tasks).not.toContain("hardened");
         expect(tasks).not.toContain("round_two");
         expect(tasks).not.toContain("bare_essentials");
+        // A boss fight has no visitors to rob you
+        expect(tasks).toContain("stand_and_deliver");
+        expect(ids(track(createSim("zachariah")).tasks)).not.toContain("stand_and_deliver");
     });
 
     test("never a co-op run", () => {
@@ -629,6 +640,144 @@ describe("the Theatre's perfect tasks", () => {
             state: "failed",
             reason: "Rain Check: hit by Falling flesh",
         });
+    });
+});
+
+describe("Act II and after", () => {
+    test("a button counts only where it lands on the boss", () => {
+        const sim = createSim("awakened_duke");
+        const tracker = track(sim);
+        const kindle = (enemyId: string, opened: boolean): SimEvent => ({
+            type: "ability",
+            abilityId: "kindle",
+            enemyId,
+            sound: -1,
+            opened,
+            ...at,
+        });
+        // A flare that caught no one, twice, and one while his guard was up
+        tracker.observe(sim, [kindle("", false), kindle("", false)]);
+        tracker.observe(sim, [kindle("awakened_duke", false)]);
+        expect(status(tracker, sim, "kindled_spirit").progress).toEqual({ done: 0, of: 3 });
+        tracker.observe(sim, [kindle("awakened_duke", true), kindle("awakened_duke", true)]);
+        expect(ids(tracker.observe(sim, [kindle("awakened_duke", true)]))).toEqual([
+            "kindled_spirit",
+        ]);
+    });
+
+    test("a win's set-up decides which runs follow it: remixes, points, an awakened boss", () => {
+        const followed = (mapId: string, options: Partial<SimOptions> = {}) =>
+            ids(track(createSim(mapId, options)).tasks);
+        const plain = followed("lumbridge");
+        expect(plain).not.toContain("remixed");
+        expect(plain).not.toContain("rude_awakening");
+        expect(plain).not.toContain("invoker");
+
+        expect(followed("lumbridge", { remixes: ["overgrown"] })).toContain("remixed");
+        expect(followed("lumbridge", { remixes: ["overgrown"] })).not.toContain(
+            "four_on_the_floor",
+        );
+        const all = createSim("lumbridge", { remixes: ["overgrown", "shadow", "frozen", "dark"] });
+        const tracker = track(all);
+        all.state = "victory";
+        const done = ids(tracker.observe(all, []));
+        expect(done).toContain("remixed");
+        expect(done).toContain("four_on_the_floor");
+
+        expect(followed("lumbridge", { awakened: true })).toContain("rude_awakening");
+
+        const hard = createSim("desert", { invocations: HARD_PRESET });
+        expect(hard.invocationPoints).toBeGreaterThanOrEqual(100);
+        expect(hard.invocationPoints).toBeLessThan(200);
+        const onHard = ids(track(hard).tasks);
+        expect(onHard).toContain("invoker");
+        expect(onHard).not.toContain("raising_the_stakes");
+    });
+
+    test("freezing solid spoils Warm Blooded", () => {
+        const sim = createSim("ghorrock");
+        const tracker = track(sim);
+        tracker.observe(sim, []);
+        expect(status(tracker, sim, "warm_blooded").state).toBe("on");
+        tracker.observe(sim, [{ type: "frozenSolid", hero: 0 }]);
+        expect(said(status(tracker, sim, "warm_blooded"))).toMatchObject({
+            state: "failed",
+            reason: "froze solid",
+        });
+    });
+
+    test("invaders count on the maps they invade, one of each over runs", () => {
+        const guard = COMBAT_TASK_BY_ID.get("home_guard")!;
+        expect(canTrackOn(guard, MAP_BY_ID.get("desert")!)).toBe(true);
+        expect(canTrackOn(guard, MAP_BY_ID.get("lumbridge")!)).toBe(false);
+
+        const save = createSave();
+        save.combatProgress["home_guard:invading_vardorvis"] = 1;
+        save.combatProgress["home_guard:invading_whisperer"] = 1;
+        save.combatProgress["home_guard:invading_duke"] = 1;
+        const sim = createSim("desert");
+        const tracker = track(sim, save);
+        // Another of one already counted is no further on
+        sim.enemyKills.invading_duke = 1;
+        tracker.observe(sim, [killed("invading_duke")]);
+        expect(status(tracker, sim, "home_guard").progress).toEqual({ done: 3, of: 4 });
+        sim.enemyKills.invading_leviathan = 1;
+        expect(ids(tracker.observe(sim, [killed("invading_leviathan")]))).toContain("home_guard");
+    });
+});
+
+describe("the Tombs of Amascut", () => {
+    // On a path, in its room: beaten if done is set
+    function enter(sim: Sim, path: string, done?: number): void {
+        sim.tombsPath = path;
+        sim.tombsRoom = { doneTick: done } as Sim["tombsRoom"];
+    }
+
+    test("a puzzle room beaten without a mistake is perfect; a mistake spoils it", () => {
+        const sim = createSim("tombs_of_amascut");
+        const tracker = track(sim);
+        enter(sim, "het");
+        // Another room's mistake isn't this one's
+        tracker.observe(sim, [{ type: "tombsMistake", path: "crondis" }]);
+        expect(status(tracker, sim, "perfect_het").state).toBe("on");
+        enter(sim, "het", sim.tick);
+        expect(ids(tracker.observe(sim, []))).toEqual(["perfect_het"]);
+
+        const spilt = createSim("tombs_of_amascut");
+        const spoilt = track(spilt);
+        enter(spilt, "crondis");
+        spoilt.observe(spilt, [{ type: "tombsMistake", path: "crondis" }]);
+        enter(spilt, "crondis", spilt.tick);
+        expect(ids(spoilt.observe(spilt, []))).not.toContain("perfect_crondis");
+        expect(said(status(spoilt, spilt, "perfect_crondis"))).toMatchObject({
+            state: "failed",
+            reason: "made a mistake in the room",
+        });
+    });
+
+    test("a path cleared, and a death or a supply spoiling the raid's rules", () => {
+        const sim = createSim("tombs_of_amascut");
+        const tracker = track(sim);
+        expect(ids(tracker.tasks)).toContain("pathfinder");
+        // Only at a raid level that high
+        expect(ids(tracker.tasks)).not.toContain("movin_on_up");
+        sim.tombsPathsDone.push("apmeken");
+        expect(ids(tracker.observe(sim, []))).toContain("pathfinder");
+        const supply = TOMBS_SUPPLY_ITEMS[0].id;
+        tracker.observe(sim, [{ type: "itemUsed", itemId: supply, ...at }]);
+        expect(said(status(tracker, sim, "spiritless")).reason).toBe("used a supply");
+        expect(status(tracker, sim, "hardcore_tombs").state).toBe("on");
+        sim.tombsDeaths = 1;
+        tracker.observe(sim, []);
+        expect(said(status(tracker, sim, "hardcore_tombs")).reason).toBe("died");
+    });
+
+    test("a mistake in a puzzle room is said, and changes nothing", () => {
+        const sim = createSim("tombs_of_amascut");
+        sim.tombsPath = "crondis";
+        sim.tombsRoom = { crondis: { water: [0] } } as unknown as Sim["tombsRoom"];
+        sim["crondisSpill"]();
+        expect(sim.takeEvents()).toContainEqual({ type: "tombsMistake", path: "crondis" });
     });
 });
 

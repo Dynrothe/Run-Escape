@@ -471,12 +471,30 @@ description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts`
   A new goal that counts its way there gives its progress in `progressOf`.
 - `allOf` is several tasks' goals met in the same run, whether they were done before or not
   (Theatre Perfectionist), on its parts' map. `beatWithEach` counts over runs, one style at a time,
-  through `RunSummary.combatProgress`, the keys the tracker saw a run earn.
+  through `RunSummary.combatProgress`, the keys the tracker saw a run earn. A `killCount` with
+  `each` wants one of each enemy, banked as `task:enemy` keys. An invader (`content/invaders.ts`)
+  isn't one of its map's own enemies, so `canTrackOn` follows a kill count of them on every map
+  that takes invasions.
+- An avoided attack (`without: [{ attacks }]`) is summed by name from `damageByAttack`, over every
+  boss on the map, while its window's open: pick a name only that boss has there. Dart, Claw, Grasp
+  and Shadow burst belong to more than one.
+- A `win` can ask what the run's set up with: an awakened final boss, remixes, invocation points
+  or the Tombs' raid level. The tracker leaves it out of a run that isn't, as it does a hard-mode
+  task on normal.
+- The Tombs of Amascut: `clearPath`, and `perfectRoom` for a puzzle room with no mistake. Each
+  room's mistakes emit `tombsMistake` (`Sim.tombsMistake`): an Apmeken issue left too long, a
+  Crondis spill, a wrong Scabaras step, Het's beam or an orb landing. The room's hits can't tell
+  them apart, since the Scabaras room's scarabs shoot under the puzzle's id. `noDeaths` counts
+  `sim.tombsDeaths`, and `noSupplies` the Helpful Spirit's supplies used too. The Wardens arrive
+  without `bossSpawned`, so a `kill` of them would need its window opened another way.
+- `abilityHits` counts only the button's landings on the boss: an `ability` event whose `enemyId`
+  is `""` (a Kindle that caught no one) doesn't count.
 - `CA=1` on `scripts/game/simulate-run.ts` reports which tasks the bot's runs did, what spoilt the
   rest, and each boss's time from its arrival to its kill. The bot can't dodge, so go by those times
   for a speed task, not by whether it did the perfect ones.
-- Only kill counts, map wins and endless rounds are retroactive: `applyRetroCombatTasks` in
-  `save.ts` gives old saves those once, at the version 12 migration, without coins.
+- Only kill counts (one of each too), map wins and endless rounds are retroactive:
+  `applyRetroCombatTasks` in `save.ts` gives old saves those once, at the version 12 migration,
+  without coins.
 - Co-op runs never count, so there's no party field and no co-op task. Nor do the Forgotten
   Four's gauntlet fights, which bank no run of their own.
 - **Every task has to be doable every run, by playing well, not by luck.** A task that avoids

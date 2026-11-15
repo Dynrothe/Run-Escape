@@ -10197,6 +10197,13 @@ export class Sim {
         };
     }
 
+    // A mistake in the path's puzzle room, for Combat Achievements: only said, nothing changes
+    private tombsMistake(): void {
+        if (this.tombsPath !== undefined) {
+            this.emit({ type: "tombsMistake", path: this.tombsPath });
+        }
+    }
+
     // A trap's hit on the current hero: hurt, their water spilt, weakened
     private crondisTrapHit(damage: number, message: string): void {
         if (this.damagePlayer(damage, "crondis_trap", false) === 0) {
@@ -10210,6 +10217,9 @@ export class Sim {
     private crondisSpill(message?: string): void {
         const crondis = this.tombsRoom?.crondis;
         const index = this.hero.index;
+        if (crondis) {
+            this.tombsMistake();
+        }
         if (!crondis || crondis.water[index] <= 0) {
             return;
         }
@@ -10648,6 +10658,7 @@ export class Sim {
         const player = this.player;
         const scabaras = this.tombsRoom!.scabaras!;
         const { x, y } = player;
+        this.tombsMistake();
         this.emit({ type: "notice", message });
         this.addEffect(
             SCABARAS.rockSpotAnim,
@@ -11166,12 +11177,15 @@ export class Sim {
         const scale = this.tombsRoomScale();
         this.forEachHeroInReach(() => {
             const player = this.player;
-            if (near(player.x, player.y, 0.5)) {
+            if (
+                near(player.x, player.y, 0.5) &&
                 this.damagePlayer(
                     HET.beamDamage * scale.damage * this.hardScale.damage,
                     "hets_seal",
                     false,
-                );
+                ) > 0
+            ) {
+                this.tombsMistake();
             }
         });
         this.damageSource = "other";
@@ -11472,7 +11486,9 @@ export class Sim {
                     fm.hypot(player.x - orb.x, player.y - orb.y) <= HET.orbRadius + player.radius
                 ) {
                     hit = true;
-                    this.damagePlayer(damage, "het_orb", false);
+                    if (this.damagePlayer(damage, "het_orb", false) > 0) {
+                        this.tombsMistake();
+                    }
                 }
             });
             const inside =
@@ -11552,6 +11568,7 @@ export class Sim {
             this.hardScale.damage *
             this.tombsRoomScale().damage;
         room.missed++;
+        this.tombsMistake();
         this.addEffect(
             at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillarFalls : APMEKEN_SPOTANIMS.ventBursts,
             at.x,

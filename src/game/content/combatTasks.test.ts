@@ -9,8 +9,10 @@ import {
     getTiersReached,
 } from "./combatTasks";
 import { ENEMY_BY_ID } from "./enemies";
+import { RUN_SET, TOMBS_SET, getInvocationPoints, getRaidLevel } from "./invocations";
 import { ALL_MAPS, MAP_BY_ID } from "./maps";
 import { QUESTS } from "./quests";
+import { REMIX_IDS } from "./remixes";
 import { TROPHIES } from "./trophies";
 import { CombatGoal } from "./types";
 
@@ -121,7 +123,7 @@ describe("Combat Achievements' tasks", () => {
         expect(new Set(watched)).toEqual(new Set([...finale.attacks, finale.ambient!.attack]));
     });
 
-    test("count a guard dropped by its boss's own attacks, by name, or a pillar", () => {
+    test("count a guard dropped by its boss's own attacks, by name, a pillar or a siphon", () => {
         for (const task of COMBAT_TASKS) {
             const goal = task.goal;
             if (goal.kind !== "guardDown") {
@@ -129,7 +131,8 @@ describe("Combat Achievements' tasks", () => {
             }
             const boss = ENEMY_BY_ID.get(goal.bossId)!.boss!;
             expect(boss.guard, task.id).toBeDefined();
-            const names = new Set(["Pillar", ...boss.attacks.map((a) => a.name)]);
+            // The sim's own causes (Sim.dropGuard): a pillar run into, the Whisperer's siphon caught
+            const names = new Set(["Pillar", "Soul Siphon", ...boss.attacks.map((a) => a.name)]);
             for (const cause of goal.causes) {
                 expect(names.has(cause), `${task.id}: ${cause}`).toBe(true);
             }
@@ -161,8 +164,13 @@ describe("Combat Achievements' tasks", () => {
                         : goal.kind === "kill"
                           ? goal.bossIds.slice(0, 1)
                           : goalEnemies(goal);
-                const events = map.raid ? map.raid.rooms.map((r) => r.boss) : [];
-                const due = [...map.events.map((e) => e.enemyId), ...events];
+                // A raid's rooms', a fight in parts' (MapDef.stages) and the Tombs' paths'
+                const due = [
+                    ...map.events.map((e) => e.enemyId),
+                    ...(map.raid?.rooms.map((r) => r.boss) ?? []),
+                    ...(map.stages ?? []).flatMap((s) => s.events.map((e) => e.enemyId)),
+                    ...(map.tombs?.paths.flatMap((p) => p.room?.boss?.enemyId ?? []) ?? []),
+                ];
                 for (const id of bosses) {
                     expect(due, `${task.id}: ${id}`).toContain(id);
                 }
@@ -197,6 +205,68 @@ describe("Combat Achievements' tasks", () => {
                 for (const style of goal.styles) {
                     expect(["melee", "ranged", "magic"], task.id).toContain(style);
                 }
+            }
+        }
+    });
+
+    test("name the Tombs' paths that have a puzzle room", () => {
+        const paths = MAP_BY_ID.get("tombs_of_amascut")!.tombs!.paths;
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind !== "clearPath" && goal.kind !== "perfectRoom") {
+                continue;
+            }
+            expect(task.mapId, task.id).toBe("tombs_of_amascut");
+            if (goal.path !== undefined) {
+                const path = paths.find((p) => p.id === goal.path);
+                expect(path, task.id).toBeDefined();
+                if (goal.kind === "perfectRoom") {
+                    expect(path!.room?.puzzle, task.id).toBeDefined();
+                }
+            }
+        }
+    });
+
+    test("count one of each of the enemies they name, each of them once", () => {
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind === "killCount" && goal.each) {
+                expect(new Set(goal.enemyIds).size, task.id).toBe(goal.enemyIds.length);
+                expect(goal.count, task.id).toBe(goal.enemyIds.length);
+            }
+        }
+    });
+
+    // Set up as the run starts: what a map can't have would leave the task out of every run
+    test("ask for what a run can be set up with", () => {
+        const runPoints = getInvocationPoints(RUN_SET.invocations.map((i) => i.id));
+        const raidLevel = getRaidLevel(TOMBS_SET.invocations.map((i) => i.id));
+        for (const task of COMBAT_TASKS) {
+            const goal = task.goal;
+            if (goal.kind !== "win") {
+                continue;
+            }
+            expect(goal.points ?? 0, task.id).toBeLessThanOrEqual(runPoints);
+            expect(goal.remixes ?? 0, task.id).toBeLessThanOrEqual(REMIX_IDS.length);
+            const maps = getGoalMaps(goal.maps).map((id) => MAP_BY_ID.get(id)!);
+            if (goal.raidLevel !== undefined) {
+                expect(goal.raidLevel, task.id).toBeLessThanOrEqual(raidLevel);
+                expect(
+                    maps.every((map) => map.tombs),
+                    task.id,
+                ).toBe(true);
+            }
+            if (goal.rules?.noFreezing) {
+                expect(
+                    maps.every((map) => map.rule?.kind === "cold"),
+                    task.id,
+                ).toBe(true);
+            }
+            if (goal.rules?.noDeaths) {
+                expect(
+                    maps.every((map) => map.tombs),
+                    task.id,
+                ).toBe(true);
             }
         }
     });

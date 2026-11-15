@@ -172,7 +172,11 @@ or failed and why), for the HUD's rows of pinned tasks (`SaveData.combatPinned`)
 menu. A spoilt pinned task gets a toast (`takeFailed`). A failure is a `CombatReason`, words only
 once `describeCombatReason` puts it in the player's language, and names the attack that did it,
 from `playerHit`'s `attack`. A `missed` hit spoils nothing, and the Forgotten Four's fights aren't
-followed (`sim.gauntlet`): they bank no run of their own.
+followed (`sim.gauntlet`): they bank no run of their own. An avoided attack is summed by name over
+every boss on the map (`damageByAttack`), so name one only that boss has there: Dart, Claw, Grasp
+and Shadow burst each belong to more than one. The Tombs' puzzle rooms emit `tombsMistake`, which
+only the tracker reads, and the Wardens arrive without `bossSpawned`, so no kill window opens for
+them yet.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in

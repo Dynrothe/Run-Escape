@@ -1162,6 +1162,10 @@ type SimEventBody =
           y: number;
           opened: boolean;
       }
+    // A mistake in a Tombs of Amascut puzzle room, on this path (its id): an Apmeken pillar or vent
+    // left too long, Crondis water spilt, a wrong Scabaras step, or Het's beam or an orb landing.
+    // Nothing in the game reads it: it's for Combat Achievements (perfectRoom).
+    | { type: "tombsMistake"; path: string }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }

@@ -2171,11 +2171,16 @@ export type CombatRules = {
     noGear?: boolean;
     // No Skills upgrades on the adventurer's page, and nothing in the Armoury
     noUpgrades?: boolean;
-    // A raid: no teleporter used, no raid points spent at the supply chest
+    // A raid: no teleporter used; no raid points spent at the supply chest, and no supply used
+    // (the Tombs of Amascut's, from the Helpful Spirit)
     noTeleports?: boolean;
     noSupplies?: boolean;
     // No sleepwalker reaching its boss
     noSleepwalkers?: boolean;
+    // The Tombs of Amascut: no death (each one a room started over)
+    noDeaths?: boolean;
+    // Under the cold (ColdRuleDef): never frozen solid
+    noFreezing?: boolean;
 };
 
 export type CombatGoal =
@@ -2194,7 +2199,9 @@ export type CombatGoal =
           maps: string[] | "campaign" | { campaignFrom: string };
           styles: CombatStyle[];
       }
-    | { kind: "killCount"; enemyIds: string[]; count: number }
+    // Over every solo run: count of these killed in all; each: one of each of them (count is then
+    // their number)
+    | { kind: "killCount"; enemyIds: string[]; count: number; each?: boolean }
     | { kind: "endlessRound"; round: number; hard?: boolean }
     // In one run: a phased boss reaching this phase (counted from 1)
     | { kind: "reachPhase"; bossId: string; phase: number }
@@ -2216,18 +2223,25 @@ export type CombatGoal =
     | { kind: "killBeforeNext"; mapId: string }
     // count of this boss killed within this many seconds, first to last
     | { kind: "killTogether"; bossId: string; count: number; seconds: number }
-    // Beat the map (maps: these, or the campaign's from this one on), keeping to these. hard: on
-    // hard mode; within: seconds; damage: taken at most, leaving out except's attacks (as a
-    // kill's); hpAbove: never below this fraction.
+    // Beat the map (maps: these, the campaign's from this one on, or any), keeping to these. hard:
+    // on hard mode; within: seconds; damage: taken at most, leaving out except's attacks (as a
+    // kill's); hpAbove: never below this fraction. What the run's set up with, as it starts:
+    // awakened, its final boss by an Awakener's orb; remixes, at least this many on; points, at
+    // least this many invocation points (hard mode's among them); raidLevel, the Tombs of
+    // Amascut's at least this.
     | {
           kind: "win";
-          maps: string[] | { campaignFrom: string };
+          maps: string[] | "any" | { campaignFrom: string };
           hard?: boolean;
           within?: number;
           damage?: number;
           except?: string[];
           hpAbove?: number;
           rules?: CombatRules;
+          awakened?: boolean;
+          remixes?: number;
+          points?: number;
+          raidLevel?: number;
       }
     // Evolve this many weapons in one run
     | { kind: "evolve"; count: number }
@@ -2242,9 +2256,14 @@ export type CombatGoal =
     // own attacks' names that missed, its arena's that caught it, or "Pillar"); stunned: only
     // the times it was stunned
     | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean }
-    // In one run, the fight's button (MapDef.fight.ability) landed count times; opened: only
-    // while the boss's guard was down (BossDef.guard)
+    // In one run, the fight's button (MapDef.fight.ability) landed on its boss count times;
+    // opened: only while the boss's guard was down (BossDef.guard)
     | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean }
+    // The Tombs of Amascut: this path cleared, its room and its boss (any of them, without one)
+    | { kind: "clearPath"; path?: string }
+    // The Tombs of Amascut: this path's puzzle room beaten without a mistake in it (Sim's
+    // tombsMistake: a pillar or vent left, a spill, a wrong step, a beam or orb)
+    | { kind: "perfectRoom"; path: string }
     // In one run, each of these tasks' goals met, whether they were done before or not (none of
     // them another allOf); win: and the map beaten
     | { kind: "allOf"; taskIds: string[]; win?: boolean };
