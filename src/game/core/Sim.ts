@@ -10,8 +10,8 @@ import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/arm
 import { WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
 import {
+    PLATINUM_BOOST,
     PLATINUM_CARDS_ONLY,
-    PLATINUM_NOT_ENDLESS,
     PLATINUM_PER_BOSS,
     PLATINUM_PER_KILL,
     PLATINUM_WIN,
@@ -3775,12 +3775,11 @@ export class Sim {
     private coinScaleTick = -1;
     private coinScaleAt = 1;
 
-    // What platinum tokens are worth over coins: twice in a run that isn't endless, and three times
-    // that in a Card collection only run (each player's caps, the whole room's in co-op)
+    // What platinum tokens are worth over coins: twice in every run, and three times that in a
+    // Card collection only run (each player's caps, the whole room's in co-op)
     get platinumBoost(): number {
         return (
-            (this.endless ? 1 : PLATINUM_NOT_ENDLESS) *
-            (this.heroes.some((hero) => hero.cardCaps) ? PLATINUM_CARDS_ONLY : 1)
+            PLATINUM_BOOST * (this.heroes.some((hero) => hero.cardCaps) ? PLATINUM_CARDS_ONLY : 1)
         );
     }
 

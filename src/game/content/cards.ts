@@ -47,9 +47,9 @@ export const PACK_SIZE = 5;
 export const PLATINUM_PER_KILL = 0.01;
 export const PLATINUM_PER_BOSS = 5;
 export const PLATINUM_WIN = 25;
-// Then twice that in a run that isn't endless (normal and hard mode alike), and three times what
-// it'd be otherwise in a Card collection only run (Sim.platinumScale)
-export const PLATINUM_NOT_ENDLESS = 2;
+// Then twice that in every run (normal, hard and endless alike), and three times that again in a
+// Card collection only run (Sim.platinumBoost)
+export const PLATINUM_BOOST = 2;
 export const PLATINUM_CARDS_ONLY = 3;
 // The most a save holds: a crafted save's number stops here
 export const MAX_PLATINUM = 1_000_000;

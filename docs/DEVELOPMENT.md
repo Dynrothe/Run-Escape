@@ -1470,8 +1470,8 @@ involved.
   `content/cards.ts`): the sim adds them up as kills and bosses come (`Sim.platinum`), each at the
   run's `coinScale` of the moment, so endless runs earn them at coins' reduced rate
   (`ENDLESS_COINS`, less again in later rounds) and hard mode and invocations at coins' raised one.
-  On top of that, `Sim.platinumBoost`: twice in a run that isn't endless (`PLATINUM_NOT_ENDLESS`),
-  and three times that in a Card collection only run (`PLATINUM_CARDS_ONLY`, any hero with
+  On top of that, `Sim.platinumBoost`: twice in every run, endless too (`PLATINUM_BOOST`), and
+  three times that in a Card collection only run (`PLATINUM_CARDS_ONLY`, any hero with
   `cardCaps`; the whole room or none in co-op). A win adds its share at the end, and
   `RunResult.platinum` is the whole. In co-op it's the party's, the same on every copy as coins
   are, and `recordRun` adds it to each player's own save. The HUD shows the run's so far beside
