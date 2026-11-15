@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Face-down cards show the new vampire card back, with less grain.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed

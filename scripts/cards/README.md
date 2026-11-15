@@ -53,3 +53,5 @@ console.log(face.footer); // its number in the game's set, 267/303 when written
 Use `--preview` or `await cards.renderFoilPreview({ itemId: 2415 })` for a looping WebP. Its warm gold reflection travels across the item window, with small glints at the brightest angle. The CLI also saves the full-size foil PNG.
 
 `createCardGenerator({ cacheDir, backPath })` accepts an alternative cache root containing `caches.json` and an alternative full-size back PNG. By default the generator resolves the project's own cache and assets relative to the library.
+
+The game's own card backs, `src/game/ui/cards/card-back-large.webp` and `card-back-small.webp`, are made from the vampire back by `bun run tsx scripts/cards/ui-backs.ts`. They keep their 399 × 600 and 226 × 340 sizes: two plain bands of the background are stretched to fit, and the paper grain is smoothed. Run it again after changing the back.
