@@ -160,27 +160,24 @@ export function getChestView(sim: Sim): ChestView | undefined {
     };
 }
 
-// A worn piece with how each of its lines got its size, for the pause menu's tooltips
-function withBreakdowns(view: ItemView, item: ItemDef, upgrades: number): ItemView {
-    return item.kind === "gear"
-        ? { ...view, lineBreakdowns: getGearBreakdowns(item, upgrades) }
-        : view;
-}
-
-export function getGearViews(sim: Sim): GearSlotView[] {
+// The worn pieces. details: with how each of a piece's lines got its size, for the pause menu's
+// tooltips (only while it's open)
+export function getGearViews(sim: Sim, details = false): GearSlotView[] {
     return GEAR_SLOTS.map((slot) => {
         const itemId = sim.gear[slot.id];
+        if (itemId === undefined) {
+            return { slot: slot.id, name: slot.name, item: undefined };
+        }
+        const item = getItem(itemId);
+        const upgrades = sim.gearUpgrades[slot.id] ?? 0;
+        const view = getRunItemView(sim, item, upgrades);
         return {
             slot: slot.id,
             name: slot.name,
             item:
-                itemId !== undefined
-                    ? withBreakdowns(
-                          getRunItemView(sim, getItem(itemId), sim.gearUpgrades[slot.id] ?? 0),
-                          getItem(itemId),
-                          sim.gearUpgrades[slot.id] ?? 0,
-                      )
-                    : undefined,
+                details && item.kind === "gear"
+                    ? { ...view, lineBreakdowns: getGearBreakdowns(item, upgrades) }
+                    : view,
         };
     });
 }

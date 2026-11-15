@@ -19,13 +19,6 @@ import {
 } from "./GameStore";
 import { getRevivesView, getWeaponAbout } from "./LoadoutViews";
 
-// One colour for each place in the party, the same on every client (and in every chart)
-export const PLAYER_COLORS = ["#4fc3f7", "#ff8a65", "#aed581", "#ba68c8"];
-
-export function playerColor(index: number): string {
-    return PLAYER_COLORS[index % PLAYER_COLORS.length];
-}
-
 export function getPlayerResultViews(sim: Sim): PlayerResultView[] {
     return sim.heroes.map((hero) =>
         sim.as(hero.index, () => {
@@ -48,12 +41,6 @@ export function getPlayerResultViews(sim: Sim): PlayerResultView[] {
                 damage: getDamageViews(sim, stats),
                 kinds: getDamageKindViews(stats),
                 killsByEnemy: getKillViews(stats),
-                revivesGiven: hero.revivesGiven,
-                timesDowned: hero.timesDowned,
-                bossDamage: hero.bossDamage,
-                aliveSeconds: sim.aliveSeconds(hero),
-                index: hero.index,
-                color: playerColor(hero.index),
             };
         }),
     );

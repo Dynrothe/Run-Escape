@@ -907,7 +907,10 @@ kind (`.ui-pause-action`): as wide as each other, an icon beside each name (`PAU
 the Collection log's item), two by two on a phone. The menu opens on the tab it was left on, and
 each tab keeps how far it was scrolled (`lastPauseTab` and `lastPauseScroll`, module state: this
 page's, not saved). The window is a dialog (`useDialog`, modal
-except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`). The Loadout
+except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`), offering
+Restart beside it in a solo run (`GameClient.restartRun`: the run's given up and banked as Give
+up banks it, then started again from its beginning; a fight of the Forgotten Four's is retried
+as the results' Retry this fight, so the try counts). The Loadout
 lists the hero's active effects (`HudView`'s `buffs`) and, on a map with blessings, those in place
 of passives (`×level`); the Combat tab ends with the run's recent messages (`UiSnapshot.toastLog`);
 the settings page (`PauseSettings` in `GameUi.tsx`, styled as `.ui-ps`) is in sections, each under
@@ -937,6 +940,9 @@ ground, the extras after the name), the same icons as the Combat tab. The Loadou
 has weapon and passive cards on the left (with free slots, and a weapon's evolution:
 `SlotView.evolution`) with the hero's stats under them, and at the right every gear slot with the
 active effects under it (one column on a narrow window: cards, equipment, effects, stats).
+What only the menu shows (a slot's `kinds`, `examine`, `form`, `statLines` and breakdowns, worn
+gear's `lineBreakdowns`, `statRows`) is built only while it's open: `updateHud`'s `details`,
+and the HUD under a run, rebuilt every `HUD_INTERVAL_MS`, goes without.
 The stat rows are `HudView.statRows`, made by `getStatRows` (`client/LoadoutViews.ts`): a new stat
 needs a group there (a test checks that all are in one). The tooltips on those numbers are
 `BreakdownView`s (`client/BreakdownViews.ts`), and their `about` (`content/statLore.ts`) is what the
@@ -968,8 +974,8 @@ Every number on the Loadout can have a tooltip that says how it got its size (`B
 parts, each in the colour of the rarity it was taken at. `client/BreakdownViews.ts` builds them: a
 weapon's stats from `weaponStatSteps` (`content/weaponStats.ts`: level 1's value and each level's
 change) with the damage bonus the picks' rarities gave, a passive's picks, worn gear's base and
-upgrades, and each of the hero's stats from `Sim.getStatSources` (what `updateStats` adds up, so
-change them together). The rarity of every pick is written by `Sim.apply` into
+upgrades, and each of the hero's stats from `Sim.getStatSources`. It and `updateStats` both go
+through `Sim.eachStatPart`, so a new part of the stats goes there and its tooltip comes with it. The rarity of every pick is written by `Sim.apply` into
 `Hero.upgradeQualities`, by weapon and passive id; it's only written, so it's in no hash. A
 starting weapon's levels, and a weapon an evolution made, have none (uncoloured). What heals on a
 hit says when too: `getHealChanceLines` (the amulet's chance, its `BLOOD_FURY_HEAL` and its

@@ -3085,9 +3085,10 @@ export class GameClient implements GameFrameHandler {
         this.leaveRun();
     }
 
-    // Starts this solo match over from its beginning, with the same map, mode and loadout. Unlike
-    // retry(), this does not jump straight to a map's lair. A shared co-op run can't be restarted
-    // by one player from their pause menu.
+    // Give up's other choice, solo only (one player can't restart a party's run): the run's given
+    // up and banked as Give up banks it (its coins, drops and quests kept), then started again
+    // from its beginning, not at its lair as the results' Retry is. A fight of the Forgotten
+    // Four's is fallen and retried as the results' Retry this fight is, so the try is counted.
     restartRun(): void {
         const sim = this.sim;
         if (!sim || this.coopRun) {
@@ -3095,27 +3096,15 @@ export class GameClient implements GameFrameHandler {
         }
         const mapId = sim.map.id;
         const vault = this.runVault !== undefined ? getVault(this.runVault) : undefined;
-        const gauntlet = this.gauntletRun?.phase === "fight" ? this.gauntletRun : undefined;
-        this.leaveRun(false);
-        void this.startRun(mapId, false, gauntlet, vault);
-    }
-
-    // Ends the current match and returns directly to the main menu. A solo run is still banked,
-    // so coins and completed tasks are kept as the confirmation says, but its results are skipped.
-    abandonRun(): void {
-        const sim = this.sim;
-        if (!sim) {
-            return;
-        }
-        if (this.coopRun) {
-            this.quitRun();
-            return;
-        }
         this.leavePauseMenu();
         sim.giveUp();
         this.finishRun(t("ui.result.gave_up"), "abandoned");
-        this.dropGauntlet();
+        if (this.gauntletRun?.phase === "fallen") {
+            this.retryGauntletFight();
+            return;
+        }
         this.leaveRun();
+        void this.startRun(mapId, false, undefined, vault);
     }
 
     // Back to the title screen after the results, or after a co-op run, back
@@ -5002,6 +4991,10 @@ export class GameClient implements GameFrameHandler {
                 waitingOn,
             });
         } else if (this.paused) {
+            // The menu's tooltips, ready as it opens (updateHud leaves them out under a run)
+            if (this.store.getSnapshot().overlay !== "paused") {
+                this.updateHud(true, true);
+            }
             this.store.set({ overlay: "paused", choices: [], chest: undefined, waitingOn });
         } else {
             this.store.set({ overlay: "none", choices: [], chest: undefined, waitingOn });
@@ -5056,7 +5049,11 @@ export class GameClient implements GameFrameHandler {
         return nearest;
     }
 
-    private updateHud(force: boolean): void {
+    // details: the pause menu's tooltips too (it's open, or opening)
+    private updateHud(
+        force: boolean,
+        details = this.store.getSnapshot().overlay === "paused",
+    ): void {
         const sim = this.sim;
         if (!sim) {
             return;
@@ -5239,8 +5236,10 @@ export class GameClient implements GameFrameHandler {
         if (force || sharedNumbers !== shownNumbers) {
             this.store.setNumbers(sharedNumbers);
         }
-        // What gives each stat, for the tooltips on the stats and on a weapon's damage
-        const statSources = sim.getStatSources();
+        // The pause menu's Loadout: what makes each number and the examine texts, built only while
+        // it's open, not every HUD_INTERVAL_MS under a run. statSources: what gives each stat.
+        const statSources = details ? sim.getStatSources() : undefined;
+        const ownedPassives = details ? new Set(sim.passives.map((p) => p.id)) : undefined;
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
@@ -5257,45 +5256,48 @@ export class GameClient implements GameFrameHandler {
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
-                    kinds: getWeaponDamageKinds(w.def),
                     detail: w.bonus > 0 ? weaponBonusText(w.bonus) : undefined,
                     stats: weaponStats(w.def, level).map(weaponStatText),
                     ...(w.def.evolved && { evolved: true }),
-                    examine: weaponExamine(w.def),
-                    form: getWeaponForm(
-                        w,
-                        new Set(sim.passives.map((p) => p.id)),
-                        sim.unlockedItems,
-                        sim.endless,
-                        sim.cardCaps,
-                    ),
-                    orbit: getOrbitObjIds(w.def, level.amount + sim.stats.amount),
-                    statLines: [
-                        ...getWeaponStatLines(
-                            w.def,
-                            w.level,
-                            w.bonus,
-                            sim.upgradeQualities.weapons[w.def.id] ?? [],
-                            sim.weaponDamageFactors(w),
-                            statSources,
-                        ),
-                        ...[getLifestealStat(w.def)].filter((stat) => stat !== undefined),
-                    ],
-                    detailBreakdown:
-                        w.bonus > 0
-                            ? {
-                                  title: t("ui.levelup.damage_bonus"),
-                                  about: bonusAbout(),
-                                  lines: [
-                                      getBonusLine(
-                                          w.def,
-                                          w.level,
-                                          w.bonus,
-                                          sim.upgradeQualities.weapons[w.def.id] ?? [],
-                                      ),
-                                  ],
-                              }
-                            : undefined,
+                    ...(statSources &&
+                        ownedPassives && {
+                            kinds: getWeaponDamageKinds(w.def),
+                            examine: weaponExamine(w.def),
+                            form: getWeaponForm(
+                                w,
+                                ownedPassives,
+                                sim.unlockedItems,
+                                sim.endless,
+                                sim.cardCaps,
+                            ),
+                            orbit: getOrbitObjIds(w.def, level.amount + sim.stats.amount),
+                            statLines: [
+                                ...getWeaponStatLines(
+                                    w.def,
+                                    w.level,
+                                    w.bonus,
+                                    sim.upgradeQualities.weapons[w.def.id] ?? [],
+                                    sim.weaponDamageFactors(w),
+                                    statSources,
+                                ),
+                                ...[getLifestealStat(w.def)].filter((stat) => stat !== undefined),
+                            ],
+                            detailBreakdown:
+                                w.bonus > 0
+                                    ? {
+                                          title: t("ui.levelup.damage_bonus"),
+                                          about: bonusAbout(),
+                                          lines: [
+                                              getBonusLine(
+                                                  w.def,
+                                                  w.level,
+                                                  w.bonus,
+                                                  sim.upgradeQualities.weapons[w.def.id] ?? [],
+                                              ),
+                                          ],
+                                      }
+                                    : undefined,
+                        }),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -5310,21 +5312,23 @@ export class GameClient implements GameFrameHandler {
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
                     detail: passiveValueText(def, p.value),
-                    examine: passiveExamine(def),
-                    form: getLevellingForm(p.level, def.maxLevel, sim.endless),
-                    detailBreakdown: getPassiveBreakdown(
-                        def,
-                        p.value,
-                        sim.upgradeQualities.passives[p.id] ?? [],
-                        p.level,
-                    ),
+                    ...(details && {
+                        examine: passiveExamine(def),
+                        form: getLevellingForm(p.level, def.maxLevel, sim.endless),
+                        detailBreakdown: getPassiveBreakdown(
+                            def,
+                            p.value,
+                            sim.upgradeQualities.passives[p.id] ?? [],
+                            p.level,
+                        ),
+                    }),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
             blessings: sim.map.blessings && getBlessingViews(sim.map.blessings, sim.blessings),
             stats: formatStats(sim.stats),
-            statRows: getStatRows(sim.stats, sim.player.maxHp, statSources),
-            gear: getGearViews(sim),
+            statRows: statSources ? getStatRows(sim.stats, sim.player.maxHp, statSources) : [],
+            gear: getGearViews(sim, details),
             inventory: getInventoryViews(sim),
             rerolls: sim.rerollsLeft,
             banishes: sim.banishesLeft,

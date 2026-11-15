@@ -503,16 +503,6 @@ export type PlayerResultView = {
     // The same damage by its kind, and kills by enemy
     kinds: DamageKindView[];
     killsByEnemy: KillView[];
-    // Co-op: teammates this player revived, times they went down, damage dealt to bosses, and
-    // seconds in the fight (not down or gone)
-    revivesGiven: number;
-    timesDowned: number;
-    bossDamage: number;
-    aliveSeconds: number;
-    // Where they are in the run's party (the timeline's heroes), and a colour that's theirs
-    // for charts and the podium
-    index: number;
-    color: string;
 };
 
 // done / of: how far it's got, this run's kills and caskets included;

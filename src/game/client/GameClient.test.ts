@@ -3,6 +3,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
+import { GAUNTLET_FIGHTS } from "../content/gauntlet";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
 import { Rarity } from "../content/rarity";
@@ -10,6 +11,7 @@ import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { encodeCardCaps } from "../core/cardRuns";
+import { GauntletRun, loseGauntletFight, startGauntlet } from "../core/gauntlet";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -2767,30 +2769,58 @@ describe("the pause menu's Collection log", () => {
 });
 
 describe("the pause menu's run actions", () => {
-    test("Restart starts the same solo match from the beginning, not at its lair", () => {
-        const { client } = createClient(createSim(), false);
-        const leaveRun = vi.fn();
-        const startRun = vi.fn(async () => {});
-        Object.assign(client, {
-            sim: { map: { id: "zachariah" } },
-            leaveRun,
-            startRun,
+    test("Restart banks the run as Give up does, then starts it from the beginning, not at its lair", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const calls: string[] = [];
+        const finishRun = vi.fn(() => calls.push("finish"));
+        const leaveRun = vi.fn(() => calls.push("leave"));
+        const startRun = vi.fn(async () => {
+            calls.push("start");
         });
+        Object.assign(client, { finishRun, leaveRun, startRun });
+        client.pause();
         client.restartRun();
-        expect(leaveRun).toHaveBeenCalledWith(false);
-        expect(startRun).toHaveBeenCalledWith("zachariah", false, undefined, undefined);
+        // Given up and banked (its coins, drops and quests) before it starts again
+        expect(sim.runOver).toBe(true);
+        expect(finishRun).toHaveBeenCalledWith(expect.any(String), "abandoned");
+        expect(calls).toEqual(["finish", "leave", "start"]);
+        expect(startRun).toHaveBeenCalledWith(sim.map.id, false, undefined, undefined);
     });
 
-    test("Abandon match finishes the run and leaves it immediately, skipping results", () => {
+    test("Restart in a fight of the Forgotten Four's is its Retry this fight, counted as a try", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const gauntlet = client as unknown as { gauntletRun: GauntletRun | undefined };
+        gauntlet.gauntletRun = startGauntlet(GAUNTLET_FIGHTS, false);
+        // As finishRun's finishGauntletFight leaves a lost fight
+        const finishRun = vi.fn(() => {
+            gauntlet.gauntletRun = loseGauntletFight(gauntlet.gauntletRun!);
+        });
+        const startGauntletFight = vi.fn(async () => {});
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, { finishRun, leaveRun: vi.fn(), startGauntletFight, startRun });
+        client.pause();
+        client.restartRun();
+        expect(gauntlet.gauntletRun?.phase).toBe("fight");
+        expect(gauntlet.gauntletRun?.tries).toBe(1);
+        expect(startGauntletFight).toHaveBeenCalledOnce();
+        expect(startRun).not.toHaveBeenCalled();
+    });
+
+    test("Give up ends a solo run on its results", () => {
         const sim = createSim();
         const { client } = createClient(sim, false);
         const finishRun = vi.fn();
         const leaveRun = vi.fn();
-        Object.assign(client, { finishRun, leaveRun });
+        const syncOverlay = vi.fn();
+        Object.assign(client, { finishRun, leaveRun, syncOverlay });
         client.pause();
-        client.abandonRun();
+        client.quitRun();
         expect(finishRun).toHaveBeenCalledWith(expect.any(String), "abandoned");
-        expect(leaveRun).toHaveBeenCalledOnce();
+        // Not left: the results come up over it
+        expect(leaveRun).not.toHaveBeenCalled();
+        expect(syncOverlay).toHaveBeenCalled();
     });
 });
 

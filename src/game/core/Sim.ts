@@ -1011,6 +1011,9 @@ export type RunResult = {
     stats: RunStats;
 };
 
+// What gives a part of the hero's stats (Sim.eachStatPart): a passive's own, to split by its picks
+type StatPartSource = Omit<StatSource, "value"> & { passive?: PassiveState };
+
 // The stats screen's numbers: damage and kills by what dealt them, most
 // damage first (seconds: how long a weapon was had, for its damage a second)
 export type RunStats = {
@@ -1241,13 +1244,8 @@ export type Hero = {
     down: boolean;
     left: boolean;
     outTick: number;
-    // For the results screens, never read by play: teammates this hero has revived, times they
-    // went down (a final fall included), damage dealt to bosses, and the ticks spent down before
-    // a revive (see aliveSeconds)
+    // Teammates this hero has revived, for the pause menu: never read by play
     revivesGiven: number;
-    timesDowned: number;
-    bossDamage: number;
-    downTicks: number;
     // Co-op: how many times a teammate's brought them back this run, and the
     // revives found or bought on top of REVIVES_PER_PLAYER
     revived: number;
@@ -2687,9 +2685,6 @@ export class Sim {
             left: false,
             outTick: -1,
             revivesGiven: 0,
-            timesDowned: 0,
-            bossDamage: 0,
-            downTicks: 0,
             revived: 0,
             extraRevives: 0,
             immuneEndTick: 0,
@@ -3057,14 +3052,6 @@ export class Sim {
         };
     }
 
-    // Seconds a hero was in the fight: until the run's end, or until they were last out (down
-    // for good, or gone), less the time they spent down before a teammate brought them back
-    aliveSeconds(hero: Hero): number {
-        const runEnd = this.endTick >= 0 ? this.endTick : this.tick;
-        const end = hero.outTick >= 0 ? Math.min(hero.outTick, runEnd) : runEnd;
-        return Math.max(0, end - hero.downTicks) / TICKS_PER_SECOND;
-    }
-
     // The player's damage a second just now, from every source
     get dps(): number {
         let damage = 0;
@@ -3116,23 +3103,9 @@ export class Sim {
 
     updateStats(): void {
         const stats = emptyStats();
-        addStats(stats, getCharacter(this.characterId).bonus);
-        addStats(stats, this.metaStats);
-        // A boss fight's own (MapDef.fight.stats)
-        addStats(stats, this.map.fight?.stats ?? {});
-        for (const passive of this.passives) {
-            const def = getPassive(passive.id);
-            for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
-                stats[stat] += passive.value;
-            }
-        }
-        for (const [slot, itemId] of Object.entries(this.gear)) {
-            const upgrades = this.gearUpgrades[slot as GearSlot] ?? 0;
-            addStats(stats, getGearStats(getGear(itemId), upgrades));
-        }
+        this.eachStatPart((part) => addStats(stats, part));
         const sets = getActiveSets(this.gear);
         for (const set of sets) {
-            addStats(stats, set.stats ?? {});
             if (!this.activeSets.includes(set.id)) {
                 this.emit(
                     {
@@ -3144,32 +3117,6 @@ export class Sim {
             }
         }
         this.activeSets = sets.map((set) => set.id);
-        for (const buff of this.buffs) {
-            addStats(stats, buff.stats);
-        }
-        for (const debuff of this.debuffs) {
-            addStats(stats, debuff.stats);
-        }
-        // Relics that are stats (content/relics.ts)
-        if (this.hasRelic("fairys_flight")) {
-            stats.moveSpeed += FAIRYS_FLIGHT.moveSpeed;
-        }
-        if (this.hasRelic("globetrotter")) {
-            stats.powerUpRate += GLOBETROTTER.rate;
-        }
-        if (this.hasRelic("specialist")) {
-            stats.weaponSlots -= SPECIALIST.slots;
-            stats.might += SPECIALIST.might;
-        }
-        const blessings = this.map.blessings;
-        if (blessings) {
-            for (const { id, count } of this.blessings) {
-                const blessed = getBlessing(blessings, id).stats ?? {};
-                for (const [key, value] of Object.entries(blessed)) {
-                    stats[key as StatKey] += value * count;
-                }
-            }
-        }
         // Grows with every level gained (the Gauntlet runner starts weak), up
         // to about where a normal run ends, so it doesn't run away in endless
         stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
@@ -3189,97 +3136,118 @@ export class Sim {
         }
     }
 
-    // Where each stat's size comes from, as updateStats adds it up, for the pause menu's tooltips.
-    // Only read for display: nothing in play uses it.
-    getStatSources(): Partial<Record<StatKey, StatSource[]>> {
-        const sources: Partial<Record<StatKey, StatSource[]>> = {};
-        const add = (stats: Partial<Stats>, source: Omit<StatSource, "value">): void => {
-            for (const [key, value] of Object.entries(stats) as [StatKey, number][]) {
-                if (value) {
-                    (sources[key] ??= []).push({ ...source, value });
-                }
-            }
-        };
+    // Each part of the hero's stats, in the order updateStats adds them up, and what gives it
+    // (made only when asked: getStatSources, for the pause menu's tooltips). Both read this one
+    // list, so a tooltip can't leave out a part the stats have.
+    private eachStatPart(add: (stats: Partial<Stats>, source: () => StatPartSource) => void): void {
         const character = getCharacter(this.characterId);
-        add(character.bonus, { kind: "adventurer", name: character.name });
+        add(character.bonus, () => ({ kind: "adventurer", name: character.name }));
         // The shop's upgrades have no icon of their own, so they wear the coins that pay for them
-        add(this.metaStats, { kind: "shop", name: "Shop upgrades", iconObjId: 995 });
-        add(this.map.fight?.stats ?? {}, { kind: "map", name: this.map.name });
+        add(this.metaStats, () => ({ kind: "shop", name: "Shop upgrades", iconObjId: 995 }));
+        // A boss fight's own (MapDef.fight.stats)
+        add(this.map.fight?.stats ?? {}, () => ({ kind: "map", name: this.map.name }));
         for (const passive of this.passives) {
             const def = getPassive(passive.id);
-            const picks = this.upgradeQualities.passives[passive.id] ?? [];
-            // A pick's size is known from the rarity it was taken at; what isn't recorded (picks
-            // the history missed) is one lump
-            const known = picks.length === passive.level ? picks : [];
-            const entries =
-                known.length > 0
-                    ? known.map((quality) => ({ quality, value: getPassiveGain(def, quality) }))
-                    : [{ quality: undefined, value: passive.value }];
+            const stats: Partial<Stats> = {};
             for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
-                for (const entry of entries) {
-                    (sources[stat] ??= []).push({
-                        kind: "passive",
-                        name: def.name,
-                        value: entry.value,
-                        quality: entry.quality,
-                        iconObjId: def.iconObjId,
-                        iconSpriteId: def.iconSpriteId,
-                    });
-                }
+                stats[stat] = passive.value;
             }
+            add(stats, () => ({
+                kind: "passive",
+                name: def.name,
+                iconObjId: def.iconObjId,
+                iconSpriteId: def.iconSpriteId,
+                passive,
+            }));
         }
         for (const [slot, itemId] of Object.entries(this.gear)) {
             const item = getGear(itemId);
-            add(getGearStats(item, this.gearUpgrades[slot as GearSlot] ?? 0), {
+            add(getGearStats(item, this.gearUpgrades[slot as GearSlot] ?? 0), () => ({
                 kind: "gear",
                 name: item.name,
                 rarity: item.rarity,
                 iconObjId: item.objId,
-            });
+            }));
         }
         for (const set of getActiveSets(this.gear)) {
-            add(set.stats ?? {}, {
+            add(set.stats ?? {}, () => ({
                 kind: "set",
                 name: set.name,
                 iconObjId: this.setPieceObjId(set.id),
-            });
+            }));
         }
         for (const buff of this.buffs) {
-            const look = buff.look ?? getItem(buff.itemId);
-            add(buff.stats, { kind: "buff", name: look.name, iconObjId: look.objId });
+            add(buff.stats, () => {
+                const look = buff.look ?? getItem(buff.itemId);
+                return { kind: "buff", name: look.name, iconObjId: look.objId };
+            });
         }
         for (const debuff of this.debuffs) {
-            add(debuff.stats, { kind: "debuff", name: debuff.name, iconObjId: debuff.iconObjId });
+            add(debuff.stats, () => ({
+                kind: "debuff",
+                name: debuff.name,
+                iconObjId: debuff.iconObjId,
+            }));
         }
-        const addRelic = (id: string, stats: Partial<Stats>): void => {
-            const relic = RELIC_BY_ID.get(id);
-            if (relic && this.hasRelic(id)) {
-                add(stats, { kind: "relic", name: relic.name, iconObjId: relic.iconObjId });
+        // Relics that are stats (content/relics.ts)
+        const relic = (id: string, stats: Partial<Stats>): void => {
+            if (this.hasRelic(id)) {
+                add(stats, () => {
+                    const def = RELIC_BY_ID.get(id);
+                    return { kind: "relic", name: def?.name ?? id, iconObjId: def?.iconObjId };
+                });
             }
         };
-        addRelic("fairys_flight", { moveSpeed: FAIRYS_FLIGHT.moveSpeed });
-        addRelic("globetrotter", { powerUpRate: GLOBETROTTER.rate });
-        addRelic("specialist", { weaponSlots: -SPECIALIST.slots, might: SPECIALIST.might });
+        relic("fairys_flight", { moveSpeed: FAIRYS_FLIGHT.moveSpeed });
+        relic("globetrotter", { powerUpRate: GLOBETROTTER.rate });
+        relic("specialist", { weaponSlots: -SPECIALIST.slots, might: SPECIALIST.might });
         const blessings = this.map.blessings;
         if (blessings) {
             for (const { id, count } of this.blessings) {
                 const blessing = getBlessing(blessings, id);
-                const stats = Object.fromEntries(
-                    Object.entries(blessing.stats ?? {}).map(([key, value]) => [
-                        key,
-                        value * count,
-                    ]),
-                ) as Partial<Stats>;
-                add(stats, {
+                const stats: Partial<Stats> = {};
+                for (const [key, value] of Object.entries(blessing.stats ?? {})) {
+                    stats[key as StatKey] = value * count;
+                }
+                add(stats, () => ({
                     kind: "blessing",
                     name: blessing.name,
                     iconObjId: blessing.iconObjId,
-                });
+                }));
             }
         }
+    }
+
+    // Where each stat's size comes from, as updateStats adds it up (eachStatPart), for the pause
+    // menu's tooltips. Only read for display: nothing in play uses it.
+    getStatSources(): Partial<Record<StatKey, StatSource[]>> {
+        const sources: Partial<Record<StatKey, StatSource[]>> = {};
+        const push = (key: StatKey, source: StatSource): void => {
+            (sources[key] ??= []).push(source);
+        };
+        this.eachStatPart((stats, describe) => {
+            const { passive, ...source } = describe();
+            // A passive's picks, each the size of the rarity it was taken at; what isn't recorded
+            // (picks the history missed) is one lump
+            const def = passive && getPassive(passive.id);
+            const picks = passive ? (this.upgradeQualities.passives[passive.id] ?? []) : [];
+            const known = passive !== undefined && picks.length === passive.level;
+            for (const [key, value] of Object.entries(stats) as [StatKey, number][]) {
+                if (!value) {
+                    continue;
+                }
+                if (def && known) {
+                    for (const quality of picks) {
+                        push(key, { ...source, quality, value: getPassiveGain(def, quality) });
+                    }
+                } else {
+                    push(key, { ...source, value });
+                }
+            }
+        });
         if (this.invoked("run_glass_cannon")) {
             const invocation = RUN_SET.byId.get("run_glass_cannon")!;
-            (sources.maxHp ??= []).push({
+            push("maxHp", {
                 kind: "invocation",
                 name: invocation.name,
                 value: GLASS_CANNON_HP - 1,
@@ -3289,7 +3257,7 @@ export class Sim {
         }
         if (this.blessed("saradomin")) {
             const blessing = GAUNTLET_BLESSINGS.find(({ id }) => id === "saradomin")!;
-            (sources.maxHp ??= []).push({
+            push("maxHp", {
                 kind: "blessing",
                 name: blessing.name,
                 value: SARADOMIN_HP,
@@ -3299,7 +3267,7 @@ export class Sim {
         }
         const levelMight = this.stats.levelMight;
         if (levelMight) {
-            (sources.might ??= []).push({
+            push("might", {
                 kind: "level",
                 name: "Level",
                 value: levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS),
@@ -5777,8 +5745,6 @@ export class Sim {
         ignoreArmor = false,
         // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
         grace = true,
-        // Which of a boss's attacks it was, for the hero's recent hits
-        attack?: string,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -19857,8 +19823,6 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
-            true,
-            attack.name,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;
@@ -20055,7 +20019,6 @@ export class Sim {
             this.hero.tombsDowns++;
             this.hero.tombsPoints *= 1 - TOMBS_POINTS.deathLoss;
         }
-        this.hero.timesDowned++;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
                 this.failTombsRoom();
@@ -20133,7 +20096,6 @@ export class Sim {
         const fraction = REVIVE_HP[Math.min(downed.revived, REVIVE_HP.length - 1)];
         downed.revived++;
         by.revivesGiven++;
-        downed.downTicks += this.tick - downed.outTick;
         downed.revive = undefined;
         downed.down = false;
         downed.outTick = -1;
@@ -20385,9 +20347,6 @@ export class Sim {
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;
         this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += shown;
         this.highestHit = Math.max(this.highestHit, shown);
-        if (enemy.boss) {
-            this.hero.bossDamage += shown;
-        }
         const kind = this.damageKind(poison);
         this.hero.damageByKind[kind] = (this.hero.damageByKind[kind] ?? 0) + shown;
         this.emit({
@@ -21030,7 +20989,6 @@ export class Sim {
             // screen, on the last of their hitpoints
             for (const hero of this.heroes) {
                 if (hero.down && hero.outTick === this.tick) {
-                    hero.timesDowned--;
                     hero.down = false;
                     hero.outTick = -1;
                     hero.player.deathTick = -1;

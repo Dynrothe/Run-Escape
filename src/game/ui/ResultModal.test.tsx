@@ -24,14 +24,8 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
         rerollsUsed: i,
         skips: i,
         damage: [{ name: `${name}'s weapon`, damage: (i + 1) * 100, kills: i + 1, perSecond: 5 }],
-        revivesGiven: i,
-        timesDowned: i % 2,
-        bossDamage: i * 50,
-        aliveSeconds: 600 - i * 30,
         kinds: [],
         killsByEnemy: [],
-        index: i,
-        color: ["#4fc3f7", "#ff8a65", "#aed581", "#ba68c8"][i],
     }));
     const ui = new GameStore(createSave()).getSnapshot();
     return {

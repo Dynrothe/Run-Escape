@@ -7,86 +7,21 @@ the version in the corner).
 
 ### Added
 
-- The pause menu and the results show your damage by type (melee, ranged, magic, poison, burning
-  ground, recoil, power-ups, items) and how many of each monster you've killed, each shown by
-  its face.
+- A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
+  blocked, your revives, and every monster you've killed, by its face. The results have it too.
+- Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got
+  its size, each level up in the colour of the rarity it was taken at.
+- Restart, by Iakee: Give up in the pause menu can start the run again from the beginning. What
+  you'd found is kept, as Give up keeps it.
 
 ### Changed
 
-- The pause menu is in tabs: Loadout, Combat, Quests and Party, with the Collection log and
-  Settings as buttons at the bottom beside Give up and Resume. Each opens as a page of the menu,
-  not a window over it, and its button takes you back. Every tab is the same size, and those
-  four buttons stay in view, all the same width with an icon each (two by two on a phone).
-- The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
-  ends with the run's recent messages.
-- The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
-- Every monster's face on the Combat tabs is framed on its own: turned, posed and zoomed to show
-  it best, inside the game's stone frame.
-- The invocations, the Tombs of Amascut's HUD and its results board, and the explore maps' labels
-  can be translated: they were in English whatever the language.
-- The pause menu's Settings look like its other tabs: sections for Sound, Display, the run, Co-op
-  and the keys, each with the game's own settings icon, and a card for each setting, edged green
-  while it's on and red while it's off. Off and On are in the quests' red and green.
-- The title screen's Settings look the same as the pause menu's, in the same sections and cards,
-  with your save first.
-- Settings explain themselves better, the language shows its flag, and holding Shift on the volume
-  (dragging it or with the arrow keys) sets it a tenth of a percent at a time.
-- The pause menu's sections all start with the same strip (name at the left, count at the right), on
-  the Loadout and on the Combat tab.
-- The Loadout's worn equipment shows the Weapon and Ammo squares, locked.
-- The Loadout and the Combat tab show your revives: how many you have left, the teammates you've
-  revived in co-op, and a red skull for the last stand once there are none.
-- The Combat tab has an icon on each total and a new one, the damage armour and a pet's bubble
-  blocked.
-- On the Combat tab the best weapons wear a gold, silver or bronze medal with lights over it (the
-  top two, only the best with four weapons, or three past four), and the worst has a cabbage-green
-  edge, falling lights and a plank in place of its number. The star and the plank each have a word
-  to say when you point at them, and each total at the top says what it counts. The totals stay
-  in one row, on a phone too.
-- The tooltip on a weapon's Damage in the Loadout now shows what a hit really does: its damage
-  and bonus, then each thing on top of it (its style's damage, set bonuses, your damage and, in
-  co-op or hard mode, the run's balance) as one line with its total and the icons of what gives it
-  (a passive, a worn piece, a potion, the shop), and the range of a hit, and against a boss if
-  anything adds to that.
-- The pause menu's recent messages are a chat: the run's clock, who said it and what they said.
-- The tooltip on a number in the Loadout (a weapon's stat, a passive, a worn piece, one of your
-  stats) now also says what it means, how it's worked out, where more of it comes from and how far
-  past its base you are.
-- A weapon that can evolve shows the passive it still needs as a small icon beside its square, red
-  while it's missing and green once you have it.
-- The pause menu's Combat tab is a fight report: your totals as tiles, the damage mix as one bar by
-  type, a ranking of what dealt it (the best one crowned) and a bestiary of what you've killed.
-- On the Combat tab the mouse over a weapon says what it is, how it fights and what it evolves into
-  (once you know how), as on the Loadout, and the last stand says it means no revives left.
-- The pause menu's Quests are cards like the Loadout's: each quest has an icon from the OSRS quest
-  it's named for, a bar of how far it's got, and the Slayer skull on a kill quest (the creatures
-  it's after are in its tooltip). The icon and the reward sit in the client's grey stone slots, as
-  do the Loadout's worn equipment, and the reward square says "Reward" with the coins the quest pays below.
-- The pause menu's Loadout shows a weapon's kind of damage as the icon of its Damage line: the
-  Attack, Ranged or Magic icon, with poison or burning after the name where it has them.
-- The pause menu's Loadout is redone in the game's own style, and tightens to fit the room it has,
-  with the buttons at the bottom always in view (a tall page scrolls inside itself): empty weapon,
-  passive and equipment slots show an empty square and where one comes from. Weapons and passives
-  are cards with
-  their item big in its square, their level written as the client does (and past the last level in
-  an endless run), their stats in an aligned grid, a square with the passive a weapon evolves with
-  (green, red or gold), free slots, your stats by group (the ones you have none of too), and every
-  equipment slot. What a weapon evolves into is a square
-  with its count of what's there ("1/2", gold and "2/2" once it can evolve), and the recipe is in
-  its tooltip. Each level up is a row of its own, in a list that scrolls (with the mouse wheel,
-  the arrow keys or a finger), so an endless run's hundreds fit.
-- In the Loadout, an evolved weapon has a violet frame and a star, and anything at its last level with
-  nothing left to evolve into (and no more levels to come) is lit up: a softly glowing orange card with bracketed corners and embers, a MAX badge beside its level,
-  and motes of golden light rising over its icon.
-- The mouse over a weapon's or passive's icon in the Loadout says what it is, in the manner of the
-  original's examine texts, and where it stands: at its best form, ready to evolve, able to evolve
-  once it has what it takes, or (for one you haven't unlocked the evolution of) that you don't yet
-  know how to evolve it.
-- Hold the mouse over any number in the Loadout (a weapon's damage, a passive, a worn piece, one
-  of your stats) to see how it got that size: its starting value and each upgrade, in the colour of
-  the rarity it was taken at. Anything that heals on a hit says how often, how much and when.
-- The runes that circle you show all of them in the weapon's icon, as many as are circling.
-- The classic results are in two tabs, Summary and Combat.
+- The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
+  and Settings as pages of it. It opens on the tab you left it on.
+- Settings are in sections with the game's own icons, by Iakee, a card for each setting. The
+  language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
+- The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
+  be translated, by Iakee.
 
 ## 0.33.2 - 2026-11-15
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import type { GameClient } from "../client/GameClient";
 import { CombatView, GameStore, HudNumbers, HudView } from "../client/GameStore";
@@ -74,21 +74,21 @@ test("pause is a labelled modal, isolates the run and starts on its selected tab
     expect(view.container.querySelector(".ui-run")).not.toBeNull();
 });
 
-test("Give up offers Restart and Abandon match as distinct actions", async () => {
+test("Give up asks first, and offers Restart beside it", async () => {
     const restartRun = vi.fn();
-    const abandonRun = vi.fn();
-    paused(undefined, { restartRun, abandonRun } as Partial<GameClient>);
+    const quitRun = vi.fn();
+    paused(undefined, { restartRun, quitRun } as Partial<GameClient>);
 
     fireEvent.click(screen.getByRole("button", { name: "Give up" }));
-    await screen.findByRole("alertdialog", { name: "Give up this run?" });
-    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Give up this run?" });
+    fireEvent.click(within(ask).getByRole("button", { name: "Restart" }));
     await waitFor(() => expect(restartRun).toHaveBeenCalledOnce());
-    expect(abandonRun).not.toHaveBeenCalled();
+    expect(quitRun).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Give up" }));
-    await screen.findByRole("alertdialog", { name: "Give up this run?" });
-    fireEvent.click(screen.getByRole("button", { name: "Abandon match" }));
-    await waitFor(() => expect(abandonRun).toHaveBeenCalledOnce());
+    const again = await screen.findByRole("alertdialog", { name: "Give up this run?" });
+    fireEvent.click(within(again).getByRole("button", { name: "Give up" }));
+    await waitFor(() => expect(quitRun).toHaveBeenCalledOnce());
 });
 
 test("Tab and Shift+Tab wrap inside the pause dialog", () => {

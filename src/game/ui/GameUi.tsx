@@ -4892,20 +4892,16 @@ function PauseModal({
                   }
                 : {
                       title: t("confirm.quit.title"),
-                      body: tr(
-                          "confirm.quit.body_with_restart",
-                          "Restart begins this match again from the start. Abandon match ends it " +
-                              "and returns to the main menu; you keep the coins found so far.",
-                      ),
-                      alternative: tr("confirm.quit.restart", "Restart"),
-                      confirm: tr("confirm.quit.abandon", "Abandon match"),
+                      body: t("confirm.quit.body"),
+                      alternative: t("confirm.quit.restart"),
+                      confirm: t("confirm.quit.confirm"),
                       cancel: t("confirm.quit.cancel"),
                   },
         );
         if (answer === "alternative") {
             client.restartRun();
         } else if (answer) {
-            client.abandonRun();
+            client.quitRun();
         }
     };
     // The menu opens on its selected tab (useDialog's focus goes on the window itself)
