@@ -42,7 +42,10 @@
     margin-bottom: 6px;
 }
 
-.ui-ca-filter {
+/* The Collection log's tabs share a row equally: a filter takes the room its words need, and the
+   row wraps */
+.ui-log-tab.ui-ca-filter {
+    flex: 1 1 auto;
     padding: 1px 7px;
 }
 
