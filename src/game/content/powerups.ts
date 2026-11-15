@@ -20,6 +20,8 @@ export const POWER_UP_BLINK = 5;
 export const POWER_UP_COLOR = "#46f0dc";
 // A lantern, on a map with lighting (LightingDef.lanternWeight)
 export const LANTERN_ID = "lantern";
+// Three assembly steps after placing the base, unaffected by duration bonuses
+export const CANNON_BUILD_SECONDS = 1;
 
 export const POWER_UPS: PowerUpDef[] = [
     {

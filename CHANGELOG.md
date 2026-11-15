@@ -25,6 +25,7 @@ the version in the corner).
 
 ### Changed
 
+- The Dwarf multicannon, by braiansmarzaro: builds one part at a time in three steps over one second before firing.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log

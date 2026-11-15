@@ -72,10 +72,10 @@ import { CinematicPlayer } from "./Cinematic";
 import { CinematicLight, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
 import {
-    CANNON_MODEL_KEY,
     GameAssets,
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
+    getCannonModelKey,
     getEnemyModelKey,
     getLairSealKey,
     getPickupModelKey,
@@ -784,7 +784,7 @@ export class GameView {
         this.drawTombsSpirit(actors, sim);
 
         for (const turret of sim.turrets) {
-            const model = this.assets.get(CANNON_MODEL_KEY);
+            const model = this.assets.get(getCannonModelKey(sim.tick - turret.startTick));
             if (model) {
                 const anim = model.anims[0];
                 // The real cannon takes up 3x3 tiles; smaller reads better next to the player

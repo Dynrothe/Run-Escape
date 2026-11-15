@@ -110,6 +110,7 @@ import {
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
+    CANNON_BUILD_SECONDS,
     LANTERN_ID,
     POWER_UPS,
     POWER_UP_CHANCE,
@@ -22743,7 +22744,7 @@ export class Sim {
             yaw: player.yaw,
             startTick: this.tick,
             endTick: this.tick + this.powerUpTicks(effect.seconds),
-            nextShot: this.tick + 15,
+            nextShot: this.tick + CANNON_BUILD_SECONDS * TICKS_PER_SECOND,
             damage: effect.damage * this.powerUpDamageScale(),
             range: effect.range * (1 + this.stats.area),
             amount: effect.amount + this.stats.amount,

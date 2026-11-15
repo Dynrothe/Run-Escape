@@ -134,6 +134,9 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
   `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
   boss hits and poison through near the end.
 - Give it a `price`, what the Mysterious Old Man charges before the run's time and the map's coins.
+- The cannon builds on its `startTick` over `CANNON_BUILD_SECONDS` before firing. Its base,
+  stand, barrels and finished model are selected by `getCannonModelKey` and included in
+  `GameAssets.getBaseRequests`, so the slim cache keeps every assembly stage.
 
 ## Random event
 
