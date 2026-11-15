@@ -2976,8 +2976,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects,
+  keyboard or controller focus and holds across bag items, weapons, passives, HUD effects,
   worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  Holds take 500 ms by default; `shortHold` uses 200 ms for Armoury tiles and upgrade steps,
+  its Weapons and Passives catalogues, and HUD weapon/passive slots. Consumables keep 500 ms.
   A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
   `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the

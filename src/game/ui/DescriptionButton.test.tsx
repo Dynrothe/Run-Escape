@@ -12,10 +12,15 @@ function pointer(button: HTMLElement, type: string, x = 20, pointerType = "touch
     fireEvent(button, event);
 }
 
-function renderButton() {
+function renderButton(shortHold = false) {
     const onUse = vi.fn();
     const view = render(
-        <DescriptionButton itemId="gear" description="Gear stats" onUse={onUse}>
+        <DescriptionButton
+            itemId="gear"
+            description="Gear stats"
+            onUse={onUse}
+            shortHold={shortHold}
+        >
             Gear
         </DescriptionButton>,
     );
@@ -32,10 +37,10 @@ afterEach(() => {
     zoomedRects.value = undefined;
 });
 
-test("a hold reads a tile without selecting it; a later tap still selects once", () => {
-    const { button, onUse } = renderButton();
+test.each([200, 500])("a %i ms hold reads without selecting; a later tap selects once", (ms) => {
+    const { button, onUse } = renderButton(ms === 200);
     pointer(button, "pointerdown");
-    act(() => vi.advanceTimersByTime(499));
+    act(() => vi.advanceTimersByTime(ms - 1));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Gear stats");
@@ -65,8 +70,8 @@ test.each(["scroll", "blur", "Escape"])("%s dismisses and cancels a held tile", 
     expect(onUse).not.toHaveBeenCalled();
 });
 
-test("dragging a tile before the hold cancels selection and its description", () => {
-    const { button, onUse } = renderButton();
+test.each([true, false])("dragging before the hold cancels it (short hold: %s)", (shortHold) => {
+    const { button, onUse } = renderButton(shortHold);
     pointer(button, "pointerdown");
     pointer(button, "pointermove", 40);
     act(() => vi.advanceTimersByTime(500));
