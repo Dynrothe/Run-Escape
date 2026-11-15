@@ -12,6 +12,7 @@ import {
     NpcHead as NpcHeadData,
     NpcHeadInput,
     NpcHeadLoader,
+    NpcHeadRequest,
 } from "../../mapviewer/worker/NpcHeadLoader";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
 import {
@@ -41,7 +42,7 @@ export class IconCache {
     private readonly waiting = new Map<string, ((url: string) => void)[]>();
     private queued: { objId: number; count: number }[] = [];
     private queuedSprites: SpriteRequest[] = [];
-    private queuedHeads: number[] = [];
+    private queuedHeads: NpcHeadRequest[] = [];
     private flushScheduled = false;
     // Batches that failed in a row, for how long to wait before trying again
     private failures = 0;
@@ -60,8 +61,9 @@ export class IconCache {
         return `sprite:${spriteId}`;
     }
 
-    static headKey(npcId: number): string {
-        return `head:${npcId}`;
+    // A portrait's framing is part of the key: two enemies can share an NPC, framed differently
+    static headKey({ npcId, portrait }: NpcHeadRequest): string {
+        return portrait ? `head:${npcId}:${JSON.stringify(portrait)}` : `head:${npcId}`;
     }
 
     static frameKey(spriteId: number, frame: number): string {
@@ -87,13 +89,13 @@ export class IconCache {
     }
 
     // "" for an NPC with no model
-    getHead(npcId: number): string | undefined {
-        return this.urls.get(IconCache.headKey(npcId));
+    getHead(request: NpcHeadRequest): string | undefined {
+        return this.urls.get(IconCache.headKey(request));
     }
 
-    requestHead(npcId: number, callback: (url: string) => void): void {
-        if (this.wait(IconCache.headKey(npcId), callback)) {
-            this.queuedHeads.push(npcId);
+    requestHead(request: NpcHeadRequest, callback: (url: string) => void): void {
+        if (this.wait(IconCache.headKey(request), callback)) {
+            this.queuedHeads.push(request);
             this.scheduleFlush();
         }
     }
@@ -194,7 +196,7 @@ export class IconCache {
                 headRequests.length > 0
                     ? workerPool.queueLoad<NpcHeadInput, NpcHeadData[], NpcHeadLoader>(
                           new NpcHeadLoader(),
-                          { npcIds: headRequests },
+                          { heads: headRequests },
                       )
                     : [],
             ]);
@@ -217,11 +219,11 @@ export class IconCache {
                 this.waiting.delete(key);
                 again.push(() => callbacks.forEach((cb) => this.queueSprite(request, cb)));
             }
-            for (const npcId of headRequests) {
-                const key = IconCache.headKey(npcId);
+            for (const request of headRequests) {
+                const key = IconCache.headKey(request);
                 const callbacks = this.waiting.get(key) ?? [];
                 this.waiting.delete(key);
-                again.push(() => callbacks.forEach((cb) => this.requestHead(npcId, cb)));
+                again.push(() => callbacks.forEach((cb) => this.requestHead(request, cb)));
             }
             if (this.failures < ICON_RETRIES) {
                 this.failures++;
@@ -233,13 +235,14 @@ export class IconCache {
         for (const icon of icons) {
             this.resolve(IconCache.key(icon.objId, icon.count), toDataUrl(icon.pixels));
         }
-        for (const head of heads) {
+        // The worker answers in the order it was asked
+        heads.forEach((head, i) => {
             const empty = head.pixels.every((pixel) => pixel === 0);
             this.resolve(
-                IconCache.headKey(head.npcId),
+                IconCache.headKey(headRequests[i]),
                 empty ? "" : toDataUrl(head.pixels, HEAD_SIZE, HEAD_SIZE),
             );
-        }
+        });
         // The worker answers in the order it was asked
         sprites.forEach((sprite, i) => {
             const request = spriteRequests[i];
@@ -380,21 +383,31 @@ export function ItemIcon(props: Props): JSX.Element {
     );
 }
 
-// An NPC's chathead, drawn in a worker as the icons are. Nothing at all for one with no model.
-export function NpcHead({ npcId, size = 48 }: { npcId: number; size?: number }): JSX.Element {
-    const [loaded, setLoaded] = useState(() => ({ npcId, url: iconCache.getHead(npcId) }));
-    const url = loaded.npcId === npcId ? loaded.url : iconCache.getHead(npcId);
+// An NPC's chathead, drawn in a worker as the icons are, in a portrait's framing if it has one
+// (EnemyHead's). Nothing at all for one with no model.
+export function NpcHead({
+    npcId,
+    portrait,
+    size = 48,
+}: NpcHeadRequest & { size?: number }): JSX.Element {
+    const key = IconCache.headKey({ npcId, portrait });
+    const [loaded, setLoaded] = useState(() => ({
+        key,
+        url: iconCache.getHead({ npcId, portrait }),
+    }));
+    const url = loaded.key === key ? loaded.url : iconCache.getHead({ npcId, portrait });
     useEffect(() => {
         let cancelled = false;
-        iconCache.requestHead(npcId, (url) => {
+        iconCache.requestHead({ npcId, portrait }, (url) => {
             if (!cancelled) {
-                setLoaded({ npcId, url });
+                setLoaded({ key, url });
             }
         });
         return () => {
             cancelled = true;
         };
-    }, [npcId]);
+        // The key stands for the portrait, which can be a new object each render
+    }, [key]);
     return url ? (
         <img
             className="ui-icon ui-npc-head"

@@ -20,7 +20,10 @@ function spawnWorker(): Promise<RenderDataWorkerThread> {
     const worker = new Worker(new URL("./RenderDataWorker.ts", import.meta.url), {
         type: "module",
     });
-    return spawn<RenderDataWorker>(worker);
+    // The worker imports the complete cache/model pipeline before expose() can run. On a cold
+    // browser cache (especially on slower disks) that can legitimately take longer than the
+    // threads package's 10 second default.
+    return spawn<RenderDataWorker>(worker, { timeout: 60_000 });
 }
 
 export class RenderDataWorkerPool {

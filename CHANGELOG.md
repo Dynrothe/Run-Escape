@@ -19,6 +19,8 @@ the version in the corner).
 - The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
   ends with the run's recent messages.
 - The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
+- Every monster's face on the Combat tabs is framed on its own: turned, posed and zoomed to show
+  it best, inside the game's stone frame.
 - The pause menu's Settings look like its other tabs: sections for Sound, Display, the run, Co-op
   and the keys, each with the game's own settings icon, and a card for each setting, edged green
   while it's on and red while it's off. Off and On are in the quests' red and green.

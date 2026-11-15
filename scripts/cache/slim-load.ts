@@ -137,7 +137,7 @@ class SlimLoader {
             case "sprites":
                 return this.load(new SpriteDataLoader(), { spriteIds: unit.ids });
             case "heads":
-                return this.load(new NpcHeadLoader(), { npcIds: unit.npcIds });
+                return this.load(new NpcHeadLoader(), { heads: unit.heads });
             case "icons":
                 // Stackables like coins have a model per stack size
                 return this.load(new ItemIconLoader(), {

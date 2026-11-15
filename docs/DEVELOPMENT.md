@@ -884,10 +884,20 @@ run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`
 whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
 laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
 `CombatView`.
-The monsters killed are shown as their chatheads: `NpcHead` (`ui/ItemIcon.tsx`) asks `iconCache`
-for one, and `NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC
-with none), fitted by where the faces land. A monster drawn as a player (the fun maps') has no
-head. New monsters need nothing: `slim-plan.ts` loads every enemy's head.
+The monsters killed are shown as their chatheads: `EnemyHead` (`ui/EnemyHead.tsx`) gives
+`NpcHead` (`ui/ItemIcon.tsx`) the monster's NPC and its framing, `iconCache` asks for it, and
+`NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC with none),
+fitted by where the faces land. A monster drawn as a player (the fun maps') has no head. New
+monsters need nothing: `slim-plan.ts` loads every enemy's head, framed as the game frames it.
+
+Each monster's framing is in `content/portraits.json`, by enemy id, holding only what differs
+from the game's own fit (`content/portraitConfig.ts`): the chathead, the whole body or one of the
+NPC's models (`model`), posed by a sequence (`seqId`, `tick`), mirrored (`mirror`, the model
+alone, seen by the same camera), and the camera turned (`yaw`, `pitch`), zoomed (`zoom`) and
+moved (`offsetX`, `offsetY`, in the picture's pixels). The offsets and zoom are in view space, so
+zooming never moves the picture, pitched or not. They were set by eye with the editor on the
+`feat/portrait-editor` branch (`?portraits` there). A framing that picks a body, a model or a
+sequence uses more of the cache, so deploy it with a new slim cache.
 
 The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
 (`PauseModal`), and its settings are a button at the bottom, beside Give up and Resume, whose page

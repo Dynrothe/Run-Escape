@@ -511,6 +511,7 @@
 }
 
 .ui-cr-kill-head {
+    position: relative;
     display: grid;
     place-items: center;
     width: 52px;
@@ -518,6 +519,18 @@
     overflow: hidden;
     background: radial-gradient(circle at 50% 40%, #3b3426, #1a1710);
     border: 1px solid #6b5f48;
+}
+
+/* The client's stone square is painted last, over the monster portrait. Keeping it as a separate
+   overlay leaves the portrait itself unobstructed and makes the same crop usable in the tuner. */
+.ui-cr-portrait-frame .ui-cr-kill-head::after {
+    position: absolute;
+    z-index: 2;
+    inset: -1px;
+    border: 5px solid transparent;
+    border-image: var(--ui-portrait-frame) 5 / 5px;
+    content: "";
+    pointer-events: none;
 }
 
 .ui-cr-kill-head .ui-npc-head {

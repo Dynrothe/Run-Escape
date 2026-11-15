@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { CSSProperties, ReactNode, useState } from "react";
 
 import type { DamageKindView, DamageView, KillView, RevivesView } from "../client/GameStore";
 import {
@@ -14,10 +14,12 @@ import type { StatIconRef } from "../content/statIcons";
 import { t, tl } from "../i18n";
 import { BreakdownTip } from "./BreakdownTip";
 import "./CombatBreakdown.css";
-import { ItemIcon, NpcHead } from "./ItemIcon";
+import { EnemyHead } from "./EnemyHead";
+import { ItemIcon } from "./ItemIcon";
 import { WeaponAboutTip } from "./PauseLoadout";
 import { formatShare } from "./formatCompact";
 import { Big, formatPerSecond } from "./results/shared";
+import { useStoneSlot } from "./useStoneSlot";
 
 // The run's fighting, the pause menu's Combat tab and the results' alike: what the hero's damage
 // was (melee, ranged, magic, poison, recoil...), what dealt it, and what they killed
@@ -127,9 +129,7 @@ export function CombatBreakdown({
                                         title={`${name}: ${kill.kills.toLocaleString()}`}
                                     >
                                         <span className="ui-combat-kill-head">
-                                            {!def.outfits && (
-                                                <NpcHead npcId={def.npcId} size={52} />
-                                            )}
+                                            {!def.outfits && <EnemyHead enemy={def} size={52} />}
                                         </span>
                                         <span className="ui-combat-kill-count">
                                             {kill.kills.toLocaleString()}
@@ -282,6 +282,7 @@ export function CombatReport({
     kills: KillView[];
     totals: CombatTotals;
 }): JSX.Element {
+    const portraitFrame = useStoneSlot();
     const dealt = kinds.reduce((sum, kind) => sum + kind.damage, 0);
     const killed = kills.reduce((sum, kill) => sum + kill.kills, 0);
     const top = Math.max(1, ...sources.map((row) => row.damage));
@@ -295,7 +296,14 @@ export function CombatReport({
     const mvpLine = t(`combat.rank.mvp.${1 + Math.floor(pick * MVP_LINES)}`);
     const plankLine = t(`combat.rank.plank.${1 + Math.floor(pick * PLANK_LINES)}`);
     return (
-        <div className="ui-cr">
+        <div
+            className={`ui-cr${portraitFrame ? " ui-cr-portrait-frame" : ""}`}
+            style={
+                portraitFrame
+                    ? ({ "--ui-portrait-frame": portraitFrame } as CSSProperties)
+                    : undefined
+            }
+        >
             <div className="ui-cr-tiles">
                 {tiles.map((tile) => (
                     <BreakdownTip
@@ -504,9 +512,7 @@ export function CombatReport({
                                         title={`${name}: ${kill.kills.toLocaleString()}`}
                                     >
                                         <span className="ui-cr-kill-head">
-                                            {!def.outfits && (
-                                                <NpcHead npcId={def.npcId} size={48} />
-                                            )}
+                                            {!def.outfits && <EnemyHead enemy={def} size={48} />}
                                         </span>
                                         <span className="ui-cr-kill-main">
                                             <span className="ui-cr-kill-name">{name}</span>

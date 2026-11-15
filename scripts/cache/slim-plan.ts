@@ -24,6 +24,8 @@ import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/it
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { PETS } from "../../src/game/content/pets";
+import { portraitRequest } from "../../src/game/content/portraitConfig";
+import { getPortrait } from "../../src/game/content/portraits";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { QUEST_ICON_OBJ_IDS } from "../../src/game/content/questIcons";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
@@ -42,6 +44,7 @@ import {
 import { WEAPONS } from "../../src/game/content/weapons";
 import { getRecipe } from "../../src/game/scaperune/squares";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
+import { NpcHeadRequest } from "../../src/mapviewer/worker/NpcHeadLoader";
 import { RegionDataInput } from "../../src/mapviewer/worker/RegionData";
 import {
     EquipSlot,
@@ -68,8 +71,8 @@ export type SlimUnit =
     | { kind: "sounds"; ids: number[] }
     | { kind: "sprites"; ids: number[] }
     | { kind: "icons"; objIds: number[] }
-    // The chatheads of the monsters the Combat tabs show
-    | { kind: "heads"; npcIds: number[] };
+    // The portraits of the monsters the Combat tabs show, as content/portraits.json frames them
+    | { kind: "heads"; heads: NpcHeadRequest[] };
 
 export function describeUnit(unit: SlimUnit): string {
     switch (unit.kind) {
@@ -80,7 +83,7 @@ export function describeUnit(unit: SlimUnit): string {
         case "icons":
             return `icons from ${unit.objIds[0]}`;
         case "heads":
-            return `heads from ${unit.npcIds[0]}`;
+            return `heads from ${unit.heads[0].npcId}`;
         default:
             return unit.kind;
     }
@@ -350,11 +353,21 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         }
     }
     const icons = batchByKey(getContentObjIds(), String, 32, ICON_BATCH);
-    // An enemy drawn as a player (the fun maps') has no NPC to show
-    const npcIds = [
-        ...new Set(ENEMIES.filter((enemy) => !enemy.outfits).map((enemy) => enemy.npcId)),
-    ].sort((a, b) => a - b);
-    const heads = batchByKey(npcIds, String, 32, ICON_BATCH);
+    // An enemy drawn as a player (the fun maps') has no NPC to show. A framed portrait can be
+    // another model or posed by a sequence, so each is drawn as the game draws it.
+    const headRequests = new Map<string, NpcHeadRequest>();
+    for (const enemy of ENEMIES) {
+        if (!enemy.outfits) {
+            const request = portraitRequest(enemy, getPortrait(enemy.id));
+            headRequests.set(JSON.stringify(request), request);
+        }
+    }
+    const heads = batchByKey(
+        [...headRequests.values()].sort((a, b) => a.npcId - b.npcId),
+        (request) => JSON.stringify(request),
+        32,
+        ICON_BATCH,
+    );
     return [
         ...maps,
         ...bakes,
@@ -362,6 +375,6 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         { kind: "sounds", ids: getGameSoundIds() },
         { kind: "sprites", ids: getGameSpriteIds() },
         ...icons.map((objIds): SlimUnit => ({ kind: "icons", objIds })),
-        ...heads.map((npcIds): SlimUnit => ({ kind: "heads", npcIds })),
+        ...heads.map((batch): SlimUnit => ({ kind: "heads", heads: batch })),
     ];
 }
