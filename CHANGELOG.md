@@ -35,6 +35,7 @@ the version in the corner).
   be translated, by Iakee.
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
   Achievements earn them. Any you bought are refunded.
+- The Skip button shows the coins it takes, by Deivid Smarzaro: "Skip (-25 coins)".
 - Polymorph's sheep baa a little louder, by GhostavoA, and a golden sheep says "Baa!" with every
   attack.
 - Polymorph's odd sheep out turns up as often as the penguin, by GhostavoA, snores as it goes, and
