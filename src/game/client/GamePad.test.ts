@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
+import { act, cleanup, render } from "@testing-library/react";
+import { Fragment, createElement, useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import type { Renderer } from "../../components/renderer/Renderer";
+import { RendererCanvas } from "../../components/renderer/RendererCanvas";
 import { GamePads, PAD, identifyPad, nearestInDirection, padLabel, padToMove } from "./GamePad";
 
 const move = () => ({ x: 0, y: 0 });
@@ -116,6 +120,7 @@ describe("GamePads", () => {
     };
     afterEach(() => {
         pad = fakePad();
+        cleanup();
         document.body.innerHTML = "";
     });
 
@@ -201,6 +206,129 @@ describe("GamePads", () => {
         pad = fakePad([PAD.start]);
         p.poll(48, "menu");
         expect(keys).toContain("+KeyP");
+    });
+
+    // The Collection log's entries, on a narrow screen
+    test("in a menu, left and right step a highlighted dropdown, up and down move on", () => {
+        const { p } = pads();
+        document.body.innerHTML =
+            `<select id="entries"><option value="a">A</option><option value="b">B</option></select>` +
+            `<button id="under">Under</button>`;
+        const select = document.getElementById("entries") as HTMLSelectElement;
+        const under = document.getElementById("under")!;
+        select.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, width: 100, height: 20 }) as DOMRect;
+        under.getBoundingClientRect = () =>
+            ({ left: 0, top: 40, width: 100, height: 20 }) as DOMRect;
+        const changes: string[] = [];
+        select.addEventListener("change", () => changes.push(select.value));
+        select.focus();
+        let now = 0;
+        const press = (button: number) => {
+            pad = fakePad([button]);
+            p.poll(now, "menu");
+            pad = fakePad();
+            p.poll(now + 16, "menu");
+            now += 32;
+        };
+        press(PAD.right);
+        // Already the last: it stays there, with no change told
+        press(PAD.right);
+        press(PAD.left);
+        expect(changes).toEqual(["b", "a"]);
+        expect(document.activeElement).toBe(select);
+        press(PAD.down);
+        expect(document.activeElement).toBe(under);
+    });
+
+    // The Wardrobe's colours for the max cape, and the volume
+    test("in a menu, left and right move a highlighted slider, as React sees a drag", () => {
+        const { p } = pads();
+        const changes: number[] = [];
+        function Slider(): JSX.Element {
+            const [value, setValue] = useState(62);
+            return createElement(
+                Fragment,
+                null,
+                createElement("input", {
+                    id: "hue",
+                    type: "range",
+                    min: 0,
+                    max: 63,
+                    value,
+                    onChange: (e: { target: HTMLInputElement }) => {
+                        changes.push(Number(e.target.value));
+                        setValue(Number(e.target.value));
+                    },
+                }),
+                createElement("button", { id: "under" }, "Under"),
+            );
+        }
+        render(createElement(Slider));
+        const slider = document.getElementById("hue") as HTMLInputElement;
+        const under = document.getElementById("under")!;
+        slider.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, width: 100, height: 20 }) as DOMRect;
+        under.getBoundingClientRect = () =>
+            ({ left: 0, top: 40, width: 100, height: 20 }) as DOMRect;
+        slider.focus();
+        let now = 0;
+        const press = (button: number) => {
+            act(() => {
+                pad = fakePad([button]);
+                p.poll(now, "menu");
+                pad = fakePad();
+                p.poll(now + 16, "menu");
+            });
+            now += 32;
+        };
+        // A press is a 32nd of the way: 2 of the 63 hues, and no further than the end
+        press(PAD.left);
+        press(PAD.right);
+        press(PAD.right);
+        // At the end: nothing new to tell
+        press(PAD.right);
+        expect(changes).toEqual([60, 62, 63]);
+        expect(slider.value).toBe("63");
+        expect(document.activeElement).toBe(slider);
+        press(PAD.down);
+        expect(document.activeElement).toBe(under);
+    });
+
+    // The game's canvas fills the screen behind every menu, ahead of it in the page
+    test("in a menu, the first highlight is the screen's first button, not the game's canvas", () => {
+        const { p } = pads();
+        const canvas = document.createElement("canvas");
+        // Focusable, as Renderer makes it for the viewer
+        canvas.tabIndex = 0;
+        const renderer = {
+            canvas,
+            init: () => new Promise(() => {}),
+            start: () => {},
+            stop: () => {},
+        } as unknown as Renderer;
+        render(
+            createElement(
+                Fragment,
+                null,
+                createElement(RendererCanvas, { renderer, focusable: false }),
+                createElement("button", { id: "play" }, "Singleplayer"),
+            ),
+        );
+        for (const el of document.querySelectorAll<HTMLElement>("div, canvas, button")) {
+            el.getBoundingClientRect = () =>
+                ({ left: 0, top: 0, width: 10, height: 10 }) as DOMRect;
+        }
+        pad = fakePad([PAD.down]);
+        p.poll(0, "menu");
+        expect(document.activeElement?.id).toBe("play");
+        // The world clicked, then south: the highlight comes back to the button
+        canvas.focus();
+        pad = fakePad();
+        p.poll(16, "menu");
+        pad = fakePad([PAD.south]);
+        p.poll(32, "menu");
+        expect(document.activeElement?.id).toBe("play");
     });
 
     // An Xbox pad and a second one, with frame(first's buttons, second's) a

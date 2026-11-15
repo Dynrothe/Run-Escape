@@ -27,5 +27,10 @@ export type SdMapLoaderInput = {
     // nothing out there can be seen. Unset keeps everything, as the viewer does.
     keepArea?: number[];
 
+    // Scenery left out of the square, three numbers each: the world tile it starts on (x, z) and
+    // its loc id. The game's title screen leaves out the bushes round the character
+    // (GameClient's TITLE_HIDDEN_LOCS). Only those in this square.
+    hiddenLocs?: number[];
+
     loadedTextureIds: Set<number>;
 };

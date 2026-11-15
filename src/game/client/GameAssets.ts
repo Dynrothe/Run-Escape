@@ -34,6 +34,7 @@ import {
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, LOCKED_GEAR_SLOTS, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
+import { applyCapeColours } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
@@ -46,6 +47,7 @@ import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
     CHECKBOX_SPRITES,
+    CLOSE_SPRITES,
     CLOUD_SAVE_SPRITES,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
@@ -220,6 +222,7 @@ export function getGameSpriteIds(): number[] {
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
         ...Object.values(CHECKBOX_SPRITES),
+        ...Object.values(CLOSE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         ...LOCKED_GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
@@ -587,6 +590,8 @@ function getCurrentAppearance(
             }
         }
     }
+    // Again, as gear can have gone over the customisable max cape
+    applyCapeColours(appearance, wearsWardrobe(character) ? look?.capeColours : undefined);
     return appearance;
 }
 
@@ -757,6 +762,7 @@ export function getCharacterAppearance(characterId: string, look?: WardrobeLook)
     if (look && wearsWardrobe(character)) {
         applyBody(appearance, look.body);
         applyOutfit(appearance, look.outfit);
+        applyCapeColours(appearance, look.capeColours);
     }
     if (character.kits) {
         appearance.kits = character.kits.slice();

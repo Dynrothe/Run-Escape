@@ -21,6 +21,11 @@ const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 // shader and rounding
 const CULL_MARGIN = 0.25;
 
+// How much nearer the camera a layered actor's faces (a player's) are drawn for each priority, in
+// tiles, seen from behind (actor.vert.glsl): enough for a cape to cover the platebody poking a few
+// units through it
+const LAYER_DEPTH = 3 / 128;
+
 export const NO_TINT = 0xffffff;
 
 export class ActorAnim {
@@ -86,6 +91,8 @@ export class ActorModel {
         // Furthest any frame gets from its origin
         readonly reach: number,
         readonly anims: ActorAnim[],
+        // Its faces drawn in layers by priority (BakedSet.layered)
+        readonly layered = false,
     ) {
         anims.forEach((anim, i) => {
             if (anim.runPose) {
@@ -174,6 +181,8 @@ class InstanceList {
         pitch: number,
         roll: number,
         unlit: number,
+        // Tiles nearer the camera for each priority (LAYER_DEPTH), 0 for none
+        layerDepth = 0,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -205,6 +214,7 @@ class InstanceList {
         data[o + 14] = pitch;
         data[o + 15] = roll;
         data[o + 16] = positionStart;
+        data[o + 17] = layerDepth;
     }
 
     grow(capacity: number): void {
@@ -482,7 +492,15 @@ export class ActorRenderer {
             );
             models.set(
                 set.key,
-                new ActorModel(page, set.key, set.height, set.radius, set.reach, anims),
+                new ActorModel(
+                    page,
+                    set.key,
+                    set.height,
+                    set.radius,
+                    set.reach,
+                    anims,
+                    set.layered ?? false,
+                ),
             );
         }
         return models;
@@ -610,6 +628,7 @@ export class ActorRenderer {
             options?.pitch ?? 0,
             options?.roll ?? 0,
             Math.max(options?.unlit ?? 0, this.unlitAtLeast),
+            model.layered ? LAYER_DEPTH : 0,
         );
         if (options?.silhouette) {
             segment.silhouettes.push(

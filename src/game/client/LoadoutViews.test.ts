@@ -75,6 +75,21 @@ test("a weapon that can evolve says into what and with which passive, and when i
     expect(ready.text).toMatch(/^Ready to evolve into .+!$/);
 });
 
+test("a Card collection only run without the cards for an evolution treats the weapon as having none", () => {
+    const evolution = EVOLVER.evolution!;
+    const unlocked = new Set([evolution.into]);
+    const needs = new Set([evolution.requiresPassive]);
+    const last = EVOLVER.levels.length;
+    const all = new Map([
+        [`weapon:${EVOLVER.id}`, "common"],
+        [`passive:${evolution.requiresPassive}`, "common"],
+        [`weapon:${evolution.into}`, "common"],
+    ] as const);
+    expect(getWeaponForm(state(EVOLVER, last), needs, unlocked, false, all).kind).toBe("ready");
+    const noInto = new Map([...all].filter(([key]) => key !== `weapon:${evolution.into}`));
+    expect(getWeaponForm(state(EVOLVER, last), needs, unlocked, false, noInto).kind).toBe("best");
+});
+
 test("one with nothing to evolve into is at its best at its last level, and levelling before", () => {
     const last = NO_EVOLUTION.levels.length;
     expect(getWeaponForm(state(NO_EVOLUTION, last), new Set(), undefined, false)).toEqual({

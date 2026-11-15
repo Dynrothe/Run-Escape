@@ -2,12 +2,15 @@ import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { LASSAR_REALM, LOST_SOUL_ID } from "../content/lassar";
 import { getMap } from "../content/maps";
+import { ROOT_HEART_ID } from "../content/stranglewood";
 import { emptyStats } from "../content/types";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { usePortableMath } from "./fmath";
 import { syncHash } from "./lockstep";
 import { RealmRule } from "./rules/RealmRule";
+import type { RuleHost } from "./rules/RunRule";
 import { isTaskDone } from "./save";
+import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
 
 // The Lassar Undercity in a run: its city and Shadow Realm (RealmRule), the party turning between
@@ -159,6 +162,26 @@ describe("the Lassar Undercity", () => {
         // Back in the city it refills
         steps(sim, 3);
         expect(realm.sanityOf(0)).toBeGreaterThan(25);
+    });
+
+    test("what the rule brings up rises clear of the walls, by its own size", () => {
+        const sim = createSim();
+        quiet(sim);
+        const host = (sim as unknown as { ruleHost: RuleHost }).ruleHost;
+        // Beside the field's west wall: room for a player, not for a tentacle or a root heart
+        const x = 1003.5;
+        const y = 1036.5;
+        expect(isCircleFree(sim.grid, x, y, 0.35)).toBe(true);
+        for (const id of ["lassar_tentacle", ROOT_HEART_ID]) {
+            const def = getEnemy(id);
+            expect(isCircleFree(sim.grid, x, y, def.radius)).toBe(false);
+            const uid = host.spawnRuleEnemy(id, x, y);
+            const enemy = sim.enemies.find((e) => e.uid === uid)!;
+            expect(enemy.def.id).toBe(id);
+            expect(isCircleFree(sim.grid, enemy.x, enemy.y, def.radius)).toBe(true);
+            // and as near as it fits
+            expect(Math.hypot(enemy.x - x, enemy.y - y)).toBeLessThan(def.radius + 1);
+        }
     });
 
     test("from 4:00 each dive brings one of the realm's elites, casket and all", () => {

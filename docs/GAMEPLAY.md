@@ -83,9 +83,38 @@ version and how to run it.
   damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
-  recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
-  finds of its own (the Hallowed Night, the Theatre of Blood, the Tombs of Amascut, Justiciar
-  Zachariah, Phosani's Nightmare): the weapons it brings in, then its trophies.
+  recipe, keeping what it makes as ??? until you've made it. It's laid out as OSRS's is, with
+  Bosses, Raids, Clues, Minigames and Other tabs. Each place with finds of its own has an entry
+  (the boss fights and Act II's maps under Bosses, the Theatre of Blood and the Tombs of Amascut
+  under Raids, the Hallowed Night and Thanksgiving Harvest under Minigames): the weapons it brings
+  in, then its trophies. Clues has the gear reward caskets hold, by rarity, and Other the
+  evolutions, each shown as the weapon that evolves until it's been made.
+- **Cards** (the title's Cards tile): a card for every weapon, passive, reward casket gear and
+  Collection log trophy, each in versions from its own rarity up to Very rare. Runs earn platinum
+  tokens beside their coins, scaled as coins are (less in endless runs), and the Card shop sells
+  packs for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
+  weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one likelier to
+  be rare. Each offer says what it holds, what its last card is at least (where that's better than
+  its commonest) and how many of its cards you've collected. Packs only hold cards of what you've
+  unlocked, and the strongest things are rarer pulls. A pack's Preview lists its cards on a tab for
+  each rarity, each with its chance per pack for your save, or Locked with the map to unlock it in;
+  its info icon shows the chance of each item rarity and each quality, with notes on how they're
+  worked out. Any card can come as a foil, a copy with a gold reflection that's only for show, with a Foils tab
+  in the album. Packs open on a playmat, a card at a time, and every save gets one free, holding
+  your starting adventurer's card. In the album, pressing a found card opens it big in a window,
+  with the versions you own.
+- **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
+  card of, no rarer than your best version of it, and reward caskets give only gear you have a card
+  of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
+  your collection has enough cards to fill a level up (the godswords count as one weapon, since
+  only one is ever held), nor as an adventurer whose starting weapon's
+  card you haven't got (their portrait is dimmed with a padlock). Either way, a card button beside
+  their favourite star shows what's still needed, with the Card shop's pack for it. In co-op the
+  host's tab sets it for the whole room; the weekly Vault and the Gauntlet are never Cards only. A
+  map won in a Cards only run gets a small card beside its beaten tick and says "Beaten in Cards
+  only" in its details, and a trophy first found in one gets a card badge in the Collection log. The
+  log's Cards tab shows each card at your best version, and its own count sits beside the log's
+  total, apart from it.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -377,7 +406,7 @@ version and how to run it.
   (the Scar's, only in it; weapons aim only at what's lit in it). A rule a remix has on already
   doesn't come; with all four on, nothing does. Each invader's kit leaves out its summons and what
   needs its own map (the Duke's vents and gaze). Its kill drops a master casket and 100 to 200
-  coins, and counts on its Act II map's Collection log tab (`SaveData.invasions`).
+  coins, and counts on its Act II map's Collection log entry (`SaveData.invasions`).
 - **Awakener's orbs** (`SaveData.awakenerOrbs`, object 28334): each Awakened fight won gives one
   (the gauntlet's first clears two, its fights none). On a campaign map's card (solo, not endless)
   the orb's switch awakens its final boss for one run: 1.6 times its hitpoints, enraged from 75%,
@@ -1157,7 +1186,10 @@ version and how to run it.
   body). The Store has
   every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
   them, from 200 coins for a Common piece to 25,000 for a Very rare one (partyhats, gilded), and
-  250,000 for each piece of 3rd Age. Pick one to try it on. Every unlocked adventurer's own pieces are yours for
+  250,000 for each piece of 3rd Age. Pick one to try it on. The Customisable max cape (25,000)
+  is a max cape in colours of your own: once it's worn, the Outfit tab has a hue, saturation and
+  lightness for each of its parts (centre, sides, edges, tails, trim and gems), or the colours of
+  any other max cape to start from. Every unlocked adventurer's own pieces are yours for
   nothing. Collection log finds that are worn aren't sold, and are yours once found: the
   Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
   Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)

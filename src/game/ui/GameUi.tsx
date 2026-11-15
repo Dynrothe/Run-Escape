@@ -1,11 +1,13 @@
 import {
     CSSProperties,
+    MutableRefObject,
     ReactNode,
     memo,
     useCallback,
     useEffect,
     useId,
     useLayoutEffect,
+    useMemo,
     useRef,
     useState,
     useSyncExternalStore,
@@ -77,9 +79,9 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
-import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
+import { PETS, PET_BY_ID, getFoundPets, getPetTrophy, isPetFound } from "../content/pets";
 import { RARITIES } from "../content/rarity";
-import { RELIC_BY_ID, relicName } from "../content/relics";
+import { RELIC_BY_ID, cleanRelics, getOpenRelicTiers, relicName } from "../content/relics";
 import {
     REMIX_BY_ID,
     REMIX_IDS,
@@ -94,6 +96,7 @@ import {
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import {
+    CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
@@ -109,6 +112,14 @@ import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { ScabarasPuzzle } from "../core/Sim";
+import {
+    getCardRunNeeds,
+    getCardsOnlyPet,
+    hasPetCard,
+    isCardLocked,
+    isCardRunBlocked,
+    playsCardsOnly,
+} from "../core/cardRuns";
 import {
     NewerSaveError,
     RecordSetup,
@@ -132,11 +143,13 @@ import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
+import { CardNeedsWindow } from "./CardNeeds";
+import { CardsScreen } from "./CardsScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
-import { CollectionLogScreen } from "./CollectionLogScreen";
+import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -161,6 +174,7 @@ import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./P
 import { PauseChat } from "./PauseChat";
 import { PauseLoadout, SlotIcon } from "./PauseLoadout";
 import { PauseQuests } from "./PauseQuests";
+import { Platinum } from "./Platinum";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
@@ -179,6 +193,7 @@ import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 import { ClassicResults } from "./results/ClassicResults";
 import { useDialog } from "./useDialog";
+import { usePhoneLayout } from "./usePhoneLayout";
 import { VOLUME_KEY_STEPS, formatVolume, volumeFromDrag, volumeFromKey } from "./volume";
 
 type Props = {
@@ -254,7 +269,10 @@ export function GameUi({ store, client }: Props): JSX.Element {
             screen = <QuestScreen ui={ui} client={client} />;
             break;
         case "collectionLog":
-            screen = <CollectionLogScreen ui={ui} client={client} />;
+            screen = <CollectionLogScreen save={ui.save} client={client} />;
+            break;
+        case "cards":
+            screen = <CardsScreen ui={ui} client={client} />;
             break;
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
@@ -287,7 +305,8 @@ export function GameUi({ store, client }: Props): JSX.Element {
             ) : (
                 <LanguageNotice />
             )}
-            {isCoarsePointer && <RotateNotice />}
+            {/* The Collection log has a layout for a phone held upright, so it's left readable */}
+            {isCoarsePointer && ui.screen !== "collectionLog" && <RotateNotice />}
         </div>
     );
 }
@@ -1113,6 +1132,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             objId={COLLECTION_LOG_OBJ}
                             onClick={() => client.showScreen("collectionLog")}
                         />
+                        <TitleTile
+                            name={t("ui.title.cards")}
+                            objId={CARDS_ICON_OBJ}
+                            onClick={() => client.showScreen("cards")}
+                        />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
@@ -1228,10 +1252,18 @@ function TitleHint(): JSX.Element {
 }
 
 // Adventurers on the left and maps on the right, so the adventurer picked
-// stands in view between them
+// stands in view between them. A phone's too short for both lists at once, so
+// it has a screen of what's picked, and each list over the whole screen
+// (PhoneSetup).
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
+    // Card collection only, what's needed for this adventurer (CardNeedsWindow), when it's open
+    const [needsFor, setNeedsFor] = useState<string>();
+    const phone = usePhoneLayout();
+    const [picker, setPicker] = useState<PhonePicker>();
+    // A picker's left open as the phone turns upright, and comes back as it turns again
+    const picking = phone ? picker : undefined;
     // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET), or remixed
     const runBoard = takesInvocations(map, ui.remixes.length > 0);
     const shownMapName = remixedMapName(map, ui.remixes);
@@ -1246,51 +1278,243 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
         : endlessShown
           ? "ui.select.enter.endless"
           : "ui.select.enter";
-    // With the invocation board open, its own keys
+    // With the invocation board open, its own keys; with a phone's picker open, back to what's
+    // picked
+    const closePicker = () => setPicker(undefined);
     useMenuKeys(
         board
             ? {}
-            : {
-                  onBack: () => client.showScreen("title"),
-                  onConfirm: () => void client.startRun(),
-              },
+            : needsFor
+              ? { onBack: () => setNeedsFor(undefined) }
+              : picking
+                ? { onBack: closePicker, onConfirm: closePicker }
+                : {
+                      onBack: () => client.showScreen("title"),
+                      onConfirm: () => void client.startRun(),
+                  },
     );
-    return (
-        <div className="ui-fill ui-select">
-            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
-            <MapPanel ui={ui} client={client} />
-            <div className="ui-panel rs-border rs-background ui-select-bar">
-                <button className="ui-button" onClick={() => client.showScreen("title")}>
-                    {t("ui.common.back")}
-                </button>
-                <Coins amount={ui.save.coins} />
-                {map.tombs ? (
-                    // The Tombs go by their invocations instead of endless and hard mode
-                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
-                ) : (
-                    <>
-                        {/* A raid ends with its last room: no endless */}
-                        {!map.raid && <EndlessSwitch ui={ui} client={client} />}
-                        <HardSwitch ui={ui} client={client} />
-                        {expertShown && <ExpertSwitch ui={ui} client={client} />}
-                        {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
-                    </>
-                )}
-                <button
-                    className="ui-button ui-button-go ui-select-go"
-                    onClick={() => client.startRun()}
-                >
-                    <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
-                    {t(enterKey, { map: shownMapName })}
-                </button>
-            </div>
+    const modes = map.tombs ? (
+        // The Tombs go by their invocations instead of endless and hard mode
+        <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+    ) : (
+        <>
+            {/* A raid ends with its last room: no endless */}
+            {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+            <HardSwitch ui={ui} client={client} />
+            {expertShown && <ExpertSwitch ui={ui} client={client} />}
+            {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
+        </>
+    );
+    const back = (
+        <button className="ui-button" onClick={() => client.showScreen("title")}>
+            {t("ui.common.back")}
+        </button>
+    );
+    const enter = (
+        <button
+            className="ui-button ui-button-go ui-select-go"
+            // From the Cards only tab, not without the cards it takes (isCardRunBlocked)
+            disabled={isCardRunBlocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
+            onClick={() => client.startRun()}
+        >
+            <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
+            {t(enterKey, { map: shownMapName })}
+        </button>
+    );
+    const boards = (
+        <>
             {board && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
             {board && runBoard && (
                 <RunInvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
+            {/* Over the whole screen, not in the bar (sticky on a narrow one) */}
+            {needsFor && (
+                <CardNeedsWindow
+                    save={ui.save}
+                    characterId={needsFor}
+                    client={client}
+                    onClose={() => setNeedsFor(undefined)}
+                />
+            )}
+        </>
+    );
+    if (phone) {
+        return (
+            <PhoneSetup
+                ui={ui}
+                client={client}
+                picker={picking}
+                onPicker={setPicker}
+                onCardNeeds={setNeedsFor}
+                modes={modes}
+                back={back}
+                enter={enter}
+            >
+                {boards}
+            </PhoneSetup>
+        );
+    }
+    return (
+        <div className="ui-fill ui-select">
+            <AdventurerPanel
+                ui={ui}
+                client={client}
+                fixed={getMapCharacter(map)}
+                onCardNeeds={setNeedsFor}
+            />
+            <MapPanel ui={ui} client={client} />
+            <div className="ui-panel rs-border rs-background ui-select-bar">
+                {back}
+                <Coins amount={ui.save.coins} />
+                {modes}
+                {enter}
+            </div>
+            {boards}
         </div>
+    );
+}
+
+type PhonePicker = "adventurer" | "map";
+
+// A phone's run setup: the map picked on the left with what it's played as on the right (the
+// switches the desktop has by its start button), and the adventurer under the middle, where they
+// stand in view. Each card opens its list over the whole screen, with the details beside it
+// rather than under it, as a phone held sideways has the width and not the height.
+function PhoneSetup({
+    ui,
+    client,
+    picker,
+    onPicker,
+    onCardNeeds,
+    modes,
+    back,
+    enter,
+    children,
+}: ScreenProps & {
+    picker: PhonePicker | undefined;
+    onPicker: (picker: PhonePicker | undefined) => void;
+    // Card collection only's needs, from the adventurer list's tab or a lock
+    onCardNeeds: (characterId: string) => void;
+    modes: ReactNode;
+    back: ReactNode;
+    enter: ReactNode;
+    // What opens over the screen (the invocation boards)
+    children: ReactNode;
+}): JSX.Element {
+    const map = getMap(ui.mapId);
+    if (picker) {
+        const done = () => onPicker(undefined);
+        return (
+            <div className="ui-fill ui-phone-picker">
+                {picker === "adventurer" ? (
+                    <AdventurerPanel
+                        ui={ui}
+                        client={client}
+                        fixed={getMapCharacter(map)}
+                        onCardNeeds={onCardNeeds}
+                        onDone={done}
+                    />
+                ) : (
+                    <MapPanel ui={ui} client={client} onDone={done} />
+                )}
+                {children}
+            </div>
+        );
+    }
+    return (
+        <div className="ui-fill ui-select ui-phone-ready">
+            <PhoneMapCard ui={ui} onOpen={() => onPicker("map")} />
+            <PhoneAdventurerCard ui={ui} map={map} onOpen={() => onPicker("adventurer")} />
+            <div className="ui-panel rs-border rs-background ui-phone-modes">{modes}</div>
+            <div className="ui-panel rs-border rs-background ui-select-bar">
+                {back}
+                <Coins amount={ui.save.coins} />
+                {enter}
+            </div>
+            {children}
+        </div>
+    );
+}
+
+// The map picked, on a phone's run setup: what it is and how it's gone, opening the maps
+function PhoneMapCard({ ui, onOpen }: { ui: UiSnapshot; onOpen: () => void }): JSX.Element {
+    const map = getMap(ui.mapId);
+    const name = remixedMapName(map, ui.remixes);
+    const status = getMapStatus(ui.save, map, ui.fightStage);
+    return (
+        <button
+            className="ui-card ui-phone-card ui-phone-map"
+            aria-label={t("ui.select.change_map", { map: name })}
+            onClick={onOpen}
+        >
+            <span className="ui-phone-card-label">
+                {t("ui.map.heading")}
+                <span className="ui-phone-change">{t("ui.select.change")}</span>
+            </span>
+            <span className="ui-select-details-head">
+                <ItemIcon objId={map.iconObjId} size={36} />
+                <span className="ui-phone-card-name">
+                    <span className="ui-card-title">{name}</span>
+                    <span className={status.locked ? "ui-card-cost" : "ui-card-style"}>
+                        {status.text}
+                    </span>
+                </span>
+                {ui.awaken && (
+                    <span className="ui-awakened-mark" title={t("ui.awaken.marked")}>
+                        <ItemIcon objId={AWAKENERS_ORB_OBJ} size={18} />
+                    </span>
+                )}
+            </span>
+            <span className="ui-card-text ui-phone-card-text">
+                <RichText text={mapDescription(map)} />
+            </span>
+        </button>
+    );
+}
+
+// The adventurer picked (or the map's own), with their pet and relics, on a phone's run setup or
+// co-op room (its map is the room's): opening the adventurers, where those are picked too
+export function PhoneAdventurerCard({
+    ui,
+    map,
+    onOpen,
+}: {
+    ui: UiSnapshot;
+    map: MapDef;
+    onOpen: () => void;
+}): JSX.Element {
+    const character = getCharacter(getMapCharacter(map) ?? ui.characterId);
+    const name = characterName(character);
+    const pet = ui.save.pet ? PET_BY_ID.get(ui.save.pet) : undefined;
+    // Only those the run takes (GameClient.runRelics)
+    const relics = takesRelics(map)
+        ? cleanRelics(ui.save.relics, getOpenRelicTiers(ui.save.mapVictories)).flatMap(
+              (id) => RELIC_BY_ID.get(id) ?? [],
+          )
+        : [];
+    return (
+        <button
+            className="ui-card ui-phone-card ui-phone-adventurer"
+            aria-label={t("ui.select.change_adventurer", { name })}
+            onClick={onOpen}
+        >
+            <ItemIcon objId={getStartingWeaponIcon(character)} size={36} />
+            <span className="ui-phone-card-name">
+                <span className="ui-card-title">{name}</span>
+                <span className="ui-card-style">{STYLE_NAMES[character.style]}</span>
+            </span>
+            {(pet || relics.length > 0) && (
+                <span className="ui-phone-extras">
+                    {pet && <ItemIcon objId={getPetTrophy(pet).objId} size={26} />}
+                    {relics.map((relic) => (
+                        <ItemIcon key={relic.id} objId={relic.iconObjId} size={24} />
+                    ))}
+                </span>
+            )}
+            <span className="ui-phone-change">{t("ui.select.change")}</span>
+        </button>
     );
 }
 
@@ -1478,16 +1702,67 @@ function stopPeeking(setPeek: (id: undefined) => void): (() => void) | undefined
 // changes it: the list scrolling under a still pointer doesn't.
 // fixed: the adventurer the map picked makes everyone play (Falador's Durial321,
 // Phosani's Inquisitor), with the choice blurred out under them
+// onDone: a phone's picker (PhoneSetup), with a button back to what's picked
 export function AdventurerPanel({
     ui,
     client,
     fixed,
-}: ScreenProps & { fixed?: string }): JSX.Element {
+    onCardNeeds,
+    cardsOnly,
+    tabLocked,
+    map: roomMap,
+    onDone,
+}: ScreenProps & {
+    fixed?: string;
+    // Card collection only's needs for an adventurer, opened from their lock or the tab's button
+    onCardNeeds?: (characterId: string) => void;
+    // A co-op room's Cards only, the host's choice for everyone (roomPlaysCardsOnly), in place of
+    // the save's own tab. Tabs that show it but can't change it say why (tabLocked): a guest's,
+    // or anyone's in the weekly Vault's room.
+    cardsOnly?: boolean;
+    tabLocked?: string;
+    // The map the run's on: a co-op room's, not the player's own last pick
+    map?: MapDef;
+    onDone?: () => void;
+}): JSX.Element {
+    const map = roomMap ?? getMap(ui.mapId);
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    const roster = getRoster();
+    // Fixed for the session (acts out or not), so cardLocked below isn't worked out on every render
+    const roster = useMemo(() => getRoster(), []);
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
+    // The save as the Cards only that applies here sees it: the room's in co-op
+    const save = useMemo(
+        () =>
+            cardsOnly === undefined || cardsOnly === (ui.save.cardsOnly === true)
+                ? ui.save
+                : { ...ui.save, cardsOnly: cardsOnly || undefined },
+        [ui.save, cardsOnly],
+    );
+    // Cards only on: the adventurers it can't start as (isCardLocked), worked out once for the
+    // save, not on every peek. Only those they have: one they haven't is locked anyway.
+    const cardLocked = useMemo(() => {
+        return new Set(
+            roster
+                .filter((c) => unlocked.includes(c.id) && isCardLocked(save, c.id, map))
+                .map((c) => c.id),
+        );
+    }, [save, map, roster, unlocked]);
+    // Whether a run from the Cards only tab can't start as the one shown (isCardRunBlocked): their
+    // details then have What's needed
+    const cardShort = useMemo(
+        () => unlocked.includes(shown) && isCardRunBlocked(save, shown, map),
+        [save, shown, map, unlocked],
+    );
+    const heading = (
+        <h2 className="ui-select-heading">
+            {t("ui.character.heading")}
+            <span className="ui-select-count">
+                {opened} / {roster.length}
+            </span>
+        </h2>
+    );
     return (
         <div
             className={
@@ -1503,12 +1778,8 @@ export function AdventurerPanel({
                 }
             }}
         >
-            <h2 className="ui-select-heading">
-                {t("ui.character.heading")}
-                <span className="ui-select-count">
-                    {opened} / {roster.length}
-                </span>
-            </h2>
+            <PickerHeading heading={heading} onDone={onDone} />
+            <CardsOnlyTabs ui={ui} client={client} save={save} locked={tabLocked} />
             {fixed && (
                 <div className="ui-select-fixed-note">
                     <ItemIcon objId={getStartingWeaponIcon(getCharacter(fixed))} size={28} />
@@ -1542,6 +1813,9 @@ export function AdventurerPanel({
                                             `char.${character.id}.name`,
                                             character.name,
                                         );
+                                        // Cards only on, solo, without their starter cards: dimmed
+                                        // and marked, still picked to read why (AdventurerDetails)
+                                        const cardsLocked = cardLocked.has(character.id);
                                         return (
                                             <button
                                                 key={character.id}
@@ -1550,9 +1824,16 @@ export function AdventurerPanel({
                                                     (selected ? " ui-card-selected" : "") +
                                                     (unlocked.includes(character.id)
                                                         ? ""
-                                                        : " ui-card-locked")
+                                                        : " ui-card-locked") +
+                                                    (cardsLocked ? " ui-tile-cards-locked" : "")
                                                 }
-                                                aria-label={charName}
+                                                aria-label={
+                                                    cardsLocked
+                                                        ? t("ui.cards_only.tile_locked", {
+                                                              name: charName,
+                                                          })
+                                                        : charName
+                                                }
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
@@ -1574,6 +1855,12 @@ export function AdventurerPanel({
                                                         size={18}
                                                     />
                                                 </span>
+                                                {cardsLocked && (
+                                                    <span
+                                                        className="ui-tile-lock"
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -1582,7 +1869,7 @@ export function AdventurerPanel({
                     );
                 })}
             </div>
-            <PetRow ui={ui} client={client} />
+            <PetRow ui={ui} client={client} save={save} map={map} />
             {ACT_MAPS.some((m) => isMapUnlocked(ui.save, m.id)) && (
                 <RelicRow ui={ui} client={client} />
             )}
@@ -1591,19 +1878,59 @@ export function AdventurerPanel({
                 save={ui.save}
                 character={getCharacter(shown)}
                 onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
+                onCardNeeds={cardShort ? onCardNeeds && (() => onCardNeeds(shown)) : undefined}
             />
+        </div>
+    );
+}
+
+// A panel's heading, with a phone picker's Done beside it: a go button, so a controller's Start
+// presses it as it does Enter on the run setup
+export function PickerHeading({
+    heading,
+    onDone,
+}: {
+    heading: ReactNode;
+    onDone?: () => void;
+}): JSX.Element {
+    if (!onDone) {
+        return <>{heading}</>;
+    }
+    return (
+        <div className="ui-picker-head">
+            {heading}
+            <button className="ui-button ui-button-go ui-picker-done" onClick={onDone}>
+                {t("ui.select.done")}
+            </button>
         </div>
     );
 }
 
 // The pet to take along, from those found: none until one's been found. Most are looks only; a
 // fighting one (PetDef.power) says what it does
-function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
-    const found = getFoundPets(ui.save.trophies);
+function PetRow({
+    ui,
+    client,
+    save,
+    map,
+}: ScreenProps & {
+    // The save as the Cards only that applies sees it (a co-op room's), and the run's map
+    save: SaveData;
+    map: MapDef;
+}): JSX.Element | null {
+    // A Card collection only run: its own pick, of the pets whose card is owned
+    // (SaveData.cardsOnlyPet). Only when the run will be one (playsCardsOnly), as it takes that
+    // pet: in co-op, the room's (the loadout's pet goes by the same, GameClient.getLoadout).
+    const cardsOnly = playsCardsOnly(save, getMapCharacter(map) ?? ui.characterId, map);
+    const found = cardsOnly
+        ? PETS.filter((pet) => hasPetCard(ui.save, pet.id) || isPetFound(ui.save.trophies, pet.id))
+        : getFoundPets(ui.save.trophies);
     if (found.length === 0) {
         return null;
     }
-    const chosen = ui.save.pet;
+    const chosen = cardsOnly ? getCardsOnlyPet(ui.save) : ui.save.pet;
+    const pick = (petId: string | undefined) =>
+        cardsOnly ? client.selectCardsOnlyPet(petId) : client.selectPet(petId);
     const name = chosen
         ? tr(
               `trophy.${getPetTrophy(PET_BY_ID.get(chosen)!).id}.name`,
@@ -1614,7 +1941,8 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
-                {t("ui.pet.label")} <span className="ui-pet-name">{name}</span>
+                {cardsOnly ? t("ui.pet.label_cards_only") : t("ui.pet.label")}{" "}
+                <span className="ui-pet-name">{name}</span>
             </span>
             <div className="ui-pet-tiles">
                 <button
@@ -1622,7 +1950,7 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     aria-label={t("ui.pet.none_aria")}
                     aria-pressed={!chosen}
                     title={t("ui.pet.none_aria")}
-                    onClick={() => client.selectPet(undefined)}
+                    onClick={() => pick(undefined)}
                 >
                     <span className="ui-pet-none">{t("ui.common.none")}</span>
                 </button>
@@ -1630,18 +1958,34 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     const trophy = getPetTrophy(pet);
                     const selected = pet.id === chosen;
                     const shownTrophyName = trophyName(trophy);
+                    // In Card collection only: a pet with its card says so; one found without it
+                    // can't be taken, and says what it needs
+                    const carded = cardsOnly && hasPetCard(ui.save, pet.id);
+                    const needsCard = cardsOnly && !carded;
+                    const label = carded
+                        ? t("ui.pet.card", { name: shownTrophyName })
+                        : needsCard
+                          ? t("ui.pet.needs_card", { name: shownTrophyName })
+                          : shownTrophyName;
                     return (
                         <button
                             key={pet.id}
                             className={
-                                "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
+                                "ui-card ui-pet-tile" +
+                                (selected ? " ui-card-selected" : "") +
+                                (needsCard ? " ui-pet-needs-card" : "")
                             }
-                            aria-label={shownTrophyName}
+                            aria-label={label}
                             aria-pressed={selected}
-                            title={shownTrophyName}
-                            onClick={() => client.selectPet(pet.id)}
+                            aria-disabled={needsCard || undefined}
+                            title={label}
+                            // One without its card says no (its name says why)
+                            onClick={() => pick(pet.id)}
                         >
                             <ItemIcon objId={trophy.objId} size={26} />
+                            {carded && (
+                                <span className="ui-pet-card-mark">{t("ui.pet.card_mark")}</span>
+                            )}
                         </button>
                     );
                 })}
@@ -1681,10 +2025,13 @@ function AdventurerDetails({
     save,
     character,
     onFavourite,
+    onCardNeeds,
 }: {
     save: SaveData;
     character: CharacterDef;
     onFavourite?: () => void;
+    // Cards only, short of what they take: the card button to what's needed
+    onCardNeeds?: () => void;
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
@@ -1697,25 +2044,42 @@ function AdventurerDetails({
                     <div className="ui-card-title">{characterName(character)}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
-                {onFavourite && unlocked && (
-                    // The label says whether it's on, so no aria-pressed as well
-                    <button
-                        className={
-                            "ui-button ui-button-small ui-favourite" +
-                            (favourite ? " ui-favourite-on" : "")
-                        }
-                        title={
-                            favourite
-                                ? t("ui.character.favourite_remove")
-                                : t("ui.character.favourite_add")
-                        }
-                        onClick={onFavourite}
-                    >
-                        {favourite
-                            ? t("ui.character.favourite_on")
-                            : t("ui.character.favourite_off")}
-                    </button>
-                )}
+                <div className="ui-select-details-actions">
+                    {/* Cards only, short of what this adventurer takes: the Cards tile's icon */}
+                    {onCardNeeds && (
+                        <button
+                            className="ui-button ui-icon-button"
+                            aria-label={t("cards.needs.open_label")}
+                            title={t("cards.needs.open")}
+                            onClick={onCardNeeds}
+                        >
+                            <ItemIcon objId={CARDS_ICON_OBJ} size={28} />
+                        </button>
+                    )}
+                    {onFavourite && unlocked && (
+                        // A star, filled when it's the favourite: its label says which, so no
+                        // aria-pressed as well
+                        <button
+                            className={
+                                "ui-button ui-icon-button ui-favourite" +
+                                (favourite ? " ui-favourite-on" : "")
+                            }
+                            aria-label={
+                                favourite
+                                    ? t("ui.character.favourite_on")
+                                    : t("ui.character.favourite_off")
+                            }
+                            title={
+                                favourite
+                                    ? t("ui.character.favourite_on")
+                                    : t("ui.character.favourite_off")
+                            }
+                            onClick={onFavourite}
+                        >
+                            <FavouriteStar filled={favourite} />
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="ui-card-text">
                 <RichText text={characterDescription(character)} />
@@ -1744,6 +2108,89 @@ function AdventurerDetails({
                     {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
                 </div>
             )}
+        </div>
+    );
+}
+
+// A map won in a Card collection only run (SaveData.cardsOnlyWins): a little drawn card, the size
+// of the beaten tick beside it, saying so to a screen reader and on hover
+function CardsOnlyMark(): JSX.Element {
+    return (
+        <span
+            className="ui-cards-only-mark"
+            role="img"
+            aria-label={t("ui.map.beaten_cards_only_label")}
+            title={t("ui.map.beaten_cards_only")}
+        />
+    );
+}
+
+// The favourite's star, drawn: gold on a dark edge, filled when it's the favourite and only
+// outlined when not, so its shape says it as well as its colour
+function FavouriteStar({ filled }: { filled: boolean }): JSX.Element {
+    const star = "M12 2.6l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17.2l-5.8 3.2 1.3-6.5-4.8-4.5 6.5-.8z";
+    return (
+        <svg className="ui-favourite-star" viewBox="0 0 24 24" aria-hidden="true">
+            <path d={star} fill="none" stroke="#000" strokeWidth="4" strokeLinejoin="round" />
+            <path
+                d={star}
+                fill={filled ? "#ffc030" : "#2a2218"}
+                stroke="#ffc030"
+                strokeWidth="2"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
+// The adventurer panel's tabs (core/cardRuns.ts): the usual adventurers, or Cards only, where a
+// run's level ups, caskets and pet keep to the player's cards. What an adventurer's short of opens
+// from their details (AdventurerDetails' What's needed).
+function CardsOnlyTabs({
+    ui,
+    client,
+    save,
+    locked,
+}: ScreenProps & {
+    // The save as the tab that applies sees it (a co-op room's, AdventurerPanel)
+    save: SaveData;
+    // Why the tabs can't be changed here, shown under them: a co-op guest's (the host picks for
+    // the room), or the weekly Vault's room (never Cards only)
+    locked?: string;
+}): JSX.Element {
+    const on = save.cardsOnly === true;
+    const isLocked = locked !== undefined;
+    // Locked tabs show the room's choice: pressing them changes nothing
+    const pick = (cardsOnly: boolean) => {
+        if (!isLocked) {
+            client.setCardsOnly(cardsOnly);
+        }
+    };
+    return (
+        <div className="ui-cards-only-tabs">
+            <div className="ui-cards-tabs" role="group" aria-label={t("ui.cards_only.tabs")}>
+                <button
+                    className={"ui-cards-tab" + (on ? "" : " ui-cards-tab-selected")}
+                    aria-pressed={!on}
+                    disabled={isLocked && on}
+                    onClick={() => pick(false)}
+                >
+                    {t("ui.cards_only.tab_normal")}
+                </button>
+                <button
+                    className={"ui-cards-tab" + (on ? " ui-cards-tab-selected" : "")}
+                    aria-pressed={on}
+                    title={t("ui.cards_only.tooltip")}
+                    disabled={isLocked && !on}
+                    onClick={() => pick(true)}
+                >
+                    {t("ui.cards_only.name")}
+                </button>
+            </div>
+            {on && !isLocked && (
+                <span className="ui-cards-only-note">{t("ui.cards_only.on_note")}</span>
+            )}
+            {isLocked && <span className="ui-cards-only-note">{locked}</span>}
         </div>
     );
 }
@@ -1845,8 +2292,8 @@ function getMapTab(mapId: string): string {
 // like the adventurers'. Every tab's page is laid out at once, one over
 // another, so the list is the same height whichever's open, and the details
 // have a fixed place below it: what's pointed at only changes what they say,
-// never where a map is.
-function MapPanel({ ui, client }: ScreenProps): JSX.Element {
+// never where a map is. onDone: a phone's picker, as the adventurers'.
+function MapPanel({ ui, client, onDone }: ScreenProps & { onDone?: () => void }): JSX.Element {
     const save = ui.save;
     const [peek, setPeek] = useState<string>();
     const [open, setOpen] = useState(() => getMapTab(ui.mapId));
@@ -1890,6 +2337,8 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                         <ItemIcon objId={AWAKENERS_ORB_OBJ} size={14} />
                     </span>
                 )}
+                {/* Won in a Card collection only run: a little card beside the tick */}
+                {save.cardsOnlyWins?.includes(map.id) && <CardsOnlyMark />}
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -1918,12 +2367,17 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             }
             onMouseLeave={stopPeeking(setPeek)}
         >
-            <h2 className="ui-select-heading">
-                {t("ui.map.heading")}
-                <span className="ui-select-count">
-                    {t("ui.map.beaten_count", { beaten, total: CAMPAIGN_MAPS.length })}
-                </span>
-            </h2>
+            <PickerHeading
+                heading={
+                    <h2 className="ui-select-heading">
+                        {t("ui.map.heading")}
+                        <span className="ui-select-count">
+                            {t("ui.map.beaten_count", { beaten, total: CAMPAIGN_MAPS.length })}
+                        </span>
+                    </h2>
+                }
+                onDone={onDone}
+            />
             <div
                 className="ui-tabs ui-map-tabs"
                 role="tablist"
@@ -2083,6 +2537,7 @@ function ActPage({
                                     : t("ui.act.coming_soon", { boss: actSlotBoss(act, slot) })}
                             </span>
                         </span>
+                        {save.cardsOnlyWins?.includes(slot.mapId ?? "") && <CardsOnlyMark />}
                         {(save.hardVictories[slot.mapId ?? ""] ?? 0) > 0 ? (
                             <span
                                 className="ui-beaten ui-beaten-hard"
@@ -2384,6 +2839,78 @@ function InvocationBadge({ points }: { points: number }): JSX.Element | null {
     ) : null;
 }
 
+// The part of a fight in parts a run starts at: the one picked, if it's been reached
+function getPickedStage(save: SaveData, map: MapDef, picked: number | undefined): number {
+    return picked !== undefined && picked < getReachedStages(save, map.id)
+        ? picked
+        : getFightStage(save, map.id);
+}
+
+// A map's line under its name: how it's gone, or what it takes to open
+function getMapStatus(
+    save: SaveData,
+    map: MapDef,
+    picked: number | undefined,
+): { text: string; locked: boolean } {
+    const wins = save.mapVictories[map.id] ?? 0;
+    if (map.fun) {
+        return {
+            text: map.fun.character
+                ? t(map.fun.explore ? "ui.map.explore_char" : "ui.map.fun_char", {
+                      name: tr(
+                          `char.${map.fun.character}.name`,
+                          getCharacter(map.fun.character).name,
+                      ),
+                  })
+                : t("ui.map.fun_endless"),
+            locked: !isMapUnlocked(save, map.id),
+        };
+    }
+    if (!isMapUnlocked(save, map.id)) {
+        const reqId =
+            map.act?.requires ??
+            map.requires ??
+            map.fight?.requires ??
+            MAPS[MAPS.indexOf(map) - 1].id;
+        return {
+            text: t("ui.map.beat_to_unlock", { map: mapName(getMap(reqId)) }),
+            locked: true,
+        };
+    }
+    if (map.stages) {
+        const stage = getPickedStage(save, map, picked);
+        return {
+            text:
+                t("ui.map.stage_status", {
+                    part: stage + 1,
+                    total: map.stages.length,
+                    name: tl(map.stages[stage].name),
+                }) + (wins > 0 ? ` ${t("ui.map.stage_complete")}` : ""),
+            locked: false,
+        };
+    }
+    if (map.fight) {
+        const name = tr(`char.${map.fight.character}.name`, getCharacter(map.fight.character).name);
+        return {
+            text:
+                wins > 0
+                    ? t("ui.map.boss_fight_beaten", {
+                          name,
+                          times: tp("ui.map.beaten_times", wins),
+                      })
+                    : t("ui.map.boss_fight_char", { name }),
+            locked: false,
+        };
+    }
+    return {
+        text:
+            wins > 0
+                ? t("ui.map.beaten_status", { times: tp("ui.map.beaten_times", wins) })
+                : t("ui.map.not_beaten"),
+        locked: false,
+    };
+}
+
 function MapDetails({
     save,
     map,
@@ -2408,10 +2935,10 @@ function MapDetails({
     picked?: number;
     onPick?: (stage: number | undefined) => void;
 }): JSX.Element {
-    const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
     const reached = getReachedStages(save, map.id);
-    const stage = picked !== undefined && picked < reached ? picked : getFightStage(save, map.id);
+    const stage = getPickedStage(save, map, picked);
+    const status = getMapStatus(save, map, picked);
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
@@ -2427,52 +2954,12 @@ function MapDetails({
                 <ItemIcon objId={map.iconObjId} size={36} />
                 <div>
                     <div className="ui-card-title">{shownMapName}</div>
-                    <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
-                        {map.fun
-                            ? map.fun.character
-                                ? t(map.fun.explore ? "ui.map.explore_char" : "ui.map.fun_char", {
-                                      name: tr(
-                                          `char.${map.fun.character}.name`,
-                                          getCharacter(map.fun.character).name,
-                                      ),
-                                  })
-                                : t("ui.map.fun_endless")
-                            : !unlocked
-                              ? (() => {
-                                    const reqId =
-                                        map.act?.requires ??
-                                        map.requires ??
-                                        map.fight?.requires ??
-                                        MAPS[MAPS.indexOf(map) - 1].id;
-                                    return t("ui.map.beat_to_unlock", {
-                                        map: mapName(getMap(reqId)),
-                                    });
-                                })()
-                              : map.stages
-                                ? t("ui.map.stage_status", {
-                                      part: stage + 1,
-                                      total: map.stages.length,
-                                      name: tl(map.stages[stage].name),
-                                  }) + (wins > 0 ? ` ${t("ui.map.stage_complete")}` : "")
-                                : map.fight
-                                  ? (() => {
-                                        const charName = tr(
-                                            `char.${map.fight.character}.name`,
-                                            getCharacter(map.fight.character).name,
-                                        );
-                                        return wins > 0
-                                            ? t("ui.map.boss_fight_beaten", {
-                                                  name: charName,
-                                                  times: tp("ui.map.beaten_times", wins),
-                                              })
-                                            : t("ui.map.boss_fight_char", { name: charName });
-                                    })()
-                                  : wins > 0
-                                    ? t("ui.map.beaten_status", {
-                                          times: tp("ui.map.beaten_times", wins),
-                                      })
-                                    : t("ui.map.not_beaten")}
+                    <div className={status.locked ? "ui-card-cost" : "ui-card-style"}>
+                        {status.text}
                     </div>
+                    {save.cardsOnlyWins?.includes(map.id) && (
+                        <div className="ui-card-style">{t("ui.map.beaten_cards_only")}</div>
+                    )}
                     {map.stages && unlocked && onPick && reached > 1 && (
                         <div className="ui-row ui-fight-parts">
                             {map.stages.slice(0, reached).map((part, i) => (
@@ -2827,6 +3314,9 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
 
 function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
+    // Where the Collection log over the pause menu was left, so it opens there again: a co-op
+    // run's level up or casket takes the menu away a moment, the log with it
+    const logPlace = useRef<LogPlace | undefined>(undefined);
     return (
         <div className="ui-fill ui-run">
             <ChoiceCountdown client={client} />
@@ -2891,7 +3381,9 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.overlay === "event" && ui.event && (
                 <RunEventModal key={ui.event.uid} event={ui.event} client={client} />
             )}
-            {ui.overlay === "paused" && hud && <PauseModal ui={ui} hud={hud} client={client} />}
+            {ui.overlay === "paused" && hud && (
+                <PauseModal ui={ui} hud={hud} client={client} logPlace={logPlace} />
+            )}
             {ui.gauntlet?.run && hud && !ui.cinematic && ui.overlay === "none" && (
                 <GauntletBadge run={ui.gauntlet.run} />
             )}
@@ -4284,10 +4776,12 @@ function PauseModal({
     ui,
     hud,
     client,
+    logPlace,
 }: {
     ui: UiSnapshot;
     hud: HudView;
     client: GameClient;
+    logPlace: MutableRefObject<LogPlace | undefined>;
 }): JSX.Element {
     const overlayRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -4460,6 +4954,9 @@ function PauseModal({
                     >
                         {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
+                    <button className="ui-button" onClick={() => client.openRunLog()}>
+                        {t("collection.title")}
+                    </button>
                     <button
                         id="pause-tab-settings"
                         className="ui-button ui-pause-settings-button"
@@ -4474,6 +4971,10 @@ function PauseModal({
                     </button>
                 </div>
             </div>
+            {/* Over the menu, which is there again once it's closed */}
+            {ui.runLog && (
+                <CollectionLogScreen save={ui.save} client={client} inRun place={logPlace} />
+            )}
             {confirmDialog}
         </div>
     );

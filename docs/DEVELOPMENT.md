@@ -1563,6 +1563,197 @@ adventurer can have:
 - **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
   cache's variant marked as a follower, with its own idle and walk animations. The pet can be
   taken out once its trophy is found.
+- **The log's screen** (`ui/CollectionLogScreen.tsx`) is laid out as OSRS's: tabs, entries and
+  a page of items. `getLogEntries` (`content/collectionLog.ts`) builds it from the save as it is,
+  with nothing of its own saved. Each `REWARD_MAPS` map is an entry, filed by `getMapTab`: a raid
+  (`RAID_MAPS`; the Tombs have no `MapDef.raid`) under Raids, a seasonal map under Minigames, a
+  boss fight or an act's map under Bosses. Clues is the casket gear (`SaveData.foundGear`) by
+  rarity, and Other the evolutions, but for gear and evolutions brought in on a map that isn't
+  out (`isMapOut`). A tab with no entries isn't shown. Names and sentences come in the player's
+  language. An item's `key` is unique in the whole log, and the title's total counts every item:
+  two finds can share a name, as a casket's Justiciar faceguard isn't the Theatre's trophy. The
+  items scroll between the entry's head and the description of the one pointed at, so that's
+  always in view. Narrower than 600px, or on a phone held upright (the rotate notice's own
+  query), the entries are a dropdown, and the log is the one screen the rotate notice leaves
+  readable there (`GameUi.tsx`).
+- **The log in a run**: the pause menu's Collection log opens the same screen over it
+  (`CollectionLogScreen`'s `inRun`, the store's `runLog`, `GameClient.openRunLog`). It's only the
+  UI's: a solo run stays paused under it, and a co-op run goes on, as it does under co-op's menu,
+  except that the run's out of reach while the log hides it. The hero stands still (a zero move,
+  as while choosing a level up: `updateCoop`'s `deciding`), and Space and 1 to 4, which work
+  under co-op's menu, do nothing (`onKeyPress`'s `coopMenu`). Escape and P are the client's
+  pause keys there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's
+  back and Start (P, with no `.ui-button-go` in the log) do the same. The panel saying nothing's
+  being saved comes before either, as it does for `useMenuKeys`. Anything that leaves the menu
+  shuts the log with it (`leavePauseMenu`: resuming, giving up, a run starting or left), so the
+  next pause opens on the menu. A co-op level up or casket takes the menu away a moment, the log
+  with it, and the log opens again where it was left (`LogPlace`, kept by `RunScreen`). The log
+  is a `memo`, so the menu under it drawing again as a co-op run goes on doesn't redraw it.
+- **What the run's found**: marked New in the log in a run (`LogItem.thisRun`).
+  `GameClient.getRunLogSaves` gives the save and a copy with the run's result banked on it as it
+  stands, by the same `bankRun` that `finishRun` banks the run with, and `getRunLogEntries`
+  marks what only the copy has, shown as the run leaves it (an invader's first kill, counted).
+  Everything else is as it's saved, the entries' counts and tallies too. These finds count in
+  the title's total, as the run keeps them however it ends in the game (a death, a win, giving
+  up, a co-op disconnect), but closing the game mid-run records nothing, so they go with it.
+  It's worked out as the log opens: a co-op find made while it's open shows the next time.
+
+### Cards
+
+The title's Cards tile: an album and the Card shop. Cards do nothing in a run except in Card
+collection only runs. Packs are bought with platinum tokens (`SaveData.platinum`), a currency of
+their own that runs earn beside their coins; coins never buy packs, and no real money is ever
+involved.
+
+- **Platinum tokens** (`PLATINUM_PER_KILL`, `PLATINUM_PER_BOSS`, `PLATINUM_WIN` in
+  `content/cards.ts`): the sim adds them up as kills and bosses come (`Sim.platinum`), each at the
+  run's `coinScale` of the moment, so endless runs earn them at coins' reduced rate
+  (`ENDLESS_COINS`, less again in later rounds) and hard mode and invocations at coins' raised one.
+  A win adds its share at the end, and `RunResult.platinum` is the whole. In co-op it's the party's,
+  the same on every copy as coins are, and `recordRun` adds it to each player's own save. The icon
+  is the Platinum token item.
+
+- **Cards are made from content** (`ALL_CARDS` in `content/cards.ts`): one for each weapon, passive,
+  reward casket gear (`CASKET_GEAR`) and trophy, its picture that thing's item icon. Their ids
+  (`weapon:<id>`, `gear:<id>` and so on) are kept in the save, so the ids they're made from must
+  never be renamed, as they already mustn't be. A card from a map that isn't out (`isCardOut`) is
+  left out of packs and the album, but a save keeps it.
+- **Versions** (`cardVersions`): a card comes in each rarity from its own up to Very rare. A
+  weapon's, a passive's and gear's own rarity is the game's; a trophy's goes by how hard it is to
+  find (`trophyRarity`). `SaveData.cards` keeps the copies of each version: a card's own version
+  under its id, the rarer ones as `<id>@<rarity>` (`versionKey`, `parseVersionKey`). The rarity is
+  always written on the card, not only shown by its frame's colour.
+- **Packs** (`PACKS`, `core/cards.ts`): each has a pool (`holds`), a price and odds by version; a
+  kind of card each, the raids' finds, and any card but gear (two prices, two sets of odds): gear
+  comes only from its own pack.
+- **A player's pool** (`packPool`, `isCardUnlocked`): a pack only holds cards of what this player
+  has unlocked, by the game's own rules, worked out from the save as it's opened: a weapon, passive
+  or gear once its map task's done (`isAvailable` on `SaveData.unlockedItems`: the Keris partisan
+  after the Kalphite Queen, the Sun one only with its jewel), an evolution once what it evolves from
+  and the passive it takes are, a trophy once its map's open (`isMapUnlocked`). A pack with none
+  can't be bought (`cantBuyCardPack`'s `"locked"`). Each shop offer shows its description, its last
+  card's line where it has one (`lastCardRarities`) and what's collected of the unlocked cards and
+  of all, with no odds lines: those are in its Preview.
+- **Picking a card** (`packRoller`): first its version, rolled by the pack's odds (in a pack with
+  odds for three rarities or more, the last card never rolls the commonest, `lastCardRarities`,
+  which the shop says), so a pack's versions come out at its odds. Then a card of the pool that
+  comes in that version (its own rarity no rarer), by its weight: `CARD_ITEM_WEIGHTS` for its item's
+  rarity times `CARD_TIER_FACTORS` for its tier (`cardTier`: gear by how far up its Armoury line it
+  is, `getArmouryDepth`; weapons 3 for an evolution or a raid's or boss fight's, 2 for a boss
+  kill's, 1 for another map's, 0 from the start; passives 1 if a map brings them in;
+  `CARD_TOP_ITEMS` always 3), times a pack's `rarer` for Rare and Very rare. Where no card of the
+  pool comes in the version rolled (all its things rarer, as in the Raider's pack), it's the
+  commonest rarity that has some. Then whether it's a foil (see Foils). All these knobs are in
+  `content/cards.ts`. A bought pack opens at once.
+- **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the adventurer panel's Cards
+  only tab): level ups offer only weapons and passives with a card, no rarer than the rarest version
+  owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the weapon's, the
+  passive's and what it becomes (`cardsAllowEvolution`, which `canEvolve`, the level up's hint and
+  the HUD's evolution all go by); and a pick into another weapon (a godsword's hilt) only with its
+  card, while that leaves two picks. With fewer, every usual pick comes back (`hiltChoices`), on
+  purpose: a blade can't be held without a hilt, and a run shouldn't stall on one. A hilt taken
+  that way has no card to cap it, so it levels at any quality, as in a normal run, and never
+  evolves. A family shares its offer chance only among its members with a card (one godsword's
+  card alone is offered as often as any weapon of its rarity). Reward
+  caskets give only gear with a card (`rollCasketItem`'s `cards`): gear has one rarity, its card's
+  own, so no version lowers it, and a rarity rolled with no carded gear gives one of its utility
+  items (every rarity has some). So the best gear (`CARD_TOP_ITEMS`), the rarest pulls in a pack,
+  comes from a Cards only casket only after a long grind: that's the trade the mode makes, kept on
+  purpose, and the pack weights are where to change it. An item still has to be in the game as
+  usual (`isAvailable`). The
+  caps go into the run's setup (`SimOptions.cardCaps`, `HeroOptions.cardCaps`), so the run plays the
+  same on every copy and from the same seed.
+- **In co-op** the whole room is Cards only or none of it is: the host's tab decides
+  (`Loadout.cardsOnly`, `roomPlaysCardsOnly`), and a guest's tabs show it without changing it
+  (`GameClient.playsCardsOnlyHere`, `cardsSave`); never in the weekly Vault's room (`isVaultRoom`),
+  whose loadouts carry no caps, and where everyone's tabs are locked on Adventurers and say why
+  (`CardsOnlyTabs`' `locked`). Each player's
+  own caps come in their loadout (`Loadout.cardCaps`), as their unlocked items do: a character for
+  each card in `ALL_CARDS`' order (`encodeCardCaps`), which every copy shares as a room runs the
+  host's build, read back by `decodeCardCaps`, for their own level ups and caskets. Each loadout is
+  sent again when the host's tab or the host changes (`onRoomCardsOnlyChanged`), when a pack's
+  opened, and a player who can't play it is un-readied. Who can't play it as their adventurer can't
+  ready (`coopCardBlock`), and the lobby says why with what's needed; the host's Start wants
+  everyone's caps, and the run keeps anyone's only with the host's `cardsOnly` and caps
+  (`partyLoadouts`).
+- **A weapon's metals** (bronze to dragon) are its levels, not cards of their own, so its one card
+  covers them all: there's no rank to unlock.
+- **Pets**: a Card collection only run takes along `SaveData.cardsOnlyPet`, picked on the run
+  screen's pet row while the run will be one (`playsCardsOnly`), and only while its card's owned
+  (`getRunPet`, `hasPetCard`); never `SaveData.pet` in its place, which still needs the real find
+  for other runs. A card pet fights as the real one does. In co-op it's the loadout's `pet`, kept
+  only if the player's caps (which carry pets' cards) have its card (`cleanLoadout`).
+- **The tab** (the adventurer panel's Adventurers and Cards only, `CardsOnlyTabs`): picked on Cards
+  only, a run is Cards only or doesn't start (`isCardRunBlocked`): not without the adventurer's
+  starter cards (`getCardLock`, `isCardLocked`: their portrait is dimmed with a drawn padlock, its
+  label telling a screen reader it's locked for Cards only, and still pickable) or while the
+  collection can't fill a level up (`getCardRunShortfall`, where a weapon family's cards count once:
+  with one godsword held, no other's offered). Short either way, their details' head
+  has a small card button (the Cards tile's icon) beside the favourite's drawn star
+  (`FavouriteStar`), opening what's needed. The Vault and the Gauntlet never play it, nor does a map
+  whose level ups are blessings. Such a run counts as any other, and its results say it was one. A
+  map won in one is kept in `SaveData.cardsOnlyWins` (`recordRun`, from `RunSummary.cardsOnly`, each
+  co-op player's own): the map lists draw a little card beside its beaten tick (`CardsOnlyMark`),
+  and its details say "Beaten in Cards only".
+- **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*` (`ui-card` is
+  the level up's), with the preview's `ui-pack-preview*`, `ui-pack-rates*` and `ui-info*`. The album
+  has no side panel: a found card pressed opens big in a window of its own (`CardWindow`), with the
+  versions owned. A card's face is the card generator's printed frame (`ui/cards/card-front-*.webp`,
+  made from `src/media/run-escape-card-front-frame.png`, see `scripts/cards/`), with the name,
+  picture, type line, text and footer laid over it where the generator prints them, in
+  percentages of its plate, in the generator's font (RuneScape Plain 12, `OSRS Plain` in
+  `src/index.css`, loaded with the game's other fonts) and rarity inks (`CARD_INKS` in
+  `content/cards.ts`, which the generator prints with too). The name is a sheen of its rarity's
+  ink, so rarity shows at a glance as well as in its word; the sheen needs `color-mix()`, so it's
+  under `@supports`, and a browser without it draws the plain ink (a fallback declaration before
+  it wouldn't do: one with a `var()` is only found wanting once it's computed, leaving the name's
+  fill transparent). A name ending in brackets ("Sanguinesti staff (uncharged)") puts them on a
+  smaller line under it, the rest on one line a size smaller (`ui-tcg-name-main`). The picture is
+  the item drawn from its model at the card's size (`ItemIcon`'s `large`). A face-down card is a
+  picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape. A
+  pack opens on a playmat that fills the screen (`PackWindow`): its cards in a deck, each press
+  dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`); the
+  row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
+  the window), not below a size its words can be read at where the height allows, and overlaps the
+  cards where it's still too wide. The mat's slots, dealt cards and deck are a small card's size,
+  as `MAT_ROW_HEIGHT` is, so they change with `.ui-tcg-small`; its faces and backs use the large
+  pictures (`large` on `CardFace` and `CardBack`), as the mat draws them up to 2.4 times their
+  size. A dealt card pressed shows big in the same window.
+- **A pack's preview** (`ui/PackPreview.tsx`, `core/cardOdds.ts`): the shop's Preview lists every
+  card a pack can hold on tabs by rarity (and All, each with its count, the last one kept per pack
+  for the session), each card with its chance to be in one pack for this save, or Locked with
+  "Unlock in" and the map that unlocks it (`cardUnlockMap`). The info icon opens a small popover
+  (`InfoPopover`: on a press, or hover and focus with a mouse; shut by a press outside, the icon or
+  Escape, which `CardsScreen` handles first) with two tables, Item chance (the rarity of each card's
+  item) and Quality chance (its version), then the share of packs with a Very rare item, each card's
+  foil chance and two footnotes: how the figures are got (locked cards don't count) and an example
+  from the pack's own figures (`versionChanceFor`). The figures are `PREVIEW_PACKS` packs rolled as
+  a bought one is (`simulatePackOdds`), a chunk at a time so a phone doesn't stall, on a generator
+  seeded by the pack and pool, and kept till the pool changes; a test holds them to `exactPackOdds`.
+- **Foils** (`CARD_FOIL_CHANCE`, a pack's own `PackDef.foil`): each card from a pack can roll a foil
+  after its card and version, on the same numbers. A foil's a copy of its version, so it counts for
+  Cards only as any copy does, and `SaveData.cardFoils` keeps how many of those copies are foils, by
+  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: the card generator's gold
+  reflection, a band swept back and forth behind the item as the window's own background
+  (`ui-tcg-art-holo`), with the name in the foil's gold, both moving where the card's big, on the
+  mat or under a pointer, with twinkling sparkles where it's big or turned over on the mat but
+  never in the album's grid, and neither moving with `prefers-reduced-motion`; screen readers hear
+  "Foil". The album has a Foils tab and shows a card at its best foil when one's owned; a foil dealt
+  from a pack flashes once and chimes. The Collection log's Cards tab counts them.
+- **What Cards only needs** (`ui/CardNeeds.tsx`): the window the details' card button opens (and the
+  co-op lobby's What's needed, beside why a player can't ready) goes by `getCardRunNeeds`, as the
+  run's check does (`getCardRunShortfall`), so they agree; it lists only what's still missing, with
+  the Card shop on its pack (`GameClient.openCardShop`).
+- **The Collection log's Cards tab** (`getCardEntries` in `content/collectionLog.ts`): a set for
+  each kind of card, then the raids' finds, each card at its rarest version owned, its slot ringed
+  in that version's colour and the version said in words. Its entries count themselves: the log's
+  title total leaves the tab out (`getLogTotal`), so it's the game's own finds, and the cards' own
+  count (each card once) sits on the right of the title bar. A trophy first found in a Card
+  collection only run is listed in `SaveData.cardsOnlyFinds` (`recordRun`, from the run's
+  `RunSummary.cardsOnly` and its own `trophies`, each co-op player's own), and the log gives its
+  slot a little drawn card and its description "First found in a Cards only run".
+- **Loading** (`migrateCards`, from `migrateSave`): only versions of cards that exist, whole counts
+  capped at `MAX_CARD_COPIES` and `MAX_CARD_PACKS`.
 
 ### Thanksgiving's Avian Assaulter
 
@@ -1959,7 +2150,33 @@ the sim never sees it.
 - **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
   cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
   and beards' streaks, made in pink), recoloured by every choice, the first included: without
-  it they come out pink.
+  it they come out pink. Skin is 4550, but a few worn models paint some of theirs a shade off,
+  mostly where the item's other body has 4550, so it stayed the default skin whatever was
+  picked (Dragon plateskirt (cr)'s legs on body type A). `STRAY_SKIN` lists them by model id, with
+  their shade, and they're made 4550 as they load. It goes by model, not shade: 4544 is the
+  Zombie helmet's face on body type B but the Camel mask's fur. A newer cache can bring more:
+  compare each item's two models for faces that are 4550 on one body and as many of another
+  colour on the other, and look for shades a step or two off 4550, then try the suspects on in
+  green skin. Some are meant: the Odd spectacles' false nose, and fur, biscuit and wood.
+- **The Customisable max cape** (`content/maxCape.ts`) is a Max cape item with no recolour of
+  its own (13342) sold as a piece of its own, spliced into `COSMETICS` by hand. The cache's max
+  capes are all one model recoloured, so its parts (`CAPE_PARTS`) are that model's face colours,
+  grouped by where they are, and `CAPE_PRESETS` are the other max capes' colours for each part. `WardrobeLook.capeColours` (and a `SavedOutfit`'s) is a colour a part,
+  OSRS's 16-bit HSL; `getCapeRecolors` turns it into pairs of from and to, keeping each shade's
+  lightness apart from its part's main colour, and `applyCapeColours` puts them in
+  `PlayerAppearance.recolors` for the cape slot, only while it's the cape worn (gear can go over
+  it). `PlayerModelLoader` repaints that slot's worn model with them (`recolorAtOnce`: all at
+  once, so a colour painted can't be painted again by the next pair, and nudged off the body's
+  recolour sources, which the merged model is recoloured by after), and they're in the
+  appearance's key, so each set of colours is its own bake. The picker (`CapeColours` in
+  `ui/WardrobeScreen.tsx`) previews a slider at most every `PREVIEW_MS` and keeps the colours once
+  it's been still for `KEEP_MS`, or as it closes, since a drag would otherwise bake a model a
+  frame. It gives the client the colours alone (`GameClient.setCapeColours`,
+  `previewCapeColours`), which go on the look worn by then: the click that closes the picker can
+  have changed the outfit, and a whole look from before it would put the cape back on. Icons take
+  the same pairs (`ItemIcon`'s `recolors`, through `ItemIconLoader` to
+  `ObjModelLoader.getModel`, which keeps no model it repainted). `scripts/cache/check-items.ts`
+  checks the parts' colours are in the model and the presets are what the max capes recolour to.
 - **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
   so it needed no relay change; `beginCoopRun` cleans each hero's.
 - **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
@@ -1995,6 +2212,27 @@ by pulling a higher priority a little towards the camera, which only matters whe
 was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
 into the hair or the helm. Alpha has 7 bits to make room.
 
+That pull is too small for a decal that sits a unit or two behind its cloth, which painting by
+priority shows anyway: a skill cape's emblem, a chainbody's rings. So a worn item's model
+(`PlayerModelLoader.getWornModel`) goes through `liftDecals` as it loads. A face drawn over a
+lower-priority one but behind it, with no corner on a lower-priority face, comes out along its
+normal to a unit in front, up to 6 units. One hidden deeper (an eye set in a mask) keeps its
+corners still, as does any face the move would turn over, so the rest settles round them.
+NPCs' models don't go through it.
+
+A platebody pokes a few units through the cape over it, and the client paints the cape over it
+anyway. So a player is drawn in layers (`BakedSet.layered`, set on every player bake, and
+`LAYER_DEPTH` in `ActorRenderer`): each priority up to 7 is pulled 3 units nearer the camera, and 10
+and 11 (sleeves, hands, what's held) sit at 4, over the body and under a cape. The pull is in depth
+only, after projection: moving the vertex nearer moves it on screen too, and opens cracks between
+faces of different layers. It's only seen from behind (`seenFromBehind` in `actor.vert.glsl`, from
+the view matrix), and from the front or side a player draws as before. From the front, depth alone
+keeps the body over the cape's sides, which layers bring out down the torso, and over the cape the
+arms that the client draws over it (it puts 10 and 11 among the rest by depth, against each
+priority group's average). Doing that per vertex, by lines through the body or the cape, made new
+seams at the shoulders and collar. At most a face comes 21 units (0.16 tiles) nearer, which doesn't
+bring a player through a wall in front of them.
+
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
 play area once it's left it, so what's past the fade and further out than the camera can get is
@@ -2006,6 +2244,12 @@ square that's all outside. Collision doesn't come from these squares (it's `Regi
 so it isn't touched. If the camera's
 pitch or zoom changes, `CAMERA_REACH` has to follow it, or the hole where something was left out
 can show.
+
+Scenery can be left out by where it stands and its loc id (`SdMapLoaderInput.hiddenLocs`, set with
+`setHiddenLocs`). The title screen leaves out the bushes round the character in Lumbridge castle's
+courtyard (`TITLE_HIDDEN_LOCS` in `GameClient`), which hid the pet, and a run there has them back.
+Only the squares a change touches load again (`MapManager.reloadMap`), and each is drawn as it was
+until its new one's in, so nothing blinks out between the title and a run. Collision isn't touched.
 
 The game has no hover menus, multisampling or FXAA, so its frames are drawn straight to the canvas
 (`drawsToCanvas`), with no framebuffer of their own and no screen quad to copy them across. The
@@ -2277,6 +2521,10 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
 
 ### Scripts
 
+Run `bun run cards 2415 --preview` to render a cache item as a collectible card with a looping
+gold foil preview. The [card generator guide](../scripts/cards/README.md) covers the TypeScript
+API, matte and foil finishes, the vampire back and numbered decks.
+
 All run from the repository root with `bun run tsx`:
 
 ```
@@ -2352,7 +2600,12 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 ```
 
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
-request (without the game's cache, so `generator.test.ts` skips its long map check there).
+request (without the game's cache). `generator.test.ts`'s long map checks are opt-in:
+`bun run test:maps` (`MAP_CHECKS=1`, with the cache) runs them, and the release workflow runs them
+every time. They build the maps with ScapeRune, collision and how a map's scenery loads, so run
+them after a change to any of those (`src/game/scaperune/`, `scripts/scaperune/`, `core/world/`,
+`RegionDataLoader.ts`, `SceneBuilder.ts`, `LocOverrides.ts`), to a map, or to a newer cache. Asked
+for without the cache, they fail rather than pass with nothing checked.
 
 The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
 a whole checkout, and watching them all held up the first load after every start by tens of
@@ -2398,7 +2651,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    A type only written a new way doesn't count. Look up the ids that changed in the content; a map
    square that changed in an arena can move its collision. Then for the dev maps:
    `compare-caches.ts <old cache> caches/slim-dev/`.
-5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
+5. `bun run test` and `bun run test:maps` with the cache there (a plain `bun run test` leaves the
+   map checks out). `grid-hash.ts` pins what the ScapeRune maps write, and a map
    that copies the real world's squares can change with them: re-pin it on purpose.
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed
@@ -2886,6 +3140,17 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
   through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
   of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
+- A phone's run setup is laid out in React as well as CSS, as CSS alone left it five scrolling
+  boxes a row or two tall: `usePhoneLayout` (`ui/usePhoneLayout.ts`, the same query as
+  `Mobile.css`'s) makes `CharacterScreen` render `PhoneSetup` instead. It's a screen of what's
+  picked (the map's card, the switches, the adventurer under the hero) with each list over the
+  whole screen: `AdventurerPanel` and `MapPanel` with `onDone`, which adds Done, the first go
+  button so a controller's Start presses it. A phone has width and not height, so the pickers
+  put details beside the list, never under it. The co-op room (`CoopLobby`) does the same with
+  its own pieces: the party on the left, the map's card and your adventurer's on the right. Only
+  the host's map card opens a list, with the host's switches beside it, as only the host picks;
+  a guest's is only to see. The pane's 667x375 and 740x360 show it; past 768 wide the pane
+  doesn't emulate touch.
 - A tablet is `pointer: coarse` too, but taller than 520px, so it gets the desktop's layout with
   the touch controls over it. The HUD lets pointers through to the stick, so whatever a finger
   has to reach there takes them back (`pointer-events: auto`) in `Mobile.css`'s plain
@@ -2941,9 +3206,18 @@ of its own.
   real key or click tells it the player's off the pad.
 - **Menus** use the focus: the d-pad or stick moves it to the nearest button that way in the top
   `.ui-modal` (or the screen), and the bottom button clicks it. With nothing focused it sends Enter
-  and focuses the `.ui-button-go` or first button, so a press as a level up appears can't pick one. Start
-  clicks the `.ui-button-go` (Enter the map, Resume, a casket's best choice) wherever the focus is,
-  so starting a run doesn't mean walking the highlight across the screen.
+  and focuses the `.ui-button-go` or first button, so a press as a level up appears can't pick
+  one. The first button is the screen's own: the game's canvas behind it is no stop for the
+  highlight or for Tab (`RendererCanvas`'s `focusable={false}`, as the game reads its keys from the
+  window), though a click still focuses it. So keep a screen's way out (Back, an X) after what's on
+  it in the page, or the first press lands there and a second leaves: the Collection log's X comes
+  after its tabs, drawn on the title's row. Start clicks the `.ui-button-go` (Enter the map,
+  Resume, a casket's best choice) wherever the focus is, so starting a run doesn't mean walking
+  the highlight across the screen. A click can't open a dropdown (`<select>`), so left and right
+  step through its options while it's highlighted (the Collection log's entries on a narrow
+  screen), and up and down move on. Left and right move a highlighted slider
+  (`<input type="range">`, the max cape's colours) a 32nd of the way (`RANGE_PRESSES`), set
+  through `HTMLInputElement`'s own value setter so React's `onChange` hears it.
 - **Hints.** `ui/PadHint.tsx`'s `KeyHint` shows a key, or the pad's button while one's in use. The
   numbered choices have none (the d-pad picks them). `:root[data-input="pad"]` shows the highlight.
   The icons are Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) (CC0, its licence

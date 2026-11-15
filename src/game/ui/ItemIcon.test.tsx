@@ -63,9 +63,28 @@ describe("ItemIcon", () => {
         expect(request).not.toHaveBeenCalled();
         sprite = "";
         act(() => spriteLoaded!(""));
-        expect(request).toHaveBeenCalledWith(21034, 1, expect.any(Function));
+        // No recolours: it's drawn as the cache has it, at its own size
+        expect(request).toHaveBeenCalledWith(21034, 1, expect.any(Function), undefined, 1);
         act(() => itemLoaded!(scroll));
         expect(container.querySelector("img")).toHaveAttribute("src", scroll);
+    });
+
+    test("draws a large one from the model at its size, smooth", () => {
+        vi.spyOn(iconCache, "get").mockImplementation(() => undefined);
+        let loaded: ((url: string) => void) | undefined;
+        const request = vi
+            .spyOn(iconCache, "request")
+            .mockImplementation((_id, _count, callback) => {
+                loaded = callback;
+            });
+        const { container } = render(<ItemIcon objId={4587} size={96} large />);
+        // 96 pixels tall is three of the icon's 32
+        expect(request).toHaveBeenCalledWith(4587, 1, expect.any(Function), undefined, 3);
+        act(() => loaded!("data:image/png;base64,big"));
+        const image = container.querySelector("img");
+        expect(image).toHaveAttribute("height", "96");
+        expect(image).toHaveClass("ui-icon-smooth");
+        expect(IconCache.key(4587, 1, undefined, 3)).not.toBe(IconCache.key(4587, 1));
     });
 });
 

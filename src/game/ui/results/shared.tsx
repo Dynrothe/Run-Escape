@@ -17,6 +17,7 @@ import { fmtNum, list, t, tl, tp } from "../../i18n";
 import { Coins } from "../Coins";
 import { ItemIcon } from "../ItemIcon";
 import { KeyHint } from "../PadHint";
+import { Platinum } from "../Platinum";
 import { formatCompact } from "../formatCompact";
 
 export type ScreenProps = { ui: UiSnapshot; client: GameClient };
@@ -271,6 +272,13 @@ export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
             {result?.raidChest && <RaidChestView chest={result.raidChest} />}
             {result?.hard && result.victory && result.relics && (
                 <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
+            )}
+            {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
+            {/* What packs are bought with, apart from the coins (content/cards.ts) */}
+            {result !== undefined && (result.platinum ?? 0) > 0 && (
+                <p className="ui-unlocked">
+                    {t("ui.result.platinum")} <Platinum amount={result.platinum!} />
+                </p>
             )}
             {result?.firstHardWin && (
                 <p className="ui-unlocked">

@@ -413,6 +413,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
                     const set = bakeSet(state, frames, request.key, getModel, request.seqIds);
+                    set.layered = true;
                     const runPoses = request.runPoses;
                     // The groups the run keeps, without the order's end
                     // marker. With none, the swing would take the legs too,

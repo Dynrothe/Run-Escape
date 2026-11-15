@@ -5,7 +5,7 @@ import { StatKey, Stats } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { getWeapon, weaponName } from "../content/weapons";
 import type { Sim } from "../core/Sim";
-import { canEvolve } from "../core/Upgrades";
+import { CardCaps, canEvolve, cardsAllowEvolution } from "../core/Upgrades";
 import type { StatSource, WeaponState } from "../core/entities";
 import { t, tl } from "../i18n";
 import { getStatBreakdown } from "./BreakdownViews";
@@ -108,21 +108,26 @@ export function getStatRows(
 // Where a weapon stands, for the end of its tooltip: ready to evolve, able to once it has the
 // passive (and its last level), not known how to evolve yet (what it evolves into isn't unlocked),
 // at its best (it's at its last level and has nothing to evolve into; in an endless run it keeps
-// growing past it), or still to level up
+// growing past it), or still to level up. A Card collection only run without the cards for its
+// evolution treats it as having none.
 export function getWeaponForm(
     weapon: WeaponState,
     ownedPassives: ReadonlySet<string>,
     unlocked: ReadonlySet<string> | undefined,
     endless: boolean,
+    cards?: CardCaps,
 ): FormView {
     const evolution = weapon.def.evolution;
-    if (evolution) {
+    if (
+        evolution &&
+        cardsAllowEvolution(cards, weapon.def.id, evolution.requiresPassive, evolution.into)
+    ) {
         const into = getWeapon(evolution.into);
         if (!isAvailable(into, unlocked)) {
             return { kind: "unknown", text: t("pause.form.unknown") };
         }
         const name = tl(weaponName(into));
-        return canEvolve(weapon, ownedPassives, unlocked)
+        return canEvolve(weapon, ownedPassives, unlocked, cards)
             ? { kind: "ready", text: t("pause.form.ready", { into: name }) }
             : {
                   kind: "evolve",
@@ -143,10 +148,16 @@ export function getLevellingForm(level: number, maxLevel: number, endless: boole
 }
 
 // How far a weapon has got towards its evolution, for the HUD, the pause menu's Loadout and the
-// Combat tab's tooltips. Nothing when it has none, or the player doesn't know it yet.
+// Combat tab's tooltips. Nothing when it has none, the player doesn't know it yet, or a Card
+// collection only run hasn't the cards for it.
 export function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
     const evolution = weapon.def.evolution;
-    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+    if (
+        !evolution ||
+        !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
+        // A Card collection only run without the cards it takes: it won't come
+        !cardsAllowEvolution(sim.cardCaps, weapon.def.id, evolution.requiresPassive, evolution.into)
+    ) {
         return undefined;
     }
     const owned = new Set(sim.passives.map((p) => p.id));
@@ -161,7 +172,7 @@ export function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolu
         intoIconObjId: top.objId ?? into.iconObjId,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
+        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.cardCaps),
     };
 }
 
@@ -192,6 +203,7 @@ export function getWeaponAbout(sim: Sim, weaponId: string): DamageView["about"] 
             new Set(sim.passives.map((p) => p.id)),
             sim.unlockedItems,
             sim.endless,
+            sim.cardCaps,
         ),
         level: owned.level,
         maxLevel: def.levels.length,

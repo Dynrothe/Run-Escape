@@ -95,17 +95,27 @@ go stale. Add anything that cost you time to work out.
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
 | The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
+| The Customisable max cape: its parts and presets       | `content/maxCape.ts`, `PlayerAppearance.recolors`, `recolorAtOnce`     |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
+| The Collection log's tabs, entries and its screen      | `content/collectionLog.ts`, `ui/CollectionLogScreen.tsx`               |
+| Cards: the album, the Card shop, foils, platinum       | `content/cards.ts`, `core/cards.ts`, `ui/CardsScreen.tsx`, `Sim.ts`    |
+| A pack's Preview: its tabs, odds and info popover      | `ui/PackPreview.tsx`, `core/cardOdds.ts`                               |
+| Cards only: its runs, tab, pets and what it needs      | `core/cardRuns.ts`, `ui/CardNeeds.tsx`, `GameUi.tsx` (CardsOnlyTabs)   |
+| The card generator: PNG cards drawn from the cache     | `scripts/cards/` (its README), `renderItemModel` in `ItemIconLoader`   |
+| A cape's emblem and other decals behind their cloth    | `src/rs/model/player/liftDecals.ts`, `docs/DEVELOPMENT.md`             |
+| A player in layers: a cape over armour poking through  | `actor/actor.vert.glsl` (`seenFromBehind`), `docs/DEVELOPMENT.md`      |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
 | Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
+| Scenery left out of the title screen (its bushes)      | `GameClient.ts` (`TITLE_HIDDEN_LOCS`), `SdMapLoaderInput.hiddenLocs`   |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
 | Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
 | Touch screens: the stick, its buttons, phone layouts   | `docs/DEVELOPMENT.md`, Touch screens                                   |
+| A phone's run setup and co-op room: cards, whole lists | `GameUi.tsx` (`PhoneSetup`), `CoopScreen.tsx`, `ui/usePhoneLayout.ts`  |
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
@@ -176,6 +186,7 @@ bun run download-caches    # the game's cache, into caches/
 bun run start              # dev server on http://localhost:5173, with co-op's relay
 bun run start:singleplayer # the same without it (or MULTIPLAYER=off): no Multiplayer button
 bun run test               # vitest
+bun run test:maps          # ScapeRune's tests with its long map checks (needs the cache)
 bun run tsc --noEmit -p .  # type check
 bun run prettier --write <files>
 bun run build && bun run slim-cache    # build for hosting (only when deploying)
@@ -190,7 +201,9 @@ There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the
 
 ## After every change
 
-1. Run the tests and the type check, and format what you changed.
+1. Run the tests and the type check, and format what you changed. After a change to ScapeRune, a
+   map, collision, how a map's scenery loads or the cache, run `bun run test:maps` too (which
+   folders count is in `docs/PR-REVIEW.md`).
 2. **Run a simulation if the change can affect gameplay or balance** (see below).
 3. **If you added anything from the cache** (an item, enemy, map, animation or sprite), say so in the
    pull request. Leave `bun run slim-cache` for deployment, after every build. It takes time and
@@ -272,8 +285,8 @@ bun run tsx scripts/game/check-lairs.ts           # every lair's boss has room w
 the game's cache. The release workflow runs the tests with it, and a failure there stops the
 desktop build.
 
-- **It runs everything, on a busy machine.** It has the game's cache, so `generator.test.ts` runs
-  its long map check. A test that takes a few seconds on your machine can pass the 5 second limit
+- **It runs everything, on a busy machine.** It has the game's cache and sets `MAP_CHECKS=1`, so
+  `generator.test.ts` runs its long map checks too. A test that takes a few seconds on your machine can pass the 5 second limit
   there, so give a long one its own timeout.
 - **"Exit code 1" with no failed test named** means an error with no stack in our code, which
   vitest's annotations leave out. `Timeout calling "onTaskUpdate"` is one: a worker went a minute
@@ -340,6 +353,9 @@ desktop build.
   session open while you test.
 - The desktop app's browser pane can stop drawing while it's hidden, and the game then sits at
   "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
+- A screen gone black, its panels and the world with it, is an error thrown while React drew a
+  screen: nothing catches one, and the canvas is in the same tree, so React takes it all down. The
+  console has the error; a player's report needs it, as their save is usually what throws.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
 - A player kept invulnerable from the console (`player.invulnerable` over 30) blinks white every 5

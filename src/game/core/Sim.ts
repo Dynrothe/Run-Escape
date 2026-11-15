@@ -9,6 +9,7 @@ import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { WEAPON_DAMAGE_BALANCE, WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
+import { PLATINUM_PER_BOSS, PLATINUM_PER_KILL, PLATINUM_WIN } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import {
     EXTRA_REVIVE_PRICE,
@@ -280,6 +281,7 @@ import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMo
 import { Rng, hashChance } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
+    CardCaps,
     MAX_PASSIVES,
     MAX_WEAPONS,
     UpgradeChoice,
@@ -854,6 +856,9 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
+    // A Card collection only run (core/cardRuns.ts): the hero's cards, which level ups keep to
+    // (Upgrades.CardCaps). Unset in any other run.
+    cardCaps?: CardCaps;
     // The raid chests' trophies already in their Collection log (isRaidChestTrophy): they're
     // unlocks, so a chest only gives ones they haven't got
     trophiesFound?: ReadonlySet<string>;
@@ -979,6 +984,8 @@ export type RunResult = {
     level: number;
     kills: number;
     coins: number;
+    // Platinum tokens earned (content/cards.ts): kills, bosses and the win, scaled as coins are
+    platinum?: number;
     // Enemy ids of the bosses killed, in order
     bossesKilled: string[];
     // The gear that came out of caskets (as found, before the Armoury's
@@ -1092,6 +1099,8 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
+    // A Card collection only run's cards, their own (SimOptions.cardCaps)
+    cardCaps: CardCaps | undefined;
     // The raid chests' trophies they'd found before the run, only those (SimOptions.trophiesFound)
     trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
@@ -1314,6 +1323,8 @@ export type HeroOptions = {
     characterId: string;
     metaStats: Stats;
     unlockedItems?: ReadonlySet<string>;
+    // A Card collection only run's cards, each player's own (SimOptions.cardCaps)
+    cardCaps?: CardCaps;
     trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
     // The pet taken along (SaveData.pet): only a fighting one (PetDef.power) does anything here
@@ -1947,6 +1958,9 @@ export class Sim {
     // When the next turkey can drop
     private nextTurkeyTick = 0;
     coins = 0;
+    // Platinum tokens so far (content/cards.ts), unrounded: each kill's and boss's, at the coin scale
+    // of the moment, so endless rounds give less as they do coins
+    platinum = 0;
     // Party income before purchases or theft. Returning stolen coins isn't new income.
     coinsGained = 0;
     // Co-op: the run ended because its last hero standing left rather than fell. A party that
@@ -2127,6 +2141,10 @@ export class Sim {
     }
     get unlockedItems(): ReadonlySet<string> | undefined {
         return this.hero.unlockedItems;
+    }
+    // A Card collection only run's cards (SimOptions.cardCaps): undefined in any other run
+    get cardCaps(): CardCaps | undefined {
+        return this.hero.cardCaps;
     }
     private get armoury(): ArmouryUpgrades | undefined {
         return this.hero.armoury;
@@ -2475,6 +2493,7 @@ export class Sim {
                 characterId: options.characterId,
                 metaStats: options.metaStats,
                 unlockedItems: options.unlockedItems,
+                cardCaps: options.cardCaps,
                 trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
                 pet: options.pet,
@@ -2573,6 +2592,7 @@ export class Sim {
             characterId: options.characterId,
             metaStats: options.metaStats,
             unlockedItems: options.unlockedItems,
+            cardCaps: options.cardCaps,
             trophiesFound: options.trophiesFound,
             armoury: options.armoury,
             ...fightingPet(options.pet),
@@ -3027,6 +3047,12 @@ export class Sim {
             level: this.level,
             kills: this.kills,
             coins: this.coins,
+            // (a little over, so hundredths summed as floats don't fall a token short)
+            platinum: Math.floor(
+                this.platinum +
+                    (this.state === "victory" ? PLATINUM_WIN * this.coinScale : 0) +
+                    1e-6,
+            ),
             bossesKilled: [...this.bossesKilled],
             gearFound: [...this.gearFound],
             evolutionsMade: [...this.evolutionsMade],
@@ -3288,7 +3314,7 @@ export class Sim {
             choice?.kind === "weaponLevel"
                 ? this.weapons.find((w) => w.def.id === choice.weaponId)
                 : undefined;
-        const hilts = weapon ? hiltChoices(weapon, this.unlockedItems) : [];
+        const hilts = weapon ? hiltChoices(weapon, this.unlockedItems, this.hero.cardCaps) : [];
         if (hilts.length > 0) {
             this.choices = hilts;
             return;
@@ -3396,6 +3422,7 @@ export class Sim {
             this.maxWeapons,
             this.maxPassives,
             this.hero.banished,
+            this.hero.cardCaps,
         );
         // Filtered after the roll, so the run's RNG goes as it did
         return this.map.noLevelUpCoins ? choices.filter((c) => c.kind !== "coins") : choices;
@@ -3872,6 +3899,18 @@ export class Sim {
             (1 + Math.min(COIN_BONUS_CAP, bonus))
         );
     }
+
+    // coinScale, worked out once a tick: a crowd's kills each want it, and with invocations it
+    // builds their list
+    private tickCoinScale(): number {
+        if (this.coinScaleTick !== this.tick) {
+            this.coinScaleTick = this.tick;
+            this.coinScaleAt = this.coinScale;
+        }
+        return this.coinScaleAt;
+    }
+    private coinScaleTick = -1;
+    private coinScaleAt = 1;
 
     // Coins for high alching an item, as the run pays them
     alchValue(itemId: string, upgrades = 0): number {
@@ -15231,9 +15270,13 @@ export class Sim {
             }
             return out;
         },
-        spawnRuleEnemy: (enemyId, x, y, elite) =>
-            sim.spawnEnemy(getEnemy(enemyId), elite ? "elite" : "normal", sim.walkableSpot(x, y))
-                ?.uid,
+        // Where it fits, by its own size: a tentacle or a root heart is wider than a player, and
+        // risen half in a wall it never comes out (it doesn't move)
+        spawnRuleEnemy: (enemyId, x, y, elite) => {
+            const def = getEnemy(enemyId);
+            const at = sim.walkableSpot(x, y, Math.max(def.radius, PLAYER_RADIUS));
+            return sim.spawnEnemy(def, elite ? "elite" : "normal", at)?.uid;
+        },
         isEnemyAlive: (uid) => sim.enemies.some((enemy) => enemy.uid === uid && !enemy.dead),
         upHeroes: () => {
             const out: number[] = [];
@@ -20404,6 +20447,7 @@ export class Sim {
         // One brought back by a reviver was counted the first time it died
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
+            this.platinum += PLATINUM_PER_KILL * this.tickCoinScale();
             this.countTraitKill();
             this.countRelicKill();
             if (lastCopy) {
@@ -20417,6 +20461,7 @@ export class Sim {
         if (enemy.boss) {
             if (lastCopy) {
                 this.bossesKilled.push(enemy.def.id);
+                this.platinum += PLATINUM_PER_BOSS * this.tickCoinScale();
                 this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
                 if (INVADER_BY_ID.has(enemy.def.id) && !byEnemy) {
                     this.invaderDown(enemy);
@@ -23831,9 +23876,10 @@ export class Sim {
 
     // Where to put something that needs walking over: what dropped it can be
     // somewhere the player can't get to (a portal stands on solid tiles, ghosts
-    // go through walls), and its drop can land past a wall
-    private walkableSpot(x: number, y: number): Vec2 {
-        return findFreeSpot(this.grid, x, y, PLAYER_RADIUS, (tileX, tileY) =>
+    // go through walls), and its drop can land past a wall. radius: how wide it is
+    // (a player's, unless it's bigger)
+    private walkableSpot(x: number, y: number, radius = PLAYER_RADIUS): Vec2 {
+        return findFreeSpot(this.grid, x, y, radius, (tileX, tileY) =>
             this.isWalkableTile(tileX, tileY),
         );
     }
@@ -24731,7 +24777,8 @@ export class Sim {
                         w.def.id === weapon.id ||
                         (weapon.family !== undefined && w.def.family === weapon.family),
                 ) &&
-                isAvailable(weapon, this.unlockedItems),
+                isAvailable(weapon, this.unlockedItems) &&
+                (!this.hero.cardCaps || this.hero.cardCaps.has(`weapon:${weapon.id}`)),
         );
         if (options.length > 0 && this.weapons.length < this.maxWeapons) {
             this.addWeapon(options[this.rng.int(options.length)].id);
@@ -25385,6 +25432,7 @@ export class Sim {
             this.declinedSets,
             this.heroes.length > 1,
             { items: this.hero.banishedItems, sets: this.hero.banishedSets },
+            this.hero.cardCaps,
         );
         if (getItem(found).kind !== "gear") {
             return { itemId: found };

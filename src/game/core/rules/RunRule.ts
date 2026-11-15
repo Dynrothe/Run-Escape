@@ -18,8 +18,8 @@ export interface RuleHost {
     readonly mapSeconds: number;
     // Where the heroes who are up are, x then y
     heroPositions(): number[];
-    // An enemy of the rule's own brought in at a spot (a root heart; elite, as an elite, casket and
-    // all): its uid, or undefined when it can't be
+    // An enemy of the rule's own brought in at a spot, or the nearest one it fits in by its size
+    // (a root heart; elite, as an elite, casket and all): its uid, or undefined when it can't be
     spawnRuleEnemy(enemyId: string, x: number, y: number, elite?: boolean): number | undefined;
     isEnemyAlive(uid: number): boolean;
     // The heroes who are up: index, x, y, and the next's

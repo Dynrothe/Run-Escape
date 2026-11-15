@@ -14,8 +14,8 @@ the version in the corner).
 ### Changed
 
 - The pause menu is in tabs: Loadout, Combat, Quests and Party, with Settings as a button at the
-  bottom beside Give up and Resume. Every tab is the same size, and Give up, Settings and Resume
-  stay in view.
+  bottom beside Give up, the Collection log and Resume. Every tab is the same size, and those
+  buttons stay in view (in two rows on a phone).
 - The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
   ends with the run's recent messages.
 - The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
@@ -84,6 +84,74 @@ the version in the corner).
   the rarity it was taken at. Anything that heals on a hit says how often, how much and when.
 - The runes that circle you show all of them in the weapon's icon, as many as are circling.
 - The classic results are in two tabs, Summary and Combat.
+
+## 0.33.1 - 2026-11-15
+
+### Fixed
+
+- The Wardrobe no longer turns the whole game black when the Customisable max cape's hue is at
+  the far end with full saturation.
+
+## 0.33.0 - 2026-11-15
+
+### Added
+
+- The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
+  anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
+  co-op it opens from the party's menu, and the run goes on while your hero stands still.
+- A Customisable max cape in the Wardrobe's store, for 25,000 coins: pick the colour of each of
+  its parts in the Outfit tab, or start from any other max cape's colours. Saved outfits keep
+  them.
+- With a controller, left and right move a highlighted slider.
+- Cards, by Okaeri, with trippy22's card frame: a collectible card for every weapon, passive,
+  casket gear and Collection log trophy, each in versions from its own rarity up to Very rare, and
+  rare foil copies, with a Cards tab in the Collection log. Runs earn platinum tokens (fewer in
+  endless runs), which buy packs in the Card shop (the first one's free); packs hold only what
+  you've unlocked, and each pack's Preview shows your chance of every card in it. Packs open on a
+  playmat, a card at a time. The Cards only tab makes runs offer only what you have cards of, no
+  rarer than your best version, with a pet whose card you have (in co-op, the host's choice for the
+  whole room); the Collection log marks trophies first found in such a run, and the map list marks
+  maps won in one.
+
+### Fixed
+
+- On the title screen, your pet stands closer beside your adventurer, and the courtyard's bushes
+  are gone, so they no longer hide it. A run in Lumbridge keeps them.
+- The skin you pick in the Wardrobe now shows on the Dragon plateskirt (cr)'s legs, the Group
+  ironman bracers' hands, the Zombie helmet's face and the few other pieces that kept the
+  default skin.
+- Escape and P no longer pause or resume a run behind the panel saying the game isn't saving.
+
+## 0.32.2 - 2026-11-14
+
+### Changed
+
+- On a phone, setting up a run starts from a screen of what's picked, with your adventurer
+  standing in view: tap the map or the adventurer to choose from the whole list, with the details
+  beside it.
+- On a phone, the co-op room shows the party beside the map and your adventurer: tap either to
+  choose from the whole list.
+- The Collection log, by Okaeri: it looks like the one in OSRS now, with its total in the title,
+  Bosses, Raids, Clues, Minigames and Other tabs, each entry's items in a grid (faded until you
+  have them, names green once an entry is complete) and its wins. Clues lists the gear reward
+  caskets hold, and it can be read on a phone held upright.
+
+### Fixed
+
+- With a controller, the first press on a menu now highlights its first button instead of
+  nothing you could see, and the keyboard's Tab goes there first too.
+
+## 0.32.1 - 2026-11-14
+
+### Fixed
+
+- A gas vent's cloud, the Duke's gas included, now grows for as long as it hurts, instead of
+  shrinking back partway and vanishing mid-puff.
+- Emblems and patterns on clothing show again where they were hidden in their cloth: the
+  skill capes' emblems on their backs, chainbodies' rings and more.
+- Armour no longer pokes through a cape on a player's back.
+- Tentacles in the Shadow Realm and root hearts in the Stranglewood no longer come up half inside
+  a wall.
 
 ## 0.32.0 - 2026-11-14
 

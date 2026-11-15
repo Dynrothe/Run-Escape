@@ -1,5 +1,6 @@
 export function buildPalette(brightness: number, var2: number, var3: number): Int32Array {
-    const palette = new Int32Array(0xffff);
+    // A colour for every 16-bit HSL, 0xffff too (the last hue at full saturation and lightness)
+    const palette = new Int32Array(0x10000);
 
     let paletteIndex = var2 * 128;
 

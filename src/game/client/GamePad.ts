@@ -264,6 +264,38 @@ function focusables(root: ParentNode): HTMLElement[] {
     });
 }
 
+// The option before or after the chosen one, stopping at the ends, told as a change the way a
+// player's pick is (React's onChange listens for it)
+function stepSelect(select: HTMLSelectElement, by: number): void {
+    const index = Math.min(Math.max(select.selectedIndex + by, 0), select.options.length - 1);
+    if (index !== select.selectedIndex) {
+        select.selectedIndex = index;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+}
+
+// How many presses take a slider from one end to the other
+const RANGE_PRESSES = 32;
+
+// A slider moved a press's worth towards one end (at least a step), told as a change the way a
+// drag is. The value goes in through the element's own setter, round React's tracking of it, or
+// React would see nothing new and skip its onChange.
+function stepRange(input: HTMLInputElement, by: number): void {
+    const min = Number(input.min || 0);
+    const max = Number(input.max || 100);
+    const step = Number(input.step) || 1;
+    const steps = Math.max(1, Math.round((max - min) / RANGE_PRESSES / step));
+    const value = Math.min(max, Math.max(min, Number(input.value) + by * steps * step));
+    if (value !== Number(input.value)) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+            input,
+            String(value),
+        );
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+}
+
 function focusOn(el: HTMLElement): void {
     el.focus({ preventScroll: true });
     // Optional in jsdom
@@ -505,6 +537,24 @@ export class GamePads {
         const at = focused instanceof HTMLElement ? items.indexOf(focused) : -1;
         if (at < 0) {
             focusOn(items.find((el) => el.classList.contains("ui-button-go")) ?? items[0]);
+            return;
+        }
+        // A dropdown can't be opened from a pad (a click doesn't), so left and right step
+        // through its options, and up and down move on as from a button
+        if (
+            focused instanceof HTMLSelectElement &&
+            (direction === "left" || direction === "right")
+        ) {
+            stepSelect(focused, direction === "left" ? -1 : 1);
+            return;
+        }
+        // And a slider: left and right move it (the Wardrobe's colours, the volume)
+        if (
+            focused instanceof HTMLInputElement &&
+            focused.type === "range" &&
+            (direction === "left" || direction === "right")
+        ) {
+            stepRange(focused, direction === "left" ? -1 : 1);
             return;
         }
         const rects = items.map((el) => el.getBoundingClientRect());

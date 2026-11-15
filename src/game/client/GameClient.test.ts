@@ -5,8 +5,11 @@ import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
+import { Rarity } from "../content/rarity";
+import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { encodeCardCaps } from "../core/cardRuns";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -36,6 +39,7 @@ import {
     getPhaseBarFraction,
     getShownHp,
     loadoutStats,
+    partyLoadouts,
 } from "./GameClient";
 import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
@@ -109,7 +113,7 @@ describe("the sound's on and off", () => {
                     Object.assign(settings, changes),
             },
         });
-        // As M or the orb do (onKeyPress is the constructor's)
+        // As M or the orb do
         const pressM = () => client.toggleMute(true);
         const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
         return { client, store, pressM, toasts };
@@ -1206,6 +1210,46 @@ describe("a co-op run that breaks", () => {
             ).updateCoop(ms, sim, fake);
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
+
+    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+        const setMove = vi.fn();
+        const { client, store, update } = coopClient({ setMove });
+        Object.assign(client, {
+            input: {
+                getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
+            },
+        });
+        client.pause();
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(1, 0);
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(0, 0);
+    });
+
+    it("uses items and the hero's button under co-op's menu, not under the Collection log over it", () => {
+        const { client } = coopClient({});
+        const useItem = vi.fn();
+        const useAbility = vi.fn();
+        Object.assign(client, { useItem, useAbility });
+        const press = (code: string) =>
+            (client as unknown as { onKeyPress(code: string): void }).onKeyPress(code);
+        client.pause();
+        press("Space");
+        press("Digit1");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledWith(0);
+        client.openRunLog();
+        press("Space");
+        press("Digit2");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledOnce();
+        // Back on the menu, in reach again
+        press("Escape");
+        press("Digit3");
+        expect(useItem).toHaveBeenLastCalledWith(2);
+    });
 
     it("sends the host's frames even when something after a step throws", () => {
         const { client, flush, stepFrame, update } = coopClient({});
@@ -2674,5 +2718,138 @@ describe("boss attacks' instructions", () => {
         } finally {
             c.restore();
         }
+    });
+});
+
+describe("the Collection log over the pause menu", () => {
+    test("opens only on the pause menu, and Escape or P goes back to the menu before resuming", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        const snapshot = () => store.getSnapshot();
+        client.openRunLog();
+        expect(snapshot().runLog).toBeFalsy();
+        press("Escape");
+        expect(snapshot().overlay).toBe("paused");
+        for (const code of ["Escape", "KeyP"]) {
+            client.openRunLog();
+            expect(snapshot().runLog).toBe(true);
+            press(code);
+            expect(snapshot().runLog).toBe(false);
+            expect(snapshot().overlay).toBe("paused");
+        }
+        press("Escape");
+        expect(snapshot().overlay).toBe("none");
+    });
+
+    test("shuts with the menu however the run leaves it, so the next pause opens on the menu", () => {
+        const { client, store } = createClient(createSim(), false);
+        Object.assign(client, { updateHud() {} });
+        client.pause();
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        // As starting a run and leaving one do (leavePauseMenu)
+        client.quitRun();
+        expect(store.getSnapshot().runLog).toBe(false);
+    });
+
+    test("leaves Escape and P to the panel saying nothing's being saved, over the menu or the log", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        client.pause();
+        client.openRunLog();
+        store.set({ saveBlock: { kind: "otherTab" } });
+        for (const code of ["Escape", "KeyP"]) {
+            press(code);
+            expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: true });
+        }
+        // Played on without saving: the keys are the log's and the menu's again
+        store.set({ saveBlockClosed: true });
+        press("Escape");
+        expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: false });
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("shows the run's finds from a copy of the save, saving nothing", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const trophy = TROPHIES[0];
+        sim.trophies.add(trophy.id);
+        const save = structuredClone(client.save);
+        const result = sim.getResult();
+        const { saved, withRun } = client.getRunLogSaves();
+        expect(saved).toEqual(save);
+        expect(withRun?.trophies).toEqual([trophy.id]);
+        expect(client.save).toEqual(save);
+        expect(sim.getResult()).toEqual(result);
+        // Once it's recorded, the save has them
+        Object.assign(client, { runRecorded: true });
+        expect(client.getRunLogSaves().withRun).toBeUndefined();
+    });
+
+    test("finds nothing the run wouldn't bank: a result with a number that isn't", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        sim.trophies.add(TROPHIES[0].id);
+        Object.assign(sim, { coins: NaN });
+        expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
+    });
+});
+
+describe("a co-op room's Cards only", () => {
+    const caps = encodeCardCaps(new Map<string, Rarity>([["weapon:scimitar", "common"]]));
+    const loadout = (cardCaps?: string) => ({
+        metaStats: {},
+        unlockedItems: [],
+        armoury: {},
+        ...(cardCaps !== undefined && { cardCaps }),
+    });
+    it("keeps everyone's cards when the host plays it", () => {
+        const heroes = [
+            { id: "host", loadout: { ...loadout(caps), cardsOnly: true as const } },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "host").map((l) => l?.cardCaps)).toEqual([caps, caps]);
+    });
+    it("drops a guest's cards when the host doesn't: no one plays it alone", () => {
+        const heroes = [
+            { id: "host", loadout: loadout() },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        const party = partyLoadouts(heroes, "host");
+        expect(party.map((l) => l?.cardCaps)).toEqual([undefined, undefined]);
+        expect(cleanLoadout(party[1]).cardCaps).toBeUndefined();
+    });
+    it("drops a new host's cards from before, when their own tab isn't on", () => {
+        // A guest who became host keeps the caps they sent as a guest, but the room's off
+        const heroes = [
+            { id: "newHost", loadout: loadout(caps) },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "newHost").map((l) => l?.cardCaps)).toEqual([
+            undefined,
+            undefined,
+        ]);
+    });
+});
+
+describe("a co-op player's Card collection only pet", () => {
+    const butch = "butch";
+    it("keeps a co-op player's pet to one whose card they've sent, in a Cards only run", () => {
+        const caps = new Map<string, Rarity>([["weapon:scimitar", "common"]]);
+        const withCard = new Map(caps).set(`trophy:${butch}`, "veryRare");
+        const loadout = (cardCaps?: string) => ({
+            metaStats: {},
+            unlockedItems: [],
+            armoury: {},
+            pet: butch,
+            ...(cardCaps !== undefined && { cardCaps }),
+        });
+        expect(cleanLoadout(loadout(encodeCardCaps(withCard))).pet).toBe(butch);
+        expect(cleanLoadout(loadout(encodeCardCaps(caps))).pet).toBeUndefined();
+        // Not playing Cards only: their found pet, as before
+        expect(cleanLoadout(loadout()).pet).toBe(butch);
     });
 });
