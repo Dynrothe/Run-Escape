@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { CombatReason, describeCombatReason } from "../content/combatTasks";
 import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
 import { CombatTracker } from "./CombatTracker";
@@ -436,21 +437,26 @@ describe("the rest", () => {
     });
 });
 
-describe("where each task's got, for the HUD and pause menu", () => {
-    const status = (tracker: CombatTracker, sim: Sim, id: string) =>
-        tracker.statuses(sim).find((s) => s.task.id === id)!;
+const status = (tracker: CombatTracker, sim: Sim, id: string) =>
+    tracker.statuses(sim).find((s) => s.task.id === id)!;
+// A status with its reason as the player reads it
+const said = <T extends { reason?: CombatReason }>(s: T) => ({
+    ...s,
+    reason: s.reason && describeCombatReason(s.reason),
+});
 
+describe("where each task's got, for the HUD and pause menu", () => {
     test("a hit spoils Bite-Proof by name, once: it's failed, and said so once", () => {
         const sim = createSim("lumbridge");
         const tracker = track(sim);
         expect(status(tracker, sim, "bite_proof").state).toBe("on");
         tracker.observe(sim, [spawned("count_draynor")]);
         tracker.observe(sim, [hit("count_draynor")]);
-        expect(status(tracker, sim, "bite_proof")).toMatchObject({
+        expect(said(status(tracker, sim, "bite_proof"))).toMatchObject({
             state: "failed",
             reason: "hit by Count Draynor",
         });
-        expect(tracker.takeFailed()).toEqual([
+        expect(tracker.takeFailed().map(said)).toEqual([
             { task: expect.objectContaining({ id: "bite_proof" }), reason: "hit by Count Draynor" },
         ]);
         tracker.observe(sim, [hit("count_draynor")]);
@@ -463,7 +469,7 @@ describe("where each task's got, for the HUD and pause menu", () => {
         tracker.observe(sim, [spawned("justiciar_zachariah")]);
         sim.heroes[0].damageByAttack["Lunges"] = 4;
         tracker.observe(sim, [hit("justiciar_zachariah", "Lunges")]);
-        expect(status(tracker, sim, "objection")).toMatchObject({
+        expect(said(status(tracker, sim, "objection"))).toMatchObject({
             state: "failed",
             reason: "hit by Lunges",
         });
@@ -489,11 +495,11 @@ describe("where each task's got, for the HUD and pause menu", () => {
         sim.heroes[0].weapons.push({ ...sim.heroes[0].weapons[0] });
         sim.heroes[0].skips = 1;
         tracker.observe(sim, []);
-        expect(status(tracker, sim, "one_track_mind")).toMatchObject({
+        expect(said(status(tracker, sim, "one_track_mind"))).toMatchObject({
             state: "failed",
             reason: "took a second weapon",
         });
-        expect(status(tracker, sim, "no_take_backs")).toMatchObject({
+        expect(said(status(tracker, sim, "no_take_backs"))).toMatchObject({
             state: "failed",
             reason: "rerolled, skipped or banished",
         });
@@ -591,9 +597,7 @@ describe("the Theatre's perfect tasks", () => {
         tracker.observe(bitten, [spawned("maiden_of_sugadinti")]);
         bitten.heroes[0].damageTaken += 1;
         tracker.observe(bitten, [hit("blood_spawn")]);
-        expect(tracker.statuses(bitten).find((s) => s.task.id === "perfect_maiden")!.reason).toBe(
-            "hit by Blood spawn",
-        );
+        expect(said(status(tracker, bitten, "perfect_maiden")).reason).toBe("hit by Blood spawn");
         expect(ids(tracker.observe(bitten, [killed("maiden_of_sugadinti")]))).not.toContain(
             "perfect_maiden",
         );
@@ -621,9 +625,10 @@ describe("the Theatre's perfect tasks", () => {
         const spoilt = track(hurtOnce);
         room(hurtOnce, spoilt, "maiden_of_sugadinti");
         room(hurtOnce, spoilt, "tob_pestilent_bloat", "Falling flesh");
-        expect(
-            spoilt.statuses(hurtOnce).find((s) => s.task.id === "theatre_perfectionist"),
-        ).toMatchObject({ state: "failed", reason: "Rain Check: hit by Falling flesh" });
+        expect(said(status(spoilt, hurtOnce, "theatre_perfectionist"))).toMatchObject({
+            state: "failed",
+            reason: "Rain Check: hit by Falling flesh",
+        });
     });
 });
 

@@ -1196,8 +1196,8 @@ version and how to run it.
   Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
   Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
   from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
-  the Tombs of Amascut, and Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
-  it). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  the Tombs of Amascut, Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
+  it), and Ghommal's hilts, from Combat Achievements. They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
   weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
   Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
@@ -1284,7 +1284,7 @@ version and how to run it.
   sleepwalkers' blast) never counts against one. Each pays its tier's coins once (100 to 3,000)
   when the run it's done in ends, with a toast as it's done, and its points earn each tier's reward,
   Ghommal's hilt 1 to 6, for the Collection log. Kill counts add up over solo runs. Co-op runs,
-  the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
+  the Forgotten Four's gauntlet, the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
   endless rounds they'd already done, without the coins. The screen has an overview of the tiers
   and every task, with filters by tier, type and map. Some take more than one run: wins with a
   melee, a ranged and a magic adventurer. One of the Theatre of Blood's takes all its perfect room

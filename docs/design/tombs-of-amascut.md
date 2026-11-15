@@ -315,9 +315,8 @@ unlocks something in the game.
 
 ### Combat Achievements
 
-Combat Achievements are PR 110 (`content/combatTasks.ts`, `core/CombatTracker.ts`), which already has
-the Theatre of Blood's tasks. Once it's merged and the raid's done, the Tombs get tasks matched to
-OSRS's own ToA ones, mostly on its goal kinds (`kill` with `within` or `without: ["hits"]`, `win`
+Combat Achievements (`content/combatTasks.ts`, `core/CombatTracker.ts`) already have the Theatre
+of Blood's tasks. The Tombs are to get tasks matched to OSRS's own ToA ones, mostly on its goal kinds (`kill` with `within` or `without: ["hits"]`, `win`
 with rules, `beatMap`):
 
 - **Each path**: its boss with no deaths, within a time, and its mechanic done right (Ba-Ba with no

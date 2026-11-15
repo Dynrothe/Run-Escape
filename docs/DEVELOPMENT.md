@@ -3274,6 +3274,17 @@ preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
 (`ui-shop-help-coins`) and the refund hint under the cards are left out there, as the
 balance's label says as much.
 
+Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
+(task id to kills so far, or `task:map` to 1 for each map a beat-them-all task has had beaten). A
+save from before it gets the kill counts, wins and endless rounds its records show, once, without
+coins; later saves never look at those records for them, since co-op runs add to them and co-op
+doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
+only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
+Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
+run earn: `task:style` for each combat style a beat-with-each task has been won with. The
+optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
+were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it.
+
 ### Languages
 
 The game is in English and Português (BR). Only English is checked: the other languages are
@@ -3301,7 +3312,8 @@ in `i18n/store.ts`.
   patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
   language without that key keeps the whole sentence in English, and a new sentence of the kind
   needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
-  the accessors, for the level-up cards.
+  the accessors, for the level-up cards. `CombatTracker` keeps why a task failed as data, a
+  `CombatReason`, and `describeCombatReason` (`content/combatTasks.ts`) words it as it's shown.
 - `items.json`, `world.json` and `gen.json` are generated from the content by
   `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
   `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
@@ -3356,17 +3368,6 @@ in it how many coins it's short. `--ui-quest-red-text`, the quest tab's red for 
 started, was picked for its tone and is well under that, with the outline quest names have.
 `--ui-outline` is for text over the world and quest names. A button doesn't inherit it, so one
 over the world sets `text-shadow` itself.
-
-Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
-(task id to kills so far, or `task:map` to 1 for each map a beat-them-all task has had beaten). A
-save from before it gets the kill counts, wins and endless rounds its records show, once, without
-coins; later saves never look at those records for them, since co-op runs add to them and co-op
-doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
-only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
-Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
-run earn: `task:style` for each combat style a beat-with-each task has been won with. The
-optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
-were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it.
 
 ### Notice
 

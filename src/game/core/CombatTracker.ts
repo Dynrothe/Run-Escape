@@ -1,7 +1,12 @@
 import { getCharacter } from "../content/characters";
-import { COMBAT_TASKS, COMBAT_TASK_BY_ID, canTrackOn, getGoalMaps } from "../content/combatTasks";
+import {
+    COMBAT_TASKS,
+    COMBAT_TASK_BY_ID,
+    CombatReason,
+    canTrackOn,
+    getGoalMaps,
+} from "../content/combatTasks";
 import { ENEMY_BY_ID } from "../content/enemies";
-import { formatTime, joinNames } from "../content/format";
 import { isDevMap, isFunMap } from "../content/maps";
 import { CombatGoal, CombatStyle, CombatTaskDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -23,7 +28,7 @@ type Watch = {
     failed: boolean;
     // Why it can't be done now: for the rest of the run (failed), or until its boss comes again
     // (an endless run's next round). Undefined while it still can be.
-    reason?: string;
+    reason?: CombatReason;
     // A boss's window (kill, stayInReach): open from its arrival (or last stand) to its kill
     open: boolean;
     openTick: number;
@@ -55,7 +60,7 @@ export type CombatTaskState = "on" | "done" | "failed";
 export type CombatTaskStatus = {
     task: CombatTaskDef;
     state: CombatTaskState;
-    reason?: string;
+    reason?: CombatReason;
     progress?: QuestProgress;
 };
 
@@ -162,11 +167,11 @@ export class CombatTracker {
     }
 
     // The tasks that have gone out of reach since the last call, and why
-    takeFailed(): { task: CombatTaskDef; reason: string }[] {
+    takeFailed(): { task: CombatTaskDef; reason: CombatReason }[] {
         if (this.failedNow.length === 0) {
             return [];
         }
-        const failed = this.failedNow.map((w) => ({ task: w.task, reason: w.reason ?? "" }));
+        const failed = this.failedNow.map((w) => ({ task: w.task, reason: w.reason! }));
         this.failedNow = [];
         return failed;
     }
@@ -310,7 +315,7 @@ export class CombatTracker {
                 }
                 watch.reason =
                     late.size > 0
-                        ? `${joinNames([...late].map(enemyName))} took over ${formatTime(goal.seconds)}`
+                        ? { kind: "tookTooLong", enemyIds: [...late], seconds: goal.seconds }
                         : undefined;
                 return inTime.size === goal.bossIds.length;
             }
@@ -325,7 +330,11 @@ export class CombatTracker {
                         const i = bosses.indexOf(e.enemyId);
                         if (i > 0 && !killed.has(bosses[i - 1])) {
                             watch.failed = true;
-                            watch.reason = `${enemyName(e.enemyId)} rose before ${enemyName(bosses[i - 1])} was down`;
+                            watch.reason = {
+                                kind: "roseBefore",
+                                enemyId: e.enemyId,
+                                before: bosses[i - 1],
+                            };
                             return false;
                         }
                     }
@@ -403,7 +412,7 @@ export class CombatTracker {
                 const spoilt = parts.find((p) => !p.done && (p.failed || p.reason !== undefined));
                 if (spoilt) {
                     watch.failed = spoilt.failed;
-                    watch.reason = `${spoilt.task.name}: ${spoilt.reason}`;
+                    watch.reason = { kind: "part", taskId: spoilt.task.id, reason: spoilt.reason! };
                     return false;
                 }
                 watch.reason = undefined;
@@ -417,34 +426,34 @@ export class CombatTracker {
         goal: Extract<CombatGoal, { kind: "win" }>,
         sim: Sim,
         events: readonly SimEvent[],
-    ): string | undefined {
+    ): CombatReason | undefined {
         const hero = sim.heroes[sim.focus];
         const rules = goal.rules ?? {};
         if (goal.hpAbove !== undefined && hero.player.hp < hero.player.maxHp * goal.hpAbove) {
-            return `fell below ${Math.round(goal.hpAbove * 100)}% hitpoints`;
+            return { kind: "hpBelow", percent: Math.round(goal.hpAbove * 100) };
         }
         if (rules.noGear && events.some((e) => e.type === "equip" && this.isMine(e, sim))) {
-            return "put on casket gear";
+            return { kind: "gear" };
         }
         if (
             rules.noSleepwalkers &&
             events.some((e) => e.type === "bossAbsorbBlast" && e.absorbed > 0)
         ) {
-            return "a sleepwalker reached her";
+            return { kind: "sleepwalker" };
         }
         if (goal.within !== undefined && sim.seconds >= goal.within) {
-            return `over ${formatTime(goal.within)}`;
+            return { kind: "over", seconds: goal.within };
         }
         if (goal.damage !== undefined && countedDamage(hero, goal.except) > goal.damage) {
             return goal.damage === 0
-                ? (lastHit(events, sim) ?? "took damage")
-                : `took over ${goal.damage} damage`;
+                ? (lastHit(events, sim) ?? { kind: "tookDamage" })
+                : { kind: "tookOver", damage: goal.damage };
         }
         if (rules.oneWeapon && hero.weapons.length > 1) {
-            return "took a second weapon";
+            return { kind: "secondWeapon" };
         }
         if (rules.noPassives && hero.passives.length > 0) {
-            return "took a passive";
+            return { kind: "passive" };
         }
         if (
             rules.noTakeBacks &&
@@ -452,13 +461,13 @@ export class CombatTracker {
                 hero.skips > 0 ||
                 hero.banished.size + hero.banishedItems.size + hero.banishedSets.size > 0)
         ) {
-            return "rerolled, skipped or banished";
+            return { kind: "takeBacks" };
         }
         if (rules.noTeleports && sim.raidTeleportsLeft !== this.teleportsAtStart) {
-            return "used a teleporter";
+            return { kind: "teleporter" };
         }
         if (rules.noSupplies && hero.raidPoints !== hero.raidPointsEarned) {
-            return "spent raid points";
+            return { kind: "supplies" };
         }
         return undefined;
     }
@@ -523,11 +532,11 @@ export class CombatTracker {
         hero: Hero,
         sim: Sim,
         events: readonly SimEvent[],
-    ): string | undefined {
+    ): CombatReason | undefined {
         const counted = countedDamage(hero, goal.except);
         for (const avoid of goal.without ?? []) {
             if (avoid === "damage" && counted > watch.damageAtOpen) {
-                return lastHit(events, sim) ?? "took damage";
+                return lastHit(events, sim) ?? { kind: "tookDamage" };
             }
             // Polled: whatever hurt them between one look and the next while the curse was on
             if (avoid === "hurtCursed") {
@@ -536,7 +545,7 @@ export class CombatTracker {
                 } else if (watch.curseBase === undefined) {
                     watch.curseBase = counted;
                 } else if (counted > watch.curseBase) {
-                    return "hurt while cursed";
+                    return { kind: "hurtCursed" };
                 }
             }
             if (
@@ -546,7 +555,10 @@ export class CombatTracker {
                 // Its hit's in these events: only a boss's attacks are counted by name, and
                 // they're evented as they land
                 return (
-                    lastHit(events, sim, avoid.attacks) ?? `hit by ${avoid.attacks.join(" or ")}`
+                    lastHit(events, sim, avoid.attacks) ?? {
+                        kind: "hitByOneOf",
+                        attacks: avoid.attacks,
+                    }
                 );
             }
         }
@@ -557,10 +569,10 @@ export class CombatTracker {
         watch: Watch,
         goal: Extract<CombatGoal, { kind: "kill" }>,
         sim: Sim,
-    ): string | undefined {
+    ): CombatReason | undefined {
         return goal.within !== undefined &&
             sim.tick - watch.openTick > goal.within * TICKS_PER_SECOND
-            ? `not down within ${formatTime(goal.within)}`
+            ? { kind: "notWithin", seconds: goal.within }
             : undefined;
     }
 
@@ -599,7 +611,7 @@ export class CombatTracker {
             watch.outSince = sim.tick;
         } else if (sim.tick - watch.outSince >= goal.seconds * TICKS_PER_SECOND) {
             watch.failed = true;
-            watch.reason = `out of reach for ${goal.seconds} seconds`;
+            watch.reason = { kind: "outOfReach", seconds: goal.seconds };
         }
         return false;
     }
@@ -683,7 +695,10 @@ function startWatch(task: CombatTaskDef): Watch {
 
 // What an event spoils a kill's window with, if anything: a hit from the boss, a sleepwalker
 // reaching it, a healer healing it
-function whatSpoils(e: SimEvent, goal: Extract<CombatGoal, { kind: "kill" }>): string | undefined {
+function whatSpoils(
+    e: SimEvent,
+    goal: Extract<CombatGoal, { kind: "kill" }>,
+): CombatReason | undefined {
     const without = goal.without ?? [];
     if (
         e.type === "playerHit" &&
@@ -691,13 +706,13 @@ function whatSpoils(e: SimEvent, goal: Extract<CombatGoal, { kind: "kill" }>): s
         without.includes("hits") &&
         goal.bossIds.includes(e.enemyId)
     ) {
-        return `hit by ${e.attack ?? enemyName(e.enemyId)}`;
+        return { kind: "hitBy", attack: e.attack, enemyId: e.enemyId };
     }
     if (e.type === "bossAbsorbBlast" && e.absorbed > 0 && without.includes("sleepwalkers")) {
-        return "a sleepwalker reached her";
+        return { kind: "sleepwalker" };
     }
     if (e.type === "enemyHealed" && without.includes("heals") && goal.bossIds.includes(e.enemyId)) {
-        return `${enemyName(e.enemyId)} was healed`;
+        return { kind: "healed", enemyId: e.enemyId };
     }
     return undefined;
 }
@@ -709,7 +724,7 @@ function lastHit(
     events: readonly SimEvent[],
     sim: Sim,
     attacks?: readonly string[],
-): string | undefined {
+): CombatReason | undefined {
     for (let i = events.length - 1; i >= 0; i--) {
         const e = events[i];
         if (
@@ -719,14 +734,10 @@ function lastHit(
             (e.hero === undefined || e.hero === sim.focus) &&
             (!attacks || (e.attack !== undefined && attacks.includes(e.attack)))
         ) {
-            return `hit by ${e.attack ?? enemyName(e.enemyId)}`;
+            return { kind: "hitBy", attack: e.attack, enemyId: e.enemyId };
         }
     }
     return undefined;
-}
-
-function enemyName(id: string): string {
-    return ENEMY_BY_ID.get(id)?.name ?? id;
 }
 
 // What they've taken, less what these attacks did: what a damage goal counts

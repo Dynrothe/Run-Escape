@@ -492,5 +492,12 @@
     "ui.invasion.roots": "Invading Vardorvis",
     "ui.invasion.realm": "Invading Whisperer",
     "ui.invasion.cold": "Invading Duke Sucellus",
-    "ui.invasion.dark": "Invading Leviathan"
+    "ui.invasion.dark": "Invading Leviathan",
+    "pause.heading.combat_tasks": "Combat tasks",
+    "ui.combat_tasks.heading": "Combat tasks",
+    "ui.combat_tasks.toggle_tooltip": "Show or hide the quests and pinned combat tasks (Q)",
+    "ui.combat_tasks.failed": "Failed",
+    "ui.combat_tasks.failed_because": "Failed: {reason}.",
+    "ui.combat_tasks.description_failed": "{description} Failed: {reason}.",
+    "ui.result.combat_task_complete": "Combat task complete: {name} ({tier})!"
 }

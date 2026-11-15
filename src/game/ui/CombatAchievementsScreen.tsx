@@ -7,17 +7,23 @@ import {
     COMBAT_TASK_TYPES,
     COMBAT_TIERS,
     MAX_COMBAT_PINS,
+    combatTaskDescription,
+    combatTaskName,
+    combatTierName,
+    combatTypeName,
     getCombatPoints,
     getTaskTier,
     getTierThresholds,
 } from "../content/combatTasks";
-import { getMap } from "../content/maps";
-import { TROPHIES } from "../content/trophies";
+import { getMap, mapName } from "../content/maps";
+import { TROPHIES, trophyName } from "../content/trophies";
 import { CombatTaskDef, CombatTaskType, CombatTier } from "../content/types";
 import { SaveData, getCombatProgress, isMapUnlocked } from "../core/save";
+import { fmtNum, t, tp } from "../i18n";
 import { Coins } from "./Coins";
 import "./CombatAchievementsScreen.css";
 import { ItemIcon } from "./ItemIcon";
+import { useMenuKeys } from "./menuKeys";
 
 // Combat Achievements, after the client's own interface: points and the next tier's reward at the
 // top, an overview of the six tiers, and every task with filters. Solo runs only. A task still to
@@ -49,6 +55,7 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
     const [place, setPlace] = useState(0);
     const [hideDone, setHideDone] = useState(false);
     const [onlyPinned, setOnlyPinned] = useState(false);
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     const pinned = save.combatPinned ?? [];
     const points = getCombatPoints(save.combatTasks);
     const thresholds = getTierThresholds();
@@ -69,38 +76,47 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-ca">
-                <h2>Combat Achievements</h2>
+                <h2>{t("ca.title")}</h2>
                 <div className="ui-ca-header">
                     <span>
-                        Points <span className="ui-ca-value">{points}</span>
+                        {t("ca.points")} <span className="ui-ca-value">{fmtNum(points)}</span>
                     </span>
                     <span>
-                        Tier <span className="ui-ca-value">{current?.name ?? "None"}</span>
+                        {t("ca.tier")}{" "}
+                        <span className="ui-ca-value">
+                            {current ? combatTierName(current.id) : t("ca.tier_none")}
+                        </span>
                     </span>
                     <span className="ui-ca-next">
                         {next ? (
                             <Bar
                                 done={points - from}
                                 of={thresholds[next.id] - from}
-                                label={`${points} / ${thresholds[next.id]} for ${next.name}`}
+                                label={t("ca.next_tier", {
+                                    points: fmtNum(points),
+                                    needed: fmtNum(thresholds[next.id]),
+                                    tier: combatTierName(next.id),
+                                })}
                             />
                         ) : (
-                            "Every tier's reward is yours!"
+                            t("ca.every_tier")
                         )}
                     </span>
                 </div>
                 <div className="ui-log-tabs">
                     <button
                         className={"ui-log-tab" + (tab === "overview" ? " ui-log-selected" : "")}
+                        aria-pressed={tab === "overview"}
                         onClick={() => setTab("overview")}
                     >
-                        Overview
+                        {t("ca.tab.overview")}
                     </button>
                     <button
                         className={"ui-log-tab" + (tab === "tasks" ? " ui-log-selected" : "")}
+                        aria-pressed={tab === "tasks"}
                         onClick={() => setTab("tasks")}
                     >
-                        Tasks
+                        {t("ca.tab.tasks")}
                     </button>
                 </div>
                 {tab === "overview" ? (
@@ -115,39 +131,50 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
                                         "ui-log-tab ui-ca-filter" +
                                         (tier === id ? " ui-log-selected" : "")
                                     }
+                                    aria-pressed={tier === id}
                                     onClick={() => setTier(id)}
                                 >
-                                    {id === "all" ? "All" : getTierName(id)}
+                                    {id === "all" ? t("ca.filter.all") : combatTierName(id)}
                                 </button>
                             ))}
                             <button
                                 className="ui-log-tab ui-ca-filter"
                                 onClick={() => setType((type + 1) % TYPES.length)}
                             >
-                                Type: {shownType === "all" ? "All" : COMBAT_TASK_TYPES[shownType]}
+                                {t("ca.filter.type", {
+                                    type:
+                                        shownType === "all"
+                                            ? t("ca.filter.all")
+                                            : combatTypeName(shownType),
+                                })}
                             </button>
                             <button
                                 className="ui-log-tab ui-ca-filter"
                                 onClick={() => setPlace((place + 1) % PLACES.length)}
                             >
-                                Where: {describePlace(shownPlace)}
+                                {t("ca.filter.where", { place: describePlace(shownPlace) })}
                             </button>
                             <button
                                 className={
                                     "ui-log-tab ui-ca-filter" + (hideDone ? " ui-log-selected" : "")
                                 }
+                                aria-pressed={hideDone}
                                 onClick={() => setHideDone(!hideDone)}
                             >
-                                Hide completed
+                                {t("ca.filter.hide_done")}
                             </button>
                             <button
                                 className={
                                     "ui-log-tab ui-ca-filter" +
                                     (onlyPinned ? " ui-log-selected" : "")
                                 }
+                                aria-pressed={onlyPinned}
                                 onClick={() => setOnlyPinned(!onlyPinned)}
                             >
-                                Pinned ({pinned.length} / {MAX_COMBAT_PINS})
+                                {t("ca.filter.pinned", {
+                                    n: fmtNum(pinned.length),
+                                    max: fmtNum(MAX_COMBAT_PINS),
+                                })}
                             </button>
                         </div>
                         <div className="ui-ca-list">
@@ -160,17 +187,20 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
                                 />
                             ))}
                             {tasks.length === 0 && (
-                                <p className="ui-subtle">No tasks match those filters.</p>
+                                <p className="ui-subtle">{t("ca.none_match")}</p>
                             )}
                         </div>
                     </>
                 )}
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
-                        Back
+                        {t("canvas.back")}
                     </button>
                     <span className="ui-ca-count">
-                        Completed {save.combatTasks.length} / {COMBAT_TASKS.length}
+                        {t("ca.completed", {
+                            done: fmtNum(save.combatTasks.length),
+                            total: fmtNum(COMBAT_TASKS.length),
+                        })}
                     </span>
                     <Coins amount={save.coins} />
                 </div>
@@ -190,10 +220,7 @@ function Overview({
 }): JSX.Element {
     return (
         <div className="ui-ca-list">
-            <p className="ui-subtle">
-                Challenges for solo runs: each pays its coins once, when the run it's done in ends.
-                Points earn each tier's reward for the Collection log. Co-op runs don't count.
-            </p>
+            <p className="ui-subtle">{t("ca.intro")}</p>
             {COMBAT_TIERS.map((tier) => {
                 const all = COMBAT_TASKS.filter((t) => t.tier === tier.id);
                 const done = all.filter((t) => save.combatTasks.includes(t.id)).length;
@@ -208,13 +235,23 @@ function Overview({
                                 </span>
                             )}
                         </span>
-                        <span className="ui-ca-tier-name">{tier.name}</span>
-                        <Bar done={done} of={all.length} label={`${done} / ${all.length} tasks`} />
+                        <span className="ui-ca-tier-name">{combatTierName(tier.id)}</span>
+                        <Bar
+                            done={done}
+                            of={all.length}
+                            label={t("ca.tier_tasks", {
+                                done: fmtNum(done),
+                                total: fmtNum(all.length),
+                            })}
+                        />
                         <span className="ui-ca-tier-reward">
                             {earned
-                                ? `${hilt.name}: yours`
-                                : `${hilt?.name ?? "Reward"} at ${thresholds[tier.id]} points ` +
-                                  `(${Math.max(0, thresholds[tier.id] - points)} to go)`}
+                                ? t("ca.reward_yours", { name: trophyName(hilt) })
+                                : t("ca.reward_at", {
+                                      name: hilt ? trophyName(hilt) : t("ca.reward"),
+                                      points: fmtNum(thresholds[tier.id]),
+                                      left: fmtNum(Math.max(0, thresholds[tier.id] - points)),
+                                  })}
                         </span>
                     </div>
                 );
@@ -242,29 +279,35 @@ function TaskRow({
     const locked = task.mapId !== undefined && !isMapUnlocked(save, task.mapId);
     return (
         <div className={"ui-ca-task ui-ca-task-" + state + (locked ? " ui-ca-locked" : "")}>
-            <span className={"ui-ca-task-tier ui-ca-tier-" + task.tier}>{tier.name}</span>
+            <span className={"ui-ca-task-tier ui-ca-tier-" + task.tier}>
+                {combatTierName(task.tier)}
+            </span>
             <span className="ui-ca-task-text">
-                <span className="ui-ca-task-name">{task.name}</span>
+                <span className="ui-ca-task-name">{combatTaskName(task)}</span>
                 <span className="ui-ca-task-description">
-                    {task.description}
+                    {combatTaskDescription(task)}
                     {task.mapId && (
                         <span className="ui-ca-task-where">
-                            {` (${describePlace(task.mapId)}${locked ? ", not open yet" : ""})`}
+                            {" "}
+                            {t(locked ? "ca.where_locked" : "ca.where", {
+                                place: describePlace(task.mapId),
+                            })}
                         </span>
                     )}
                 </span>
             </span>
-            <span className="ui-ca-task-type">{COMBAT_TASK_TYPES[task.type]}</span>
+            <span className="ui-ca-task-type">{combatTypeName(task.type)}</span>
             <span className="ui-ca-task-state">
                 {done
-                    ? "Done"
+                    ? t("quest.done")
                     : progress
-                      ? `${progress.done.toLocaleString()} / ${progress.of.toLocaleString()}`
+                      ? t("quest.progress", {
+                            done: fmtNum(progress.done),
+                            total: fmtNum(progress.of),
+                        })
                       : ""}
             </span>
-            <span className="ui-ca-task-points">
-                {tier.points} pt{tier.points === 1 ? "" : "s"}
-            </span>
+            <span className="ui-ca-task-points">{tp("ca.task_points", tier.points)}</span>
             {done ? (
                 <span />
             ) : (
@@ -273,15 +316,15 @@ function TaskRow({
                     disabled={full}
                     title={
                         pinned
-                            ? "Unpin it from the run's HUD"
+                            ? t("ca.unpin_tooltip")
                             : full
-                              ? `${MAX_COMBAT_PINS} are pinned already: unpin one first`
-                              : "Pin it to the run's HUD, with a word when it's spoilt"
+                              ? t("ca.pins_full", { max: fmtNum(MAX_COMBAT_PINS) })
+                              : t("ca.pin_tooltip")
                     }
                     aria-pressed={pinned}
                     onClick={onPin}
                 >
-                    {pinned ? "Pinned" : "Pin"}
+                    {pinned ? t("ca.pinned") : t("ca.pin")}
                 </button>
             )}
         </div>
@@ -298,10 +341,10 @@ function Bar({ done, of, label }: { done: number; of: number; label: string }): 
     );
 }
 
-function getTierName(id: CombatTier): string {
-    return COMBAT_TIERS.find((t) => t.id === id)!.name;
-}
-
 function describePlace(place: string | undefined): string {
-    return place === undefined ? "All" : place === "" ? "All over" : getMap(place).name;
+    return place === undefined
+        ? t("ca.filter.all")
+        : place === ""
+          ? t("ca.all_over")
+          : mapName(getMap(place));
 }

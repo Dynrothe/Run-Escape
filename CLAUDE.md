@@ -169,8 +169,10 @@ events as well: a Smite can kill Zachariah, or move him on a phase, there and th
 to be doable on every run, by playing well: see Combat task in `.claude/rules/adding-content.md`
 for what that rules out. `CombatTracker.statuses` says where each task has got (under way, done,
 or failed and why), for the HUD's rows of pinned tasks (`SaveData.combatPinned`) and the pause
-menu. A spoilt pinned task gets a toast (`takeFailed`). A failure names the attack that did it,
-from `playerHit`'s `attack`.
+menu. A spoilt pinned task gets a toast (`takeFailed`). A failure is a `CombatReason`, words only
+once `describeCombatReason` puts it in the player's language, and names the attack that did it,
+from `playerHit`'s `attack`. A `missed` hit spoils nothing, and the Forgotten Four's fights aren't
+followed (`sim.gauntlet`): they bank no run of their own.
 
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in

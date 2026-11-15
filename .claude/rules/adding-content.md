@@ -454,13 +454,19 @@ goes in saves, so never rename one. Its name mustn't be a quest's (two Inferno q
 OSRS combat achievements' names). `combatTasks.test.ts` checks its enemy and map ids, and that every
 attack a task avoids is one its boss has by that name, so renaming a boss's attack fails it rather
 than making the task impossible. Its coins and points come from its tier, and the tiers' reward
-thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`.
+thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`. Its name and
+description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts` puts them in
+`locales/en/gen.json` (`combat.task.<id>.name` and `.desc`), and the screens read them through
+`combatTaskName` and `combatTaskDescription`.
 
 - Goals that need nothing new from the sim are checked in `core/CombatTracker.ts`, which only reads
   the sim and its events. A goal that can't be seen from those needs a new event: an `emit` that
   only reads state is hash-neutral, and `runHash.test.ts` must stay as it is.
-- A goal that can be spoilt sets the watch's `reason` as it's spoilt ("hit by Lunge"): the HUD's
-  pinned rows, the pause menu and a pinned task's toast show it. A boss's attacks name themselves
+- A goal that can be spoilt sets the watch's `reason` as it's spoilt, a `CombatReason`
+  (`{ kind: "hitBy", attack: "Lunge", ... }`, which reads "hit by Lunge"): the HUD's pinned rows,
+  the pause menu and a pinned task's toast show it. A new kind of reason needs its English in
+  `COMBAT_MESSAGES` and a case in `describeCombatReason`. A hit with `missed` set (a Trickster's
+  bubble) did no harm, and spoils nothing. A boss's attacks name themselves
   on `playerHit` (`attack`); a crowd's hit, a stomp or a pool doesn't, and says who landed it.
   A new goal that counts its way there gives its progress in `progressOf`.
 - `allOf` is several tasks' goals met in the same run, whether they were done before or not
@@ -471,7 +477,8 @@ thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`
   for a speed task, not by whether it did the perfect ones.
 - Only kill counts, map wins and endless rounds are retroactive: `applyRetroCombatTasks` in
   `save.ts` gives old saves those once, at the version 12 migration, without coins.
-- Co-op runs never count, so there's no party field and no co-op task.
+- Co-op runs never count, so there's no party field and no co-op task. Nor do the Forgotten
+  Four's gauntlet fights, which bank no run of their own.
 - **Every task has to be doable every run, by playing well, not by luck.** A task that avoids
   damage leaves out what no one can dodge, in its goal's `except`: a mark lands wherever the player
   is (a curse, Phosani's parasites bursting), the sleepwalkers' blast lands even with none let

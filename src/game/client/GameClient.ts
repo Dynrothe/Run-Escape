@@ -9,11 +9,17 @@ import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
 import type { PackDef } from "../content/cards";
 import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
-import { COMBAT_TASK_BY_ID, getTaskTier } from "../content/combatTasks";
+import {
+    COMBAT_TASK_BY_ID,
+    combatTaskDescription,
+    combatTaskName,
+    combatTierName,
+    describeCombatReason,
+    getTaskTier,
+} from "../content/combatTasks";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { joinNames } from "../content/format";
 import { BlessingId, CAMP_SECONDS, GAUNTLET_FIGHTS, isGauntletOrder } from "../content/gauntlet";
 import { INVADER_BY_ID } from "../content/invaders";
 import { isInvasionOpen, rollInvasion, takesInvasions } from "../content/invasions";
@@ -155,7 +161,7 @@ import {
     toggleCombatPin,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
-import { fmtNum, t, tl, tp } from "../i18n";
+import { fmtNum, list, t, tl, tp } from "../i18n";
 import {
     CameraRig,
     MAX_CAMERA_DISTANCE,
@@ -429,11 +435,11 @@ function getCombatTrackViews(
     const pinned = save.combatPinned ?? [];
     const views = tracker.statuses(sim).map(({ task, state, reason, progress }) => ({
         id: task.id,
-        name: task.name,
-        description: task.description,
-        tier: getTaskTier(task).name,
+        name: combatTaskName(task),
+        description: combatTaskDescription(task),
+        tier: combatTierName(task.tier),
         state,
-        ...(reason !== undefined && { reason }),
+        ...(reason !== undefined && { reason: describeCombatReason(reason) }),
         ...(progress && { progress }),
         pinned: pinned.includes(task.id),
     }));
@@ -3514,8 +3520,8 @@ export class GameClient implements GameFrameHandler {
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 combatTasks: combatDone.map((task) => ({
-                    name: task.name,
-                    tier: getTaskTier(task).name,
+                    name: combatTaskName(task),
+                    tier: combatTierName(task.tier),
                     coins: getTaskTier(task).coins,
                 })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
@@ -3546,11 +3552,13 @@ export class GameClient implements GameFrameHandler {
             .takeFailed()
             .filter(({ task }) => this.save.combatPinned?.includes(task.id));
         if (failed.length > 0) {
-            const what = failed.map(({ task, reason }) => `${task.name} (${reason})`);
-            this.store.toast(
-                `Combat task${failed.length === 1 ? "" : "s"} failed: ${joinNames(what)}.`,
-                5000,
+            const what = failed.map(({ task, reason }) =>
+                t("toast.combat_failed_item", {
+                    task: combatTaskName(task),
+                    reason: describeCombatReason(reason),
+                }),
             );
+            this.store.toast(tp("toast.combat_failed", failed.length, { list: list(what) }), 5000);
         }
         if (done.length === 0) {
             return;
@@ -3558,14 +3566,22 @@ export class GameClient implements GameFrameHandler {
         const tiers = done.map(getTaskTier);
         const points = tiers.reduce((sum, tier) => sum + tier.points, 0);
         const coins = tiers.reduce((sum, tier) => sum + tier.coins, 0);
-        const what =
-            done.length === 1
-                ? `Combat task complete: ${done[0].name} (${tiers[0].name}, `
-                : `Combat tasks complete: ${joinNames(done.map((task) => task.name))} (`;
+        const params = {
+            points: tp("toast.combat_points", points),
+            coins: fmtNum(coins),
+        };
         this.sounds.taskDone();
         this.store.toast(
-            `${what}${points} point${points === 1 ? "" : "s"})! ` +
-                `${coins.toLocaleString()} coins are yours after this run.`,
+            done.length === 1
+                ? t("toast.combat_done", {
+                      ...params,
+                      name: combatTaskName(done[0]),
+                      tier: combatTierName(done[0].tier),
+                  })
+                : t("toast.combat_done_many", {
+                      ...params,
+                      names: list(done.map(combatTaskName)),
+                  }),
             6000,
         );
     }

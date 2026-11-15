@@ -9,11 +9,14 @@ the version in the corner).
 
 - Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
   Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
-- Saves get the Combat Achievements their kill counts, wins and endless rounds had already done,
-  without the coins.
+  Your kill counts, wins and endless rounds so far already count, without the coins.
 - Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
   says what spoilt one. The pause menu shows how every task the run is following is going.
-- Three more Combat Achievements: Jack of All Styles, Perfect Maiden and Theatre Perfectionist.
+
+### Changed
+
+- The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
+  Achievements earn them.
 
 ## 0.33.2 - 2026-11-15
 

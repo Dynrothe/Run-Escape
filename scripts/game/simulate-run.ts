@@ -54,7 +54,7 @@
 //                    # EMPOWERED=1 as if its rival were beaten first (LairDef.empowered)
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS, getCharacter } from "../../src/game/content/characters";
-import { COMBAT_TASKS } from "../../src/game/content/combatTasks";
+import { COMBAT_TASKS, describeCombatReason } from "../../src/game/content/combatTasks";
 import { getEnemy } from "../../src/game/content/enemies";
 import {
     BLESSINGS,
@@ -2296,7 +2296,7 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         const done = statuses.filter((s) => s.state === "done").map((s) => s.task.id);
         const failed = statuses
             .filter((s) => s.state === "failed")
-            .map((s) => `${s.task.id} (${s.reason})`);
+            .map((s) => `${s.task.id} (${s.reason ? describeCombatReason(s.reason) : ""})`);
         console.log(`  combat tasks done: ${done.join(", ") || "none"}`);
         console.log(`  combat tasks failed: ${failed.join(", ") || "none"}`);
         if (bossTimes.length > 0) {

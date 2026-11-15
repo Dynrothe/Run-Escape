@@ -1,3 +1,5 @@
+import { list, tl, tr } from "../i18n";
+import { ENEMY_BY_ID, enemyName } from "./enemies";
 import { formatTime } from "./format";
 import { getMapEnemyIds } from "./mapEnemies";
 import { CAMPAIGN_MAPS, MAP_BY_ID, isDevMap, isFunMap } from "./maps";
@@ -758,4 +760,156 @@ export function isMultiRunGoal(goal: CombatGoal): boolean {
         goal.kind === "beatWithEach" ||
         (goal.kind === "beatMap" && goal.all === true)
     );
+}
+
+// A task's name and what it asks, a tier's name and a type's, in the player's language
+export function combatTaskName(task: CombatTaskDef): string {
+    return tr(`combat.task.${task.id}.name`, task.name);
+}
+
+export function combatTaskDescription(task: CombatTaskDef): string {
+    return tr(`combat.task.${task.id}.desc`, task.description);
+}
+
+export function combatTierName(tier: CombatTier): string {
+    return tr(`combat.tier.${tier}`, COMBAT_TIER_BY_ID.get(tier)!.name);
+}
+
+export function combatTypeName(type: CombatTaskType): string {
+    return tr(`combat.type.${type}`, COMBAT_TASK_TYPES[type]);
+}
+
+// Why a task's out of reach, as the tracker (core/CombatTracker.ts) finds it: what happened, by
+// ids and numbers, put in words where it's shown (describeCombatReason). A boss attack's name is
+// its BossAttackDef.name; an enemy's is its id.
+export type CombatReason =
+    | { kind: "hitBy"; attack?: string; enemyId: string }
+    // Hurt by one of these attacks, with no hit in the events to name which
+    | { kind: "hitByOneOf"; attacks: readonly string[] }
+    | { kind: "tookDamage" }
+    | { kind: "tookOver"; damage: number }
+    | { kind: "hpBelow"; percent: number }
+    | { kind: "over"; seconds: number }
+    | { kind: "notWithin"; seconds: number }
+    // killEachWithin: these took longer than that
+    | { kind: "tookTooLong"; enemyIds: readonly string[]; seconds: number }
+    // killBeforeNext: this one rose before that one was down
+    | { kind: "roseBefore"; enemyId: string; before: string }
+    | { kind: "healed"; enemyId: string }
+    | { kind: "outOfReach"; seconds: number }
+    // allOf: one of its tasks, and why
+    | { kind: "part"; taskId: string; reason: CombatReason }
+    | {
+          kind:
+              | "sleepwalker"
+              | "hurtCursed"
+              | "gear"
+              | "secondWeapon"
+              | "passive"
+              | "takeBacks"
+              | "teleporter"
+              | "supplies";
+      };
+
+// Combat Achievements' sentences, for locales/en/gen.json (scripts/i18n/extractors/gen.ts)
+export const COMBAT_MESSAGES: Record<string, string> = {
+    "combat.reason.hit_by": "hit by {what}",
+    "combat.reason.one_of": "{rest} or {last}",
+    "combat.reason.took_damage": "took damage",
+    "combat.reason.took_over": "took over {damage} damage",
+    "combat.reason.hp_below": "fell below {percent}% hitpoints",
+    "combat.reason.over": "over {time}",
+    "combat.reason.not_within": "not down within {time}",
+    "combat.reason.took_too_long": "{names} took over {time}",
+    "combat.reason.rose_before": "{name} rose before {before} was down",
+    "combat.reason.healed": "{name} was healed",
+    "combat.reason.out_of_reach": "out of reach for {seconds} seconds",
+    "combat.reason.part": "{task}: {reason}",
+    "combat.reason.sleepwalker": "a sleepwalker reached her",
+    "combat.reason.hurtCursed": "hurt while cursed",
+    "combat.reason.gear": "put on casket gear",
+    "combat.reason.secondWeapon": "took a second weapon",
+    "combat.reason.passive": "took a passive",
+    "combat.reason.takeBacks": "rerolled, skipped or banished",
+    "combat.reason.teleporter": "used a teleporter",
+    "combat.reason.supplies": "spent raid points",
+};
+
+function message(key: string, params?: Record<string, string | number>): string {
+    return tr(key, COMBAT_MESSAGES[key], params);
+}
+
+function nameOf(enemyId: string): string {
+    const def = ENEMY_BY_ID.get(enemyId);
+    return def ? enemyName(def) : enemyId;
+}
+
+// "A", or "A, B or C"
+function oneOf(names: readonly string[]): string {
+    return names.length < 2
+        ? names[0]
+        : message("combat.reason.one_of", {
+              rest: names.slice(0, -1).join(", "),
+              last: names[names.length - 1],
+          });
+}
+
+// A reason in the player's language (English under tsx, as the bot prints it)
+export function describeCombatReason(reason: CombatReason): string {
+    switch (reason.kind) {
+        case "hitBy":
+            return message("combat.reason.hit_by", {
+                what: reason.attack !== undefined ? tl(reason.attack) : nameOf(reason.enemyId),
+            });
+        case "hitByOneOf":
+            return message("combat.reason.hit_by", { what: oneOf(reason.attacks.map(tl)) });
+        case "tookDamage":
+            return message("combat.reason.took_damage");
+        case "tookOver":
+            return message("combat.reason.took_over", { damage: reason.damage });
+        case "hpBelow":
+            return message("combat.reason.hp_below", { percent: reason.percent });
+        case "over":
+            return message("combat.reason.over", { time: formatTime(reason.seconds) });
+        case "notWithin":
+            return message("combat.reason.not_within", { time: formatTime(reason.seconds) });
+        case "tookTooLong":
+            return message("combat.reason.took_too_long", {
+                names: list(reason.enemyIds.map(nameOf)),
+                time: formatTime(reason.seconds),
+            });
+        case "roseBefore":
+            return message("combat.reason.rose_before", {
+                name: nameOf(reason.enemyId),
+                before: nameOf(reason.before),
+            });
+        case "healed":
+            return message("combat.reason.healed", { name: nameOf(reason.enemyId) });
+        case "outOfReach":
+            return message("combat.reason.out_of_reach", { seconds: reason.seconds });
+        case "part":
+            return message("combat.reason.part", {
+                task: combatTaskName(COMBAT_TASK_BY_ID.get(reason.taskId)!),
+                reason: describeCombatReason(reason.reason),
+            });
+        default:
+            return message(`combat.reason.${reason.kind}`);
+    }
+}
+
+// combat.* for gen.json: each task's name and what it asks, each tier's and type's name, and the
+// sentences above
+export function getCombatMessages(): Record<string, string> {
+    const messages: Record<string, string> = {};
+    for (const task of COMBAT_TASKS) {
+        messages[`combat.task.${task.id}.name`] = task.name;
+        messages[`combat.task.${task.id}.desc`] = task.description;
+    }
+    for (const tier of COMBAT_TIERS) {
+        messages[`combat.tier.${tier.id}`] = tier.name;
+    }
+    for (const [type, name] of Object.entries(COMBAT_TASK_TYPES)) {
+        messages[`combat.type.${type}`] = name;
+    }
+    return { ...messages, ...COMBAT_MESSAGES };
 }
