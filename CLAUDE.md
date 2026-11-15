@@ -348,6 +348,9 @@ desktop build.
   session open while you test.
 - The desktop app's browser pane can stop drawing while it's hidden, and the game then sits at
   "Loading - 0%". Check that `requestAnimationFrame` fires before blaming the game.
+- A screen gone black, its panels and the world with it, is an error thrown while React drew a
+  screen: nothing catches one, and the canvas is in the same tree, so React takes it all down. The
+  console has the error; a player's report needs it, as their save is usually what throws.
 - Effects like swooshes only last a moment, so a screenshot can easily miss them. Check game state
   as well, and don't report an effect as seen unless you saw it.
 - A player kept invulnerable from the console (`player.invulnerable` over 30) blinks white every 5
