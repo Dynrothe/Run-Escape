@@ -348,7 +348,10 @@ function ChestCard({
     const replaces = chest.replaces;
     return (
         <div
-            className="ui-panel rs-border rs-background ui-chest-card"
+            className={
+                "ui-panel rs-border rs-background ui-chest-card" +
+                (replaces ? " ui-chest-card-compare" : "")
+            }
             onClick={(e) => e.stopPropagation()}
         >
             {/* What it is: in a short window this scrolls, and the buttons under it stay */}
@@ -441,7 +444,8 @@ function SetLine({ item }: { item: ItemView }): JSX.Element | null {
     ) : null;
 }
 
-// Only the stats that change, coloured by whether they're better.
+// The piece it would replace, its set, and only the stats that would change,
+// green for better and red for worse
 function GearCompare({ replaces }: { replaces: NonNullable<ChestView["replaces"]> }): JSX.Element {
     const worn = replaces.item;
     return (
@@ -454,18 +458,18 @@ function GearCompare({ replaces }: { replaces: NonNullable<ChestView["replaces"]
                 {t("chest.alched_for", { coins: fmtNum(replaces.alchCoins) })}
             </div>
             <SetLine item={worn} />
-            <div className="ui-chest-changes">
-                {replaces.stats
-                    .filter((pair) => pair.change !== undefined)
-                    .map((pair) => (
+            {replaces.changes.length > 0 && (
+                <div className="ui-chest-changes">
+                    {replaces.changes.map((change) => (
                         <StatLine
-                            key={pair.key}
-                            text={`${pair.change} ${pair.label}`}
-                            statKey={pair.key}
-                            className={pair.better ? "ui-good" : "ui-bad"}
+                            key={change.key}
+                            text={change.text}
+                            statKey={change.key}
+                            className={change.better ? "ui-good" : "ui-bad"}
                         />
                     ))}
-            </div>
+                </div>
+            )}
         </div>
     );
 }

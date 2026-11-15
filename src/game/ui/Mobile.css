@@ -1466,6 +1466,27 @@
         margin-top: 6px;
     }
 
+    /* Tighter, so gear against the worn piece fits beside the casket on a
+       small phone, under co-op's countdown too */
+    .ui-chest-lines {
+        margin-top: 4px;
+        gap: 0;
+    }
+
+    .ui-chest-set {
+        margin-top: 2px;
+    }
+
+    .ui-chest-compare {
+        margin-top: 4px;
+        padding-top: 4px;
+    }
+
+    .ui-chest-changes {
+        margin-top: 2px;
+        gap: 0 12px;
+    }
+
     /* Pause and results: their columns scroll under the buttons */
 
     .ui-pause-columns,

@@ -14,7 +14,7 @@ import {
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
 import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
-import { pairStats } from "../content/stats";
+import { statChanges } from "../content/stats";
 import { createSave } from "../core/save";
 import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
@@ -258,45 +258,20 @@ describe("stat icons on the screens that show stats", () => {
                 gearChest({
                     item: crystalBody,
                     alchCoins: 10,
-                    stats: [
-                        {
-                            key: "might",
-                            label: "Damage",
-                            worn: "+5%",
-                            found: "+10%",
-                            change: "+5%",
-                            better: true,
-                        },
-                        {
-                            key: "armor",
-                            label: "Armour",
-                            worn: "+1",
-                            found: "+2",
-                            change: "+1",
-                            better: true,
-                        },
-                        {
-                            key: "maxHp",
-                            label: "Max hitpoints",
-                            worn: "+5%",
-                            found: "+5%",
-                            better: true,
-                        },
-                        {
-                            key: "speed",
-                            label: "Projectile speed",
-                            worn: "+15%",
-                            change: "-15%",
-                            better: false,
-                        },
-                    ],
+                    changes: statChanges(
+                        { might: 0.05, armor: 1, maxHp: 0.05, speed: 0.15 },
+                        { might: 0.1, armor: 2, maxHp: 0.05 },
+                    ),
                 }),
             );
 
+            // Wider, so the worn piece's line fits on one line
+            expect(view.container.querySelector(".ui-chest-card")).toHaveClass(
+                "ui-chest-card-compare",
+            );
             expect(view.container.querySelector(".ui-chest-lines")?.textContent).toBe(
                 "+10% damage+2 armour",
             );
-            expect(view.container.querySelector("table")).toBeNull();
             const compare = view.container.querySelector(".ui-chest-compare")!;
             expect(compare.textContent).toContain("Crystal body");
             expect(compare.textContent).toContain("· Rare");
@@ -310,10 +285,11 @@ describe("stat icons on the screens that show stats", () => {
             expect(sets[1]).toHaveClass("ui-chest-set-on");
 
             const changes = [...compare.querySelectorAll(".ui-chest-changes .ui-stat-line")];
+            // Worded as the found piece's own lines are, and the same max hitpoints left out
             expect(changes.map((line) => line.textContent)).toEqual([
-                "+5% Damage",
-                "+1 Armour",
-                "-15% Projectile speed",
+                "+5% damage",
+                "+1 armour",
+                "-15% projectile speed",
             ]);
             expect(changes[0]).toHaveClass("ui-good");
             expect(changes[1]).toHaveClass("ui-good");
@@ -328,21 +304,21 @@ describe("stat icons on the screens that show stats", () => {
         const iconSrc = iconsById();
         try {
             setLang("pt-BR");
-            const stats = pairStats(
+            const changes = statChanges(
                 { might: 0.03, speed: 0.15 },
                 { might: 0.05, maxHp: 0.13, armor: 1 },
             );
+            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, changes }));
+            const lines = [...view.container.querySelectorAll(".ui-chest-changes .ui-stat-line")];
             // Nothing in the words to find an icon by
-            expect(stats.map((pair) => pair.label)).toEqual([
-                "Dano",
-                "Armadura",
-                "Pontos de vida máximos",
-                "Velocidade de projétil",
+            expect(lines.map((line) => line.textContent)).toEqual([
+                "+2% dano",
+                "+1 armadura",
+                "+13% pontos de vida máximos",
+                "-15% velocidade de projétil",
             ]);
-            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, stats }));
-            const changes = [...view.container.querySelectorAll(".ui-chest-changes .ui-stat-line")];
-            expect(changes.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
-                stats.map((pair) => iconSrc(statKeyIcon(pair.key))),
+            expect(lines.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
+                changes.map((change) => iconSrc(statKeyIcon(change.key))),
             );
         } finally {
             setLang("en");
@@ -358,10 +334,10 @@ describe("stat icons on the screens that show stats", () => {
                 gearChest({
                     item: crystalBody,
                     alchCoins: 10,
-                    stats: pairStats({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 }),
+                    changes: statChanges({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 }),
                 }),
             );
-            expect(view.container.querySelector(".ui-chest-changes")).toBeEmptyDOMElement();
+            expect(view.container.querySelector(".ui-chest-changes")).toBeNull();
             expect(view.container.querySelector(".ui-chest-replaces")?.textContent).toContain(
                 "Crystal body",
             );

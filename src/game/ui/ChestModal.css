@@ -656,6 +656,12 @@
     gap: 5px;
 }
 
+/* Gear against the piece it would replace: a little wider, so the piece's
+   name, rarity and what it alchs for fit on one line */
+.ui-chest-card-compare {
+    width: min(540px, calc(94vw / var(--ui-scale)));
+}
+
 .ui-chest-changes {
     display: flex;
     flex-wrap: wrap;

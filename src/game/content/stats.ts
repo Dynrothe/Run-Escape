@@ -136,37 +136,23 @@ export function compareStats(
     return lines;
 }
 
-// Every stat either of two pieces has, side by side: a casket's gear against
-// the piece it would replace, for its table. worn or found is undefined where
-// that piece hasn't got the stat. change (found less worn) is undefined when
-// the two show the same: it and better go by the values as shown, so the
-// difference is always what the two columns say, never "-0%".
-export type StatPair = {
-    key: StatKey;
-    label: string;
-    worn?: string;
-    found?: string;
-    change?: string;
-    better: boolean;
-};
+// What a casket's gear changes against the piece it would replace, a line for
+// each stat that differs: "+2% damage", "-15% projectile speed". It goes by
+// the values as shown, so two pieces that read the same differ by nothing,
+// never "-0%".
+export type StatChange = { key: StatKey; text: string; better: boolean };
 
-export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair[] {
-    const pairs: StatPair[] = [];
+export function statChanges(worn: Partial<Stats>, found: Partial<Stats>): StatChange[] {
+    const changes: StatChange[] = [];
     for (const key of STAT_ORDER) {
-        const was = worn[key] ?? 0;
-        const now = found[key] ?? 0;
-        if (!was && !now) {
-            continue;
+        const change = shownSteps(key, found[key] ?? 0) - shownSteps(key, worn[key] ?? 0);
+        if (change !== 0) {
+            changes.push({
+                key,
+                text: formatStat(key, change / statStep(key)),
+                better: change > 0,
+            });
         }
-        const change = shownSteps(key, now) - shownSteps(key, was);
-        pairs.push({
-            key,
-            label: statHeading(key),
-            ...(was !== 0 && { worn: formatStatValue(key, was) }),
-            ...(now !== 0 && { found: formatStatValue(key, now) }),
-            ...(change !== 0 && { change: formatStatValue(key, change / statStep(key)) }),
-            better: change >= 0,
-        });
     }
-    return pairs;
+    return changes;
 }
