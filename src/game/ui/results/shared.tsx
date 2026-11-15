@@ -2,7 +2,12 @@ import type { GameClient } from "../../client/GameClient";
 import type { UiSnapshot } from "../../client/GameStore";
 import { formatTime } from "../../client/GameView";
 import { invaderName } from "../../content/invasions";
-import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../../content/invocations";
+import {
+    INVOCATION_BY_ID,
+    RAID_BAND_SPRITES,
+    getRaidBand,
+    invocationName,
+} from "../../content/invocations";
 import { getMap, mapName } from "../../content/maps";
 import { TROPHY_BY_ID, trophyName } from "../../content/trophies";
 import type { MapDef } from "../../content/types";
@@ -124,15 +129,18 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
             <div className="ui-tombs-board-level">
                 <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
                 <span>
-                    Raid level <b>{tombs.level}</b> ({band})
+                    {t("ui.invocations.raid_level_band", {
+                        level: tombs.level,
+                        band: t(`ui.invocations.band.${band.toLowerCase()}`),
+                    })}
                 </span>
             </div>
             {tombs.invocations.length > 0 && (
-                <div className="ui-tombs-board-invocations" aria-label="Invocations">
+                <div className="ui-tombs-board-invocations" aria-label={t("ui.invocations.title")}>
                     {tombs.invocations.map((id) => {
                         const invocation = INVOCATION_BY_ID.get(id);
                         return invocation ? (
-                            <span key={id} title={invocation.name}>
+                            <span key={id} title={invocationName(invocation)}>
                                 <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
                             </span>
                         ) : null;
@@ -143,25 +151,25 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                 <table className="ui-tombs-board-table">
                     <thead>
                         <tr>
-                            <th>Room</th>
-                            <th>Time</th>
+                            <th>{t("ui.tombs.board.room")}</th>
+                            <th>{t("ui.tombs.board.time")}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {tombs.paths.map((path) => (
                             <tr key={path.id}>
-                                <td>{path.name}</td>
+                                <td>{tl(path.name)}</td>
                                 <td>{formatTime(path.seconds)}</td>
                             </tr>
                         ))}
                         {tombs.wardensSeconds !== undefined && (
                             <tr>
-                                <td>The Wardens</td>
+                                <td>{t("ui.tombs.board.wardens")}</td>
                                 <td>{formatTime(tombs.wardensSeconds)}</td>
                             </tr>
                         )}
                         <tr className="ui-tombs-board-total">
-                            <td>Total</td>
+                            <td>{t("ui.tombs.board.total")}</td>
                             <td>{formatTime(total)}</td>
                         </tr>
                     </tbody>
@@ -169,16 +177,16 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                 <table className="ui-tombs-board-table">
                     <thead>
                         <tr>
-                            <th>Player</th>
-                            <th>Points</th>
-                            <th>Deaths</th>
-                            <th>Purple</th>
+                            <th>{t("ui.tombs.board.player")}</th>
+                            <th>{t("ui.tombs.board.points")}</th>
+                            <th>{t("ui.tombs.board.deaths")}</th>
+                            <th>{t("ui.tombs.board.purple")}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {tombs.party.map((player, i) => (
                             <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
-                                <td>{player.name || "You"}</td>
+                                <td>{player.name || t("ui.tombs.board.you")}</td>
                                 <td>{player.points.toLocaleString("en-GB")}</td>
                                 <td>{player.deaths}</td>
                                 {/* None with no purple left to find, as their chest's line */}
@@ -191,7 +199,7 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                         ))}
                         {tombs.party.length > 1 && (
                             <tr className="ui-tombs-board-total">
-                                <td>Party</td>
+                                <td>{t("ui.tombs.board.party")}</td>
                                 <td>{party.toLocaleString("en-GB")}</td>
                                 <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
                                 <td />
@@ -203,14 +211,15 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
             {tombs.timeLimit && (
                 <div className="ui-subtle">
                     {tombs.timeLimit.met
-                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
-                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
+                        ? t("ui.tombs.board.in_time", { minutes: tombs.timeLimit.minutes })
+                        : t("ui.tombs.board.past_time", {
+                              minutes: tombs.timeLimit.minutes,
+                              level: Math.max(0, tombs.level - tombs.timeLimit.drop),
+                          })}
                 </div>
             )}
             {tombs.wipes > 0 && (
-                <div className="ui-subtle">
-                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
-                </div>
+                <div className="ui-subtle">{tp("ui.tombs.board.wipes", tombs.wipes)}</div>
             )}
         </div>
     );

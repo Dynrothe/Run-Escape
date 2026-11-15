@@ -1308,23 +1308,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
     }
     if (isPeaceful(getMap(ui.mapId))) {
         return (
-            <div
-                className="ui-endless"
-                title="Nothing comes here: walk round it for as long as you like."
-            >
-                <span className="ui-endless-name">Explore</span>
-                <span className="ui-endless-hint">No enemies</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.peaceful")}>
+                <span className="ui-endless-name">{t("ui.endless.explore")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.no_enemies")}</span>
             </div>
         );
     }
     if (getMap(ui.mapId).fun?.explore) {
         return (
-            <div
-                className="ui-endless"
-                title="No clock here: fight on for as long as you like. The run is won when its last boss falls."
-            >
-                <span className="ui-endless-name">Explore</span>
-                <span className="ui-endless-hint">No clock</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.explore")}>
+                <span className="ui-endless-name">{t("ui.endless.explore")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.no_clock")}</span>
             </div>
         );
     }
@@ -3530,10 +3524,15 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
         <>
             <div className="ui-round">
                 {wave.done
-                    ? "Room done"
+                    ? t("ui.tombs.room_done")
                     : wave.waiting
-                      ? "Through the barrier to begin"
-                      : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
+                      ? t("ui.tombs.barrier")
+                      : t("ui.tombs.wave", {
+                            // The rooms' own counts come from GameClient in English
+                            label: wave.label ? tl(wave.label) : t("ui.tombs.label.wave"),
+                            wave: wave.wave,
+                            of: wave.of,
+                        })}
             </div>
             {/* Dev server only, with ?devtools: straight to the boss, for testing it */}
             {client.devTools && !wave.done && (
@@ -3554,7 +3553,7 @@ function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
     if (seconds === undefined) {
         return null;
     }
-    return <div className="ui-round">Zebak roars in {seconds}s: get behind a boulder!</div>;
+    return <div className="ui-round">{t("ui.tombs.roar", { seconds })}</div>;
 }
 
 // The Crondis room: your water, and the palm's growth
@@ -3565,7 +3564,7 @@ function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | nul
     }
     return (
         <div className="ui-round">
-            Water {info.water}: the palm has {info.growth} of {info.goal}
+            {t("ui.tombs.crondis", { water: info.water, growth: info.growth, goal: info.goal })}
         </div>
     );
 }
@@ -3579,8 +3578,10 @@ function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
     const filled = Math.round(info.charge * 10);
     return (
         <div className="ui-round">
-            Mirrors held: {info.held} · Beam {"▰".repeat(filled)}
-            {"▱".repeat(10 - filled)}
+            {t("ui.tombs.het", {
+                held: info.held,
+                beam: "▰".repeat(filled) + "▱".repeat(10 - filled),
+            })}
         </div>
     );
 }
@@ -3597,18 +3598,22 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
             <div className="ui-scabaras-puzzles">
                 {info.puzzles.map(({ puzzle, state }) => (
                     <div key={puzzle} className={"ui-scabaras-puzzle ui-scabaras-puzzle-" + state}>
-                        {SCABARAS_PUZZLES[puzzle].name}:{" "}
-                        {state === "solved"
-                            ? "done"
-                            : state === "open"
-                              ? SCABARAS_PUZZLES[puzzle].todo
-                              : SCABARAS_PUZZLES[puzzle].after}
+                        {t("ui.tombs.scabaras.puzzle", {
+                            name: t(`ui.tombs.scabaras.${puzzle}.name`),
+                            state:
+                                state === "solved"
+                                    ? t("ui.tombs.scabaras.done")
+                                    : state === "open"
+                                      ? t(`ui.tombs.scabaras.${puzzle}.todo`)
+                                      : SCABARAS_PUZZLES[puzzle].after &&
+                                        t(`ui.tombs.scabaras.${puzzle}.after`),
+                        })}
                     </div>
                 ))}
             </div>
             {info.readable && (
                 <div className="ui-round">
-                    The tablet says {info.target}: made {info.sum}
+                    {t("ui.tombs.tablet_says", { target: info.target, sum: info.sum })}
                 </div>
             )}
         </>
@@ -3647,27 +3652,29 @@ function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element |
     if (info.reading === "tablet") {
         return (
             <div className="ui-panel rs-border rs-background ui-scabaras-reading">
-                <div className="ui-scabaras-title">Ancient tablet</div>
+                <div className="ui-scabaras-title">{t("ui.tombs.tablet")}</div>
                 {info.readable ? (
                     <>
                         <div className="ui-scabaras-number">{info.target}</div>
-                        <div>So far: {info.sum}</div>
+                        <div>{t("ui.tombs.so_far", { sum: info.sum })}</div>
                     </>
                 ) : (
-                    <div>Its markings are dark.</div>
+                    <div>{t("ui.tombs.dark")}</div>
                 )}
             </div>
         );
     }
     return (
         <div className="ui-panel rs-border rs-background ui-scabaras-reading ui-scabaras-slate">
-            <div className="ui-scabaras-title">Ancient slate</div>
+            <div className="ui-scabaras-title">{t("ui.tombs.slate")}</div>
             <div className="ui-scabaras-symbols">
                 {SCABARAS.symbolNames.map((name, i) => (
                     <div key={name} className="ui-scabaras-symbol">
                         <ItemIcon locId={SCABARAS.locs.symbols[i]} size={40} />
                         <span className="ui-scabaras-value">{i + 1}</span>
-                        <span className="ui-scabaras-name">{name}</span>
+                        <span className="ui-scabaras-name">
+                            {t(`ui.tombs.symbol.${name.toLowerCase()}`)}
+                        </span>
                     </div>
                 ))}
             </div>
@@ -3683,7 +3690,7 @@ function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | nul
     }
     return (
         <div className="ui-round">
-            Shadows {shadows.left} / 4: they flood in {shadows.seconds}s
+            {t("ui.tombs.shadows", { left: shadows.left, seconds: shadows.seconds })}
         </div>
     );
 }

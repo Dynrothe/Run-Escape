@@ -21,6 +21,8 @@ the version in the corner).
 - The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
 - Every monster's face on the Combat tabs is framed on its own: turned, posed and zoomed to show
   it best, inside the game's stone frame.
+- The invocations, the Tombs of Amascut's HUD and its results board, and the explore maps' labels
+  can be translated: they were in English whatever the language.
 - The pause menu's Settings look like its other tabs: sections for Sound, Display, the run, Co-op
   and the keys, each with the game's own settings icon, and a card for each setting, edged green
   while it's on and red while it's off. Off and On are in the quests' red and green.

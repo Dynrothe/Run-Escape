@@ -3163,6 +3163,11 @@ in `i18n/store.ts`.
   that isn't a stat gives `StatLine` its `icon` (a potion's duration has `DURATION_ICON`).
   `statIcons.test.ts` runs every language in `LANGS` over every such line, so a new language is
   checked by adding it there.
+- `scripts/i18n/find-untranslated.ts` lists English a screen shows without the language files
+  (JSX text, what a player sees or hears in `title`, `aria-label`, `placeholder` and `alt`, and
+  strings a JSX expression shows straight). It's a list to look through, not a check: the dev
+  screens and `?devtools` buttons are left out, and text a view builds in a `.ts` file (a label
+  `GameClient` hands the HUD) isn't seen, so that goes through `tl()` where it's shown.
 - Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
   keys there, and `tr()` and `tl()` English.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
