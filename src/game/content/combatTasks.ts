@@ -463,7 +463,9 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         id: "unscarred",
         name: "Unscarred",
         description: "Kill the Scarred black demon without it hitting you.",
-        tier: "medium",
+        // Hard, not medium like the other Act II maps' no-hit kills: its 10-tile Roar comes in the
+        // dark
+        tier: "hard",
         type: "perfection",
         mapId: "scar",
         goal: { kind: "kill", bossIds: ["scarred_black_demon"], without: ["hits"] },
