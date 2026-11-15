@@ -91,7 +91,8 @@ version and how to run it.
   evolutions, each shown as the weapon that evolves until it's been made.
 - **Cards** (the title's Cards tile): a card for every weapon, passive, reward casket gear and
   Collection log trophy, each in versions from its own rarity up to Very rare. Runs earn platinum
-  tokens beside their coins, scaled as coins are (less in endless runs), and the Card shop sells
+  tokens beside their coins, scaled as coins are, twice over, and three times that in a Cards
+  only run, and the Card shop sells
   packs for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
   weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one likelier to
   be rare. Each offer says what it holds, what its last card is at least (where that's better than
@@ -104,7 +105,10 @@ version and how to run it.
   your starting adventurer's card. In the album, pressing a found card opens it big in a window,
   with the versions you own.
 - **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
-  card of, no rarer than your best version of it, and reward caskets give only gear you have a card
+  card of, no rarer than your best version of it, and a weapon whose levels are metals (Bronze to
+  Dragon, Strike to Wave) only up to the best metal you have a card of; each metal is a card of its
+  own, rarer up the metals, and a higher one brings the lower ones you haven't got. Reward caskets
+  give only gear you have a card
   of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
   your collection has enough cards to fill a level up (the godswords count as one weapon, since
   only one is ever held), nor as an adventurer whose starting weapon's

@@ -15,6 +15,7 @@ import {
     packCards,
     parseVersionKey,
     versionKey,
+    weaponTiers,
 } from "./cards";
 import { CASKET_GEAR } from "./items";
 import { PASSIVES } from "./passives";
@@ -31,11 +32,17 @@ const card = (id: string) => {
 };
 
 describe("cards", () => {
-    it("has one for each weapon, passive, casket gear and trophy, under an id that won't change", () => {
+    it("has one for each weapon (and its metals), passive, casket gear and trophy, under an id that won't change", () => {
         const ids = ALL_CARDS.map((c) => c.id);
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids).toEqual([
-            ...WEAPONS.map((w) => `weapon:${w.id}`),
+            // A weapon's own card, then its metals' (weaponTiers), each after the last
+            ...WEAPONS.flatMap((w) => [
+                `weapon:${w.id}`,
+                ...weaponTiers(w)
+                    .slice(1)
+                    .map((_, i) => `weapon:${w.id}.${i + 2}`),
+            ]),
             ...PASSIVES.map((p) => `passive:${p.id}`),
             ...CASKET_GEAR.map((g) => `gear:${g.id}`),
             ...TROPHIES.map((t) => `trophy:${t.id}`),

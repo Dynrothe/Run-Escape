@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ALL_CARDS } from "../content/cards";
+import { ALL_CARDS, tierCardId, weaponTiers } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import { getEvolutionsWith } from "../content/evolutions";
 import { PET_BY_ID } from "../content/pets";
@@ -13,6 +13,7 @@ import {
     CardCaps,
     UpgradeChoice,
     canEvolve,
+    cardLevelCap,
     getEvolutionHint,
     hiltChoices,
     rollChoices,
@@ -132,14 +133,16 @@ describe("Card collection only offers", () => {
         expect(offers(CAPS, 9)).toEqual(offers(CAPS, 9));
     });
 
-    it("evolves only with three cards: the weapon's, the passive's and what it becomes", () => {
+    it("evolves only with the weapon's cards (its top metal's too), the passive's and what it becomes", () => {
         // The throwing axes at their last level (dragon) with the Tome of fire: the Chain-hit axes
         const axes = getWeapon("throwing_axes");
         expect(axes.evolution).toEqual({ into: "chain_hit_axes", requiresPassive: "tome_of_fire" });
         const maxed = weapon("throwing_axes", axes.levels.length);
         const owned = new Set(["tome_of_fire"]);
+        // (the top metal's card too: the last level, where it evolves, takes it)
         const all = new Map<string, Rarity>([
             ["weapon:throwing_axes", "common"],
+            ["weapon:throwing_axes.7", "veryRare"],
             ["passive:tome_of_fire", "common"],
             ["weapon:chain_hit_axes", "veryRare"],
         ]);
@@ -151,33 +154,55 @@ describe("Card collection only offers", () => {
         }
     });
 
-    it("lets a weapon climb all its metals with its one card", () => {
-        // A weapon's metals are its levels, not cards of their own: its card covers them all
+    it("lets a weapon climb its metals only as far as the rarest metal's card owned", () => {
+        // The throwing axes' metals are cards of their own: Bronze is level 1, Iron 2, Steel 3...
         const axes = getWeapon("throwing_axes");
-        const caps = new Map<string, Rarity>([["weapon:throwing_axes", "common"]]);
-        const levels = new Set<number>();
-        for (let level = 1; level < axes.levels.length; level++) {
-            for (const choice of rollChoices(
-                new Rng(level),
-                [weapon("throwing_axes", level)],
-                [],
-                0,
-                "ranged",
-                undefined,
-                false,
-                1,
-                0,
-                undefined,
-                caps,
-            )) {
-                if (choice.kind === "weaponLevel") {
-                    levels.add(choice.level);
+        const offeredLevels = (caps: CardCaps) => {
+            const levels = new Set<number>();
+            for (let level = 1; level < axes.levels.length; level++) {
+                for (let seed = 1; seed < 6; seed++) {
+                    for (const choice of rollChoices(
+                        new Rng(seed * 100 + level),
+                        [weapon("throwing_axes", level)],
+                        [],
+                        0,
+                        "ranged",
+                        undefined,
+                        false,
+                        1,
+                        0,
+                        undefined,
+                        caps,
+                    )) {
+                        if (choice.kind === "weaponLevel") {
+                            levels.add(choice.level);
+                        }
+                    }
                 }
             }
-        }
-        expect([...levels].sort((a, b) => a - b)).toEqual(
+            return [...levels].sort((a, b) => a - b);
+        };
+        // Bronze's card alone: never past Bronze (the bug: an Adamant thrownaxe offered)
+        expect(offeredLevels(new Map([["weapon:throwing_axes", "common"]]))).toEqual([]);
+        // Up to Steel (with Bronze and Iron, which come with it)
+        const steel = new Map<string, Rarity>([
+            ["weapon:throwing_axes", "common"],
+            ["weapon:throwing_axes.2", "common"],
+            ["weapon:throwing_axes.3", "uncommon"],
+        ]);
+        expect(cardLevelCap(steel, axes)).toBe(3);
+        expect(offeredLevels(steel)).toEqual([2, 3]);
+        // The top metal's: every level
+        const all = new Map(
+            weaponTiers(axes).map((_, i) => [tierCardId(axes.id, i), "veryRare" as Rarity]),
+        );
+        expect(cardLevelCap(all, axes)).toBe(Infinity);
+        expect(offeredLevels(all)).toEqual(
             Array.from({ length: axes.levels.length - 1 }, (_, i) => i + 2),
         );
+        // Outside a Card collection only run, and a weapon without metals: no cap
+        expect(cardLevelCap(undefined, axes)).toBe(Infinity);
+        expect(cardLevelCap(steel, getWeapon("dark_bow"))).toBe(Infinity);
     });
 
     it("hints, picks and evolves only into weapons with a card", () => {
@@ -244,7 +269,7 @@ describe("Card collection only offers", () => {
         ).toBeUndefined();
     });
 
-    it("hints a passive's evolutions only from a weapon with its card", () => {
+    it("hints a passive's evolutions only from a weapon with its cards, its top metal's too", () => {
         // Piety evolves the scimitar into the Abyssal whip: without the scimitar's card it's never
         // offered, so Piety's card mustn't promise it
         const piety: UpgradeChoice = { kind: "newPassive", passiveId: "piety", quality: "common" };
@@ -253,7 +278,10 @@ describe("Card collection only offers", () => {
             ["weapon:abyssal_whip", "veryRare"],
         ]);
         expect(getEvolutionHint(piety, [], [], "melee", undefined, caps)).toBeUndefined();
+        // Nor with only its Bronze: its Dragon's card, which takes it to the last level, too
         caps.set("weapon:scimitar", "common");
+        expect(getEvolutionHint(piety, [], [], "melee", undefined, caps)).toBeUndefined();
+        caps.set("weapon:scimitar.8", "veryRare");
         expect(getEvolutionHint(piety, [], [], "melee", undefined, caps)?.text).toContain(
             getEvolutionsWith("piety").find((e) => e.into.id === "abyssal_whip")!.name,
         );

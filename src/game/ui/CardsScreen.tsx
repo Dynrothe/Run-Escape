@@ -90,7 +90,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
     const [previewInfo, setPreviewInfo] = useState(false);
     // A found card shown big in a window of its own, pressed in the album or dealt from a pack
     const [viewing, setViewing] = useState<
-        { card: CardDef; rarity?: Rarity; foil?: boolean } | undefined
+        { card: CardDef; rarity?: Rarity; foil?: boolean; alsoUnlocks?: CardDef[] } | undefined
     >(undefined);
     const packs = getCardPacks(save);
     const backRef = useRef<HTMLButtonElement>(null);
@@ -290,7 +290,12 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                     again={again(opened.pack)}
                     viewing={viewing !== undefined}
                     onView={(dealt) =>
-                        setViewing({ card: dealt.card, rarity: dealt.rarity, foil: dealt.foil })
+                        setViewing({
+                            card: dealt.card,
+                            rarity: dealt.rarity,
+                            foil: dealt.foil,
+                            alsoUnlocks: dealt.alsoUnlocks,
+                        })
                     }
                     onClose={() => setOpened(undefined)}
                 />
@@ -302,6 +307,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                     card={viewing.card}
                     rarity={viewing.rarity}
                     foil={viewing.foil}
+                    alsoUnlocks={viewing.alsoUnlocks}
                     onClose={() => setViewing(undefined)}
                 />
             )}
@@ -628,10 +634,13 @@ function CardWindow({
     card,
     rarity,
     foil,
+    alsoUnlocks,
     onClose,
 }: {
     save: SaveData;
     card: CardDef;
+    // A card just dealt: the lower tiers of its weapon it brought with it (giveLowerTiers)
+    alsoUnlocks?: CardDef[];
     // The version to show (a card just dealt's, and whether it's a foil), else the rarest owned (a
     // foil's, if one is)
     rarity?: Rarity;
@@ -656,6 +665,13 @@ function CardWindow({
                     moving
                 />
                 <Versions save={save} card={card} />
+                {alsoUnlocks && alsoUnlocks.length > 0 && (
+                    <div className="ui-cards-detail-text">
+                        {t("cards.also_unlocks", {
+                            list: list(alsoUnlocks.map((lower) => lower.name())),
+                        })}
+                    </div>
+                )}
                 <button className="ui-button" onClick={onClose}>
                     {t("cards.close")}
                 </button>
@@ -826,7 +842,18 @@ function PackWindow({
                                 {i < dealt && (
                                     <button
                                         className="ui-tcg-deal"
-                                        aria-label={dealtCard.card.name()}
+                                        aria-label={
+                                            dealtCard.card.name() +
+                                            (dealtCard.alsoUnlocks
+                                                ? `. ${t("cards.also_unlocks", {
+                                                      list: list(
+                                                          dealtCard.alsoUnlocks.map((c) =>
+                                                              c.name(),
+                                                          ),
+                                                      ),
+                                                  })}`
+                                                : "")
+                                        }
                                         onClick={() => onView(dealtCard)}
                                     >
                                         <span className="ui-tcg-deal-back" aria-hidden="true">

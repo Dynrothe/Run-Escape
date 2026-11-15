@@ -1,4 +1,5 @@
 import { getBlessing } from "../content/blessings";
+import { tierCardId, weaponTiers } from "../content/cards";
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import { EVOLUTIONS, EvolutionDef, getEvolutionsWith } from "../content/evolutions";
 import {
@@ -94,9 +95,28 @@ function hasCard(cards: CardCaps | undefined, kind: "weapon" | "passive", id: st
     return !cards || cards.has(`${kind}:${id}`);
 }
 
+// The level a run's cards let a weapon reach: in a Card collection only run, for a weapon whose
+// levels are items of their own (weaponTiers), the last level of the highest tier with its card
+// (a Steel scimitar's card, up to Steel); any other, as far as it goes
+export function cardLevelCap(cards: CardCaps | undefined, weapon: WeaponDef): number {
+    const tiers = weaponTiers(weapon);
+    if (!cards || tiers.length === 0) {
+        return Infinity;
+    }
+    let cap = 0;
+    tiers.forEach((tier, i) => {
+        if (cards.has(tierCardId(weapon.id, i))) {
+            cap = tier.toLevel;
+        }
+    });
+    // The top tier's: as far as it goes, endless levels too
+    return cap >= weapon.levels.length ? Infinity : cap;
+}
+
 // Whether a run's cards allow an evolution: three cards, the weapon's, its passive's and what it
-// evolves into (always, outside a Card collection only run). canEvolve, the level up's hints and
-// the HUD all go by this, so they agree.
+// evolves into, and for a weapon whose levels are metals its top metal's (an evolution comes at
+// the last level, which only that card reaches, cardLevelCap) (always, outside a Card collection
+// only run). canEvolve, the level up's hints and the HUD all go by this, so they agree.
 export function cardsAllowEvolution(
     cards: CardCaps | undefined,
     weaponId: string,
@@ -105,6 +125,7 @@ export function cardsAllowEvolution(
 ): boolean {
     return (
         hasCard(cards, "weapon", weaponId) &&
+        cardLevelCap(cards, getWeapon(weaponId)) === Infinity &&
         hasCard(cards, "passive", passiveId) &&
         hasCard(cards, "weapon", intoId)
     );
@@ -517,7 +538,11 @@ export function rollChoices(
     const ownedPassives = new Set(passives.map((p) => p.id));
 
     for (const weapon of weapons) {
-        if (weapon.level < weapon.def.levels.length || endless) {
+        if (
+            (weapon.level < weapon.def.levels.length || endless) &&
+            // A metal past the rarest one with its card never comes (cardLevelCap)
+            weapon.level < cardLevelCap(cards, weapon.def)
+        ) {
             pool.push({
                 choice: () => ({
                     kind: "weaponLevel",

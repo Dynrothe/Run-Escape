@@ -10,7 +10,7 @@ import { formatStats } from "./stats";
 import { CARDS_ICON_OBJ } from "./titleIcons";
 import { TROPHIES, TrophyDef, trophyName } from "./trophies";
 import type { GearDef, PassiveDef, WeaponDef } from "./types";
-import { WEAPONS, getWeapon, weaponDescription, weaponName } from "./weapons";
+import { WEAPONS, getWeapon, weaponDescription, weaponLevelName, weaponName } from "./weapons";
 
 // Cards: a card for each weapon, passive, reward casket gear and Collection log trophy the game
 // already has, with that thing's cache item as its picture. Packs are bought with the platinum
@@ -32,6 +32,12 @@ export type CardDef = {
     spriteId?: number;
     // The map it comes from, when it isn't in from the start: its card's only out once the map is
     mapId?: string;
+    // A weapon's card: the weapon, and for a weapon whose levels are items of their own (a
+    // scimitar's metals, Fire spells' Strike to Wave), which of them it is (weaponTiers), 0 for the
+    // first. Its card's "weapon:<id>" as it always was; the others' are "weapon:<id>.<n>", n from
+    // 2 (tierCardId)
+    weaponId?: string;
+    tier?: number;
     name(): string;
     text(): string;
 };
@@ -47,6 +53,10 @@ export const PACK_SIZE = 5;
 export const PLATINUM_PER_KILL = 0.01;
 export const PLATINUM_PER_BOSS = 5;
 export const PLATINUM_WIN = 25;
+// Then twice that in every run (normal, hard and endless alike), and three times that again in a
+// Card collection only run (Sim.platinumBoost)
+export const PLATINUM_BOOST = 2;
+export const PLATINUM_CARDS_ONLY = 3;
 // The most a save holds: a crafted save's number stops here
 export const MAX_PLATINUM = 1_000_000;
 // Packs a save starts with, free, once: every save, old ones too, until SaveData.cardPacks is set
@@ -104,16 +114,110 @@ function trophyMap(trophy: TrophyDef): string | undefined {
     return from.mapId;
 }
 
-function weaponCard(weapon: WeaponDef): CardDef {
-    return {
-        id: `weapon:${weapon.id}`,
-        kind: "weapon",
-        rarity: weapon.rarity,
-        objId: weapon.iconObjId,
+// A weapon's tiers: its levels that are items of their own, each run of levels with the same name
+// (a scimitar's Bronze to Dragon, Fire spells' Strike to Wave), with the last level each reaches.
+// A weapon with one name for every level has none: its one card covers it all.
+export type WeaponTier = { levelIndex: number; toLevel: number; objId: number };
+
+const TIERS = new Map<string, WeaponTier[]>();
+
+export function weaponTiers(weapon: WeaponDef): WeaponTier[] {
+    let tiers = TIERS.get(weapon.id);
+    if (!tiers) {
+        tiers = [];
+        weapon.levels.forEach((level, i) => {
+            const last = tiers![tiers!.length - 1];
+            if (last && weapon.levels[last.levelIndex].name === level.name) {
+                last.toLevel = i + 1;
+            } else {
+                tiers!.push({
+                    levelIndex: i,
+                    toLevel: i + 1,
+                    objId: level.objId ?? weapon.iconObjId,
+                });
+            }
+        });
+        if (tiers.length < 2 || weapon.levels.some((level) => level.name === undefined)) {
+            tiers = [];
+        }
+        TIERS.set(weapon.id, tiers);
+    }
+    return tiers;
+}
+
+// A tier's card's id: the first's is the weapon's own card's, as saves have always kept it
+export function tierCardId(weaponId: string, tier: number): string {
+    return tier === 0 ? `weapon:${weaponId}` : `weapon:${weaponId}.${tier + 1}`;
+}
+
+// A tier's rarity: the weapon's own for its first, rarer up the tiers, the top one Very rare
+// (a scimitar's Bronze and Iron Common, Steel and Black Uncommon, Mithril and Adamant Rare, Rune
+// and Dragon Very rare; Fire spells' Strike, Bolt, Blast and Wave one each), so the better metals
+// are the rarer pulls
+export function tierRarity(weapon: WeaponDef, tier: number, tiers: number): Rarity {
+    const base = RARITY_ORDER.indexOf(weapon.rarity);
+    const step = Math.floor((tier * RARITY_ORDER.length) / tiers);
+    return RARITY_ORDER[Math.min(base + step, RARITY_ORDER.length - 1)];
+}
+
+// A weapon's cards: its own, and one for each of its tiers past the first, each named and
+// pictured as that tier's item (weaponLevelName)
+function weaponCards(weapon: WeaponDef): CardDef[] {
+    const tiers = weaponTiers(weapon);
+    if (tiers.length === 0) {
+        return [
+            {
+                id: `weapon:${weapon.id}`,
+                kind: "weapon",
+                rarity: weapon.rarity,
+                objId: weapon.iconObjId,
+                mapId: weapon.unlock?.mapId,
+                weaponId: weapon.id,
+                name: () => weaponName(weapon),
+                text: () => weaponDescription(weapon),
+            },
+        ];
+    }
+    return tiers.map((tier, i) => ({
+        id: tierCardId(weapon.id, i),
+        kind: "weapon" as const,
+        rarity: i === 0 ? weapon.rarity : tierRarity(weapon, i, tiers.length),
+        objId: tier.objId,
         mapId: weapon.unlock?.mapId,
-        name: () => weaponName(weapon),
-        text: () => weaponDescription(weapon),
-    };
+        weaponId: weapon.id,
+        tier: i,
+        name: () => weaponLevelName(weapon, tier.levelIndex) ?? weaponName(weapon),
+        // Its first sentence (not the one about climbing the metals: a card's one metal), then
+        // how far it takes the weapon in a Cards only run
+        text: () =>
+            `${firstSentence(weaponDescription(weapon))} ` +
+            // The top metal's goes on past its last level, in endless
+            (i === tiers.length - 1
+                ? t("cards.tier_text_top")
+                : t("cards.tier_text", { level: tier.toLevel })),
+    }));
+}
+
+// A text's first sentence
+function firstSentence(text: string): string {
+    const end = text.search(/[.!?](\s|$)/);
+    return end < 0 ? text : text.slice(0, end + 1);
+}
+
+// A weapon card's lower tiers' cards (weaponTiers): what a card of a higher tier brings with it
+export function lowerTierCards(card: CardDef): CardDef[] {
+    if (!card.weaponId || !card.tier) {
+        return [];
+    }
+    return Array.from(
+        { length: card.tier },
+        (_, i) => CARD_BY_ID.get(tierCardId(card.weaponId!, i))!,
+    );
+}
+
+// The weapon, passive, gear or trophy a card's for
+export function cardDefId(card: CardDef): string {
+    return card.weaponId ?? card.id.slice(card.id.indexOf(":") + 1);
 }
 
 function passiveCard(passive: PassiveDef): CardDef {
@@ -157,7 +261,7 @@ function trophyCard(trophy: TrophyDef): CardDef {
 // Every card there is, out or not: a save keeps the ones it has (migrateSave), so a card from a
 // map that isn't out yet isn't dropped from a tester's save
 export const ALL_CARDS: CardDef[] = [
-    ...WEAPONS.map(weaponCard),
+    ...WEAPONS.flatMap(weaponCards),
     ...PASSIVES.map(passiveCard),
     ...CASKET_GEAR.map(gearCard),
     ...TROPHIES.map(trophyCard),
@@ -206,8 +310,8 @@ export function cardRarityName(rarity: Rarity): string {
 // A rarity's ink on a printed card, in the game (ui/CardsScreen.tsx) and the card generator
 // (scripts/cards) alike: softer than the game's own rarity colours, so they sit on the plate
 export const CARD_INKS: Record<Rarity, string> = {
-    common: "#ece6da",
-    uncommon: "#8cc878",
+    common: "#8cc878",
+    uncommon: "#eac874",
     rare: "#eb9b63",
     veryRare: "#ed8580",
 };
@@ -285,7 +389,7 @@ export function cardTier(card: CardDef): number {
     if (CARD_TOP_ITEMS.has(card.id)) {
         return 3;
     }
-    const id = card.id.slice(card.id.indexOf(":") + 1);
+    const id = cardDefId(card);
     if (card.kind === "gear") {
         return Math.min(getArmouryDepth(id), 3);
     }
