@@ -452,8 +452,10 @@ Add it to `quests.ts`. Tests check every quest can be done, so its enemy ids mus
 Add it to `COMBAT_TASKS` in `combatTasks.ts`, with a `goal` from `CombatGoal` in `types.ts`. Its id
 goes in saves, so never rename one. Its name mustn't be a quest's (two Inferno quests already have
 OSRS combat achievements' names). `combatTasks.test.ts` checks its enemy and map ids, and that every
-attack a task avoids is one its boss has by that name, so renaming a boss's attack fails it rather
-than making the task impossible. Its coins and points come from its tier, and the tiers' reward
+attack a task avoids is one its boss (or what it summons) has by that name and one that does
+damage, so renaming a boss's attack fails it rather than making the task impossible, and a summon's
+name (the Forester's Feathered Apocalypse, which only brings his chickens) can't make it a gift.
+Its coins and points come from its tier, and the tiers' reward
 thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`. Its name and
 description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts` puts them in
 `locales/en/gen.json` (`combat.task.<id>.name` and `.desc`), and the screens read them through
@@ -485,7 +487,9 @@ description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts`
   room's mistakes emit `tombsMistake` (`Sim.tombsMistake`): an Apmeken issue left too long, a
   Crondis spill, a wrong Scabaras step, Het's beam or an orb landing. The room's hits can't tell
   them apart, since the Scabaras room's scarabs shoot under the puzzle's id. `noDeaths` counts
-  `sim.tombsDeaths`, and `noSupplies` the Helpful Spirit's supplies used too. The Wardens arrive
+  `sim.tombsDeaths`. `noSupplies` is the Theatre's raid points spent at its chest, and the Helpful
+  Spirit's supplies used: the Tombs' rooms add points never counted as earned
+  (`raidPointsEarned` is the Theatre's), so its points aren't compared. The Wardens arrive
   without `bossSpawned`, so a `kill` of them would need its window opened another way.
 - `abilityHits` counts only the button's landings on the boss: an `ability` event whose `enemyId`
   is `""` (a Kindle that caught no one) doesn't count.
@@ -502,7 +506,9 @@ description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts`
   is (a curse, Phosani's parasites bursting), the sleepwalkers' blast lands even with none let
   through, and a hit always costs at least 1, armour or not. Don't spoil a task on something the
   boss picks at random (being cursed at all): spoil it on what the player could have stopped (hurt
-  while cursed, a parasite reaching her). A homing shot has to be dodgeable at the player's own
+  while cursed, a parasite reaching her). `healers` narrows `heals` to the heals the player could
+  have stopped: Parasite-Free counts her eggs' parasites, not one that bursts out of the player
+  beside her (her leash keeps her close). A homing shot has to be dodgeable at the player's own
   speed; Jad's Magic needs about +25% move speed, or a long head start. Probe a new one in a
   throwaway test before relying on it.
 - A new boss fight should come with its tasks.

@@ -493,7 +493,7 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         name: "Insomniac",
         description:
             "Kill The Nightmare without being hurt while cursed, apart from her sleepwalkers' " +
-            "blast and parasites.",
+            "blast and a parasite bursting out of you.",
         tier: "hard",
         type: "mechanical",
         mapId: "halloween",
@@ -523,15 +523,16 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         id: "plucked",
         name: "Plucked",
         description:
-            "Kill the Freaky Forester, his last stand too, without being hit by the Feathered " +
-            "Apocalypse.",
+            "Kill the Freaky Forester, his last stand too, without an enraged chicken running " +
+            "you down.",
         tier: "hard",
         type: "mechanical",
         mapId: "thanksgiving",
         goal: {
             kind: "kill",
             bossIds: ["freaky_forester", "freaky_forester_final"],
-            without: [{ attacks: ["Feathered Apocalypse"] }],
+            // The Feathered Apocalypse only brings them: their charge is what hurts
+            without: [{ attacks: ["Lane Rush"] }],
         },
     },
 
@@ -557,18 +558,25 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "parasite_free",
         name: "Parasite-Free",
-        description: "Kill Phosani's Nightmare without a parasite healing her.",
+        description: "Kill Phosani's Nightmare without a parasite from her eggs healing her.",
         tier: "hard",
         type: "mechanical",
         mapId: "phosani",
-        goal: { kind: "kill", bossIds: PHOSANI, without: ["heals"] },
+        // Not one that bursts out of the player: it comes out beside her, with her never more
+        // than her leash away, too quick to stop
+        goal: {
+            kind: "kill",
+            bossIds: PHOSANI,
+            without: ["heals"],
+            healers: ["phosani_parasite_weak"],
+        },
     },
     {
         id: "lucid_dreamer",
         name: "Lucid Dreamer",
         description:
             "Kill Phosani's Nightmare without letting a sleepwalker reach her or being hurt while " +
-            "cursed, apart from her sleepwalkers' blast and parasites.",
+            "cursed, apart from her sleepwalkers' blast and a parasite bursting out of you.",
         tier: "elite",
         type: "mechanical",
         mapId: "phosani",
@@ -609,7 +617,8 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         name: "Dreamless",
         description:
             "Kill Phosani's Nightmare on hard mode without letting a sleepwalker reach her or " +
-            "taking any damage, apart from her sleepwalkers' blast and parasites.",
+            "taking any damage, apart from her sleepwalkers' blast and a parasite bursting out " +
+            "of you.",
         tier: "grandmaster",
         type: "perfection",
         mapId: "phosani",
@@ -902,7 +911,7 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "no_diving",
         name: "No Diving",
-        description: "Kill the Menaphite Akh without being hit by a dive.",
+        description: "Kill the Menaphite Akh without being hit by one of her own dives.",
         tier: "hard",
         type: "mechanical",
         mapId: SANDS,
@@ -1071,11 +1080,13 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
     {
         id: "amascuts_remnant",
         name: "Amascut's Remnant",
-        description: "Beat the Tombs of Amascut at raid level 500 or above without dying.",
+        description: "Beat the Tombs of Amascut at raid level 500 or above.",
         tier: "grandmaster",
         type: "mechanical",
         mapId: TOMBS,
-        goal: { kind: "win", maps: [TOMBS], raidLevel: 500, rules: { noDeaths: true } },
+        // Deaths allowed: from 450 a boss's adds drop no food, and its unavoidable hits outrun a
+        // run's hitpoints without it (TOMBS_BOSS_FOOD)
+        goal: { kind: "win", maps: [TOMBS], raidLevel: 500 },
     },
 
     // Awakened Vardorvis

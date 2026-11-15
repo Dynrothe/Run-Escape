@@ -490,7 +490,10 @@ export class CombatTracker {
         if (rules.noTeleports && sim.raidTeleportsLeft !== this.teleportsAtStart) {
             return { kind: "teleporter" };
         }
-        if (rules.noSupplies && hero.raidPoints !== hero.raidPointsEarned) {
+        // The Theatre's supply chest takes raid points. The Tombs' points aren't counted as earned
+        // (raidPointsEarned is the Theatre's), and its supplies are the Spirit's, used from the
+        // inventory (below).
+        if (rules.noSupplies && sim.map.raid && hero.raidPoints !== hero.raidPointsEarned) {
             return { kind: "supplies" };
         }
         if (
@@ -750,7 +753,12 @@ function whatSpoils(
     if (e.type === "bossAbsorbBlast" && e.absorbed > 0 && without.includes("sleepwalkers")) {
         return { kind: "sleepwalker" };
     }
-    if (e.type === "enemyHealed" && without.includes("heals") && goal.bossIds.includes(e.enemyId)) {
+    if (
+        e.type === "enemyHealed" &&
+        without.includes("heals") &&
+        goal.bossIds.includes(e.enemyId) &&
+        (!goal.healers || goal.healers.includes(e.healerId))
+    ) {
         return { kind: "healed", enemyId: e.enemyId };
     }
     return undefined;

@@ -346,16 +346,18 @@ describe("boss kills", () => {
         );
     });
 
-    test("a parasite healing Phosani spoils Parasite-Free; anything else healed doesn't", () => {
-        const heal = (enemyId: string): SimEvent => ({
+    test("an egg's parasite healing Phosani spoils Parasite-Free; anything else doesn't", () => {
+        const heal = (enemyId: string, healerId = "phosani_parasite_weak"): SimEvent => ({
             type: "enemyHealed",
             enemyId,
-            healerId: "phosani_parasite",
+            healerId,
         });
         const sim = createSim("phosani");
         const tracker = track(sim);
         tracker.observe(sim, [spawned("phosanis_nightmare")]);
         tracker.observe(sim, [heal("phosani_totem_charging")]);
+        // One that burst out of the player, beside her: too quick to stop
+        tracker.observe(sim, [heal("phosanis_nightmare", "phosani_parasite")]);
         expect(ids(tracker.observe(sim, [killed("phosanis_nightmare")]))).toContain(
             "parasite_free",
         );
@@ -762,7 +764,10 @@ describe("the Tombs of Amascut", () => {
         // Only at a raid level that high
         expect(ids(tracker.tasks)).not.toContain("movin_on_up");
         sim.tombsPathsDone.push("apmeken");
+        // A room's points, which the Tombs never counts as earned, spend nothing
+        sim.heroes[0].raidPoints += 400;
         expect(ids(tracker.observe(sim, []))).toContain("pathfinder");
+        expect(status(tracker, sim, "spiritless").state).toBe("on");
         const supply = TOMBS_SUPPLY_ITEMS[0].id;
         tracker.observe(sim, [{ type: "itemUsed", itemId: supply, ...at }]);
         expect(said(status(tracker, sim, "spiritless")).reason).toBe("used a supply");

@@ -67,20 +67,25 @@ describe("Combat Achievements' tasks", () => {
         }
     });
 
-    // A renamed attack would make its task impossible without a word
-    test("avoid attacks their bosses have, by name", () => {
+    // A renamed attack would make its task impossible without a word, and one that does no damage
+    // (a summon's) could never spoil it. Its bosses' own, or what they summon (the Forester's
+    // chickens).
+    test("avoid attacks their bosses have, by name, that hurt", () => {
         for (const task of COMBAT_TASKS) {
             const goal = task.goal;
             if (goal.kind !== "kill") {
                 continue;
             }
-            const names = new Set(
-                goal.bossIds.flatMap((id) => ENEMY_BY_ID.get(id)!.boss!.attacks.map((a) => a.name)),
+            const own = goal.bossIds.flatMap((id) => ENEMY_BY_ID.get(id)!.boss!.attacks);
+            const summoned = own.flatMap((a) =>
+                a.summon ? (ENEMY_BY_ID.get(a.summon.enemyId)!.boss?.attacks ?? []) : [],
             );
+            const attacks = [...own, ...summoned];
             for (const avoid of goal.without ?? []) {
                 if (typeof avoid === "object") {
-                    for (const attack of avoid.attacks) {
-                        expect(names.has(attack), `${task.id}: ${attack}`).toBe(true);
+                    for (const name of avoid.attacks) {
+                        const hurts = attacks.some((a) => a.name === name && a.damage > 0);
+                        expect(hurts, `${task.id}: ${name}`).toBe(true);
                     }
                 }
             }

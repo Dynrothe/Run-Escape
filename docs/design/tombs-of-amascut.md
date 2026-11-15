@@ -321,7 +321,8 @@ matched to OSRS's own ToA ones where the game has what they ask for:
 - **The raid**: a path cleared (Pathfinder), the raid beaten (Tomb Explorer), without dying
   (Hardcore Tombs) and without the Helpful Spirit's supplies (Spiritless).
 - **Raid level**: beaten at 150 (Movin' on up), 300 (Confident Raider), 350 without dying
-  (Something of an expert myself) and 500 without dying (Amascut's Remnant), on `win`'s
+  (Something of an expert myself) and 500 (Amascut's Remnant; deaths allowed, as from 450 a
+  boss's adds drop no food, and its unavoidable hits outrun a run's hitpoints), on `win`'s
   `raidLevel`.
 - **Each puzzle room** without a mistake (Perfect Apmeken, Crondis, Het and Scabaras), on
   `perfectRoom`. The rooms emit `tombsMistake` where each mistake happens.

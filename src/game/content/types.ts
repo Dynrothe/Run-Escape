@@ -2208,7 +2208,9 @@ export type CombatGoal =
     // Kill a boss (bossIds: all its forms, the first the one that arrives) without any of
     // these, within this many seconds of its arrival if set. from: "finale" times it from its
     // last stand rather than its arrival. except: attacks whose damage doesn't count, as
-    // nothing the player does can stop it (a mark, the sleepwalkers' blast).
+    // nothing the player does can stop it (a mark, the sleepwalkers' blast). healers: only heals
+    // by these count against "heals" (Phosani's egg-hatched parasites, not one that bursts out of
+    // the player beside her)
     | {
           kind: "kill";
           bossIds: string[];
@@ -2216,6 +2218,7 @@ export type CombatGoal =
           within?: number;
           from?: "finale";
           except?: string[];
+          healers?: string[];
       }
     // Each of these bosses killed within this many seconds of its own arrival
     | { kind: "killEachWithin"; bossIds: string[]; seconds: number }
