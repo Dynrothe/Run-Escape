@@ -23,7 +23,6 @@ import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
-import { useDialog } from "./useDialog";
 import { useSpriteFrame } from "./useSpriteFrame";
 
 // The Collection log, laid out as OSRS's client lays it: its total in the title, tabs along the
@@ -32,10 +31,11 @@ import { useSpriteFrame } from "./useSpriteFrame";
 // items say where they're from. On a narrow screen the entries are a dropdown above the items.
 // What's listed comes from content/collectionLog.ts.
 //
-// inRun: open over the pause menu (GameClient.openRunLog), as a window over it, with what the run
-// has found and not saved yet marked New. Its Escape and P are the client's (closeRunLog), as
-// they're the pause keys there. place keeps where it was left, for when a co-op run's level up
-// or casket takes it away a moment and it opens again.
+// inRun: a page of the pause menu (from its Collection log button, as the settings are), with
+// what the run has found and not saved yet marked New. No window and no X of its own: the button
+// takes it back to the tab it came from, and Escape and P are the pause menu's. place keeps where
+// it was left, for when a co-op run's level up or casket takes the menu away a moment and it
+// opens again.
 
 // Where the log's open: its tab, the entry open on each tab, and the item pointed at
 export type LogPlace = {
@@ -110,7 +110,7 @@ function withPart(text: string, placeholder: string, part: JSX.Element): JSX.Ele
     );
 }
 
-// Memo: over a co-op run, the pause menu under it draws again as the run goes on, and the log
+// Memo: in a co-op run, the pause menu it's in draws again as the run goes on, and the log
 // needn't with it
 export const CollectionLogScreen = memo(function CollectionLogScreen({
     save,
@@ -147,11 +147,8 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
             place.current = { tab, entryIds, itemIndex };
         }
     }, [place, tab, entryIds, itemIndex]);
-    const close = inRun ? () => client.closeRunLog() : () => client.showScreen("title");
+    const close = () => client.showScreen("title");
     useMenuKeys({ onBack: inRun ? undefined : close });
-    // Over a run, a window like the pause menu under it: the focus in it, what's behind out of
-    // reach (its ref is only given to the panel then)
-    const { dialogProps } = useDialog<HTMLDivElement>();
 
     const openTab = (next: LogTab) => {
         setTab(next);
@@ -163,152 +160,139 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
     };
     const found = entryCount(entry);
 
-    return (
-        <div className={inRun ? "ui-fill ui-center ui-modal" : "ui-fill ui-center"}>
-            <div
-                {...(inRun && {
-                    ref: dialogProps.ref,
-                    tabIndex: dialogProps.tabIndex,
-                    "aria-modal": true,
-                })}
-                className="ui-panel rs-border rs-background ui-log"
-                role="dialog"
-                aria-labelledby="ui-log-title"
-            >
-                {/* The X comes after the tabs, drawn on the title's row, so a pad's first
+    const log = (
+        <div
+            className={inRun ? "ui-log ui-log-in-pause" : "ui-panel rs-border rs-background ui-log"}
+            role={inRun ? "region" : "dialog"}
+            aria-labelledby="ui-log-title"
+        >
+            {/* The X comes after the tabs, drawn on the title's row, so a pad's first
                     highlight and the first Tab are the open tab, not the way out */}
-                <div className="ui-log-top">
-                    {/* The log's total on the left, its items only; the cards' own on the right,
+            <div className="ui-log-top">
+                {/* The log's total on the left, its items only; the cards' own on the right,
                         each card once, any version; stacked where they won't fit on one line */}
-                    <div className="ui-log-head">
-                        <div className="ui-log-counts">
-                            <h2 id="ui-log-title" className="ui-log-title">
-                                {t("collection.title_count", {
-                                    title: t("collection.title"),
-                                    n: fmtNum(total.found),
-                                    total: fmtNum(total.total),
-                                })}
-                            </h2>
-                            <span className="ui-log-title ui-log-cards-count">
-                                {t("collection.cards_count", {
-                                    n: fmtNum(countCardsOwned(save)),
-                                    total: fmtNum(CARDS.length),
-                                })}
-                            </span>
-                        </div>
+                <div className="ui-log-head">
+                    <div className="ui-log-counts">
+                        <h2 id="ui-log-title" className="ui-log-title">
+                            {t("collection.title_count", {
+                                title: t("collection.title"),
+                                n: fmtNum(total.found),
+                                total: fmtNum(total.total),
+                            })}
+                        </h2>
+                        <span className="ui-log-title ui-log-cards-count">
+                            {t("collection.cards_count", {
+                                n: fmtNum(countCardsOwned(save)),
+                                total: fmtNum(CARDS.length),
+                            })}
+                        </span>
                     </div>
-                    <div className="ui-log-tabs" role="group" aria-label={t("collection.tabs")}>
-                        {tabs.map((id) => (
-                            <button
-                                key={id}
-                                className={"ui-log-tab" + (id === tab ? " ui-log-selected" : "")}
-                                aria-pressed={id === tab}
-                                onClick={(event) => {
-                                    openTab(id);
-                                    releaseFocus(event);
-                                }}
-                            >
-                                {t(`collection.tab.${id}`)}
-                            </button>
-                        ))}
-                    </div>
-                    <CloseButton onClose={close} />
                 </div>
-                <div className="ui-log-body">
-                    <div
-                        className="ui-log-entries ui-log-inset"
-                        role="group"
-                        aria-label={t("collection.entries")}
-                    >
-                        {inTab.map((e) => {
-                            const complete = entryCount(e) === e.items.length;
-                            const fresh = hasNew(e);
-                            return (
-                                <button
-                                    key={e.id}
-                                    className={
-                                        "ui-log-entry" +
-                                        (complete ? " ui-log-entry-complete" : "") +
-                                        (e === entry ? " ui-log-selected" : "")
-                                    }
-                                    aria-label={
-                                        complete
-                                            ? t("collection.entry_complete", {
-                                                  name: fresh
-                                                      ? t("collection.entry_new", { name: e.name })
-                                                      : e.name,
-                                              })
-                                            : undefined
-                                    }
-                                    aria-pressed={e === entry}
-                                    onClick={() => openEntry(e.id)}
-                                >
-                                    <span className="ui-log-entry-name">{e.name}</span>
-                                    {fresh && (
-                                        <span className="ui-log-new">{t("collection.new")}</span>
-                                    )}
-                                    {complete && (
-                                        <span className="ui-log-check" aria-hidden="true" />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <select
-                        className="ui-log-entry-select"
-                        aria-label={t("collection.entries")}
-                        value={entry.id}
-                        onChange={(event) => openEntry(event.target.value)}
-                    >
-                        {inTab.map((e) => (
-                            <option key={e.id} value={e.id}>
-                                {entryOption(e)}
-                            </option>
-                        ))}
-                    </select>
-                    <div className="ui-log-page ui-log-inset">
-                        <div className="ui-log-page-head">
-                            <h3 className="ui-log-page-title">{entry.name}</h3>
-                            <div>
-                                {withPart(
-                                    t("collection.obtained"),
-                                    "count",
-                                    <span className={countClass(found, entry.items.length)}>
-                                        {fmtNum(found)}/{fmtNum(entry.items.length)}
-                                    </span>,
-                                )}
-                            </div>
-                            {entry.tally && (
-                                <div>{t(entry.tally.key, { n: fmtNum(entry.tally.n) })}</div>
-                            )}
-                            {entry.tally2 && (
-                                <div>{t(entry.tally2.key, { n: fmtNum(entry.tally2.n) })}</div>
-                            )}
-                            {entry.id === "evolutions" && (
-                                <div className="ui-log-how">{t("collection.evolution_intro")}</div>
-                            )}
-                        </div>
-                        {/* The items scroll, and what's pointed at stays in view under them */}
-                        <div
-                            className="ui-log-grid"
-                            role="group"
-                            aria-label={t("collection.items")}
+                <div className="ui-log-tabs" role="group" aria-label={t("collection.tabs")}>
+                    {tabs.map((id) => (
+                        <button
+                            key={id}
+                            className={"ui-log-tab" + (id === tab ? " ui-log-selected" : "")}
+                            aria-pressed={id === tab}
+                            onClick={(event) => {
+                                openTab(id);
+                                releaseFocus(event);
+                            }}
                         >
-                            {entry.items.map((it, i) => (
-                                <ItemSlot
-                                    key={it.key}
-                                    item={it}
-                                    selected={it === item}
-                                    onShow={() => setItemIndex(i)}
-                                />
-                            ))}
+                            {t(`collection.tab.${id}`)}
+                        </button>
+                    ))}
+                </div>
+                {!inRun && <CloseButton onClose={close} />}
+            </div>
+            <div className="ui-log-body">
+                <div
+                    className="ui-log-entries ui-log-inset"
+                    role="group"
+                    aria-label={t("collection.entries")}
+                >
+                    {inTab.map((e) => {
+                        const complete = entryCount(e) === e.items.length;
+                        const fresh = hasNew(e);
+                        return (
+                            <button
+                                key={e.id}
+                                className={
+                                    "ui-log-entry" +
+                                    (complete ? " ui-log-entry-complete" : "") +
+                                    (e === entry ? " ui-log-selected" : "")
+                                }
+                                aria-label={
+                                    complete
+                                        ? t("collection.entry_complete", {
+                                              name: fresh
+                                                  ? t("collection.entry_new", { name: e.name })
+                                                  : e.name,
+                                          })
+                                        : undefined
+                                }
+                                aria-pressed={e === entry}
+                                onClick={() => openEntry(e.id)}
+                            >
+                                <span className="ui-log-entry-name">{e.name}</span>
+                                {fresh && <span className="ui-log-new">{t("collection.new")}</span>}
+                                {complete && <span className="ui-log-check" aria-hidden="true" />}
+                            </button>
+                        );
+                    })}
+                </div>
+                <select
+                    className="ui-log-entry-select"
+                    aria-label={t("collection.entries")}
+                    value={entry.id}
+                    onChange={(event) => openEntry(event.target.value)}
+                >
+                    {inTab.map((e) => (
+                        <option key={e.id} value={e.id}>
+                            {entryOption(e)}
+                        </option>
+                    ))}
+                </select>
+                <div className="ui-log-page ui-log-inset">
+                    <div className="ui-log-page-head">
+                        <h3 className="ui-log-page-title">{entry.name}</h3>
+                        <div>
+                            {withPart(
+                                t("collection.obtained"),
+                                "count",
+                                <span className={countClass(found, entry.items.length)}>
+                                    {fmtNum(found)}/{fmtNum(entry.items.length)}
+                                </span>,
+                            )}
                         </div>
-                        {item && <ItemDetail item={item} />}
+                        {entry.tally && (
+                            <div>{t(entry.tally.key, { n: fmtNum(entry.tally.n) })}</div>
+                        )}
+                        {entry.tally2 && (
+                            <div>{t(entry.tally2.key, { n: fmtNum(entry.tally2.n) })}</div>
+                        )}
+                        {entry.id === "evolutions" && (
+                            <div className="ui-log-how">{t("collection.evolution_intro")}</div>
+                        )}
                     </div>
+                    {/* The items scroll, and what's pointed at stays in view under them */}
+                    <div className="ui-log-grid" role="group" aria-label={t("collection.items")}>
+                        {entry.items.map((it, i) => (
+                            <ItemSlot
+                                key={it.key}
+                                item={it}
+                                selected={it === item}
+                                onShow={() => setItemIndex(i)}
+                            />
+                        ))}
+                    </div>
+                    {item && <ItemDetail item={item} />}
                 </div>
             </div>
         </div>
     );
+    // In the pause menu, its page; from the title, a screen of its own
+    return inRun ? log : <div className="ui-fill ui-center">{log}</div>;
 });
 
 // The client's own X, lit under the mouse; a plain X till its sprites are drawn

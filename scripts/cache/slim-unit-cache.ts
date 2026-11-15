@@ -28,6 +28,11 @@ export function unitId(unit: SlimUnit): string {
             return `bake:${unit.group}:${unit.requests[0].key}`;
         case "icons":
             return `icons:${unit.objIds[0]}`;
+        case "heads": {
+            // A framed portrait can share its NPC with another batch's first
+            const { npcId, portrait } = unit.heads[0];
+            return portrait ? `heads:${npcId}:${digest(portrait).slice(0, 12)}` : `heads:${npcId}`;
+        }
         default:
             return unit.kind;
     }

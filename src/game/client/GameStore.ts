@@ -1,7 +1,9 @@
+import { DamageKind } from "../content/damageKinds";
 import { Rarity } from "../content/rarity";
 import type { RemixId } from "../content/remixes";
-import { StatPair, StatText } from "../content/stats";
-import { GearSlot } from "../content/types";
+import type { About } from "../content/statLore";
+import { StatChange, StatText } from "../content/stats";
+import { GearSlot, StatKey } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult, ScabarasPuzzleState } from "../core/Sim";
@@ -29,6 +31,7 @@ export type Screen =
     // The Wardrobe: the body, the outfit, and its store of outfit pieces
     | "wardrobe"
     | "quests"
+    | "combatAchievements"
     | "collectionLog"
     // Cards: the album and its packs (content/cards.ts)
     | "cards"
@@ -53,10 +56,34 @@ export type SlotView = {
     // What it adds up to so far: "+18% damage", "+15% damage to this weapon" (none for a
     // weapon with no bonus)
     detail?: StatText;
+    // Weapons: the kinds of damage it deals, its style first (melee, ranged or magic)
+    kinds?: DamageKind[];
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
     stats?: StatText[];
-    // Weapons that evolve: the passive it takes, and what's done of it
-    evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
+    // Weapons that evolve: the passive it takes, what it evolves into, and what's done of it
+    evolution?: {
+        passive: string;
+        passiveIconObjId: number;
+        passiveIconSpriteId?: number;
+        into: string;
+        intoIconObjId: number;
+        maxed: boolean;
+        hasPassive: boolean;
+        ready: boolean;
+    };
+    // What it says when looked at (a line or two, as the original's examine texts)
+    examine?: string;
+    // Where it stands: at its best, or what's left to do
+    form?: FormView;
+    // Weapons: it's one an evolution made
+    evolved?: boolean;
+    // Weapons that circle the hero (the runes): what's circling now, one item for each, so the
+    // icon can show them all
+    orbit?: number[];
+    // Weapons: the same stats, each with how it got its size
+    statLines?: SlotStatView[];
+    // What the detail line (a passive's size, a weapon's damage bonus) is made of
+    detailBreakdown?: BreakdownView;
     // The item's own rarity, for the slot's border
     rarityColor: string;
     // A blessing (MapDef.blessings) rather than a weapon or passive: level is how many times it's
@@ -73,11 +100,61 @@ export type ItemView = {
     kindLabel: string;
     // What it does, a line per stat or effect
     lines: StatText[];
+    // Worn gear: how each of those lines got its size, a view to each (the pause menu's tooltips)
+    lineBreakdowns?: BreakdownView[];
     // A potion's stats last this long: in a run, stretched by the hero's effect duration
     seconds?: number;
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };
+};
+
+// Where a number on the pause menu comes from, for the tooltip on it: its parts (each in the
+// colour of the rarity it was taken at) and what they come to. title: what it's the make-up of.
+// label: what this part is of ("Level 3", "Base"): a line with parts that have one is a list, a row
+// each, down the tooltip
+export type BreakdownPart = { text: string; color?: string; label?: string };
+// What gives a bonus, as a small icon after its line's name (the name is its tooltip)
+export type BreakdownIcon = { name: string; objId?: number; spriteId?: number };
+export type BreakdownLine = {
+    label?: string;
+    parts: BreakdownPart[];
+    total?: string;
+    icons?: BreakdownIcon[];
+};
+// about: what the number means, how it's worked out and how far past its base it is
+export type BreakdownView = {
+    title: string;
+    total?: string;
+    lines: BreakdownLine[];
+    about?: About;
+};
+
+// A weapon's stat as the pause menu lists it ("Damage", "18"), with how it got that size
+// english: the line in English ("Damage 13"), for its icon in any language
+export type SlotStatView = {
+    label: string;
+    value: string;
+    english?: string;
+    breakdown?: BreakdownView;
+};
+
+// Where a weapon or passive stands, for the end of its tooltip: at its best, ready to evolve, able to
+// evolve once it has what it takes, not known how to evolve yet, or still to level up
+export type FormView = {
+    kind: "best" | "ready" | "evolve" | "unknown" | "levelling";
+    text: string;
+};
+
+// One of the hero's stats on the pause menu's Loadout: its name, its size now, and the group it's
+// listed in. zero: nothing's adding to it.
+export type StatRowView = {
+    key: StatKey;
+    group: "offense" | "defense" | "utility";
+    label: string;
+    value: string;
+    zero: boolean;
+    breakdown?: BreakdownView;
 };
 
 export type GearSlotView = { slot: GearSlot; name: string; item?: ItemView };
@@ -114,8 +191,8 @@ export type ChestView = {
     upgradedFrom?: string;
     isGear: boolean;
     // Gear: what it replaces (alched when the new piece goes on), and each
-    // stat either piece has, worn against found
-    replaces?: { item: ItemView; alchCoins: number; stats: StatPair[] };
+    // stat that would change
+    replaces?: { item: ItemView; alchCoins: number; changes: StatChange[] };
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;
@@ -156,6 +233,8 @@ export type EventView = {
 export type HudView = {
     // The run's map
     mapId: string;
+    // The hero's revives left and given
+    revives?: RevivesView;
     // An endless run's round
     round?: number;
     level: number;
@@ -169,6 +248,8 @@ export type HudView = {
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
     stats: StatText[];
+    // The same stats as rows by group, with the ones a hero has none of too
+    statRows: StatRowView[];
     gear: GearSlotView[];
     inventory: InventorySlotView[];
     // Left this run, for a level up's rewards or a casket's item
@@ -270,6 +351,8 @@ export type HudNumbers = {
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
+    // The Combat Achievements a solo run follows, pinned ones first (none in co-op)
+    combatTasks: CombatTrackView[];
 };
 
 // next, keeping each of prev's fields that's the same (by value), so a memoized
@@ -309,6 +392,51 @@ export type DamageView = {
     damage: number;
     kills: number;
     perSecond?: number;
+    // A weapon's, for its tooltip on the pause menu's Combat tab (the results don't have it)
+    about?: {
+        examine: string;
+        form?: FormView;
+        evolved?: boolean;
+        level?: number;
+        maxLevel?: number;
+        evolution?: SlotView["evolution"];
+    };
+};
+
+// The run's damage by its kind (melee, poison, recoil...), most first, none that did nothing
+export type DamageKindView = { kind: DamageKind; damage: number };
+
+// Kills of one enemy, most first; boss: it's a boss
+export type KillView = { enemyId: string; kills: number; boss: boolean };
+
+export type ActiveInvocationView = {
+    id: string;
+    name: string;
+    description: string;
+    iconSpriteId: number;
+    points: number;
+};
+
+// The pause menu's Combat tab, and the results' (PlayerResultView has the same): the hero's
+// damage by kind and by source, kills by enemy, and the totals
+// The hero's chances to be brought back: left is the ring's revives and, in co-op, what teammates
+// can still do (none left is the last stand); given is the teammates they've revived
+export type RevivesView = { left: number; given: number; coop: boolean };
+
+export type CombatView = {
+    damageDealt: number;
+    damageTaken: number;
+    // What armour and a pet's bubble stopped
+    damageBlocked: number;
+    healed: number;
+    highestHit: number;
+    revives: RevivesView;
+    kinds: DamageKindView[];
+    sources: DamageView[];
+    kills: KillView[];
+    invocations: ActiveInvocationView[];
+    invocationTotal: number;
+    tombsInvocations: boolean;
 };
 
 // fraction: of its hitpoints, or a fight in phases' shield. fight: how that
@@ -375,6 +503,9 @@ export type PlayerResultView = {
     rerollsUsed: number;
     skips: number;
     damage: DamageView[];
+    // The same damage by its kind, and kills by enemy
+    kinds: DamageKindView[];
+    killsByEnemy: KillView[];
 };
 
 // done / of: how far it's got, this run's kills and caskets included;
@@ -386,6 +517,28 @@ export type QuestTrackView = {
     done: number;
     of: number;
     finished: boolean;
+    // The quest's own icon (an item), and the enemies it's after, for their faces
+    iconObjId?: number;
+    enemyIds: string[];
+    // What it pays when the run ends, and an item it unlocks instead of (or as well as) the coins
+    coins: number;
+    unlockObjId?: number;
+};
+
+// A Combat Achievement the run's following: on (still to do), done this run, or failed (reason:
+// what spoilt it, for the rest of the run or until its boss comes again); progress for one that
+// counts its way there (kills, Smites, maps beaten)
+export type CombatTrackView = {
+    id: string;
+    name: string;
+    description: string;
+    // Its tier's name, and the coins it pays
+    tier: string;
+    coins: number;
+    state: "on" | "done" | "failed";
+    reason?: string;
+    progress?: { done: number; of: number };
+    pinned: boolean;
 };
 
 export type ChoiceView = {
@@ -499,8 +652,6 @@ export type UiSnapshot = {
     expert: boolean;
     hud?: HudView;
     overlay: RunOverlay;
-    // The Collection log, open over the pause menu (or co-op's menu, with the run going on)
-    runLog?: boolean;
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
@@ -539,6 +690,8 @@ export type UiSnapshot = {
         // The names of the trophies it found for the first time
         newTrophies: string[];
         quests: { name: string; coins: number }[];
+        // The Combat Achievements it banked: name, tier and coins
+        combatTasks: { name: string; tier: string; coins: number }[];
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
@@ -564,14 +717,18 @@ export type UiSnapshot = {
     cardShopPack?: string;
     cardShopFrom?: Screen;
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
-    toastLog: string[];
+    toastLog: ToastLogEntry[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
 };
 
 // How many of the run's messages the pause menu keeps
-const TOAST_LOG_SIZE = 8;
+const TOAST_LOG_SIZE = 40;
+
+// A message the pause menu's chat keeps: when in the run (seconds on its clock; none outside a
+// run) and who said it (a teammate, or what kind of thing it is: a boss, a power-up, the game)
+export type ToastLogEntry = { text: string; seconds?: number; source?: string };
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
 // read by React through useSyncExternalStore.
@@ -579,6 +736,10 @@ export class GameStore {
     private snapshot: UiSnapshot;
     private readonly listeners = new Set<() => void>();
     private nextToastId = 1;
+    // Who the toasts made now are from, and the run's clock for stamping them (set by the client
+    // while it handles the sim's events)
+    toastSource: string | undefined;
+    toastSeconds: (() => number | undefined) | undefined;
 
     constructor(save: SaveData) {
         this.snapshot = {
@@ -642,7 +803,7 @@ export class GameStore {
     }
 
     // Its id, to find it again or take it down early (a boss's instruction: GameClient)
-    toast(text: string, ms = 3500): number {
+    toast(text: string, ms = 3500, source: string | undefined = this.toastSource): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
@@ -652,7 +813,13 @@ export class GameStore {
         const log = this.snapshot.toastLog;
         this.set({
             toasts: toasts.slice(-4),
-            toastLog: log[0] === text ? log : [text, ...log].slice(0, TOAST_LOG_SIZE),
+            toastLog:
+                log[0]?.text === text && log[0]?.source === source
+                    ? log
+                    : [{ text, seconds: this.toastSeconds?.(), source }, ...log].slice(
+                          0,
+                          TOAST_LOG_SIZE,
+                      ),
         });
         return id;
     }

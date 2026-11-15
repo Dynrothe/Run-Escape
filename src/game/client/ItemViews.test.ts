@@ -27,7 +27,7 @@ function offer(sim: Sim, itemId: string): void {
 }
 
 describe("getChestView", () => {
-    it("shows the worn piece, its set as it's worn now, and a row for each stat", () => {
+    it("shows the worn piece, its set as it's worn now, and each stat that would change", () => {
         const sim = createSim();
         sim.equip("crystal_helm");
         sim.equip("crystal_legs");
@@ -42,12 +42,12 @@ describe("getChestView", () => {
         expect(chest.item.set!.text).toContain("1/3");
         expect(worn.alchCoins).toBe(sim.alchValue("crystal_body", 0));
         // Crystal body: damage, projectile speed, movement speed. Torva: armour, hitpoints.
-        expect(worn.stats.map((pair) => [pair.key, pair.worn, pair.found])).toEqual([
-            ["might", "+5%", undefined],
-            ["armor", undefined, "+1.5"],
-            ["maxHp", undefined, "+10%"],
-            ["speed", "+15%", undefined],
-            ["moveSpeed", "+3%", undefined],
+        expect(worn.changes.map((change) => [change.text, change.better])).toEqual([
+            ["-5% damage", false],
+            ["+1.5 armour", true],
+            ["+10% max hitpoints", true],
+            ["-15% projectile speed", false],
+            ["-3% movement speed", false],
         ]);
     });
 

@@ -15,12 +15,13 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { StatText, formatStats, pairStats } from "../content/stats";
+import { StatText, formatStats, statChanges } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { t, tl, tr } from "../i18n";
+import { getGearBreakdowns } from "./BreakdownViews";
 import {
     BuffView,
     ChestView,
@@ -120,7 +121,7 @@ export function getChestView(sim: Sim): ChestView | undefined {
                 // Its set as it's worn now
                 item: getRunItemView(sim, worn, wornUpgrades),
                 alchCoins: sim.alchValue(worn.id, wornUpgrades),
-                stats: pairStats(
+                changes: statChanges(
                     getGearStats(worn, wornUpgrades),
                     getGearStats(item, chest.upgrades),
                 ),
@@ -159,16 +160,24 @@ export function getChestView(sim: Sim): ChestView | undefined {
     };
 }
 
-export function getGearViews(sim: Sim): GearSlotView[] {
+// The worn pieces. details: with how each of a piece's lines got its size, for the pause menu's
+// tooltips (only while it's open)
+export function getGearViews(sim: Sim, details = false): GearSlotView[] {
     return GEAR_SLOTS.map((slot) => {
         const itemId = sim.gear[slot.id];
+        if (itemId === undefined) {
+            return { slot: slot.id, name: slot.name, item: undefined };
+        }
+        const item = getItem(itemId);
+        const upgrades = sim.gearUpgrades[slot.id] ?? 0;
+        const view = getRunItemView(sim, item, upgrades);
         return {
             slot: slot.id,
             name: slot.name,
             item:
-                itemId !== undefined
-                    ? getRunItemView(sim, getItem(itemId), sim.gearUpgrades[slot.id] ?? 0)
-                    : undefined,
+                details && item.kind === "gear"
+                    ? { ...view, lineBreakdowns: getGearBreakdowns(item, upgrades) }
+                    : view,
         };
     });
 }

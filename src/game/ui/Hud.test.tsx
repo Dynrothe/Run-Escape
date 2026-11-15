@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { GameClient } from "../client/GameClient";
 import {
     ChestView,
+    CombatTrackView,
     EventView,
     GameStore,
     HudNumbers,
@@ -58,6 +59,7 @@ function hud(weapons: SlotView[]): HudView {
         weapons,
         passives: [],
         stats: [],
+        statRows: [],
         gear: [],
         inventory: [null, null, null, null],
         rerolls: 0,
@@ -81,6 +83,7 @@ function numbers(changes: Partial<HudNumbers> = {}): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
         ...changes,
     };
 }
@@ -465,6 +468,45 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
     });
 
+    test("the pinned combat tasks the run follows, and how each is going", () => {
+        const { store, view } = renderHud();
+        const task = (id: string, changes: Partial<CombatTrackView>): CombatTrackView => ({
+            id,
+            name: id,
+            description: "",
+            tier: "Easy",
+            coins: 100,
+            state: "on",
+            pinned: true,
+            ...changes,
+        });
+        const rows = () =>
+            [...view.container.querySelectorAll(".ui-combat-tracker .ui-quest-track")].map(
+                (row) => [row.className.split(" ")[1], row.textContent],
+            );
+        expect(view.container.querySelector(".ui-combat-tracker")).toBeNull();
+        act(() =>
+            store.setNumbers(
+                numbers({
+                    combatTasks: [
+                        task("Bite-Proof", { state: "failed", reason: "hit by Count Draynor" }),
+                        task("Recurring", { progress: { done: 2, of: 5 } }),
+                        task("Wise Guy", { state: "done" }),
+                        task("Purist", {}),
+                        // Not pinned: in the pause menu only
+                        task("Hidden", { pinned: false }),
+                    ],
+                }),
+            ),
+        );
+        expect(rows()).toEqual([
+            ["ui-combat-failed", "Bite-ProofFailed"],
+            ["ui-quest-started", "Recurring2 / 5"],
+            ["ui-quest-done", "Wise GuyDone"],
+            ["ui-combat-on", "Purist"],
+        ]);
+    });
+
     test("a map's objective shows while no boss is out, with how many of it are done", () => {
         const { store, view } = renderHud();
         const objective = () => view.container.querySelector(".ui-map-objective")?.textContent;
@@ -519,7 +561,15 @@ describe("the run's HUD", () => {
             ...slot("bow", 8),
             stats: [{ text: "Damage: 20" }, { text: "Cooldown: 1s" }],
             detail: { text: "Shoots an arrow." },
-            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+            evolution: {
+                passive: "Piety",
+                passiveIconObjId: 1,
+                into: "Dragon bow",
+                intoIconObjId: 2,
+                maxed: true,
+                hasPassive: false,
+                ready: false,
+            },
         };
         const passive: SlotView = { ...slot("Piety", 2), detail: { text: "+10% damage" } };
         act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));

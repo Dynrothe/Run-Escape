@@ -45,7 +45,8 @@ describe("cards", () => {
             ]),
             ...PASSIVES.map((p) => `passive:${p.id}`),
             ...CASKET_GEAR.map((g) => `gear:${g.id}`),
-            ...TROPHIES.map((t) => `trophy:${t.id}`),
+            // (not Combat Achievements' tier rewards, earned with points)
+            ...TROPHIES.filter((t) => t.from.kind !== "combatTier").map((t) => `trophy:${t.id}`),
         ]);
     });
 

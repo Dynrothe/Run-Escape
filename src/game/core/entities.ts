@@ -1,3 +1,4 @@
+import type { Rarity } from "../content/rarity";
 import {
     ArenaStatue,
     BossAttackDef,
@@ -1076,6 +1077,36 @@ export type Debuff = {
     light?: { off: number; to?: number };
 };
 
+// Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the map,
+// upgrades and equipment, temporary effects, relics, blessings or invocations
+export type StatSource = {
+    kind:
+        | "adventurer"
+        | "shop"
+        | "map"
+        | "passive"
+        | "gear"
+        | "set"
+        | "buff"
+        | "debuff"
+        | "relic"
+        | "blessing"
+        | "invocation"
+        | "level";
+    name: string;
+    value: number;
+    // Applied after the additive stat (Glass Cannon and a gauntlet blessing's hitpoints)
+    multiplier?: boolean;
+    // A passive's pick: the rarity it was offered at
+    quality?: Rarity;
+    // A worn piece's own rarity, for its colour
+    rarity?: Rarity;
+    // Its icon, for the tooltips that say what gives a bonus: an item's, or an interface sprite's
+    // (a prayer's)
+    iconObjId?: number;
+    iconSpriteId?: number;
+};
+
 export type PassiveState = {
     id: string;
     // Times picked
@@ -1113,7 +1144,8 @@ type SimEventBody =
     | { type: "thrallAttack"; sound: number; x: number; y: number }
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }
-    // sound: the boss attack's hit sound, instead of the enemy's attack sound
+    // sound: the boss attack's hit sound, instead of the enemy's attack sound; attack: that
+    // attack's name (BossAttackDef.name), none for a crowd's hit, a stomp or a pool
     // missed: Trickster's (content/relics.ts), a hit that didn't land
     | {
           type: "playerHit";
@@ -1121,6 +1153,7 @@ type SimEventBody =
           enemyId: string;
           elite: boolean;
           sound?: number;
+          attack?: string;
           missed?: boolean;
       }
     | { type: "playerPoisoned"; amount: number }
@@ -1160,6 +1193,10 @@ type SimEventBody =
           y: number;
           opened: boolean;
       }
+    // A mistake in a Tombs of Amascut puzzle room, on this path (its id): an Apmeken pillar or vent
+    // left too long, Crondis water spilt, a wrong Scabaras step, or Het's beam or an orb landing.
+    // Nothing in the game reads it: it's for Combat Achievements (perfectRoom).
+    | { type: "tombsMistake"; path: string }
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
@@ -1273,6 +1310,8 @@ type SimEventBody =
     // A boss took coins from the player, or gave them back when it died
     | { type: "coinsStolen"; enemyId: string; amount: number }
     | { type: "coinsReturned"; enemyId: string; amount: number }
+    // A healer (a Yt-HurKot, a parasite) healed an enemy, or fed back its shield or charge
+    | { type: "enemyHealed"; enemyId: string; healerId: string }
     // A random event's visitor came, went or did what they do; on screen for a
     // moment. sound: cache sound effect, -1 for none.
     | { type: "visitor"; message: string; sound: number }
