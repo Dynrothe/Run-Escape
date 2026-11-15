@@ -1470,8 +1470,12 @@ involved.
   `content/cards.ts`): the sim adds them up as kills and bosses come (`Sim.platinum`), each at the
   run's `coinScale` of the moment, so endless runs earn them at coins' reduced rate
   (`ENDLESS_COINS`, less again in later rounds) and hard mode and invocations at coins' raised one.
-  A win adds its share at the end, and `RunResult.platinum` is the whole. In co-op it's the party's,
-  the same on every copy as coins are, and `recordRun` adds it to each player's own save. The icon
+  On top of that, `Sim.platinumBoost`: twice in every run, endless too (`PLATINUM_BOOST`), and
+  three times that in a Card collection only run (`PLATINUM_CARDS_ONLY`, any hero with
+  `cardCaps`; the whole room or none in co-op). A win adds its share at the end, and
+  `RunResult.platinum` is the whole. In co-op it's the party's, the same on every copy as coins
+  are, and `recordRun` adds it to each player's own save. The HUD shows the run's so far beside
+  its coins (`HudNumbers.platinum`), and the results' Run totals beside the coins banked. The icon
   is the Platinum token item.
 
 - **Cards are made from content** (`ALL_CARDS` in `content/cards.ts`): one for each weapon, passive,
@@ -1537,8 +1541,19 @@ involved.
   ready (`coopCardBlock`), and the lobby says why with what's needed; the host's Start wants
   everyone's caps, and the run keeps anyone's only with the host's `cardsOnly` and caps
   (`partyLoadouts`).
-- **A weapon's metals** (bronze to dragon) are its levels, not cards of their own, so its one card
-  covers them all: there's no rank to unlock.
+- **A weapon's metals** (`weaponTiers`): a weapon whose levels are items of their own, each run of
+  levels with the same name (a scimitar's Bronze to Dragon, Fire spells' Strike to Wave, the
+  shortbows' woods), has a card for each: its first is the weapon's own card, `weapon:<id>` as saves
+  have always kept it, and the others `weapon:<id>.<n>`, n from 2 (`tierCardId`), each named and
+  pictured as its item, each a version and a foil as any card. Up the metals they're rarer
+  (`tierRarity`: the weapon's own rarity, then a step rarer for each quarter of the way up, the top
+  one Very rare), so the better metals are the rarer pulls; they're unlocked with their weapon. In a
+  Card collection only run a weapon is offered with its first card and levels up only to the last
+  level of the highest metal whose card's owned (`cardLevelCap` in `Upgrades.ts`; the top one's lets
+  it go on in endless), its quality capped by its first card as before; an evolution, which comes at
+  the last level, so takes the top metal's card. A higher metal's card brings the lower ones never
+  owned with it, a copy each at its own commonest version (`giveLowerTiers`, from a pack and on
+  loading an older save), never a foil; the pack says what it brought (`PackCard.alsoUnlocks`).
 - **Pets**: a Card collection only run takes along `SaveData.cardsOnlyPet`, picked on the run
   screen's pet row while the run will be one (`playsCardsOnly`), and only while its card's owned
   (`getRunPet`, `hasPetCard`); never `SaveData.pet` in its place, which still needs the real find

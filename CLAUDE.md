@@ -101,6 +101,7 @@ go stale. Add anything that cost you time to work out.
 | Cards: the album, the Card shop, foils, platinum       | `content/cards.ts`, `core/cards.ts`, `ui/CardsScreen.tsx`, `Sim.ts`    |
 | A pack's Preview: its tabs, odds and info popover      | `ui/PackPreview.tsx`, `core/cardOdds.ts`                               |
 | Cards only: its runs, tab, pets and what it needs      | `core/cardRuns.ts`, `ui/CardNeeds.tsx`, `GameUi.tsx` (CardsOnlyTabs)   |
+| A weapon's metals as cards, and how far they level     | `content/cards.ts` (weaponTiers), `Upgrades.ts` (cardLevelCap)         |
 | The card generator: PNG cards drawn from the cache     | `scripts/cards/` (its README), `renderItemModel` in `ItemIconLoader`   |
 | A cape's emblem and other decals behind their cloth    | `src/rs/model/player/liftDecals.ts`, `docs/DEVELOPMENT.md`             |
 | A player in layers: a cape over armour poking through  | `actor/actor.vert.glsl` (`seenFromBehind`), `docs/DEVELOPMENT.md`      |

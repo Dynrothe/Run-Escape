@@ -1,4 +1,4 @@
-import { CardDef, PACK_SIZE, PackDef, cardWeight } from "../content/cards";
+import { CardDef, PACK_SIZE, PackDef, cardDefId, cardWeight } from "../content/cards";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { LOCKABLE_ITEM_BY_ID } from "../content/unlocks";
 import { WEAPONS } from "../content/weapons";
@@ -229,7 +229,7 @@ export function cachePackOdds(pack: PackDef, pool: readonly CardDef[], odds: Pac
 // unlock data: a weapon's, passive's or gear's task, an evolution's from what it evolves from, a
 // trophy's map), or undefined for one there from the start
 export function cardUnlockMap(card: CardDef): string | undefined {
-    const id = card.id.slice(card.id.indexOf(":") + 1);
+    const id = cardDefId(card);
     if (card.kind === "trophy") {
         return card.mapId;
     }
