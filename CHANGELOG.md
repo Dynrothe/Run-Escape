@@ -22,6 +22,7 @@ the version in the corner).
   language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
 - The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
   be translated, by Iakee.
+- The Skip button now says "Costs" before its coin price to make the deduction clear, by braiansmarzaro.
 
 ## 0.33.2 - 2026-11-15
 
