@@ -1420,6 +1420,11 @@
         margin-top: 4px;
     }
 
+    /* Room for Reroll, Skip (one it's short for too) and Reloaded's two on a 667px phone */
+    .ui-levelup-actions {
+        gap: 6px;
+    }
+
     /* The casket's card beside the casket once it's open */
 
     .ui-chest-scene {
