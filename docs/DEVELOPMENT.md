@@ -104,8 +104,10 @@ loaded again.
   a change to a group renames only its own chunk, and a player who's played before downloads only
   that one. Changing a span renames that index's chunks.
 - **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses. It
-  checks each one it downloads against its name, and after loading drops the ones `caches.json`
-  doesn't list.
+  reads and checks stored chunks in a bounded pipeline, downloading a missing or damaged chunk
+  as soon as its check finishes while other stored chunks are still being read. It checks each
+  download against its name, and after loading drops the ones `caches.json` doesn't list.
+  Download progress waits for the stored checks to finish so its total counts only missing bytes.
 - **A cache made for another build** would stop partway through loading, on a group it hasn't
   got, so the game checks `caches.json`'s build against its own before it starts. On a mismatch it
   reloads the page once, as the page may be an old copy, and then says what's wrong rather than
@@ -2634,6 +2636,23 @@ every time. They build the maps with ScapeRune, collision and how a map's scener
 them after a change to any of those (`src/game/scaperune/`, `scripts/scaperune/`, `core/world/`,
 `RegionDataLoader.ts`, `SceneBuilder.ts`, `LocOverrides.ts`), to a map, or to a newer cache. Asked
 for without the cache, they fail rather than pass with nothing checked.
+
+### Worktree caches
+
+The dev and preview servers, tests and cache-loading tools call `scripts/shared-cache.cjs`.
+If the current checkout is a Git worktree with no `caches` entry, and the main repository has a
+`caches/` directory, it creates a directory link to that cache (a junction on Windows, without
+administrator privileges). Git's common directory locates the main repository, so nested and
+sibling worktrees work without hard-coded paths. New worktrees get the link on their first use.
+Download the cache in the main repository first with `bun run download-caches`.
+
+An existing local directory or link is never replaced. If the main cache is absent, downloads
+still go to the worktree's own `caches/`. The link shares the whole folder, including collision
+snapshots and slim-cache reuse data; deleting or changing files through it changes the main
+cache too. Remove only the link to stop sharing, not its contents. `/caches` in `.gitignore`
+ignores links as well as directories. Preview still prefers its own build's `dist/caches/`.
+Keep `node_modules` installed locally: linking it from another checkout can fail Vite's file
+access checks.
 
 The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
 a whole checkout, and watching them all held up the first load after every start by tens of

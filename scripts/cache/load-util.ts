@@ -5,6 +5,9 @@ import { CacheList, LoadedCache, XteaMap } from "../../src/mapviewer/Caches";
 import { CacheFiles } from "../../src/rs/cache/CacheFiles";
 import { CacheInfo, getLatestCache } from "../../src/rs/cache/CacheInfo";
 import { detectCacheType } from "../../src/rs/cache/CacheType";
+import { ensureSharedCache } from "../shared-cache.cjs";
+
+ensureSharedCache();
 
 export function loadCacheInfos(root = "./caches"): CacheInfo[] {
     const json = fs.readFileSync(path.join(root, "caches.json"), "utf8");

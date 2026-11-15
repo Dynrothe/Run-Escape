@@ -25,6 +25,7 @@ the version in the corner).
 
 ### Changed
 
+- Loading the game starts missing cache downloads while checking the chunks already stored.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
@@ -39,6 +40,7 @@ the version in the corner).
 
 ### Fixed
 
+- Running the game from a worktree can reuse the main checkout's downloaded cache.
 - Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
   lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
 

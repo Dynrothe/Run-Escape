@@ -85,6 +85,10 @@ connection that drops out for longer, set `CACHE_DOWNLOAD_TIMEOUT_MS` to a longe
 milliseconds. The first load copies the 227 MB cache into the browser's cache storage, so later
 loads are quick.
 
+Git worktrees without their own `caches/` automatically link to the main repository's cache
+when starting the dev server, running tests or using cache tools. No second download is needed;
+see [Worktree caches](docs/DEVELOPMENT.md#worktree-caches).
+
 ### Controls
 
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and

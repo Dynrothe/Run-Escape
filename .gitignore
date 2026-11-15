@@ -26,6 +26,7 @@ yarn-debug.log*
 yarn-error.log*
 
 caches/
+/caches
 
 # Trailers the shot editor records (scripts/dev/trailer-server.ts), and any other video
 trailers/

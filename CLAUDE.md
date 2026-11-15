@@ -219,6 +219,10 @@ cd android && ./gradlew test assembleDebug     # the Android app (Java 21 and An
 
 There's no pre-commit hook, so run Prettier yourself. `bun run lint` formats the whole repository.
 
+Worktrees without a local `caches` entry automatically link to the main repository's cache when
+Vite, tests or cache tools start (`scripts/shared-cache.cjs`). Install dependencies locally, not
+through a `node_modules` link. See Development, Worktree caches.
+
 ## After every change
 
 1. Run the tests and the type check, and format what you changed. After a change to ScapeRune, a
@@ -395,8 +399,8 @@ desktop build.
   real can do the job, and then keep it small and say so in the pull request.
 - **Pull requests**: work on a branch and open a pull request. Don't commit to `main`. Keep one
   topic in each pull request, unless asked to combine them.
-- **Stage files by name**, not with `git add -A`. `.gitignore` has `caches/`, which only matches a
-  folder, so a `caches` symlink gets committed.
+- **Stage files by name**, not with `git add -A`. `.gitignore` ignores cache directories and the
+  root `caches` link; cache files and exports still never belong in a commit.
 - **Changelog**: written for players, in one-line bullets under Added, Changed or Fixed. Keep it
   short, and never mention secret content (like hidden bosses) in it or in map descriptions.
 - **Comments**: short, and they say why or what something's for. Match what's around them.

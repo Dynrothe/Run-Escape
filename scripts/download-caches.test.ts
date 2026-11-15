@@ -44,6 +44,9 @@ async function runDownloader(fetchMock: ArchiveFetch, env: Record<string, string
                 exit: resolve,
             },
             require: (name: string) => {
+                if (name === "./shared-cache.cjs") {
+                    return { ensureSharedCache: vi.fn() };
+                }
                 if (name === "fs") {
                     return {
                         readFileSync: (path: string) => files.get(path),
