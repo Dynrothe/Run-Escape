@@ -75,7 +75,6 @@ describe("hitsplat groups", () => {
             { ...playerHit, missed: true },
             playerHit,
         );
-        emit(enemyHit, playerHit);
         expect(view["hitsplats"]).toHaveLength(8);
         expect(view["hitsplats"].map((hit) => hit.slot)).toEqual([0, 1, 2, 3, 0, 1, 2, 3]);
         expect(view["hitsplats"].map((hit) => hit.kind)).toEqual([
@@ -101,13 +100,40 @@ describe("hitsplat groups", () => {
         emit({ ...enemyHit, amount: 36 });
         expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 36, slot: 0 });
         expect(view["hitsplats"].slice(1, 4).map((hit) => hit.slot)).toEqual([1, 2, 3]);
-        emit(enemyHit);
-        expect(view["hitsplats"]).toHaveLength(5);
         view.reset();
         emit(enemyHit);
         expect(view["hitsplats"]).toHaveLength(1);
         expect(view["hitsplats"][0].slot).toBe(0);
     });
+
+    test.each(["enemy", "player"] as const)(
+        "replaces the oldest %s hit in its slot without disturbing other targets",
+        (target) => {
+            const { view, enemyHit, playerHit, emit, setNow } = setup();
+            const hit = target === "enemy" ? enemyHit : playerHit;
+            const other = target === "enemy" ? playerHit : enemyHit;
+            emit(other);
+            for (let amount = 1; amount <= 4; amount++) {
+                setNow(100 + amount * 10);
+                emit({ ...hit, amount });
+            }
+            const untouched = view["hitsplats"].slice(0, 1).concat(view["hitsplats"].slice(2));
+            setNow(150);
+            emit({ ...hit, amount: 5 });
+            expect(view["hitsplats"]).toHaveLength(5);
+            expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 5, slot: 0, start: 150 });
+            expect(view["hitsplats"].slice(0, 4)).toEqual(untouched);
+            emit({ ...hit, amount: 6 });
+            expect(view["hitsplats"].map((active) => active.amount)).toEqual([
+                other.amount,
+                3,
+                4,
+                5,
+                6,
+            ]);
+            expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 6, slot: 1 });
+        },
+    );
 
     test.each(["enemy", "player"] as const)(
         "draws %s hits in four scaled screen positions",

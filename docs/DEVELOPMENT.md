@@ -2386,8 +2386,9 @@ projectile glows likewise: text and gradients are the slowest things on a 2D can
 fight has a hundred splats. The effects it prunes each frame are pruned in place, and the enemies
 reuse one options object, to keep a phone's garbage collector quiet.
 Each hero and enemy has four hitsplat slots, laid out in screen pixels like OSRS and scaled with
-the overlay. Slots stay fixed until their splats expire; when all four are occupied, further hits
-still deal damage but don't add a splat. This is display-only, in `GameView`, not the sim.
+the overlay. Slots stay fixed until their splats expire; when all four are occupied, a new hit
+replaces the oldest hit on that target in its existing slot. This is display-only, in `GameView`,
+not the sim.
 
 Power-ups on the ground have a countdown pie over them, like RuneLite's
 (`GameView.drawPickupTimers`): it drains clockwise, from green to orange at half the power-up's

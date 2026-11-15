@@ -567,13 +567,18 @@ export class GameView {
 
     private addHitsplat(hitsplat: Omit<Hitsplat, "start" | "slot">, now: number): void {
         let occupied = 0;
-        for (const active of this.hitsplats) {
+        let oldest = -1;
+        for (let i = 0; i < this.hitsplats.length; i++) {
+            const active = this.hitsplats[i];
             if (
                 active.hero === hitsplat.hero &&
                 active.enemyUid === hitsplat.enemyUid &&
                 active.start + HITSPLAT_MS > now
             ) {
                 occupied |= 1 << active.slot;
+                if (oldest === -1) {
+                    oldest = i;
+                }
             }
         }
         let slot = 0;
@@ -581,7 +586,8 @@ export class GameView {
             slot++;
         }
         if (slot >= HITSPLAT_OFFSETS.length) {
-            return;
+            slot = this.hitsplats[oldest].slot;
+            this.hitsplats.splice(oldest, 1);
         }
         if (this.hitsplats.length >= MAX_HITSPLATS) {
             this.hitsplats.shift();
