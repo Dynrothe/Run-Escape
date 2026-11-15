@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 
+import { FLAG_FRAMES, FLAG_SPRITE } from "../content/flags";
 import { LANGS, Lang, setLang, t, useLang } from "../i18n";
 import "./LanguageSetting.css";
 import { releaseFocus } from "./menuKeys";
+import { useSpriteFrame } from "./useSpriteFrame";
 
-// A language as it's offered: its name, and who translated it in small text underneath
+// A language's flag: the world list's round one for its country (co-op's flags), and nothing
+// while it loads or where the cache hasn't got it. Only decoration: its name is beside it.
+function LanguageFlag({ country }: { country: string }): JSX.Element {
+    const url = useSpriteFrame(FLAG_SPRITE, FLAG_FRAMES[country]);
+    return url ? (
+        <img className="ui-flag ui-language-flag" src={url} alt="" draggable={false} />
+    ) : (
+        <span className="ui-flag ui-language-flag" />
+    );
+}
+
+// A language as it's offered: its flag, its name, and who translated it in small text underneath
 export function LanguageName({ lang }: { lang: Lang }): JSX.Element {
-    const { label, translator } = LANGS.find((it) => it.id === lang)!;
+    const { label, translator, country } = LANGS.find((it) => it.id === lang)!;
     return (
         <span className="ui-language-name">
-            <span className="ui-language-label">{label}</span>
-            {translator && (
-                <span className="ui-language-credit">
-                    {t("settings.language.translator", { name: translator })}
-                </span>
-            )}
+            <LanguageFlag country={country} />
+            <span className="ui-language-text">
+                <span className="ui-language-label">{label}</span>
+                {translator && (
+                    <span className="ui-language-credit">
+                        {t("settings.language.translator", { name: translator })}
+                    </span>
+                )}
+            </span>
         </span>
     );
 }
@@ -25,6 +41,7 @@ export function LanguageSetting(): JSX.Element {
         <div className="ui-setting">
             <div className="ui-setting-label">
                 <div className="ui-setting-name">{t("settings.language.name")}</div>
+                <div className="ui-setting-text">{t("settings.language.desc")}</div>
             </div>
             <div className="ui-setting-control">
                 <LanguageDropdown />

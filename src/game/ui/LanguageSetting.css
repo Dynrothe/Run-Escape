@@ -1,9 +1,25 @@
-/* A language's name, with who translated it in small text underneath */
+/* A language's flag, then its name with who translated it in small text underneath */
 .ui-language-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+
+.ui-language-text {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    text-align: left;
+}
+
+/* The world list's round flag, at its own size (as co-op's .ui-flag), kept here too so it doesn't
+   hang on another screen's stylesheet */
+.ui-language-flag {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 17px;
+    height: 19px;
+    image-rendering: pixelated;
 }
 
 .ui-language-label {

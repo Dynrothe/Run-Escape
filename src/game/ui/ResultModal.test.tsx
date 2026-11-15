@@ -24,6 +24,8 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
         rerollsUsed: i,
         skips: i,
         damage: [{ name: `${name}'s weapon`, damage: (i + 1) * 100, kills: i + 1, perSecond: 5 }],
+        kinds: [],
+        killsByEnemy: [],
     }));
     const ui = new GameStore(createSave()).getSnapshot();
     return {
@@ -65,7 +67,10 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
             caskets: solo ? 1 : 6,
             stats: {
                 sources: [],
+                damageByKind: {},
+                killsByEnemy: {},
                 damageTaken: 11,
+                damageBlocked: 0,
                 healed: 21,
                 highestHit: 31,
                 rerollsUsed: 1,
@@ -156,9 +161,12 @@ test("starts on your own stats and cycles every player with themed buttons and a
     expect(stat("Individual stats", "Damage taken")).toBe("12");
     expect(stat("Individual stats", "Hitpoints healed")).toBe("22");
     expect(stat("Individual stats", "Caskets opened")).toBe("2");
-    expect(screen.getByRole("table", { name: "Damage breakdown" })).toHaveTextContent(
+    // The damage by source is on the Combat tab
+    fireEvent.click(screen.getByRole("tab", { name: "Combat" }));
+    expect(screen.getByRole("table", { name: "Damage by source" })).toHaveTextContent(
         "Charlie's weapon",
     );
+    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByText("Player 4 of 4 · Left the run")).toBeInTheDocument();

@@ -1,3 +1,4 @@
+import type { Rarity } from "../content/rarity";
 import {
     ArenaStatue,
     BossAttackDef,
@@ -1074,6 +1075,36 @@ export type Debuff = {
     endTick: number;
     // A dim (PlayerEffectDef dim): tiles off the player's light, or no more than to tiles
     light?: { off: number; to?: number };
+};
+
+// Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the map,
+// upgrades and equipment, temporary effects, relics, blessings or invocations
+export type StatSource = {
+    kind:
+        | "adventurer"
+        | "shop"
+        | "map"
+        | "passive"
+        | "gear"
+        | "set"
+        | "buff"
+        | "debuff"
+        | "relic"
+        | "blessing"
+        | "invocation"
+        | "level";
+    name: string;
+    value: number;
+    // Applied after the additive stat (Glass Cannon and a gauntlet blessing's hitpoints)
+    multiplier?: boolean;
+    // A passive's pick: the rarity it was offered at
+    quality?: Rarity;
+    // A worn piece's own rarity, for its colour
+    rarity?: Rarity;
+    // Its icon, for the tooltips that say what gives a bonus: an item's, or an interface sprite's
+    // (a prayer's)
+    iconObjId?: number;
+    iconSpriteId?: number;
 };
 
 export type PassiveState = {

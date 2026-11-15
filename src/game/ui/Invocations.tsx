@@ -30,10 +30,15 @@ import {
 } from "../content/invocations";
 import { getMap, mapName } from "../content/maps";
 import { isHardUnlocked } from "../core/save";
-import { t } from "../i18n";
+import { t, tl } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
+
+// A raid level band's name (Entry, Normal, Expert), in the player's language
+function bandName(band: string): string {
+    return t(`ui.invocations.band.${band.toLowerCase()}`);
+}
 
 // The Tombs of Amascut's raid level, and the way to its invocation board
 export function InvocationsButton({
@@ -46,9 +51,9 @@ export function InvocationsButton({
     const level = getRaidLevel(ui.save.invocations ?? []);
     return (
         <button className="ui-button ui-invocations-button" onClick={onOpen}>
-            Invocations
+            {t("ui.invocations.title")}
             <span className="ui-invocations-level">
-                Raid level {level} ({getRaidBand(level)})
+                {t("ui.invocations.raid_level_band", { level, band: bandName(getRaidBand(level)) })}
             </span>
         </button>
     );
@@ -89,7 +94,7 @@ export function InvocationBoard({
         <div className="ui-modal">
             <div {...dialogProps} className="ui-panel rs-border rs-background ui-invocations">
                 <h2 id={titleId} className="ui-invocations-title">
-                    Invocations
+                    {t("ui.invocations.title")}
                 </h2>
                 {/* What scrolls on a short screen, so Reset All and Done stay in view */}
                 <div className="ui-invocations-scroll">
@@ -139,7 +144,9 @@ export function InvocationBoard({
                             })}
                         </div>
                         <div className="ui-invocations-reward">
-                            <div className="ui-invocations-reward-title">Reward Potential</div>
+                            <div className="ui-invocations-reward-title">
+                                {t("ui.invocations.reward_potential")}
+                            </div>
                             <div className="ui-invocations-level-row">
                                 <span className="ui-invocations-number">{level}</span>
                                 <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={40} />
@@ -154,8 +161,10 @@ export function InvocationBoard({
                                 />
                             </div>
                             <div className="ui-invocations-scale">
-                                Enemies {signedPercent(scale.hp)} hitpoints,{" "}
-                                {signedPercent(scale.damage)} damage
+                                {t("ui.invocations.scale", {
+                                    hp: signedPercent(scale.hp),
+                                    damage: signedPercent(scale.damage),
+                                })}
                             </div>
                             <div className="ui-invocations-uniques">
                                 {TOMBS_UNIQUES.map((unique) => {
@@ -169,8 +178,11 @@ export function InvocationBoard({
                                             }
                                             title={
                                                 out
-                                                    ? `${unique.name}: from raid level ${unique.minLevel}`
-                                                    : unique.name
+                                                    ? t("ui.invocations.unique_from", {
+                                                          name: tl(unique.name),
+                                                          level: unique.minLevel,
+                                                      })
+                                                    : tl(unique.name)
                                             }
                                         >
                                             <ItemIcon objId={unique.objId} size={32} />
@@ -184,22 +196,22 @@ export function InvocationBoard({
                         {pointed ? (
                             <>
                                 <span className="ui-invocations-detail-name">
-                                    {pointed.name}{" "}
+                                    {invocationName(pointed)}{" "}
                                     <span className="ui-invocations-detail-level">
                                         +{pointed.level}
                                     </span>
                                 </span>
                                 <span>
-                                    {pointed.description}
+                                    {invocationDescription(pointed)}
                                     {INVOCATION_GROUPS.find((g) => g.id === pointed.group)?.one &&
-                                        " Only one of its kind can be on."}
+                                        " " + t("ui.invocations.only_one")}
                                 </span>
                             </>
                         ) : (
                             <span className="ui-subtle">
                                 {touch
-                                    ? "Tap an invocation to see what it does, and again to switch it."
-                                    : "Point at an invocation to see what it does."}
+                                    ? t("ui.invocations.tap_hint")
+                                    : t("ui.invocations.point_hint")}
                             </span>
                         )}
                     </div>
@@ -207,10 +219,10 @@ export function InvocationBoard({
                 </div>
                 <div className="ui-invocations-buttons">
                     <button className="ui-button" onClick={() => client.clearInvocations()}>
-                        Reset All
+                        {t("ui.invocations.reset")}
                     </button>
                     <button className="ui-button ui-button-go" onClick={onClose}>
-                        Done
+                        {t("ui.invocations.done")}
                     </button>
                 </div>
             </div>
@@ -268,9 +280,9 @@ export function InvocationPresets({
         ids.length === on.length && ids.every((id) => on.includes(id));
     return (
         <div className="ui-invocations-presets">
-            <div className="ui-invocations-presets-title">Presets</div>
+            <div className="ui-invocations-presets-title">{t("ui.invocations.presets")}</div>
             {presets.length === 0 ? (
-                <span className="ui-subtle">None saved yet.</span>
+                <span className="ui-subtle">{t("ui.invocations.presets_none")}</span>
             ) : (
                 <div className="ui-invocations-preset-list">
                     {presets.map((preset) => {
@@ -279,6 +291,11 @@ export function InvocationPresets({
                         const byLevel = preset.name === presetName("", level);
                         const current = same(preset.invocations);
                         const sure = deleting === preset.name;
+                        // One named by its level is shown in the player's language; the save
+                        // keeps the English name it goes by
+                        const shown = byLevel
+                            ? t("ui.invocations.raid_level", { level })
+                            : preset.name;
                         return (
                             <div key={preset.name} className="ui-invocations-preset">
                                 <button
@@ -288,16 +305,19 @@ export function InvocationPresets({
                                     }
                                     aria-label={
                                         byLevel
-                                            ? `Load ${preset.name}`
-                                            : `Load ${preset.name}, raid level ${level}`
+                                            ? t("ui.invocations.preset_load", { name: shown })
+                                            : t("ui.invocations.preset_load_level", {
+                                                  name: shown,
+                                                  level,
+                                              })
                                     }
                                     aria-current={current || undefined}
                                     onClick={() => client.loadInvocationPreset(preset.name)}
                                 >
-                                    {preset.name}
+                                    {shown}
                                     {!byLevel && (
                                         <span className="ui-invocations-preset-level">
-                                            level {level}
+                                            {t("ui.invocations.preset_level", { level })}
                                         </span>
                                     )}
                                 </button>
@@ -309,8 +329,10 @@ export function InvocationPresets({
                                     }
                                     aria-label={
                                         sure
-                                            ? `Press again to delete ${preset.name}`
-                                            : `Delete ${preset.name}`
+                                            ? t("ui.invocations.preset_delete_sure", {
+                                                  name: shown,
+                                              })
+                                            : t("ui.invocations.preset_delete", { name: shown })
                                     }
                                     onBlur={() => sure && setDeleting(undefined)}
                                     onClick={() => {
@@ -323,7 +345,7 @@ export function InvocationPresets({
                                         client.deleteInvocationPreset(preset.name);
                                     }}
                                 >
-                                    {sure ? "Sure?" : "Delete"}
+                                    {sure ? t("ui.invocations.sure") : t("ui.invocations.delete")}
                                 </button>
                             </div>
                         );
@@ -344,19 +366,19 @@ export function InvocationPresets({
                     className="ui-coop-input"
                     value={name}
                     maxLength={MAX_PRESET_NAME}
-                    placeholder={presetName("", boardLevel)}
-                    aria-label="Preset name"
+                    placeholder={t("ui.invocations.raid_level", { level: boardLevel })}
+                    aria-label={t("ui.invocations.preset_name")}
                     spellCheck={false}
                     autoComplete="off"
                     onChange={(e) => setName(e.target.value)}
                 />
                 <button ref={saveButton} className="ui-button" type="submit" disabled={full}>
-                    {replaces ? "Replace" : "Save"}
+                    {replaces ? t("ui.invocations.replace") : t("ui.invocations.save")}
                 </button>
             </form>
             {full && (
                 <span className="ui-subtle">
-                    All {MAX_INVOCATION_PRESETS} are used: delete one, or save over one by its name.
+                    {t("ui.invocations.presets_full", { max: MAX_INVOCATION_PRESETS })}
                 </span>
             )}
         </div>

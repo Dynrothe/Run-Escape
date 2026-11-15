@@ -6,6 +6,7 @@ import {
     useCallback,
     useEffect,
     useId,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -24,6 +25,7 @@ import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import {
     BuffView,
+    CombatView,
     GameStore,
     GearSlotView,
     HudNumbers,
@@ -31,6 +33,7 @@ import {
     InventorySlotView,
     QuestTrackView,
     SlotView,
+    ToastLogEntry,
     UiSnapshot,
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
@@ -96,7 +99,9 @@ import { StatText, formatStats } from "../content/stats";
 import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
+    PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
+    SETTINGS_SECTION_SPRITES,
     TITLE_TAB_SPRITES,
     WARDROBE_ICON_OBJ,
 } from "../content/titleIcons";
@@ -107,7 +112,7 @@ import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks
 import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
-import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
+import type { ScabarasPuzzle } from "../core/Sim";
 import {
     getCardRunNeeds,
     getCardsOnlyPet,
@@ -146,6 +151,7 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
+import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
@@ -166,6 +172,9 @@ import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { PauseChat } from "./PauseChat";
+import { PauseLoadout, SlotIcon } from "./PauseLoadout";
+import { PauseQuests } from "./PauseQuests";
 import { Platinum } from "./Platinum";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
@@ -174,6 +183,7 @@ import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanel
 import { SkipButton } from "./SkipButton";
 import { SoundOrb } from "./SoundOrb";
 import { StatLine } from "./StatLine";
+import { TabBar, TabDef, getTabFromKey } from "./TabBar";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { AwakenRow, VaultScreen } from "./Vault";
@@ -182,8 +192,10 @@ import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
+import { ClassicResults } from "./results/ClassicResults";
 import { useDialog } from "./useDialog";
 import { usePhoneLayout } from "./usePhoneLayout";
+import { VOLUME_KEY_STEPS, formatVolume, volumeFromDrag, volumeFromKey } from "./volume";
 
 type Props = {
     store: GameStore;
@@ -359,7 +371,9 @@ function SoundSettings({
         <>
             <Setting
                 name={t("settings.sound.name")}
-                text={isCoarsePointer ? undefined : t("settings.sound.hint")}
+                text={t(
+                    isCoarsePointer ? "settings.sound.desc.touch" : "settings.sound.desc.mouse",
+                )}
             >
                 <Toggle
                     on={!muted}
@@ -369,6 +383,9 @@ function SoundSettings({
             </Setting>
             <VolumeSetting
                 name={t("settings.volume.name")}
+                text={t(
+                    isCoarsePointer ? "settings.volume.desc.touch" : "settings.volume.desc.mouse",
+                )}
                 value={volume}
                 muted={muted}
                 onChange={(value) => client.setVolume(value)}
@@ -376,6 +393,7 @@ function SoundSettings({
             {music && (
                 <VolumeSetting
                     name={t("settings.music.name")}
+                    text={t("settings.music.desc")}
                     value={ui.audio.music}
                     muted={muted}
                     onChange={(value) => client.setMusicVolume(value)}
@@ -385,31 +403,106 @@ function SoundSettings({
     );
 }
 
+// A volume's slider. Arrows move it a percent and Page Up and Down ten; Shift makes a drag or an
+// arrow a tenth as much, for a level in between. The browser's own range input underneath keeps
+// it a control to the game's keys (they leave inputs alone) and to a controller's highlight.
 function VolumeSetting({
     name,
+    text,
     value,
     muted,
     onChange,
 }: {
     name: string;
+    text?: string;
     value: number;
     muted: boolean;
     onChange: (value: number) => void;
 }): JSX.Element {
+    // While Shift's held on a drag: the slider's position and the volume when it took over. Its
+    // position is NaN until the pointer's been somewhere on it, so the thumb doesn't jump.
+    const fine = useRef<{ position: number; value: number } | undefined>(undefined);
+    const dragging = useRef(false);
+    // Where the pointer last was along it, this drag
+    const at = useRef(NaN);
+    const latest = useRef(value);
+    latest.current = value;
+    const setShift = (held: boolean) => {
+        if (held !== (fine.current !== undefined)) {
+            fine.current = held ? { position: at.current, value: latest.current } : undefined;
+        }
+    };
+    const endDrag = () => {
+        dragging.current = false;
+        fine.current = undefined;
+        at.current = NaN;
+    };
+    // Shift pressed or let go with the pointer still
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Shift" && dragging.current) {
+                setShift(e.type === "keydown");
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("keyup", onKey);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("keyup", onKey);
+        };
+    }, []);
+    const percent = Math.round(value * 1000) / 10;
     return (
-        <Setting name={name}>
+        <Setting name={name} text={text}>
             <input
-                className={"ui-volume" + (muted ? " ui-volume-muted" : "")}
+                className={"ui-slider" + (muted ? " ui-slider-muted" : "")}
+                style={{ "--ui-slider-fill": `${percent}%` } as CSSProperties}
                 type="range"
                 min={0}
                 max={100}
-                value={Math.round(value * 100)}
-                onChange={(e) => onChange(parseInt(e.target.value) / 100)}
-                // Give the keys back to the game once it's set
-                onPointerUp={(e) => e.currentTarget.blur()}
+                step={0.1}
+                value={percent}
                 aria-label={name}
+                aria-valuetext={formatVolume(value)}
+                onPointerDown={(e) => {
+                    dragging.current = true;
+                    fine.current = undefined;
+                    at.current = NaN;
+                    setShift(e.shiftKey);
+                }}
+                onPointerMove={(e) => {
+                    if (dragging.current) {
+                        setShift(e.shiftKey);
+                    }
+                }}
+                onChange={(e) => {
+                    // Where the pointer is along it, not where the thumb's drawn
+                    const position = e.target.valueAsNumber;
+                    at.current = position;
+                    if (fine.current && Number.isNaN(fine.current.position)) {
+                        fine.current = { position, value: latest.current };
+                    }
+                    const next = volumeFromDrag(position, fine.current);
+                    if (next !== latest.current) {
+                        onChange(next);
+                    }
+                }}
+                onKeyDown={(e) => {
+                    const step = VOLUME_KEY_STEPS[e.key];
+                    if (step === undefined) {
+                        return;
+                    }
+                    e.preventDefault();
+                    onChange(volumeFromKey(value, step, e.shiftKey));
+                }}
+                // Give the keys back to the game once it's set
+                onPointerUp={(e) => {
+                    endDrag();
+                    e.currentTarget.blur();
+                }}
+                onPointerCancel={endDrag}
             />
-            <span className="ui-volume-value">{Math.round(value * 100)}%</span>
+            <span className="ui-volume-value">{formatVolume(value)}</span>
         </Setting>
     );
 }
@@ -451,16 +544,16 @@ function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
     const unlocked = ui.save.scabarasBeaten === true;
     return (
         <Setting
-            name="Puzzle helper"
-            text={
+            name={t("settings.puzzle_helper.name")}
+            text={t(
                 unlocked
-                    ? "In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
-                    : "In the Tombs of Amascut's Scabaras room, marks what to step on: at Entry for now, at any raid level once you've beaten the room"
-            }
+                    ? "settings.puzzle_helper.desc.unlocked"
+                    : "settings.puzzle_helper.desc.locked",
+            )}
         >
             <Toggle
                 on={ui.display.puzzleHelper}
-                label="Puzzle helper"
+                label={t("settings.puzzle_helper.name")}
                 onToggle={() => client.togglePuzzleHelper()}
             />
         </Setting>
@@ -767,7 +860,9 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
-// Behind the title screen's Settings button
+// Behind the title screen's Settings button: the pause menu's sections and cards, with what only
+// the title has besides (the save, the menu's camera, screen shake, run stats and co-op's flag).
+// The save on the left, first, as it's what a player can lose.
 function SettingsPanel({
     ui,
     client,
@@ -775,72 +870,94 @@ function SettingsPanel({
 }: ScreenProps & { onClose: () => void }): JSX.Element {
     const padKind = usePadKind();
     return (
-        <div className="ui-panel rs-border rs-background ui-settings">
+        <div className="ui-panel rs-border rs-background ui-settings ui-settings-cards">
             <h2>{t("settings.title")}</h2>
-            <div className="ui-settings-body">
-                {/* First: it's what a player can lose */}
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.save")}</h3>
-                    <SaveSetting ui={ui} client={client} />
-                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
-                    <UnreadableSaveSettings ui={ui} client={client} />
-                </section>
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.sound")}</h3>
-                    <SoundSettings ui={ui} client={client} />
-                </section>
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.game")}</h3>
-                    <h4 className="ui-settings-group">{t("settings.group.general")}</h4>
-                    <LanguageSetting />
-                    <h4 className="ui-settings-group">{t("settings.group.camera")}</h4>
-                    <Setting
-                        name={t("settings.camera_spin.name")}
-                        text={t("settings.camera_spin.desc")}
+            <div className="ui-settings-body ui-ps">
+                <div className="ui-ps-column">
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.save}
+                        title={t("settings.section.save")}
                     >
-                        <Toggle
-                            on={ui.display.menuSpin}
-                            label={t("settings.camera_spin.name")}
-                            onToggle={() => client.toggleMenuSpin()}
+                        <SaveSetting ui={ui} client={client} />
+                        <CloudSaveSettings
+                            cloud={ui.cloud}
+                            client={client}
+                            saving={!ui.saveBlock}
                         />
-                    </Setting>
-                    <Setting
-                        name={t("settings.screen_shake.name")}
-                        text={t("settings.screen_shake.desc")}
+                        <UnreadableSaveSettings ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.sound}
+                        title={t("settings.section.sound")}
                     >
-                        <Toggle
-                            on={ui.display.screenShake}
-                            label={t("settings.screen_shake.name")}
-                            onToggle={() => client.toggleScreenShake()}
-                        />
-                    </Setting>
-                    <h4 className="ui-settings-group">{t("settings.group.run")}</h4>
-                    <PickupTimerSetting ui={ui} client={client} />
-                    <GearPanelSetting ui={ui} client={client} />
-                    <PuzzleHelperSetting ui={ui} client={client} />
-                    <AutoPauseSetting ui={ui} client={client} />
-                    <AutoAlchSetting ui={ui} client={client} />
-                    <AutoEquipSetting ui={ui} client={client} />
-                    <RunStatsSetting ui={ui} client={client} />
-                    <h4 className="ui-settings-group">{t("settings.group.coop")}</h4>
-                    <MovePredictionSetting ui={ui} client={client} />
-                    <CoopFlagSetting ui={ui} client={client} />
-                    <h4 className="ui-settings-group">{t("settings.group.performance")}</h4>
-                    <FrameRateSetting ui={ui} client={client} />
-                </section>
-                {padKind ? (
-                    <section className="ui-settings-section">
-                        <h3>{t("settings.section.controller")}</h3>
-                        <PadControls />
-                    </section>
-                ) : (
-                    !isCoarsePointer && (
-                        <section className="ui-settings-section">
-                            <h3>{t("settings.section.keyboard")}</h3>
-                            <KeyboardControls />
-                        </section>
-                    )
-                )}
+                        <SoundSettings ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.display}
+                        title={t("settings.group.display")}
+                    >
+                        <LanguageSetting />
+                        <Setting
+                            name={t("settings.camera_spin.name")}
+                            text={t("settings.camera_spin.desc")}
+                        >
+                            <Toggle
+                                on={ui.display.menuSpin}
+                                label={t("settings.camera_spin.name")}
+                                onToggle={() => client.toggleMenuSpin()}
+                            />
+                        </Setting>
+                        <Setting
+                            name={t("settings.screen_shake.name")}
+                            text={t("settings.screen_shake.desc")}
+                        >
+                            <Toggle
+                                on={ui.display.screenShake}
+                                label={t("settings.screen_shake.name")}
+                                onToggle={() => client.toggleScreenShake()}
+                            />
+                        </Setting>
+                        <GearPanelSetting ui={ui} client={client} />
+                        <PickupTimerSetting ui={ui} client={client} />
+                        <FrameRateSetting ui={ui} client={client} />
+                    </SettingsSection>
+                </div>
+                <div className="ui-ps-column">
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.run}
+                        title={t("settings.group.run")}
+                    >
+                        <AutoPauseSetting ui={ui} client={client} />
+                        <AutoAlchSetting ui={ui} client={client} />
+                        <AutoEquipSetting ui={ui} client={client} />
+                        <PuzzleHelperSetting ui={ui} client={client} />
+                        <RunStatsSetting ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.coop}
+                        title={t("settings.group.coop")}
+                    >
+                        <MovePredictionSetting ui={ui} client={client} />
+                        <CoopFlagSetting ui={ui} client={client} />
+                    </SettingsSection>
+                    {padKind ? (
+                        <SettingsSection
+                            spriteId={SETTINGS_SECTION_SPRITES.controller}
+                            title={t("settings.section.controller")}
+                        >
+                            <PadControls />
+                        </SettingsSection>
+                    ) : (
+                        !isCoarsePointer && (
+                            <SettingsSection
+                                spriteId={SETTINGS_SECTION_SPRITES.keyboard}
+                                title={t("settings.section.keyboard")}
+                            >
+                                <KeyboardControls />
+                            </SettingsSection>
+                        )
+                    )}
+                </div>
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
@@ -1440,23 +1557,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
     }
     if (isPeaceful(getMap(ui.mapId))) {
         return (
-            <div
-                className="ui-endless"
-                title="Nothing comes here: walk round it for as long as you like."
-            >
-                <span className="ui-endless-name">Explore</span>
-                <span className="ui-endless-hint">No enemies</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.peaceful")}>
+                <span className="ui-endless-name">{t("ui.endless.explore")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.no_enemies")}</span>
             </div>
         );
     }
     if (getMap(ui.mapId).fun?.explore) {
         return (
-            <div
-                className="ui-endless"
-                title="No clock here: fight on for as long as you like. The run is won when its last boss falls."
-            >
-                <span className="ui-endless-name">Explore</span>
-                <span className="ui-endless-hint">No clock</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.explore")}>
+                <span className="ui-endless-name">{t("ui.endless.explore")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.no_clock")}</span>
             </div>
         );
     }
@@ -1569,154 +1680,6 @@ function RaidObjective({
             {room.first && room.number === 1 && (
                 <div className="ui-raid-objective-hint">
                     {t("ui.raid.first_room_hint", { count: room.count })}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// The chest at the end of a raid: what it was rolled with, and what came out
-function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
-    const found = chest.found.map((id) => TROPHY_BY_ID.get(id)!).filter(Boolean);
-    // The Tombs' pet, Thread and jewels aren't purples
-    const purple = found.some((t) => t.from.kind !== "tombs" || t.from.weight !== undefined);
-    return (
-        <div className="ui-raid-chest">
-            <div className="ui-raid-chest-title">
-                {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
-            </div>
-            <div className="ui-subtle">
-                {/* No purple left to find: no chance to show (a roll of its own can still give
-                    something, the Tombs' jewels or expert's looks) */}
-                {t(
-                    chest.level !== undefined
-                        ? chest.purpleLeft
-                            ? "ui.raid.chest.points_level"
-                            : "ui.raid.chest.points_level_none"
-                        : chest.purpleLeft
-                          ? "ui.raid.chest.points"
-                          : "ui.raid.chest.points_none",
-                    {
-                        points: fmtNum(chest.points),
-                        level: chest.level ?? 0,
-                        chance: Math.round(chest.chance * 100),
-                    },
-                )}
-            </div>
-            {found.length > 0 ? (
-                <div className="ui-raid-chest-items">
-                    {found.map((trophy) => (
-                        <span key={trophy.id} className="ui-raid-chest-item">
-                            <ItemIcon objId={trophy.objId} size={36} />
-                            {trophyName(trophy)}
-                        </span>
-                    ))}
-                </div>
-            ) : (
-                <div className="ui-subtle">{t("ui.raid.chest.no_unique")}</div>
-            )}
-        </div>
-    );
-}
-
-// The Tombs of Amascut's board at the end, as OSRS's raid summary has it: the raid level and the
-// invocations that made it, each path's time and the Wardens', and the party's points and deaths
-function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
-    const band = getRaidBand(tombs.level);
-    const total =
-        tombs.paths.reduce((sum, path) => sum + path.seconds, 0) + (tombs.wardensSeconds ?? 0);
-    const party = tombs.party.reduce((sum, player) => sum + player.points, 0);
-    return (
-        <div className="ui-tombs-board">
-            <div className="ui-tombs-board-level">
-                <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
-                <span>
-                    Raid level <b>{tombs.level}</b> ({band})
-                </span>
-            </div>
-            {tombs.invocations.length > 0 && (
-                <div className="ui-tombs-board-invocations" aria-label="Invocations">
-                    {tombs.invocations.map((id) => {
-                        const invocation = INVOCATION_BY_ID.get(id);
-                        return invocation ? (
-                            <span key={id} title={invocation.name}>
-                                <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
-                            </span>
-                        ) : null;
-                    })}
-                </div>
-            )}
-            <div className="ui-tombs-board-columns">
-                <table className="ui-tombs-board-table">
-                    <thead>
-                        <tr>
-                            <th>Room</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tombs.paths.map((path) => (
-                            <tr key={path.id}>
-                                <td>{path.name}</td>
-                                <td>{formatTime(path.seconds)}</td>
-                            </tr>
-                        ))}
-                        {tombs.wardensSeconds !== undefined && (
-                            <tr>
-                                <td>The Wardens</td>
-                                <td>{formatTime(tombs.wardensSeconds)}</td>
-                            </tr>
-                        )}
-                        <tr className="ui-tombs-board-total">
-                            <td>Total</td>
-                            <td>{formatTime(total)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <table className="ui-tombs-board-table">
-                    <thead>
-                        <tr>
-                            <th>Player</th>
-                            <th>Points</th>
-                            <th>Deaths</th>
-                            <th>Purple</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tombs.party.map((player, i) => (
-                            <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
-                                <td>{player.name || "You"}</td>
-                                <td>{player.points.toLocaleString("en-GB")}</td>
-                                <td>{player.deaths}</td>
-                                {/* None with no purple left to find, as their chest's line */}
-                                <td>
-                                    {player.chance === undefined
-                                        ? "–"
-                                        : `${Math.round(player.chance * 100)}%`}
-                                </td>
-                            </tr>
-                        ))}
-                        {tombs.party.length > 1 && (
-                            <tr className="ui-tombs-board-total">
-                                <td>Party</td>
-                                <td>{party.toLocaleString("en-GB")}</td>
-                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
-                                <td />
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-            {tombs.timeLimit && (
-                <div className="ui-subtle">
-                    {tombs.timeLimit.met
-                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
-                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
-                </div>
-            )}
-            {tombs.wipes > 0 && (
-                <div className="ui-subtle">
-                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
                 </div>
             )}
         </div>
@@ -2901,23 +2864,6 @@ function InvocationBadge({ points }: { points: number }): JSX.Element | null {
     ) : null;
 }
 
-// The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
-// its next part once one's won ("Next fight"), or from the first again once the last has been;
-// anything else is tried again
-function nextFightLabel(map: MapDef, victory: boolean, stage: number | undefined): string {
-    if (!victory || !map.stages) {
-        return t("ui.result.retry");
-    }
-    return (stage ?? 0) + 1 < map.stages.length
-        ? t("ui.result.next_fight")
-        : t("ui.result.fight_again");
-}
-
-// What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
-function stageVictoryText(map: MapDef, stage: number | undefined): string {
-    return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
-}
-
 // The part of a fight in parts a run starts at: the one picked, if it's been reached
 function getPickedStage(save: SaveData, map: MapDef, picked: number | undefined): number {
     return picked !== undefined && picked < getReachedStages(save, map.id)
@@ -3216,21 +3162,6 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
     );
 }
 
-// The tab an arrow key, Home or End moves to from the one that's open, round from the last to
-// the first and back
-function getTabFromKey<T>(key: string, tabs: readonly T[], open: T): T | undefined {
-    const index = tabs.indexOf(open);
-    return key === "ArrowRight"
-        ? tabs[(index + 1) % tabs.length]
-        : key === "ArrowLeft"
-          ? tabs[(index + tabs.length - 1) % tabs.length]
-          : key === "Home"
-            ? tabs[0]
-            : key === "End"
-              ? tabs[tabs.length - 1]
-              : undefined;
-}
-
 function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const save = ui.save;
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
@@ -3408,8 +3339,8 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
 
 function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
-    // Where the Collection log over the pause menu was left, so it opens there again: a co-op
-    // run's level up or casket takes the menu away a moment, the log with it
+    // Where the pause menu's Collection log was left, so it opens there again: a co-op run's level
+    // up or casket takes the menu away a moment, the log with it
     const logPlace = useRef<LogPlace | undefined>(undefined);
     return (
         <div className="ui-fill ui-run">
@@ -3660,11 +3591,7 @@ const Slots = memo(function Slots({
                     >
                         {slot && (
                             <>
-                                <ItemIcon
-                                    objId={slot.iconObjId}
-                                    spriteId={slot.iconSpriteId}
-                                    size={30}
-                                />
+                                <SlotIcon slot={slot} size={30} />
                                 <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
                             </>
                         )}
@@ -4028,7 +3955,7 @@ function KillsAndCoins({ client }: { client: GameClient }): JSX.Element {
     return (
         <>
             <div>
-                <span className="ui-skull">☠</span> {kills.toLocaleString()}
+                <span className="ui-skull">☠</span> {fmtNum(kills)}
             </div>
             <Coins amount={coins} />
             {/* Platinum tokens, for card packs, beside the coins */}
@@ -4117,10 +4044,15 @@ function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
         <>
             <div className="ui-round">
                 {wave.done
-                    ? "Room done"
+                    ? t("ui.tombs.room_done")
                     : wave.waiting
-                      ? "Through the barrier to begin"
-                      : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
+                      ? t("ui.tombs.barrier")
+                      : t("ui.tombs.wave", {
+                            // The rooms' own counts come from GameClient in English
+                            label: wave.label ? tl(wave.label) : t("ui.tombs.label.wave"),
+                            wave: wave.wave,
+                            of: wave.of,
+                        })}
             </div>
             {/* Dev server only, with ?devtools: straight to the boss, for testing it */}
             {client.devTools && !wave.done && (
@@ -4141,7 +4073,7 @@ function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
     if (seconds === undefined) {
         return null;
     }
-    return <div className="ui-round">Zebak roars in {seconds}s: get behind a boulder!</div>;
+    return <div className="ui-round">{t("ui.tombs.roar", { seconds })}</div>;
 }
 
 // The Crondis room: your water, and the palm's growth
@@ -4152,7 +4084,7 @@ function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | nul
     }
     return (
         <div className="ui-round">
-            Water {info.water}: the palm has {info.growth} of {info.goal}
+            {t("ui.tombs.crondis", { water: info.water, growth: info.growth, goal: info.goal })}
         </div>
     );
 }
@@ -4166,8 +4098,10 @@ function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
     const filled = Math.round(info.charge * 10);
     return (
         <div className="ui-round">
-            Mirrors held: {info.held} · Beam {"▰".repeat(filled)}
-            {"▱".repeat(10 - filled)}
+            {t("ui.tombs.het", {
+                held: info.held,
+                beam: "▰".repeat(filled) + "▱".repeat(10 - filled),
+            })}
         </div>
     );
 }
@@ -4184,18 +4118,22 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
             <div className="ui-scabaras-puzzles">
                 {info.puzzles.map(({ puzzle, state }) => (
                     <div key={puzzle} className={"ui-scabaras-puzzle ui-scabaras-puzzle-" + state}>
-                        {SCABARAS_PUZZLES[puzzle].name}:{" "}
-                        {state === "solved"
-                            ? "done"
-                            : state === "open"
-                              ? SCABARAS_PUZZLES[puzzle].todo
-                              : SCABARAS_PUZZLES[puzzle].after}
+                        {t("ui.tombs.scabaras.puzzle", {
+                            name: t(`ui.tombs.scabaras.${puzzle}.name`),
+                            state:
+                                state === "solved"
+                                    ? t("ui.tombs.scabaras.done")
+                                    : state === "open"
+                                      ? t(`ui.tombs.scabaras.${puzzle}.todo`)
+                                      : SCABARAS_PUZZLES[puzzle].after &&
+                                        t(`ui.tombs.scabaras.${puzzle}.after`),
+                        })}
                     </div>
                 ))}
             </div>
             {info.readable && (
                 <div className="ui-round">
-                    The tablet says {info.target}: made {info.sum}
+                    {t("ui.tombs.tablet_says", { target: info.target, sum: info.sum })}
                 </div>
             )}
         </>
@@ -4234,27 +4172,29 @@ function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element |
     if (info.reading === "tablet") {
         return (
             <div className="ui-panel rs-border rs-background ui-scabaras-reading">
-                <div className="ui-scabaras-title">Ancient tablet</div>
+                <div className="ui-scabaras-title">{t("ui.tombs.tablet")}</div>
                 {info.readable ? (
                     <>
                         <div className="ui-scabaras-number">{info.target}</div>
-                        <div>So far: {info.sum}</div>
+                        <div>{t("ui.tombs.so_far", { sum: info.sum })}</div>
                     </>
                 ) : (
-                    <div>Its markings are dark.</div>
+                    <div>{t("ui.tombs.dark")}</div>
                 )}
             </div>
         );
     }
     return (
         <div className="ui-panel rs-border rs-background ui-scabaras-reading ui-scabaras-slate">
-            <div className="ui-scabaras-title">Ancient slate</div>
+            <div className="ui-scabaras-title">{t("ui.tombs.slate")}</div>
             <div className="ui-scabaras-symbols">
                 {SCABARAS.symbolNames.map((name, i) => (
                     <div key={name} className="ui-scabaras-symbol">
                         <ItemIcon locId={SCABARAS.locs.symbols[i]} size={40} />
                         <span className="ui-scabaras-value">{i + 1}</span>
-                        <span className="ui-scabaras-name">{name}</span>
+                        <span className="ui-scabaras-name">
+                            {t(`ui.tombs.symbol.${name.toLowerCase()}`)}
+                        </span>
                     </div>
                 ))}
             </div>
@@ -4270,7 +4210,7 @@ function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | nul
     }
     return (
         <div className="ui-round">
-            Shadows {shadows.left} / 4: they flood in {shadows.seconds}s
+            {t("ui.tombs.shadows", { left: shadows.left, seconds: shadows.seconds })}
         </div>
     );
 }
@@ -4783,7 +4723,7 @@ function DamagePanel({
 }
 
 function exact(value: number): string {
-    return Math.round(value).toLocaleString();
+    return fmtNum(Math.round(value));
 }
 
 // The quests this run is getting on with, under the minimap: click the title
@@ -4847,9 +4787,23 @@ function questTrackClass(quest: QuestTrackView): string {
 function formatQuestProgress(quest: QuestTrackView): string {
     return quest.finished
         ? t("ui.quest.done")
-        : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`;
+        : t("quest.progress", { done: fmtNum(quest.done), total: fmtNum(quest.of) });
 }
 
+type PauseTab = "loadout" | "combat" | "quests" | "party" | "collection" | "settings";
+
+// The pages opened from a button along the bottom, not a tab along the top
+const PAUSE_BUTTON_PAGES: PauseTab[] = ["collection", "settings"];
+
+// The tab the menu was left on, open again next time it's opened (this page's, not saved), the tab
+// the Collection log or the settings were opened from, and how far each page was scrolled
+let lastPauseTab: PauseTab = "loadout";
+let lastPauseFrom: PauseTab = "loadout";
+const lastPauseScroll: Partial<Record<PauseTab, number>> = {};
+
+// The pause menu: a page for each part of it (the run's loadout, its fighting, the quests, the
+// party) under a row of the client's own side tab icons, and the Collection log's and the
+// settings' from their buttons along the bottom
 function PauseModal({
     ui,
     hud,
@@ -4861,21 +4815,74 @@ function PauseModal({
     client: GameClient;
     logPlace: MutableRefObject<LogPlace | undefined>;
 }): JSX.Element {
+    const overlayRef = useRef<HTMLDivElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
     const activeEffects = useHudNumber(client, (n) => n.buffs) ?? [];
-    const padKind = usePadKind();
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
         coop && ui.coop.room?.hostId === ui.coop.you
             ? ui.party.filter((member) => member.id && !member.left)
             : [];
+    const tabs: TabDef<PauseTab>[] = [
+        { id: "loadout", name: t("pause.tab.loadout"), spriteId: PAUSE_TAB_SPRITES.loadout },
+        { id: "combat", name: t("pause.tab.combat"), spriteId: PAUSE_TAB_SPRITES.combat },
+        ...(quests.length > 0
+            ? [
+                  {
+                      id: "quests" as const,
+                      name: t("pause.tab.quests"),
+                      spriteId: PAUSE_TAB_SPRITES.quests,
+                  },
+              ]
+            : []),
+        ...(kickable.length > 0
+            ? [
+                  {
+                      id: "party" as const,
+                      name: t("pause.tab.party"),
+                      spriteId: PAUSE_TAB_SPRITES.party,
+                  },
+              ]
+            : []),
+    ];
+    const [picked, setPicked] = useState<PauseTab>(lastPauseTab);
+    // One that's gone (the last quest done with, the party's left) falls back to the first. The
+    // Collection log and the settings are not tabs: their buttons are at the bottom, and each
+    // one's page replaces the open one.
+    const open: PauseTab =
+        PAUSE_BUTTON_PAGES.includes(picked) || tabs.some((tab) => tab.id === picked)
+            ? picked
+            : tabs[0].id;
+    const openTab = (tab: PauseTab) => {
+        lastPauseTab = tab;
+        setPicked(tab);
+    };
+    // A bottom button's page, or back to the tab it came from when it's open
+    const togglePage = (page: PauseTab) => {
+        if (open === page) {
+            openTab(lastPauseFrom);
+        } else {
+            if (!PAUSE_BUTTON_PAGES.includes(open)) {
+                lastPauseFrom = open;
+            }
+            openTab(page);
+        }
+    };
+    // Each page keeps how far it was scrolled: as it opens (or the menu does) it goes back there
+    const pageRef = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        if (pageRef.current) {
+            pageRef.current.scrollTop = lastPauseScroll[open] ?? 0;
+        }
+    }, [open]);
     const { titleId, dialogProps } = useDialog<HTMLDivElement>({ modal: !coop });
     const [confirm, confirmDialog] = useConfirm();
     const host = coop && ui.coop.room?.hostId === ui.coop.you;
     const quit = async () => {
-        const confirmed = await confirm(
+        const answer = await confirm(
             coop
                 ? {
                       title: t("confirm.leave.title"),
@@ -4886,19 +4893,64 @@ function PauseModal({
                 : {
                       title: t("confirm.quit.title"),
                       body: t("confirm.quit.body"),
+                      alternative: t("confirm.quit.restart"),
                       confirm: t("confirm.quit.confirm"),
                       cancel: t("confirm.quit.cancel"),
                   },
         );
-        if (confirmed) {
+        if (answer === "alternative") {
+            client.restartRun();
+        } else if (answer) {
             client.quitRun();
         }
     };
+    // The menu opens on its selected tab (useDialog's focus goes on the window itself)
+    useEffect(() => {
+        const dialog = dialogProps.ref.current;
+        dialog
+            ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+            ?.focus({ preventScroll: true });
+    }, [dialogProps.ref]);
     return (
         <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
-            <div {...dialogProps} className="ui-panel rs-border rs-background ui-pause">
+            <div
+                {...dialogProps}
+                className="ui-panel rs-border rs-background ui-pause"
+                aria-describedby={coop ? "pause-live-warning" : undefined}
+                onKeyDown={(event) => {
+                    if (event.key !== "Tab") {
+                        return;
+                    }
+                    const dialog = dialogProps.ref.current;
+                    if (!dialog) {
+                        return;
+                    }
+                    const focusable = [
+                        ...dialog.querySelectorAll<HTMLElement>(
+                            'button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+                        ),
+                    ];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (!first || !last) {
+                        return;
+                    }
+                    const active = document.activeElement;
+                    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && active === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }}
+            >
                 <h2 id={titleId}>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
-                {coop && <p className="ui-subtle">{t("pause.coop_warning")}</p>}
+                {coop && (
+                    <p id="pause-live-warning" className="ui-subtle">
+                        {t("pause.coop_warning")}
+                    </p>
+                )}
                 {ui.saveBlock && ui.saveBlockClosed && (
                     <p className="ui-subtle">
                         <button
@@ -4909,762 +4961,275 @@ function PauseModal({
                         </button>
                     </p>
                 )}
-                <div className="ui-pause-columns">
-                    <div className="ui-pause-column">
-                        {hud.stats.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.your_stats")}
-                                </h3>
-                                <div className="ui-pause-stats">
-                                    {hud.stats.map((line) => (
-                                        <StatLine
-                                            key={line.text}
-                                            text={line.text}
-                                            english={line.english}
-                                        />
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        <div
-                            className={
-                                "ui-pause-list" +
-                                (hud.stats.length > 0 &&
-                                hud.weapons.length + hud.passives.length > 0
-                                    ? " ui-pause-loadout"
-                                    : "")
-                            }
-                        >
-                            {/* A map with blessings has those in place of passives */}
-                            {[...hud.weapons, ...(hud.blessings ?? hud.passives)].map((slot) => (
-                                <div key={slot.id} className="ui-pause-item">
-                                    <ItemIcon
-                                        objId={slot.iconObjId}
-                                        spriteId={slot.iconSpriteId}
-                                        size={28}
-                                    />
-                                    {/* The name, and what it does under it */}
-                                    <span className="ui-pause-name">
-                                        <span style={{ color: slot.rarityColor }}>
-                                            {tl(slot.name)}
-                                        </span>
-                                        <span className="ui-pause-detail">
-                                            {[...(slot.stats ?? []), slot.detail]
-                                                .filter((line): line is StatText => !!line)
-                                                .map((line, i) => (
-                                                    <StatLine
-                                                        key={i}
-                                                        text={line.text}
-                                                        english={line.english}
-                                                    />
-                                                ))}
-                                        </span>
-                                        {slot.evolution && <EvolutionLine {...slot.evolution} />}
-                                    </span>
-                                    <span className="ui-pause-level">
-                                        {slot.blessing
-                                            ? `×${slot.level}`
-                                            : slot.level >= slot.maxLevel
-                                              ? t("pause.slot_max")
-                                              : t("pause.slot_level", { level: slot.level })}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                        {hud.gear.some((slot) => slot.item) && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.worn_equipment")}
-                                </h3>
-                                <div className="ui-pause-list">
-                                    {hud.gear.map(
-                                        ({ slot, item }) =>
-                                            item && (
-                                                <div key={slot} className="ui-pause-item">
-                                                    <ItemIcon objId={item.objId} size={28} />
-                                                    <span className="ui-pause-name">
-                                                        <span style={{ color: item.rarity.color }}>
-                                                            {tl(item.name)}
-                                                        </span>
-                                                        <span className="ui-pause-detail">
-                                                            <ItemLines item={item} />
-                                                            {item.set && (
-                                                                <span
-                                                                    className={
-                                                                        "ui-pause-set" +
-                                                                        (item.set.active
-                                                                            ? " ui-pause-set-on"
-                                                                            : "")
-                                                                    }
-                                                                >
-                                                                    <StatLine
-                                                                        text={item.set.text}
-                                                                    />
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                            ),
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <div className="ui-pause-column">
-                        <h3 className="ui-pause-heading">{t("pause.heading.effects")}</h3>
-                        {activeEffects.length > 0 ? (
-                            <div className="ui-pause-list">
-                                {activeEffects.map((effect) => (
-                                    <div key={effect.id} className="ui-pause-item">
-                                        <ItemIcon objId={effect.objId} size={24} />
-                                        <span className="ui-pause-name">
-                                            {tl(effect.name)}
-                                            <span className="ui-pause-detail">
-                                                {effect.description}
-                                            </span>
-                                            {effect.secondsLeft !== undefined && (
-                                                <span className="ui-pause-detail">
-                                                    {t("pause.effects.left", {
-                                                        seconds: effect.secondsLeft,
-                                                    })}
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span
-                                            className={
-                                                "ui-pause-level " +
-                                                (effect.harmful
-                                                    ? "ui-pause-effect-debuff"
-                                                    : "ui-pause-effect-buff")
-                                            }
-                                        >
-                                            {effect.harmful
-                                                ? t("pause.effects.debuff")
-                                                : t("pause.effects.buff")}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="ui-subtle">{t("pause.effects.none")}</div>
-                        )}
-                        {quests.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">{t("pause.heading.quests")}</h3>
-                                <div className="ui-pause-list">
-                                    {quests.map((quest) => (
-                                        <div
-                                            key={quest.id}
-                                            className={"ui-pause-quest " + questTrackClass(quest)}
-                                        >
-                                            <span className="ui-quest-name">{tl(quest.name)}</span>
-                                            <span className="ui-pause-detail">
-                                                {tl(quest.task)}
-                                            </span>
-                                            <span className="ui-quest-progress">
-                                                {formatQuestProgress(quest)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        {kickable.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">{t("pause.heading.party")}</h3>
-                                <div className="ui-pause-list">
-                                    {kickable.map((member) => (
-                                        <div key={member.id} className="ui-pause-item">
-                                            <span className="ui-pause-name">{member.name}</span>
-                                            <button
-                                                className="ui-button ui-button-small ui-coop-kick"
-                                                title={t("pause.party.kick_title", {
-                                                    name: member.name,
-                                                })}
-                                                aria-label={t("pause.party.kick_aria", {
-                                                    name: member.name,
-                                                })}
-                                                onClick={() => client.kickPlayer(member.id!)}
-                                            >
-                                                {t("pause.party.kick_button")}
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        {ui.toastLog.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">{t("pause.heading.recent")}</h3>
-                                <ul className="ui-pause-recent">
-                                    {ui.toastLog.map((text, i) => (
-                                        <li key={i}>{text}</li>
-                                    ))}
-                                </ul>
-                            </>
-                        )}
-                        {padKind ? (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.controller")}
-                                </h3>
-                                <PadControls />
-                            </>
-                        ) : (
-                            !isCoarsePointer && (
-                                <>
-                                    <h3 className="ui-pause-heading">
-                                        {t("pause.heading.keyboard")}
-                                    </h3>
-                                    <KeyboardControls />
-                                </>
-                            )
-                        )}
-                        <h3 className="ui-pause-heading">{t("pause.heading.settings")}</h3>
-                        <LanguageSetting />
-                        <SoundSettings
-                            ui={ui}
+                <TabBar
+                    tabs={tabs}
+                    open={PAUSE_BUTTON_PAGES.includes(open) ? undefined : open}
+                    onOpen={openTab}
+                    idPrefix="pause"
+                    label={t("pause.tabs_aria")}
+                />
+                <div
+                    ref={pageRef}
+                    className={
+                        open === "collection" ? "ui-pause-page ui-pause-page-log" : "ui-pause-page"
+                    }
+                    onScroll={(event) => {
+                        lastPauseScroll[open] = event.currentTarget.scrollTop;
+                    }}
+                    id={`pause-page-${open}`}
+                    role="tabpanel"
+                    aria-labelledby={`pause-tab-${open}`}
+                >
+                    {open === "loadout" && <PauseLoadout hud={hud} effects={activeEffects} />}
+                    {open === "combat" && (
+                        <PauseCombat client={client} live={coop} log={ui.toastLog} />
+                    )}
+                    {open === "quests" && <PauseQuests quests={quests} />}
+                    {open === "party" && <PauseParty kickable={kickable} client={client} />}
+                    {open === "collection" && (
+                        <CollectionLogScreen
+                            save={ui.save}
                             client={client}
-                            music={getMap(ui.mapId).music !== undefined}
+                            inRun
+                            place={logPlace}
                         />
-                        <PickupTimerSetting ui={ui} client={client} />
-                        <GearPanelSetting ui={ui} client={client} />
-                        <PuzzleHelperSetting ui={ui} client={client} />
-                        <AutoPauseSetting ui={ui} client={client} />
-                        <AutoAlchSetting ui={ui} client={client} />
-                        <AutoEquipSetting ui={ui} client={client} />
-                        <MovePredictionSetting ui={ui} client={client} />
-                        <FrameRateSetting ui={ui} client={client} />
-                    </div>
+                    )}
+                    {open === "settings" && <PauseSettings ui={ui} client={client} />}
                 </div>
-                <div className="ui-row">
+                {/* Four buttons of one kind: as wide as each other, each with its icon */}
+                <div className="ui-row ui-pause-actions">
                     <button
-                        className="ui-button"
+                        className="ui-button ui-pause-action"
                         title={host ? t("pause.quit.host_warning") : undefined}
                         onClick={quit}
                     >
-                        {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.giveUp} size={24} />
+                        <span>{coop ? t("pause.quit.leave") : t("pause.quit.give_up")}</span>
                     </button>
-                    <button className="ui-button" onClick={() => client.openRunLog()}>
-                        {t("collection.title")}
+                    <button
+                        id="pause-tab-collection"
+                        className="ui-button ui-pause-action"
+                        aria-pressed={open === "collection"}
+                        onClick={() => togglePage("collection")}
+                    >
+                        <ItemIcon objId={COLLECTION_LOG_OBJ} size={24} />
+                        <span>{t("collection.title")}</span>
                     </button>
-                    <button className="ui-button ui-button-go" onClick={() => client.resume()}>
-                        {t("pause.resume")}
+                    <button
+                        id="pause-tab-settings"
+                        className="ui-button ui-pause-action"
+                        aria-pressed={open === "settings"}
+                        onClick={() => togglePage("settings")}
+                    >
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.settings} size={24} />
+                        <span>{t("pause.tab.settings")}</span>
+                    </button>
+                    <button
+                        className="ui-button ui-button-go ui-pause-action"
+                        onClick={() => client.resume()}
+                    >
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.resume} size={24} />
+                        <span>{t("pause.resume")}</span>
                     </button>
                 </div>
             </div>
-            {/* Over the menu, which is there again once it's closed */}
-            {ui.runLog && (
-                <CollectionLogScreen save={ui.save} client={client} inRun place={logPlace} />
-            )}
             {confirmDialog}
         </div>
     );
 }
 
-// Co-op's results name everyone else
-const MAX_LISTED_TEAMMATES = 3;
-
-// How long the results ignore Escape and Enter after they come up
-const RESULT_KEY_GUARD_MS = 600;
-
-// "Coif, Rune boots and Seers ring", or the first few "and 5 more"
-function listNames(names: string[], most = 3): string {
-    if (names.length === 0) {
-        return "";
-    }
-    if (names.length === 1) {
-        return names[0];
-    }
-    const shown = names.length > most ? names.slice(0, most - 1) : names;
-    if (names.length > most) {
-        const rest = tp("ui.result.and_more", names.length - shown.length);
-        return list([...shown, rest]);
-    }
-    return list(names);
-}
-
-// Damage a second, with a decimal while it's small
-function formatPerSecond(perSecond: number): string {
-    return perSecond < 100_000
-        ? perSecond.toLocaleString(undefined, { maximumFractionDigits: perSecond < 10 ? 1 : 0 })
-        : formatBig(perSecond);
-}
-
-// Big numbers the way OSRS shows a stack: in full up to 99,999, then 100K,
-// then 10M, so an endless run's totals still fit. Past what a stack can hold
-// (10,000M), the damage panel's short form: 12B, 4.6Qa.
-function formatBig(value: number): string {
-    const n = Math.round(value);
-    if (n < 100_000) {
-        return n.toLocaleString();
-    }
-    if (n < 10_000_000) {
-        return `${Math.floor(n / 1000).toLocaleString()}K`;
-    }
-    if (n < 10_000_000_000) {
-        return `${Math.floor(n / 1_000_000).toLocaleString()}M`;
-    }
-    return formatCompact(n);
-}
-
-// A stat's number, shortened when it's big, in full when pointed at
-function Big({ value }: { value: number }): JSX.Element {
-    const n = Math.round(value);
-    return <span title={n >= 100_000 ? n.toLocaleString() : undefined}>{formatBig(n)}</span>;
-}
-
-export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
-    const result = ui.result;
-    const victory = ui.overlay === "victory";
-    const players = result?.players ?? [];
-    // Your own page first (the modal is mounted afresh for each run's result)
-    const [playerIndex, setPlayerIndex] = useState(() =>
-        Math.max(
-            0,
-            players.findIndex((player) => player.isLocal),
-        ),
-    );
-    const player = players[playerIndex];
-    const multiplayer = players.length > 1;
-    const changePlayer = useCallback(
-        (direction: number) =>
-            setPlayerIndex((current) => (current + direction + players.length) % players.length),
-        [players.length],
-    );
+// What the hero's damage was and what they've killed. Read from the run as the tab opens, and
+// each second in co-op, whose run goes on behind the menu.
+function PauseCombat({
+    client,
+    live,
+    log,
+}: {
+    client: GameClient;
+    live: boolean;
+    log: ToastLogEntry[];
+}): JSX.Element {
+    const [view, setView] = useState(() => client.getCombatView());
     useEffect(() => {
-        if (!multiplayer) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            const target = event.target;
-            if (
-                event.altKey ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey ||
-                (target instanceof HTMLElement &&
-                    (target.isContentEditable || target.closest("input, textarea, select")))
-            )
-                return;
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                event.preventDefault();
-                if (!event.repeat) changePlayer(event.key === "ArrowLeft" ? -1 : 1);
-            }
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [changePlayer, multiplayer]);
-    // The map just played: a win can have moved the pick on to the one it opened
-    const played = getMap(result?.mapId ?? ui.mapId);
-    const canRetry = !result?.coop;
-    useMenuKeys({
-        onBack: () => client.leaveRun(),
-        onConfirm: () => (canRetry ? client.retry() : client.leaveRun()),
-        // Esc is the pause key: a run can end just as it's pressed
-        guardMs: RESULT_KEY_GUARD_MS,
-    });
-    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
+        if (!live) {
+            return;
+        }
+        const timer = window.setInterval(() => setView(client.getCombatView()), 1000);
+        return () => window.clearInterval(timer);
+    }, [client, live]);
+    if (!view) {
+        return <></>;
+    }
     return (
-        <div className="ui-modal">
-            <div {...dialogProps} className="ui-panel rs-border rs-background ui-result">
-                <h2 id={titleId} className={victory ? "ui-victory" : "ui-defeat"}>
-                    {victory && result
-                        ? tl(stageVictoryText(getMap(result.mapId), result.stage))
-                        : (result?.endedEarly ?? t("ui.result.dead"))}
-                </h2>
-                {result?.party && (
-                    <p className="ui-subtle">
-                        {t("ui.result.with_party", {
-                            party: listNames(result.party, MAX_LISTED_TEAMMATES),
-                        })}
-                    </p>
-                )}
-                {result?.endlessRecord && (
-                    <p className="ui-unlocked">
-                        {result.hard
-                            ? t("ui.result.endless_record_hard", {
-                                  map: mapName(getMap(result.mapId)),
-                              })
-                            : t("ui.result.endless_record", { map: mapName(getMap(result.mapId)) })}
-                    </p>
-                )}
-                {result?.tombs && <TombsBoardView tombs={result.tombs} />}
-                {result?.raidChest && <RaidChestView chest={result.raidChest} />}
-                {result?.hard && result.victory && result.relics && (
-                    <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
-                )}
-                {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
-                {result?.firstHardWin && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
-                    </p>
-                )}
-                {/* Act II's extras (act-2-fallen-empire.md 8.6): an invader felled, an orb spent
-                    or won, the Vault's week */}
-                {result?.invasion?.killed && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.invader_killed", { name: invaderName(result.invasion.id) })}
-                    </p>
-                )}
-                {result?.invasion?.came && !result.invasion.killed && (
-                    <p className="ui-subtle">
-                        {t("ui.result.invader_lived", { name: invaderName(result.invasion.id) })}
-                    </p>
-                )}
-                {result?.awakened?.seen && (
-                    <p className={result.victory ? "ui-unlocked" : "ui-subtle"}>
-                        {result.victory
-                            ? t("ui.result.awakened_won", {
-                                  coins: fmtNum(result.awakened.casketCoins ?? 0),
-                              })
-                            : t("ui.result.awakened_spent")}
-                    </p>
-                )}
-                {result?.orbWon && <p className="ui-unlocked">{t("ui.result.orb_won")}</p>}
-                {result?.vault && (
-                    <p className={result.vault.best ? "ui-unlocked" : "ui-subtle"}>
-                        {result.vault.best
-                            ? t("ui.result.vault_best", {
-                                  week: parseWeekKey(result.vault.key)?.week ?? 0,
-                              })
-                            : t("ui.result.vault_not_best")}
-                    </p>
-                )}
-                {result?.unlockedMap && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.unlocked_map", { map: tl(result.unlockedMap) })}
-                    </p>
-                )}
-                {result?.unlockedCharacters.map((name) => (
-                    <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_character", { name: tl(name) })}
-                    </p>
+        <>
+            <CombatReport
+                kinds={view.kinds}
+                sources={view.sources}
+                kills={view.kills}
+                totals={view}
+            />
+            {view.invocations.length > 0 && <ActiveInvocations view={view} />}
+            {log.length > 0 && (
+                <section className="ui-cr-recent">
+                    <h3 className="ui-loadout-heading">
+                        <span>{t("pause.heading.recent")}</span>
+                    </h3>
+                    <PauseChat log={log} />
+                </section>
+            )}
+        </>
+    );
+}
+
+// The modifiers that are actually shaping this map. The sim has already cleaned the ids against
+// the map's board, so this never shows selections that are inactive here.
+function ActiveInvocations({ view }: { view: CombatView }): JSX.Element {
+    const total = view.tombsInvocations
+        ? t("ui.invocations.raid_level", { level: view.invocationTotal })
+        : t("ui.invocations.points", { points: view.invocationTotal });
+    return (
+        <section className="ui-cr-invocations">
+            <h3 className="ui-loadout-heading">
+                <span>{t("ui.invocations.title")}</span>
+                <span className="ui-loadout-count">{total}</span>
+            </h3>
+            <ul aria-label={t("ui.invocations.title")}>
+                {view.invocations.map((invocation) => (
+                    <li key={invocation.id}>
+                        <span className="ui-cr-invocation-icon">
+                            <ItemIcon objId={-1} spriteId={invocation.iconSpriteId} size={32} />
+                        </span>
+                        <span className="ui-cr-invocation-copy">
+                            <span className="ui-cr-invocation-name">{invocation.name}</span>
+                            <span className="ui-subtle">{invocation.description}</span>
+                        </span>
+                        <span className="ui-cr-invocation-points">
+                            {t("ui.invocations.detail_points", { points: invocation.points })}
+                        </span>
+                    </li>
                 ))}
-                {result?.unlockedItems.map((name) => (
-                    <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_item", { name: tl(name) })}
-                    </p>
-                ))}
-                {result && result.newTrophies.length > 0 && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.new_trophies", {
-                            trophies: listNames(result.newTrophies.map(tl)),
-                        })}
-                    </p>
-                )}
-                {result && result.newGear.length > 0 && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.new_gear", {
-                            gear: listNames(result.newGear.map(tl)),
-                        })}
-                    </p>
-                )}
-                {result?.quests.map((quest) => (
-                    <p key={quest.name} className="ui-unlocked">
-                        {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
-                        <Coins amount={quest.coins} />
-                    </p>
-                ))}
-                {multiplayer && player && (
-                    <div
-                        className="ui-result-player-nav"
-                        role="group"
-                        aria-label={t("ui.result.player_nav_aria")}
-                    >
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.prev_player_aria")}
-                            title={t("ui.result.prev_player_title")}
-                            onClick={() => changePlayer(-1)}
-                        >
-                            <span className="ui-result-arrow-left" aria-hidden="true" />
-                        </button>
-                        <div className="ui-result-player" aria-live="polite" aria-atomic="true">
-                            <div className="ui-result-player-name">
-                                {player.name}
-                                {player.isLocal && t("ui.result.you")}
-                            </div>
-                            <div className="ui-result-player-detail">
-                                {t("ui.result.player_index", {
-                                    current: playerIndex + 1,
-                                    total: players.length,
-                                })}
-                                {player.left
-                                    ? t("ui.result.left_run")
-                                    : player.down
-                                      ? t("ui.result.down")
-                                      : ""}
-                            </div>
-                        </div>
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.next_player_aria")}
-                            title={t("ui.result.next_player_title")}
-                            onClick={() => changePlayer(1)}
-                        >
-                            <span className="ui-result-arrow-right" aria-hidden="true" />
-                        </button>
-                    </div>
-                )}
-                {result && player && (
-                    <div className="ui-result-columns">
-                        <div className="ui-result-column">
-                            {multiplayer && (
-                                <h3 className="ui-pause-heading">
-                                    {t("ui.result.individual_stats")}
-                                </h3>
-                            )}
-                            <table
-                                className="ui-result-table"
-                                aria-label={t("ui.result.individual_stats")}
-                            >
-                                <tbody>
-                                    <tr>
-                                        <td>{t("ui.result.stat.adventurer")}</td>
-                                        <td>{tl(player.characterName)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.kills")}</td>
-                                        <td>
-                                            <Big value={player.kills} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_dealt")}</td>
-                                        <td>
-                                            <Big value={player.damageDealt} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.biggest_hit")}</td>
-                                        <td>
-                                            <Big value={player.highestHit} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_taken")}</td>
-                                        <td>
-                                            <Big value={player.damageTaken} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.healed")}</td>
-                                        <td>
-                                            <Big value={player.healed} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.caskets")}</td>
-                                        <td>{player.caskets}</td>
-                                    </tr>
-                                    {(player.rerollsUsed > 0 || player.skips > 0) && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.rerolls_skips")}</td>
-                                            <td>
-                                                {player.rerollsUsed} / {player.skips}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                            <h3 className="ui-pause-heading">
-                                {multiplayer
-                                    ? t("ui.result.party_totals")
-                                    : t("ui.result.run_totals")}
-                            </h3>
-                            <table
-                                className="ui-result-table"
-                                aria-label={
-                                    multiplayer
-                                        ? t("ui.result.party_totals_aria")
-                                        : t("ui.result.run_totals")
-                                }
-                            >
-                                <tbody>
-                                    {result.hard && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.difficulty")}</td>
-                                            <td>
-                                                {result.expert
-                                                    ? t("ui.expert.name")
-                                                    : t("ui.hard.name")}
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {result.points !== undefined && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.invocations")}</td>
-                                            <td>
-                                                {t("ui.invocations.points", {
-                                                    points: result.points,
-                                                })}
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {result.relics && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.relics")}</td>
-                                            <td>
-                                                {list(
-                                                    result.relics.flatMap((id) => {
-                                                        const relic = RELIC_BY_ID.get(id);
-                                                        return relic ? [relicName(relic)] : [];
-                                                    }),
-                                                )}
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {result.endless && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.endless_round")}</td>
-                                            <td>{result.round}</td>
-                                        </tr>
-                                    )}
-                                    <tr>
-                                        <td>{t("ui.result.stat.run_time")}</td>
-                                        <td>{formatTime(result.seconds)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.level")}</td>
-                                        <td>{result.level}</td>
-                                    </tr>
-                                    {multiplayer && (
-                                        <>
-                                            <tr>
-                                                <td>{t("ui.result.stat.kills")}</td>
-                                                <td>
-                                                    <Big value={result.kills} />
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>{t("ui.result.stat.damage_dealt")}</td>
-                                                <td>
-                                                    <Big
-                                                        value={players.reduce(
-                                                            (total, entry) =>
-                                                                total + entry.damageDealt,
-                                                            0,
-                                                        )}
-                                                    />
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>{t("ui.result.stat.caskets")}</td>
-                                                <td>{result.caskets}</td>
-                                            </tr>
-                                        </>
-                                    )}
-                                    <tr>
-                                        <td>{t("ui.result.stat.coins_banked")}</td>
-                                        <td>
-                                            <Coins amount={result.coins} />
-                                        </td>
-                                    </tr>
-                                    {/* What card packs are bought with (content/cards.ts) */}
-                                    <tr>
-                                        <td>{t("ui.result.stat.platinum")}</td>
-                                        <td>
-                                            <Platinum amount={result.platinum ?? 0} />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            {result.bossKills.length > 0 && (
-                                <>
-                                    <h3 className="ui-pause-heading">
-                                        {multiplayer
-                                            ? t("ui.result.party_bosses")
-                                            : t("ui.result.bosses")}
-                                    </h3>
-                                    <table className="ui-result-table">
-                                        <tbody>
-                                            {result.bossKills.map((boss, i) => (
-                                                <tr key={i}>
-                                                    <td>{tl(boss.name)}</td>
-                                                    <td>{formatTime(boss.seconds)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </>
-                            )}
-                        </div>
-                        {player.damage.length > 0 && (
-                            <div className="ui-result-column">
-                                <h3 className="ui-pause-heading">
-                                    {t("ui.result.damage_breakdown")}
-                                </h3>
-                                <table
-                                    className="ui-result-damage"
-                                    aria-label={t("ui.result.damage_breakdown")}
-                                >
-                                    <thead>
-                                        <tr>
-                                            <th />
-                                            <th>{t("ui.result.damage")}</th>
-                                            <th>{t("ui.result.stat.kills")}</th>
-                                            <th>{t("ui.damage.dps")}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {player.damage.map((row, i) => (
-                                            <tr key={i}>
-                                                <td>
-                                                    <span className="ui-result-source">
-                                                        {row.iconObjId !== undefined && (
-                                                            <ItemIcon
-                                                                objId={row.iconObjId}
-                                                                spriteId={row.iconSpriteId}
-                                                                size={24}
-                                                            />
-                                                        )}
-                                                        <span
-                                                            className="ui-result-name"
-                                                            style={{ color: row.color }}
-                                                            title={tl(row.name)}
-                                                        >
-                                                            {tl(row.name)}
-                                                        </span>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <Big value={row.damage} />
-                                                </td>
-                                                <td>
-                                                    <Big value={row.kills} />
-                                                </td>
-                                                <td>
-                                                    {row.perSecond !== undefined
-                                                        ? formatPerSecond(row.perSecond)
-                                                        : ""}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                )}
-                <div className="ui-row">
-                    {/* On your own: straight into the same map again */}
-                    {canRetry && (
-                        <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            <KeyHint keyLabel="Enter" className="ui-choice-key ui-word-key" />{" "}
-                            {played.fight
-                                ? nextFightLabel(played, victory, result?.stage)
-                                : t("ui.result.play_again")}
-                        </button>
-                    )}
+            </ul>
+        </section>
+    );
+}
+
+// The host's: anyone still in the run, to remove one who's stopped playing
+function PauseParty({
+    kickable,
+    client,
+}: {
+    kickable: UiSnapshot["party"];
+    client: GameClient;
+}): JSX.Element {
+    return (
+        <div className="ui-pause-list ui-pause-narrow">
+            {kickable.map((member) => (
+                <div key={member.id} className="ui-pause-item">
+                    <span className="ui-pause-name">{member.name}</span>
                     <button
-                        className={canRetry ? "ui-button" : "ui-button ui-button-go"}
-                        onClick={() => client.leaveRun()}
+                        className="ui-button ui-button-small ui-coop-kick"
+                        title={t("pause.party.kick_title", { name: member.name })}
+                        aria-label={t("pause.party.kick_aria", { name: member.name })}
+                        onClick={() => client.kickPlayer(member.id!)}
                     >
-                        {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}
+                        {t("pause.party.kick_button")}
                     </button>
                 </div>
+            ))}
+        </div>
+    );
+}
+
+// A section of the settings (the pause menu's and the title's): its heading, with the client's own icon for it, over a
+// card for each setting
+function SettingsSection({
+    spriteId,
+    title,
+    children,
+}: {
+    spriteId: number;
+    title: string;
+    children: ReactNode;
+}): JSX.Element {
+    return (
+        <section className="ui-ps-section">
+            <h3 className="ui-ps-heading">
+                <ItemIcon objId={-1} spriteId={spriteId} size={22} />
+                <span>{title}</span>
+            </h3>
+            <div className="ui-ps-cards">{children}</div>
+        </section>
+    );
+}
+
+// The pause menu's settings, in the Loadout's and Quests' style: sections under a heading each,
+// a card for each setting, its edge green while it's on and red while off (as a quest's). Two
+// columns while there's room: the sound and the screen on the left, the run, co-op and the keys
+// (or a controller's buttons) on the right.
+function PauseSettings({ ui, client }: ScreenProps): JSX.Element {
+    const padKind = usePadKind();
+    return (
+        <div className="ui-ps">
+            <div className="ui-ps-column">
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.sound}
+                    title={t("settings.section.sound")}
+                >
+                    <SoundSettings
+                        ui={ui}
+                        client={client}
+                        music={getMap(ui.mapId).music !== undefined}
+                    />
+                </SettingsSection>
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.display}
+                    title={t("settings.group.display")}
+                >
+                    <LanguageSetting />
+                    <GearPanelSetting ui={ui} client={client} />
+                    <PickupTimerSetting ui={ui} client={client} />
+                    <FrameRateSetting ui={ui} client={client} />
+                </SettingsSection>
+            </div>
+            <div className="ui-ps-column">
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.run}
+                    title={t("settings.group.run")}
+                >
+                    <AutoPauseSetting ui={ui} client={client} />
+                    <AutoAlchSetting ui={ui} client={client} />
+                    <AutoEquipSetting ui={ui} client={client} />
+                    <PuzzleHelperSetting ui={ui} client={client} />
+                </SettingsSection>
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.coop}
+                    title={t("settings.group.coop")}
+                >
+                    <MovePredictionSetting ui={ui} client={client} />
+                </SettingsSection>
+                {padKind ? (
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.controller}
+                        title={t("pause.heading.controller")}
+                    >
+                        <PadControls />
+                    </SettingsSection>
+                ) : (
+                    !isCoarsePointer && (
+                        <SettingsSection
+                            spriteId={SETTINGS_SECTION_SPRITES.keyboard}
+                            title={t("pause.heading.keyboard")}
+                        >
+                            <KeyboardControls />
+                        </SettingsSection>
+                    )
+                )}
             </div>
         </div>
     );
+}
+
+// The results screen
+export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
+    return <ClassicResults ui={ui} client={client} />;
 }

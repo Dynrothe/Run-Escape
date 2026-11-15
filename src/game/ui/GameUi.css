@@ -24,6 +24,14 @@
     --ui-quest-red-text: #ff3010;
     /* The buttons' green is too dark on the stone */
     --ui-green-text: #5fe05f;
+    /* Something's state on a card: the pause menu's quests (not started, under way, done) and the
+       settings' toggles (off, on). The text's are 4.5:1 on a card; the edges', on the card's side,
+       only decorate. */
+    --ui-state-red: #ff8585;
+    --ui-state-red-edge: #ff4040;
+    --ui-state-yellow: #ffd700;
+    --ui-state-green: #00ff00;
+    --ui-state-green-edge: #00c800;
     /* A whole outline, for text over the world, which can be any colour */
     --ui-outline:
         1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 1px 0 #000,
@@ -420,7 +428,7 @@
     outline-offset: 1px;
 }
 
-/* Settings: behind the title screen's button, and in the pause menu */
+/* Settings' rows: behind the title screen's button, in cloud save's panel and the pause menu */
 
 .ui-settings {
     width: min(500px, calc(94vw / var(--ui-scale)));
@@ -440,18 +448,9 @@
     padding-right: 4px;
 }
 
-.ui-settings-section + .ui-settings-section {
-    margin-top: 12px;
-}
-
-.ui-settings-section h3 {
-    margin: 0 0 2px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid var(--ui-edge-light);
-    font-family: "OSRS Bold", sans-serif;
-    font-weight: normal;
-    font-size: 18px;
-    color: var(--ui-orange);
+/* The title's Settings: the pause menu's sections and cards (.ui-ps), as wide as the pause menu */
+.ui-settings-cards {
+    width: min(920px, calc(94vw / var(--ui-scale)));
 }
 
 .ui-setting {
@@ -481,15 +480,6 @@
 .ui-setting-note {
     display: block;
     color: var(--ui-text);
-}
-
-/* A kind of setting, inside a section */
-.ui-settings-group {
-    margin: 8px 0 0;
-    font-family: "OSRS Bold", sans-serif;
-    font-weight: normal;
-    font-size: 15px;
-    color: var(--ui-yellow);
 }
 
 .ui-setting-control {
@@ -536,13 +526,14 @@
     user-select: all;
 }
 
+/* Off in the quests' red, on in their green */
 .ui-toggle {
     min-width: 52px;
-    color: var(--ui-red-text);
+    color: var(--ui-state-red);
 }
 
 .ui-toggle-on {
-    color: var(--ui-green);
+    color: var(--ui-state-green);
 }
 
 /* The frame rate's choices: the one picked lit up */
@@ -567,8 +558,82 @@
 }
 
 .ui-volume-value {
-    width: 36px;
+    width: 48px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A volume's slider: a sunk dark groove filled orange up to the level (--ui-slider-fill), and a
+   raised stone thumb, as the client's own sliders */
+.ui-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 150px;
+    height: 24px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.ui-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    background: linear-gradient(
+        90deg,
+        var(--ui-orange) 0 var(--ui-slider-fill, 0%),
+        rgba(0, 0, 0, 0.55) var(--ui-slider-fill, 0%) 100%
+    );
+    border: 1px solid #000;
+    box-shadow: 0 1px 0 rgba(107, 94, 74, 0.6);
+}
+
+.ui-slider::-moz-range-track {
+    height: 8px;
+    background: linear-gradient(
+        90deg,
+        var(--ui-orange) 0 var(--ui-slider-fill, 0%),
+        rgba(0, 0, 0, 0.55) var(--ui-slider-fill, 0%) 100%
+    );
+    border: 1px solid #000;
+    box-shadow: 0 1px 0 rgba(107, 94, 74, 0.6);
+}
+
+.ui-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 20px;
+    margin-top: -7px;
+    background: #5c5246;
+    border: 1px solid #000;
+    box-shadow:
+        inset 1px 1px 0 #8a7c66,
+        inset -1px -1px 0 #2a241c;
+}
+
+.ui-slider::-moz-range-thumb {
+    width: 10px;
+    height: 20px;
+    box-sizing: border-box;
+    border-radius: 0;
+    background: #5c5246;
+    border: 1px solid #000;
+    box-shadow:
+        inset 1px 1px 0 #8a7c66,
+        inset -1px -1px 0 #2a241c;
+}
+
+.ui-slider:hover::-webkit-slider-thumb,
+.ui-slider:focus-visible::-webkit-slider-thumb {
+    background: #6f6352;
+}
+
+.ui-slider:hover::-moz-range-thumb,
+.ui-slider:focus-visible::-moz-range-thumb {
+    background: #6f6352;
+}
+
+.ui-slider-muted {
+    opacity: 0.5;
 }
 
 /* In the title screen's corner, out of the way */
@@ -1382,6 +1447,46 @@
     transform: translateY(1px);
 }
 
+/* The pause menu's buttons along the bottom (Give up, Collection log, Settings, Resume): stone
+   tabs like the pages' above, an icon beside each name, all as wide as each other. Settings is
+   pressed in while its page is open. */
+.ui-pause-actions {
+    gap: 8px;
+}
+
+.ui-pause-action {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 4px 10px;
+    box-shadow:
+        inset 1px 1px 0 var(--ui-edge-light),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.55);
+}
+
+.ui-pause-action > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-pause-action > :first-child {
+    flex: none;
+}
+
+.ui-pause-action[aria-pressed="true"] {
+    color: var(--ui-green);
+    box-shadow:
+        inset 2px 2px 0 rgba(0, 0, 0, 0.75),
+        inset -1px -1px 0 var(--ui-edge-light);
+    transform: translateY(1px);
+}
+
 /* It scrolls, so it clips what's outside it: the padding is room for a
    controller's highlight around the cards at its edges (3px out, 3px wide),
    and the margin keeps the cards where they'd be without it */
@@ -1920,17 +2025,6 @@
 .ui-dps-label {
     font-family: "OSRS Bold", sans-serif;
     color: var(--ui-orange);
-}
-
-/* A quest in the pause menu's list: its name, what it asks and how far */
-.ui-pause-quest {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-}
-
-.ui-pause-quest .ui-pause-detail {
-    flex: 1;
 }
 
 /* An endless run's round, under the coins */
@@ -2955,24 +3049,227 @@
     margin-top: 10px;
 }
 
-/* The columns scroll, and Give up and Resume stay in view under them */
+/* The title and tabs on top, the page in the middle and the buttons at the foot. The page is what
+   scrolls, so the buttons stay in view whenever the window has room for the top and a page's
+   minimum (.ui-pause-page); only a window shorter than that scrolls the whole panel. */
 .ui-pause {
     display: flex;
     flex-direction: column;
     width: min(920px, calc(94vw / var(--ui-scale)));
+    /* Stable between tabs, but capped before a sparse page becomes mostly empty on desktop. */
+    height: min(680px, calc(90vh / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
 }
 
-.ui-pause > .ui-pause-columns {
-    flex: 1 1 auto;
-    min-height: 120px;
-    padding-right: 4px;
-    overflow-y: auto;
+.ui-pause > .ui-row {
+    flex: none;
 }
 
-.ui-pause > :not(.ui-pause-columns) {
+/* The pause menu's and the results' pages: a stone tab each, its side tab icon beside its name
+   (the icon alone on a phone), across the panel */
+.ui-page-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 4px 0 10px;
     flex-shrink: 0;
+}
+
+.ui-page-tabs .ui-button {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 6px;
+}
+
+.ui-page-tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+    /* Give up, Collection log, Settings and Resume don't fit across a phone: two by two */
+    .ui-pause > .ui-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .ui-pause > .ui-row .ui-pause-action {
+        flex: 1 1 calc(50% - 3px);
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
+
+/* The open page: it takes what the window has left and scrolls inside it. Never shorter than the
+   minimum that shows its main items (a weapon or two), so changing tabs moves little. */
+.ui-pause-page {
+    flex: 1 1 auto;
+    min-height: min(300px, calc(40vh / var(--ui-scale)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-color: #a58b61 #23201b;
+    padding-right: 4px;
+    padding-bottom: 6px;
+}
+
+/* The Collection log's page: the log scrolls its own entries and items, so the page holds it at its
+   height instead of scrolling it whole */
+.ui-pause-page.ui-pause-page-log {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    padding-right: 0;
+}
+
+.ui-pause-page::-webkit-scrollbar-thumb {
+    background: #8d7652;
+    border-color: #c6a56d #4c3e2d #4c3e2d #c6a56d;
+}
+
+/* A short viewport needs the whole screen more than it needs the modal's outside margin. Compact
+   only the chrome; content stays readable and receives the extra room. */
+@media (max-height: 500px) {
+    .ui-pause {
+        box-sizing: border-box;
+        height: calc(100vh / var(--ui-scale));
+        max-height: calc(100vh / var(--ui-scale));
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .ui-pause h2 {
+        margin-bottom: 2px;
+        font-size: 20px;
+    }
+
+    .ui-pause .ui-page-tabs {
+        margin-top: 2px;
+        margin-bottom: 6px;
+    }
+
+    .ui-pause > .ui-row {
+        margin-top: 6px;
+    }
+}
+
+/* Touch controls should be comfortably hittable even when labels are replaced by icons. */
+@media (pointer: coarse) {
+    .ui-pause .ui-page-tabs .ui-button,
+    .ui-pause > .ui-row .ui-button {
+        min-height: 44px;
+    }
+}
+
+/* Settings in the Loadout's and Quests' style, the pause menu's and the title's: two columns of
+   sections while there's room, one on a narrow window */
+.ui-ps {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.ui-ps-column {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+@media (max-width: 760px) {
+    .ui-ps {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .ui-ps-column {
+        width: 100%;
+    }
+}
+
+/* A section's heading, as the Loadout's, with the client's icon for it */
+.ui-ps-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(107, 94, 74, 0.5);
+    border-left: 3px solid var(--ui-orange);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-ps-heading .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-ps-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* A setting's card, as a quest's: its edge red while it's off and green while it's on (a setting
+   that's neither keeps the card's own) */
+.ui-ps .ui-setting {
+    padding: 6px 10px 6px 9px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    border-left: 3px solid var(--ui-edge-light);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-ps .ui-setting:has(.ui-toggle) {
+    border-left-color: var(--ui-state-red-edge);
+}
+
+.ui-ps .ui-setting:has(.ui-toggle-on) {
+    border-left-color: var(--ui-state-green-edge);
+    background: linear-gradient(90deg, rgba(0, 120, 0, 0.14), rgba(0, 0, 0, 0)), var(--ui-card);
+}
+
+.ui-ps .ui-setting-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-white);
+}
+
+.ui-ps .ui-setting-text {
+    margin-top: 1px;
+    line-height: 1.15;
+}
+
+/* The keys (or a controller's buttons) in a card of their own */
+.ui-ps .ui-pad-controls {
+    padding: 6px 10px 6px 9px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    border-left: 3px solid var(--ui-edge-light);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-ps .ui-pad-control + .ui-pad-control {
+    padding-top: 4px;
+    border-top: 1px solid var(--ui-divider);
+}
+
+/* A short list (the party) not stretched across the whole panel */
+.ui-pause-narrow {
+    max-width: 420px;
+    margin: 0 auto;
 }
 
 /* The run (weapons, passives and worn equipment) on the left, the quests and

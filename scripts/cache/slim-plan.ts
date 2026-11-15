@@ -17,13 +17,17 @@ import {
 } from "../../src/game/client/GameAssets";
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
+import { DAMAGE_KIND_OBJ_IDS } from "../../src/game/content/damageKinds";
 import { ENEMIES } from "../../src/game/content/enemies";
 import { BLOOD_SOULREAPER_AXE_OBJ } from "../../src/game/content/gauntlet";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { PETS } from "../../src/game/content/pets";
+import { portraitRequest } from "../../src/game/content/portraitConfig";
+import { getPortrait } from "../../src/game/content/portraits";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
+import { QUEST_ICON_OBJ_IDS } from "../../src/game/content/questIcons";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
@@ -44,6 +48,7 @@ import {
 import { WEAPONS } from "../../src/game/content/weapons";
 import { getRecipe } from "../../src/game/scaperune/squares";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
+import { NpcHeadRequest } from "../../src/mapviewer/worker/NpcHeadLoader";
 import { RegionDataInput } from "../../src/mapviewer/worker/RegionData";
 import {
     EquipSlot,
@@ -69,7 +74,9 @@ export type SlimUnit =
     | { kind: "textures" }
     | { kind: "sounds"; ids: number[] }
     | { kind: "sprites"; ids: number[] }
-    | { kind: "icons"; objIds: number[] };
+    | { kind: "icons"; objIds: number[] }
+    // The portraits of the monsters the Combat tabs show, as content/portraits.json frames them
+    | { kind: "heads"; heads: NpcHeadRequest[] };
 
 export function describeUnit(unit: SlimUnit): string {
     switch (unit.kind) {
@@ -79,6 +86,8 @@ export function describeUnit(unit: SlimUnit): string {
             return `${unit.group} bakes from ${unit.requests[0].key}`;
         case "icons":
             return `icons from ${unit.objIds[0]}`;
+        case "heads":
+            return `heads from ${unit.heads[0].npcId}`;
         default:
             return unit.kind;
     }
@@ -172,6 +181,8 @@ function getContentObjIds(): number[] {
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
         ...STAT_ICON_OBJ_IDS,
+        ...DAMAGE_KIND_OBJ_IDS,
+        ...Object.values(QUEST_ICON_OBJ_IDS),
         // The Wardrobe's store
         ...COSMETICS.map((cosmetic) => cosmetic.objId),
     ]);
@@ -348,6 +359,21 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         }
     }
     const icons = batchByKey(getContentObjIds(), String, 32, ICON_BATCH);
+    // An enemy drawn as a player (the fun maps') has no NPC to show. A framed portrait can be
+    // another model or posed by a sequence, so each is drawn as the game draws it.
+    const headRequests = new Map<string, NpcHeadRequest>();
+    for (const enemy of ENEMIES) {
+        if (!enemy.outfits) {
+            const request = portraitRequest(enemy, getPortrait(enemy.id));
+            headRequests.set(JSON.stringify(request), request);
+        }
+    }
+    const heads = batchByKey(
+        [...headRequests.values()].sort((a, b) => a.npcId - b.npcId),
+        (request) => JSON.stringify(request),
+        32,
+        ICON_BATCH,
+    );
     return [
         ...maps,
         ...bakes,
@@ -355,5 +381,6 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         { kind: "sounds", ids: getGameSoundIds() },
         { kind: "sprites", ids: getGameSpriteIds() },
         ...icons.map((objIds): SlimUnit => ({ kind: "icons", objIds })),
+        ...heads.map((batch): SlimUnit => ({ kind: "heads", heads: batch })),
     ];
 }

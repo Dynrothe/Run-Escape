@@ -58,6 +58,7 @@ function hud(weapons: SlotView[]): HudView {
         weapons,
         passives: [],
         stats: [],
+        statRows: [],
         gear: [],
         inventory: [null, null, null, null],
         rerolls: 0,
@@ -519,7 +520,15 @@ describe("the run's HUD", () => {
             ...slot("bow", 8),
             stats: [{ text: "Damage: 20" }, { text: "Cooldown: 1s" }],
             detail: { text: "Shoots an arrow." },
-            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+            evolution: {
+                passive: "Piety",
+                passiveIconObjId: 1,
+                into: "Dragon bow",
+                intoIconObjId: 2,
+                maxed: true,
+                hasPassive: false,
+                ready: false,
+            },
         };
         const passive: SlotView = { ...slot("Piety", 2), detail: { text: "+10% damage" } };
         act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));

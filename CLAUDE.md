@@ -120,6 +120,11 @@ go stale. Add anything that cost you time to work out.
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
+| The pause menu's tabs, and the results' (`TabBar`)     | `ui/GameUi.tsx` (`PauseModal`), `ui/TabBar.tsx`                        |
+| The pause menu's settings: sections, cards, volume     | `GameUi.tsx` (`PauseSettings`), `ui/volume.ts`                         |
+| Results screens (the classic one)                      | `src/game/ui/results/`, `docs/DEVELOPMENT.md`                          |
+| Damage by type and kills by monster (Combat tabs)      | `content/damageKinds.ts`, `ui/CombatBreakdown.tsx`                     |
+| Monsters' portraits: how each is framed                | `content/portraits.json`, `ui/EnemyHead.tsx`, `NpcHeadLoader`          |
 | Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
 | The Armoury's Weapons and Passives tabs                | `src/game/ui/LoadoutCatalogue.tsx`                                     |
 | Menus' Esc and Enter, windows' focus, confirmations    | `ui/menuKeys.ts`, `ui/useDialog.ts`, `ui/ConfirmDialog.tsx`            |
