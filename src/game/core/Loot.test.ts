@@ -161,6 +161,19 @@ describe("items", () => {
             const better = { ...coif, id: "better", stats: { speed: 0.15, armor: 1 } };
             expect(shouldAutoEquip(worn, upgraded, better, 0)).toBe(true);
         });
+
+        test.each([
+            [0.0498, 1, true],
+            [0.045, 1, true],
+            [0.0449, 1, false],
+            [0.0498, 0, false],
+            [0.0502, 0, false],
+            [0.055, 0, true],
+        ])("compares shown damage %s and armour %s: %s", (might, armor, expected) => {
+            const worn = getGear("amulet_of_strength");
+            const offered = { ...worn, stats: { might, armor } };
+            expect(shouldAutoEquip({ neck: worn.id }, {}, offered, 0)).toBe(expected);
+        });
     });
 
     test("every piece of gear adds something", () => {

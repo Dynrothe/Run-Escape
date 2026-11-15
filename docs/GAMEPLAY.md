@@ -488,7 +488,7 @@ version and how to run it.
   opened, gear and rare finds included, with a line saying what it was and no casket screen. It's
   the same as clicking High alch: alching a piece of a set you've started stops that set too.
 - **Auto equip** (off by default, in Settings and the pause menu) equips casket gear into empty
-  slots, or replaces gear only if no stat bonus decreases and at least one increases, including
+  slots, or replaces gear only if no shown stat bonus decreases and at least one increases, including
   Armoury and endless upgrades. Equal gear, trade-offs and utility items still ask. Replacing a
   worn set piece always asks, even before its set bonus is active or when upgrading within the
   same set. Replaced gear is high alched as usual, with a line saying what was equipped and alched.

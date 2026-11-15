@@ -1,5 +1,5 @@
 import { overrideMessages } from "../i18n/catalog";
-import { compareStats, statChanges } from "./stats";
+import { compareStats, formatStat, formatStatValue, statChanges } from "./stats";
 
 describe("stats", () => {
     it("compares a piece's stats before and after an upgrade", () => {
@@ -29,6 +29,13 @@ describe("stats", () => {
         expect(statChanges({ might: 0.05, armor: 1.04 }, { might: 0.0498, armor: 1.26 })).toEqual([
             { key: "armor", text: "+0.3 armour", better: true },
         ]);
+    });
+
+    it("shows a rounded-zero penalty as neutral, without a minus sign", () => {
+        expect(formatStat("might", -0.0002)).toBe("+0% damage");
+        expect(formatStatValue("might", -0.0002)).toBe("+0%");
+        expect(statChanges({}, { might: -0.0002 })).toEqual([]);
+        expect(formatStatValue("might", -0.005)).toBe("-1%");
     });
 
     it("gives each stat a found piece changes against a worn one, as a stat line", () => {

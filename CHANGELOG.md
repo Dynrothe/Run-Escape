@@ -36,6 +36,10 @@ the version in the corner).
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
   Achievements earn them. Any you bought are refunded.
 
+### Fixed
+
+- Rounded-zero gear differences no longer show as penalties or block Auto equip when another stat improves. Fixed by braiansmarzaro.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed
