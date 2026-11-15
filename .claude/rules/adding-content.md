@@ -445,4 +445,5 @@ in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`.
 
 ## Quest
 
-Add it to `quests.ts`. Tests check every quest can be done, so its enemy ids must exist.
+Add it to `quests.ts`, and its icon (an item the OSRS quest is known by) to `questIcons.ts`. Tests
+check every quest can be done, so its enemy ids must exist, and that it has an icon.

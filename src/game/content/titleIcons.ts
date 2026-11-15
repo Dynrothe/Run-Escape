@@ -7,6 +7,40 @@ export const TITLE_TAB_SPRITES = {
     settings: 908,
 } as const;
 
+// The pause menu's tabs: the client's own side tab icons (crossed swords for Combat options,
+// the clan chat's for the party), and the title's for the rest. Its buttons along the bottom too:
+// the logout tab's door to give up, and the run orb's boot, lit, to resume. scripts/cache/slim-cache.ts
+// keeps them in the slim cache.
+export const PAUSE_TAB_SPRITES = {
+    loadout: TITLE_TAB_SPRITES.armoury,
+    combat: 168,
+    quests: TITLE_TAB_SPRITES.quests,
+    party: 895,
+    settings: TITLE_TAB_SPRITES.settings,
+    giveUp: 907,
+    resume: 1070,
+} as const;
+
+// The pause menu's settings, by section: the client's own Settings interface's icons (its sound
+// waves, monitor, keyboard's Shift key and joystick), the emote tab's dancer for a run's and the
+// clan chat's for co-op. The title's Settings has the save too: cloud save's storage chest. Also
+// kept in the slim cache by scripts/cache/slim-cache.ts.
+export const SETTINGS_SECTION_SPRITES = {
+    save: 1106,
+    sound: 2244,
+    display: 1084,
+    run: 909,
+    coop: PAUSE_TAB_SPRITES.party,
+    keyboard: 1165,
+    controller: 1088,
+} as const;
+
+// The results' tabs: the skills tab's icon for the summary, the combat tab's for the fighting
+export const RESULT_TAB_SPRITES = {
+    summary: TITLE_TAB_SPRITES.skills,
+    combat: PAUSE_TAB_SPRITES.combat,
+} as const;
+
 // Cloud save's button beside Settings: the client's storage chest with an up arrow, and in its
 // corner the "!" while it's waiting on the player or the "no" sign while it can't sync
 export const CLOUD_SAVE_SPRITES = {
@@ -15,6 +49,9 @@ export const CLOUD_SAVE_SPRITES = {
     problem: 940,
 } as const;
 
+// The client's grey stone slot (the equipment screen's): the squares on the pause menu's quest
+// cards. Also kept in the slim cache by scripts/cache/slim-cache.ts.
+export const STONE_SLOT_SPRITE = 170;
 // The sound's orb (ui/SoundOrb.tsx): the client's orb frame and an orb's fill, as by its minimap,
 // with the Music tab's harp in the circle, and cloud save's "no" sign over it while it's off
 export const SOUND_ORB_SPRITES = {

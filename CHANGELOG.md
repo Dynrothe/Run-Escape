@@ -5,9 +5,24 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
+  blocked, your revives, and every monster you've killed, by its face. The results have it too.
+- Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got
+  its size, each level up in the colour of the rarity it was taken at.
+- Restart, by Iakee: Give up in the pause menu can start the run again from the beginning. What
+  you'd found is kept, as Give up keeps it.
+
 ### Changed
 
-- Casket gear comparisons show compact stat differences again instead of a Wearing/New table.
+- Casket gear comparisons show compact stat differences again instead of a Wearing/New table, by braiansmarzaro.
+- The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
+  and Settings as pages of it. It opens on the tab you left it on.
+- Settings are in sections with the game's own icons, by Iakee, a card for each setting. The
+  language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
+- The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
+  be translated, by Iakee.
 
 ## 0.33.2 - 2026-11-15
 
