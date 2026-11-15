@@ -527,7 +527,7 @@ version and how to run it.
       all. Everything in his way is hit once a pass and thrown aside.
     - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
       within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
-      opened, and shots still come through.
+      opened, and shots still come through. The fairy teleport effect appears as enemies warp away.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
