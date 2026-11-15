@@ -232,13 +232,15 @@ export function DescriptionButton({
     );
 }
 
-function DescriptionTip({
+// The tooltip itself, placed beside what it describes: also used by tooltips on things that aren't
+// buttons (the pause menu's stat breakdowns)
+export function DescriptionTip({
     id,
     anchor,
     children,
 }: {
     id: string;
-    anchor: RefObject<HTMLButtonElement | null>;
+    anchor: RefObject<HTMLElement | null>;
     children: ReactNode;
 }): JSX.Element {
     const tip = useRef<HTMLDivElement>(null);

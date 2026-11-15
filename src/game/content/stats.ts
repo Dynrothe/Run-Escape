@@ -70,6 +70,13 @@ function shownSteps(key: StatKey, value: number): number {
     return Math.sign(value) * Math.round(Math.abs(value) * statStep(key));
 }
 
+// How far after is from before in shown steps: above 0 better, below 0 worse, 0 when the two
+// read the same. The casket's lines and Auto equip (Production Prodigy's choice in the sim too)
+// both go by it, so changing how a stat is shown changes what they take.
+export function compareStatValues(key: StatKey, before: number, after: number): number {
+    return shownSteps(key, after) - shownSteps(key, before);
+}
+
 // A stat's size as a number: whole percent, or flat to a tenth
 function statNumber(key: StatKey, abs: number): string {
     const steps = Math.round(abs * statStep(key));
@@ -79,7 +86,7 @@ function statNumber(key: StatKey, abs: number): string {
 // "+10% damage", "-1 armour"
 export function formatStat(key: StatKey, value: number): string {
     return t(`statline.${STAT_INFO[key].unit}`, {
-        sign: value < 0 ? "-" : "+",
+        sign: shownSteps(key, value) < 0 ? "-" : "+",
         value: statNumber(key, Math.abs(value)),
         label: statLabel(key),
     });
@@ -105,7 +112,7 @@ export function formatStats(stats: Partial<Stats>): StatText[] {
 // A stat's value on its own: "+10%", "-1"
 export function formatStatValue(key: StatKey, value: number): string {
     return t(`statline.value.${STAT_INFO[key].unit}`, {
-        sign: value < 0 ? "-" : "+",
+        sign: shownSteps(key, value) < 0 ? "-" : "+",
         value: statNumber(key, Math.abs(value)),
     });
 }
@@ -124,7 +131,7 @@ export function compareStats(
         if (!was && !now) {
             continue;
         }
-        const change = shownSteps(key, now) - shownSteps(key, was);
+        const change = compareStatValues(key, was, now);
         lines.push({
             key,
             label: statHeading(key),
@@ -136,37 +143,23 @@ export function compareStats(
     return lines;
 }
 
-// Every stat either of two pieces has, side by side: a casket's gear against
-// the piece it would replace, for its table. worn or found is undefined where
-// that piece hasn't got the stat. change (found less worn) is undefined when
-// the two show the same: it and better go by the values as shown, so the
-// difference is always what the two columns say, never "-0%".
-export type StatPair = {
-    key: StatKey;
-    label: string;
-    worn?: string;
-    found?: string;
-    change?: string;
-    better: boolean;
-};
+// What a casket's gear changes against the piece it would replace, a line for
+// each stat that differs: "+2% damage", "-15% projectile speed". It goes by
+// the values as shown, so two pieces that read the same differ by nothing,
+// never "-0%".
+export type StatChange = { key: StatKey; text: string; better: boolean };
 
-export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair[] {
-    const pairs: StatPair[] = [];
+export function statChanges(worn: Partial<Stats>, found: Partial<Stats>): StatChange[] {
+    const changes: StatChange[] = [];
     for (const key of STAT_ORDER) {
-        const was = worn[key] ?? 0;
-        const now = found[key] ?? 0;
-        if (!was && !now) {
-            continue;
+        const change = compareStatValues(key, worn[key] ?? 0, found[key] ?? 0);
+        if (change !== 0) {
+            changes.push({
+                key,
+                text: formatStat(key, change / statStep(key)),
+                better: change > 0,
+            });
         }
-        const change = shownSteps(key, now) - shownSteps(key, was);
-        pairs.push({
-            key,
-            label: statHeading(key),
-            ...(was !== 0 && { worn: formatStatValue(key, was) }),
-            ...(now !== 0 && { found: formatStatValue(key, now) }),
-            ...(change !== 0 && { change: formatStatValue(key, change / statStep(key)) }),
-            better: change >= 0,
-        });
     }
-    return pairs;
+    return changes;
 }

@@ -9,9 +9,18 @@ import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
 import type { PackDef } from "../content/cards";
 import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
+import {
+    COMBAT_TASK_BY_ID,
+    combatTaskDescription,
+    combatTaskName,
+    combatTierName,
+    describeCombatReason,
+    getTaskTier,
+} from "../content/combatTasks";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { passiveExamine, weaponExamine } from "../content/examine";
 import { BlessingId, CAMP_SECONDS, GAUNTLET_FIGHTS, isGauntletOrder } from "../content/gauntlet";
 import { INVADER_BY_ID } from "../content/invaders";
 import { isInvasionOpen, rollInvasion, takesInvasions } from "../content/invasions";
@@ -45,6 +54,7 @@ import { Hsl } from "../content/maxCape";
 import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
+import { QUEST_ICON_OBJ_IDS } from "../content/questIcons";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -52,6 +62,7 @@ import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { RelicTier, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
 import { RemixId, cleanRemixes, isRemixOpen } from "../content/remixes";
 import { SHOP_UPGRADES } from "../content/shop";
+import { bonusAbout } from "../content/statLore";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
@@ -74,7 +85,8 @@ import {
 } from "../content/vault";
 import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
-import { getWeapon, getWeaponStyle } from "../content/weapons";
+import { getWeapon, getWeaponDamageKinds, getWeaponStyle } from "../content/weapons";
+import { CombatTaskStatus, CombatTracker } from "../core/CombatTracker";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import {
@@ -149,9 +161,10 @@ import {
     refundUpgrade,
     refundUpgrades,
     takeActEnding,
+    toggleCombatPin,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
-import { fmtNum, t, tl, tp } from "../i18n";
+import { Lang, fmtNum, getLang, list, t, tl, tp } from "../i18n";
 import {
     CameraRig,
     MAX_CAMERA_DISTANCE,
@@ -162,6 +175,14 @@ import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/Game
 import { getRecipe, installRecipe } from "../scaperune/squares";
 import { BLESSING_COLOR, getBlessingViews } from "./BlessingViews";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
+import {
+    formatBonusText,
+    getBonusLine,
+    getLifestealStat,
+    getOrbitObjIds,
+    getPassiveBreakdown,
+    getWeaponStatLines,
+} from "./BreakdownViews";
 import {
     CinematicCamera,
     CinematicPlayer,
@@ -195,6 +216,8 @@ import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
     ChoiceView,
+    CombatTrackView,
+    CombatView,
     GameStore,
     HudNumbers,
     HudView,
@@ -215,11 +238,18 @@ import {
     getUsedRevive,
 } from "./ItemViews";
 import { LightBudget, MAX_SHOWN_LIGHTS } from "./LightBudget";
+import {
+    getEvolutionView,
+    getLevellingForm,
+    getRevivesView,
+    getStatRows,
+    getWeaponForm,
+} from "./LoadoutViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
 import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
-import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
+import { getBossKillViews, getCombatView, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
@@ -254,6 +284,31 @@ const HUD_INTERVAL_MS = 100;
 const BOSS_BAR_SWITCH = 2;
 // The damage meter's number holds this long, so it can be read
 const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
+
+// Who says an event's toast in the pause menu's chat: what kind of thing it is (a teammate's own
+// are their name instead). Any other message is the game's.
+const EVENT_TOAST_SOURCES: Partial<Record<SimEvent["type"], string>> = {
+    casketDropped: "loot",
+    alch: "loot",
+    equip: "loot",
+    bossSpawned: "boss",
+    bossRose: "boss",
+    bossEnraged: "boss",
+    bossStage: "boss",
+    coinsStolen: "thief",
+    coinsReturned: "thief",
+    revive: "revive",
+    heroDown: "revive",
+    heroRevived: "revive",
+    extraRevive: "revive",
+    roundStarted: "endless",
+    worldTurned: "realm",
+    frozenSolid: "cold",
+    soulCaught: "souls",
+    powerUp: "powerup",
+    visitor: "visitor",
+    notice: "notice",
+};
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
@@ -411,6 +466,81 @@ function describeRound(sim: Sim): string {
     });
 }
 
+// The views of the Combat Achievements a run follows, as last built: each with the status it was
+// built from, in the tracker's order, and the list as the HUD has it
+type CombatTrackCache = {
+    tracker: CombatTracker;
+    lang: Lang;
+    pinned: string;
+    rows: { view: CombatTrackView; status: CombatTaskStatus }[];
+    views: CombatTrackView[];
+};
+
+// The Combat Achievements the run follows, the pinned ones first in the order they were pinned
+// (the HUD shows those), then the rest in the list's order (the pause menu has them all). A task
+// whose state, reason and progress are as they were keeps its view, and with none changed the
+// last list comes back as it was: a HUD update then builds no text, and the store has nothing to
+// compare.
+function getCombatTrackViews(
+    save: SaveData,
+    tracker: CombatTracker | undefined,
+    sim: Sim,
+    last: CombatTrackCache | undefined,
+): CombatTrackCache | undefined {
+    if (!tracker) {
+        return undefined;
+    }
+    const pinnedIds = save.combatPinned ?? [];
+    const lang = getLang();
+    const pinned = pinnedIds.join();
+    const kept =
+        last?.tracker === tracker && last.lang === lang && last.pinned === pinned
+            ? last
+            : undefined;
+    let changed = kept === undefined;
+    const rows = tracker.statuses(sim).map((status, i) => {
+        const old = kept?.rows[i];
+        if (
+            old &&
+            old.status.state === status.state &&
+            old.status.reason === status.reason &&
+            old.status.progress?.done === status.progress?.done &&
+            old.status.progress?.of === status.progress?.of
+        ) {
+            return old;
+        }
+        changed = true;
+        return { view: getCombatTrackView(status, pinnedIds), status };
+    });
+    if (!changed) {
+        return kept;
+    }
+    const order = (view: CombatTrackView) => {
+        const at = pinnedIds.indexOf(view.id);
+        return at < 0 ? pinnedIds.length : at;
+    };
+    // (a stable sort: the rest keep the list's order)
+    const views = rows.map((row) => row.view).sort((a, b) => order(a) - order(b));
+    return { tracker, lang, pinned, rows, views };
+}
+
+function getCombatTrackView(
+    { task, state, reason, progress }: CombatTaskStatus,
+    pinned: readonly string[],
+): CombatTrackView {
+    return {
+        id: task.id,
+        name: combatTaskName(task),
+        description: combatTaskDescription(task),
+        tier: combatTierName(task.tier),
+        coins: getTaskTier(task).coins,
+        state,
+        ...(reason !== undefined && { reason: describeCombatReason(reason) }),
+        ...(progress && { progress }),
+        pinned: pinned.includes(task.id),
+    };
+}
+
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
     // Quests don't count on the fun maps, so there's nothing to track there
     if (isFunMap(sim.map.id)) {
@@ -430,28 +560,14 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
             done,
             of,
             finished: done >= of,
+            iconObjId: QUEST_ICON_OBJ_IDS[quest.id],
+            coins: quest.coins,
+            enemyIds:
+                quest.objective.kind === "kill" || quest.objective.kind === "killEach"
+                    ? quest.objective.enemyIds
+                    : [],
         };
     });
-}
-
-// How far a weapon has got towards its evolution, for the HUD and pause menu
-function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
-    const evolution = weapon.def.evolution;
-    if (
-        !evolution ||
-        !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
-        // A Card collection only run without the cards it takes: it won't come
-        !cardsAllowEvolution(sim.cardCaps, weapon.def.id, evolution.requiresPassive, evolution.into)
-    ) {
-        return undefined;
-    }
-    const owned = new Set(sim.passives.map((p) => p.id));
-    return {
-        passive: getPassive(evolution.requiresPassive).name,
-        maxed: weapon.level >= weapon.def.levels.length,
-        hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.cardCaps),
-    };
 }
 
 // A raid whose bosses all pray against a weapon's style (the Theatre's, against ranged and
@@ -928,6 +1044,10 @@ export class GameClient implements GameFrameHandler {
     private soundToast?: number;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
+    // A solo run's Combat Achievements, followed from outside the sim (none in co-op)
+    private combat?: CombatTracker;
+    // Their views as the HUD last had them (getCombatTrackViews)
+    private combatViews?: CombatTrackCache;
     private attractTick = 0;
     private attractYaw = 0;
     private display = loadDisplaySettings();
@@ -954,6 +1074,8 @@ export class GameClient implements GameFrameHandler {
         readonly options: GameClientOptions,
     ) {
         this.save = store.getSnapshot().save;
+        // The pause menu's chat stamps each message with the run's clock
+        store.toastSeconds = () => (this.sim && !this.sim.runOver ? this.sim.seconds : undefined);
         setGauntletLooks(hasGauntletLooks(this.save));
         this.grid = titleGrid;
         this.grids.set(TITLE_MAP.id, titleGrid);
@@ -1097,6 +1219,12 @@ export class GameClient implements GameFrameHandler {
         }
         this.save.favouriteCharacter =
             this.save.favouriteCharacter === characterId ? undefined : characterId;
+        this.persist();
+    }
+
+    // Pins a Combat Achievement to the HUD, or unpins it (MAX_COMBAT_PINS at most)
+    toggleCombatPin(taskId: string): void {
+        toggleCombatPin(this.save, taskId);
         this.persist();
     }
 
@@ -2009,6 +2137,12 @@ export class GameClient implements GameFrameHandler {
         );
     }
 
+    // The pause menu's Combat tab: this player's damage by kind and source, and kills by enemy
+    getCombatView(): CombatView | undefined {
+        const sim = this.sim;
+        return sim ? sim.as(sim.focus, () => getCombatView(sim)) : undefined;
+    }
+
     toggleDamagePanel(): void {
         this.setDisplay({ damagePanel: !this.display.damagePanel });
     }
@@ -2612,6 +2746,8 @@ export class GameClient implements GameFrameHandler {
                   () => this.display.runStats,
               );
         this.tasksAnnounced.clear();
+        // Solo runs only: co-op never counts towards them
+        this.combat = this.coopRun ? undefined : CombatTracker.forRun(sim, this.save);
         this.accumulator = 0;
         this.shownDps = 0;
         this.shownDpsTick = 0;
@@ -2946,13 +3082,9 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Out of the pause menu, and so out of the Collection log over it: the next pause opens on
-    // the menu
+    // Out of the pause menu (its Collection log and settings are pages of it, the UI's alone)
     private leavePauseMenu(): void {
         this.paused = false;
-        if (this.store.getSnapshot().runLog) {
-            this.store.set({ runLog: false });
-        }
     }
 
     // The page lost its graphics (GameApp): a solo run stops where it stands, and
@@ -2984,19 +3116,6 @@ export class GameClient implements GameFrameHandler {
         this.leavePauseMenu();
         this.accumulator = 0;
         this.syncOverlay();
-    }
-
-    // The Collection log over the pause menu. Only the UI's: a solo run stays paused under it,
-    // and a co-op run goes on as it does under co-op's menu, with nothing sent.
-    openRunLog(): void {
-        if (this.sim && this.store.getSnapshot().overlay === "paused") {
-            this.store.set({ runLog: true });
-        }
-    }
-
-    // Back to the pause menu
-    closeRunLog(): void {
-        this.store.set({ runLog: false });
     }
 
     // The save, and the save as this run would leave it if it ended now, for the log's "Found
@@ -3033,11 +3152,14 @@ export class GameClient implements GameFrameHandler {
         }
         const vaultKey = this.runVault;
         const sim = this.sim;
+        const combat = this.combat;
         return recordRun(save, {
             ...result,
             ...(vaultKey && { vault: vaultKey }),
             // This player's own: each co-op player records their run on their own save
             ...(sim?.heroes[sim.focus].cardCaps && { cardsOnly: true }),
+            // A solo run Combat Achievements followed: the tasks it did, banked with it
+            ...(combat && { combatTasks: [...combat.done], combatProgress: [...combat.earned] }),
         });
     }
 
@@ -3062,6 +3184,28 @@ export class GameClient implements GameFrameHandler {
             this.coop.leave();
         }
         this.leaveRun();
+    }
+
+    // Give up's other choice, solo only (one player can't restart a party's run): the run's given
+    // up and banked as Give up banks it (its coins, drops and quests kept), then started again
+    // from its beginning, not at its lair as the results' Retry is. A fight of the Forgotten
+    // Four's is fallen and retried as the results' Retry this fight is, so the try is counted.
+    restartRun(): void {
+        const sim = this.sim;
+        if (!sim || this.coopRun) {
+            return;
+        }
+        const mapId = sim.map.id;
+        const vault = this.runVault !== undefined ? getVault(this.runVault) : undefined;
+        this.leavePauseMenu();
+        sim.giveUp();
+        this.finishRun(t("ui.result.gave_up"), "abandoned");
+        if (this.gauntletRun?.phase === "fallen") {
+            this.retryGauntletFight();
+            return;
+        }
+        this.leaveRun();
+        void this.startRun(mapId, false, undefined, vault);
     }
 
     // Back to the title screen after the results, or after a co-op run, back
@@ -3091,6 +3235,7 @@ export class GameClient implements GameFrameHandler {
             this.coop.end();
         }
         this.coopRun = undefined;
+        this.combat = undefined;
         this.stopCoopTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
@@ -3423,12 +3568,23 @@ export class GameClient implements GameFrameHandler {
         const vaultKey = this.runVault;
         const vaultBest =
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
+        const trophiesBefore = this.save.trophies.length;
+        const combatBefore = this.save.combatTasks.length;
         const quests = this.bankRun(this.save, result);
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
         // A run's results: a save point for cloud save
         this.cloud?.savePoint();
+        // Combat Achievements banked, and the tier rewards they brought
+        const combatDone = this.save.combatTasks
+            .slice(combatBefore)
+            .map((id) => COMBAT_TASK_BY_ID.get(id)!);
+        for (const id of this.save.trophies.slice(trophiesBefore)) {
+            if (!newTrophies.includes(id)) {
+                newTrophies.push(id);
+            }
+        }
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -3454,6 +3610,11 @@ export class GameClient implements GameFrameHandler {
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                combatTasks: combatDone.map((task) => ({
+                    name: combatTaskName(task),
+                    tier: combatTierName(task.tier),
+                    coins: getTaskTier(task).coins,
+                })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
                 orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
                 ...(sim.heroes[sim.focus].cardCaps && { cardsOnly: true }),
@@ -3468,6 +3629,52 @@ export class GameClient implements GameFrameHandler {
         });
         // The room sees this player's new unlocks and upgrades next run
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
+    }
+
+    // The Combat Achievements tracker's look at what's just happened (it only reads the sim and
+    // its events). The tasks done together get one toast, so none are pushed off the screen.
+    private observeCombat(sim: Sim, events: readonly SimEvent[]): void {
+        if (!this.combat) {
+            return;
+        }
+        const done = this.combat.observe(sim, events);
+        // Pinned ones spoilt, in one toast: what did it, so it's known for next time
+        const failed = this.combat
+            .takeFailed()
+            .filter(({ task }) => this.save.combatPinned?.includes(task.id));
+        if (failed.length > 0) {
+            const what = failed.map(({ task, reason }) =>
+                t("toast.combat_failed_item", {
+                    task: combatTaskName(task),
+                    reason: describeCombatReason(reason),
+                }),
+            );
+            this.store.toast(tp("toast.combat_failed", failed.length, { list: list(what) }), 5000);
+        }
+        if (done.length === 0) {
+            return;
+        }
+        const tiers = done.map(getTaskTier);
+        const points = tiers.reduce((sum, tier) => sum + tier.points, 0);
+        const coins = tiers.reduce((sum, tier) => sum + tier.coins, 0);
+        const params = {
+            points: tp("toast.combat_points", points),
+            coins: fmtNum(coins),
+        };
+        this.sounds.taskDone();
+        this.store.toast(
+            done.length === 1
+                ? t("toast.combat_done", {
+                      ...params,
+                      name: combatTaskName(done[0]),
+                      tier: combatTierName(done[0].tier),
+                  })
+                : t("toast.combat_done_many", {
+                      ...params,
+                      names: list(done.map(combatTaskName)),
+                  }),
+            6000,
+        );
     }
 
     // A task or quest done mid-run: the adventurer or item joins, and the
@@ -3559,10 +3766,9 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return;
         }
-        const { overlay, runLog } = this.store.getSnapshot();
-        // The run goes on behind co-op's menu, in reach, but not behind the Collection log over
-        // it, which hides it (the hero stands still too: updateCoop)
-        const coopMenu = overlay === "paused" && this.coopRun !== undefined && !runLog;
+        const { overlay } = this.store.getSnapshot();
+        // The run goes on behind co-op's menu, in reach
+        const coopMenu = overlay === "paused" && this.coopRun !== undefined;
         if (code === "Escape" || code === "KeyP") {
             this.pressPauseKey(code);
         } else if (overlay === "event" && code.startsWith("Digit")) {
@@ -3594,16 +3800,18 @@ export class GameClient implements GameFrameHandler {
     // main button), for the top window: a window over the run and its menu first, then the
     // menu's resume, the run's pause, and Escape leaves an event
     private pressPauseKey(code: string): void {
-        const { overlay, runLog, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        const { overlay, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        // Escape dismisses the description currently over the menu before it resumes the run.
+        // The tip is still in the DOM while this native key listener handles the same event.
+        if (code === "Escape" && document.querySelector(".ui-description-tip")) {
+            return;
+        }
         if (saveBlock && !saveBlockClosed) {
             // The panel saying nothing's being saved comes first, as it does for useMenuKeys: the
             // run behind it stays as it is till the player picks what to do
             return;
         }
-        if (overlay === "paused" && runLog) {
-            // The Collection log over the menu, back to the menu
-            this.closeRunLog();
-        } else if (overlay === "paused") {
+        if (overlay === "paused") {
             this.resume();
         } else if (overlay === "none") {
             this.pause();
@@ -4065,7 +4273,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         if (this.coopRun) {
-            this.store.toast("The shot editor is for solo runs.");
+            this.store.toast(t("toast.shot_editor_solo"));
             return;
         }
         if (this.sim?.map.id !== mapId) {
@@ -4076,7 +4284,7 @@ export class GameClient implements GameFrameHandler {
         }
         const sim = this.sim;
         if (!sim || sim.map.id !== mapId) {
-            this.store.toast(`No run started on ${mapId}: is it open in this save?`, 6000);
+            this.store.toast(t("toast.shot_editor_no_run", { map: mapId }), 6000);
             return;
         }
         const choices = getDirectorChoices(sim.map);
@@ -4183,15 +4391,15 @@ export class GameClient implements GameFrameHandler {
                 this.warmUpTrailer(sim, spec.warmup);
             }
             const file = await recorder.record();
-            this.store.toast(`Trailer saved to ${file}`, 10000);
+            this.store.toast(t("toast.trailer_saved", { file }), 10000);
             return file;
         } catch (error) {
             if (recorder.cancelled) {
-                this.store.toast("Trailer cancelled.");
+                this.store.toast(t("toast.trailer_cancelled"));
             } else {
                 console.error("No trailer", error);
                 const why = error instanceof Error ? error.message : String(error);
-                this.store.toast(`No trailer: ${why}`, 10000);
+                this.store.toast(t("toast.trailer_failed", { why }), 10000);
             }
             return undefined;
         } finally {
@@ -4391,13 +4599,9 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        // and through the opening cinematic, and while the Collection log over the menu hides the
-        // run (whose keys are out of reach then too: onKeyPress)
-        const { overlay, runLog } = this.store.getSnapshot();
-        const deciding =
-            (overlay !== "none" && !this.paused) ||
-            (overlay === "paused" && runLog === true) ||
-            this.cinematic !== undefined;
+        // and through the opening cinematic
+        const { overlay } = this.store.getSnapshot();
+        const deciding = (overlay !== "none" && !this.paused) || this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
@@ -4610,7 +4814,10 @@ export class GameClient implements GameFrameHandler {
         );
     }
 
+    // Every batch of the sim's events, as it's taken: drain them only through here
     private handleEvents(sim: Sim, events: SimEvent[]): void {
+        // Empty ones too: some goals are watched for, not evented (a win, the boss's reach)
+        this.observeCombat(sim, events);
         if (events.length === 0) {
             return;
         }
@@ -4623,9 +4830,13 @@ export class GameClient implements GameFrameHandler {
             }
             // Co-op: a teammate's own events, said with their name if at all
             if (event.hero !== undefined && event.hero !== sim.focus) {
+                this.store.toastSource = `player:${sim.heroes[event.hero].name}`;
                 this.teammateToast(sim, sim.heroes[event.hero].name, event);
+                this.store.toastSource = undefined;
                 continue;
             }
+            // Who says what the event toasts, for the pause menu's chat
+            this.store.toastSource = EVENT_TOAST_SOURCES[event.type];
             switch (event.type) {
                 case "casketDropped":
                     this.store.toast(
@@ -4795,6 +5006,7 @@ export class GameClient implements GameFrameHandler {
                     }
                     break;
             }
+            this.store.toastSource = undefined;
         }
     }
 
@@ -4946,6 +5158,10 @@ export class GameClient implements GameFrameHandler {
                 waitingOn,
             });
         } else if (this.paused) {
+            // The menu's tooltips, ready as it opens (updateHud leaves them out under a run)
+            if (this.store.getSnapshot().overlay !== "paused") {
+                this.updateHud(true, true);
+            }
             this.store.set({ overlay: "paused", choices: [], chest: undefined, waitingOn });
         } else {
             this.store.set({ overlay: "none", choices: [], chest: undefined, waitingOn });
@@ -5000,7 +5216,11 @@ export class GameClient implements GameFrameHandler {
         return nearest;
     }
 
-    private updateHud(force: boolean): void {
+    // details: the pause menu's tooltips too (it's open, or opening)
+    private updateHud(
+        force: boolean,
+        details = this.store.getSnapshot().overlay === "paused",
+    ): void {
         const sim = this.sim;
         if (!sim) {
             return;
@@ -5084,6 +5304,7 @@ export class GameClient implements GameFrameHandler {
                 damage: meter.totals[`weapon:${w.def.id}`] ?? 0,
             };
         }
+        this.combatViews = getCombatTrackViews(this.save, this.combat, sim, this.combatViews);
         const numbers: HudNumbers = {
             // Whole seconds, as they're shown, so standing still changes nothing
             bossIn: Math.ceil(sim.timeLeftForBoss),
@@ -5175,6 +5396,7 @@ export class GameClient implements GameFrameHandler {
             ability: this.getAbilityView(sim),
             abilities: this.getKitViews(sim),
             quests: getQuestTrackViews(this.save, sim),
+            combatTasks: this.combatViews?.views ?? [],
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows
         // only that doesn't draw again
@@ -5183,9 +5405,14 @@ export class GameClient implements GameFrameHandler {
         if (force || sharedNumbers !== shownNumbers) {
             this.store.setNumbers(sharedNumbers);
         }
+        // The pause menu's Loadout: what makes each number and the examine texts, built only while
+        // it's open, not every HUD_INTERVAL_MS under a run. statSources: what gives each stat.
+        const statSources = details ? sim.getStatSources() : undefined;
+        const ownedPassives = details ? new Set(sim.passives.map((p) => p.id)) : undefined;
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
+            revives: getRevivesView(sim),
             level: sim.level,
             maxWeapons: sim.maxWeapons,
             maxPassives: sim.maxPassives,
@@ -5200,6 +5427,46 @@ export class GameClient implements GameFrameHandler {
                     iconObjId: level.objId ?? w.def.iconObjId,
                     detail: w.bonus > 0 ? weaponBonusText(w.bonus) : undefined,
                     stats: weaponStats(w.def, level).map(weaponStatText),
+                    ...(w.def.evolved && { evolved: true }),
+                    ...(statSources &&
+                        ownedPassives && {
+                            kinds: getWeaponDamageKinds(w.def),
+                            examine: weaponExamine(w.def),
+                            form: getWeaponForm(
+                                w,
+                                ownedPassives,
+                                sim.unlockedItems,
+                                sim.endless,
+                                sim.cardCaps,
+                            ),
+                            orbit: getOrbitObjIds(w.def, level.amount + sim.stats.amount),
+                            statLines: [
+                                ...getWeaponStatLines(
+                                    w.def,
+                                    w.level,
+                                    w.bonus,
+                                    sim.upgradeQualities.weapons[w.def.id] ?? [],
+                                    sim.weaponDamageFactors(w),
+                                    statSources,
+                                ),
+                                ...[getLifestealStat(w.def)].filter((stat) => stat !== undefined),
+                            ],
+                            detailBreakdown:
+                                w.bonus > 0
+                                    ? {
+                                          title: t("ui.levelup.damage_bonus"),
+                                          about: bonusAbout(),
+                                          lines: [
+                                              getBonusLine(
+                                                  w.def,
+                                                  w.level,
+                                                  w.bonus,
+                                                  sim.upgradeQualities.weapons[w.def.id] ?? [],
+                                              ),
+                                          ],
+                                      }
+                                    : undefined,
+                        }),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -5214,12 +5481,23 @@ export class GameClient implements GameFrameHandler {
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
                     detail: passiveValueText(def, p.value),
+                    ...(details && {
+                        examine: passiveExamine(def),
+                        form: getLevellingForm(p.level, def.maxLevel, sim.endless),
+                        detailBreakdown: getPassiveBreakdown(
+                            def,
+                            p.value,
+                            sim.upgradeQualities.passives[p.id] ?? [],
+                            p.level,
+                        ),
+                    }),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
             blessings: sim.map.blessings && getBlessingViews(sim.map.blessings, sim.blessings),
             stats: formatStats(sim.stats),
-            gear: getGearViews(sim),
+            statRows: statSources ? getStatRows(sim.stats, sim.player.maxHp, statSources) : [],
+            gear: getGearViews(sim, details),
             inventory: getInventoryViews(sim),
             rerolls: sim.rerollsLeft,
             banishes: sim.banishesLeft,

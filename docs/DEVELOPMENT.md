@@ -50,7 +50,7 @@ reloaded while a phone's still writing it (or out of room) is put together from 
 resume asks past the end, and a 416 with the parts' length means every part was there.
 
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
-bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
+bakes, of item icons and of monster chatheads, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
 what making them read, so what it reads doesn't depend on what ran before it in that worker: a warm
 model cache would hide a group an earlier unit read, and a map would keep an earlier map's
@@ -811,7 +811,8 @@ src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
             of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
-            (what each map's tasks bring in); quests (what each asks for and pays); hard (hard
+            (what each map's tasks bring in); quests (what each asks for and pays); combatTasks
+            (Combat Achievements: tasks, tiers, coins and rewards); hard (hard
             mode's numbers); raids (a raid's rooms, points, supply chest, teleporters) and theatre
             (the Theatre of Blood's bosses)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
@@ -835,6 +836,9 @@ src/game/
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
+    CombatTracker.ts  follows a solo run's Combat Achievements from outside the sim: it reads the
+                      sim and each tick's events, and never writes to them; says where each task
+                      has got (under way, done, or failed and why) for the HUD and pause menu
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count), and LocalSaveStore (the
@@ -867,12 +871,160 @@ src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhe
                              any number of them, one multi-draw per segment and pass (without
                              multi draw, one instanced draw per frame of an animation)
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one
-                             scene build), ItemIconLoader (inventory icons drawn like the client)
+                             scene build), ItemIconLoader (inventory icons drawn like the client),
+                             NpcHeadLoader (a monster's chathead, fitted to its picture)
                              SoundLoader (sound effects synthesized off the main thread),
                              SpriteDataLoader (interface sprites, like hitsplats)
 src/rs/audio/               the client's sound effect synth: instruments, envelopes, filters
 src/rs/model/player/         player models from identity kits and worn items
 ```
+
+### Results screens
+
+A finished run's results are `ClassicResults` (`ui/results/ClassicResults.tsx`); `ResultModal` in `ui/GameUi.tsx` shows it. The screen takes the shared `{ ui, client }` `ScreenProps`, and uses `ResultNotices` and `ResultButtons` (`ui/results/shared.tsx`, with the raid chest and the Tombs' board) so unlocks and Retry/Back behave as before.
+
+The classic screen has two tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player's stats beside the
+run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the player
+whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
+laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
+`CombatView`.
+The monsters killed are shown as their chatheads: `EnemyHead` (`ui/EnemyHead.tsx`) gives
+`NpcHead` (`ui/ItemIcon.tsx`) the monster's NPC and its framing, `iconCache` asks for it, and
+`NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC with none),
+fitted by where the faces land. A monster drawn as a player (the fun maps') has no head. New
+monsters need nothing: `slim-plan.ts` loads every enemy's head, framed as the game frames it.
+
+Each monster's framing is in `content/portraits.json`, by enemy id, holding only what differs
+from the game's own fit (`content/portraitConfig.ts`): the chathead, the whole body or one of the
+NPC's models (`model`), posed by a sequence (`seqId`, `tick`), mirrored (`mirror`, the model
+alone, seen by the same camera), and the camera turned (`yaw`, `pitch`), zoomed (`zoom`) and
+moved (`offsetX`, `offsetY`, in the picture's pixels). The offsets and zoom are in view space, so
+zooming never moves the picture, pitched or not. They were set by eye with the editor on the
+`feat/portrait-editor` branch (`?portraits` there). A framing that picks a body, a model or a
+sequence uses more of the cache, so deploy it with a new slim cache.
+
+The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
+(`PauseModal`; Quests has the Combat Achievements a solo run follows under its quests, in
+`PauseQuests`), and its Collection log and settings are buttons at the bottom, beside Give up and
+Resume, each one's page replacing the open tab (`PAUSE_BUTTON_PAGES`; the button goes back to the
+tab it came from, through the other's page too). Those four buttons are one
+kind (`.ui-pause-action`): as wide as each other, an icon beside each name (`PAUSE_TAB_SPRITES`,
+the Collection log's item), two by two on a phone. The menu opens on the tab it was left on, and
+each tab keeps how far it was scrolled (`lastPauseTab` and `lastPauseScroll`, module state: this
+page's, not saved). The window is a dialog (`useDialog`, modal
+except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`), offering
+Restart beside it in a solo run (`GameClient.restartRun`: the run's given up and banked as Give
+up banks it, then started again from its beginning; a fight of the Forgotten Four's is retried
+as the results' Retry this fight, so the try counts). The Loadout
+lists the hero's active effects (`HudView`'s `buffs`) and, on a map with blessings, those in place
+of passives (`×level`); the Combat tab ends with the run's recent messages (`UiSnapshot.toastLog`);
+the settings page (`PauseSettings` in `GameUi.tsx`, styled as `.ui-ps`) is in sections, each under
+a `.ui-ps-heading` with the client's Settings icon for it (`SETTINGS_SECTION_SPRITES`, in
+`getGameSpriteIds` for the slim cache), and every setting is a card whose edge follows its toggle
+(`--ui-state-*`, the quests' red and green: use those for an on, off or under-way colour). A new
+setting goes in the section it belongs to; one with a toggle gets its edge by itself (`:has`). The
+title's Settings panel (`SettingsPanel`, `.ui-settings-cards`) is laid out the same way, with the
+same `SettingsSection`s, and adds what only it has: the save first (its export, cloud save and
+unreadable saves), the menu's camera and screen shake under Display, Share run stats under the run
+and Co-op flag under Co-op. A setting in both goes in the same section in each. A volume's slider
+(`VolumeSetting`, its sums in `ui/volume.ts`) moves in whole percents and, with Shift held, a tenth
+of the pointer's way, to a tenth of a percent (GameAudio takes any level from 0 to 1). A language's
+flag is its `LANGS` entry's `country`, from co-op's `FLAG_FRAMES`. A weapon's stat cells
+keep their English (`SlotStatView.english`) so their icons show in any language. The panel has one fixed height for every tab
+(`.ui-pause`), and the open page scrolls inside it. The Quests tab (`ui/PauseQuests.tsx`) is a card
+a quest: its icon is an item from `content/questIcons.ts` (a new quest needs an entry, a test
+checks, and `slim-plan.ts` keeps it), and a kill quest wears the Slayer skull
+(`SLAYER_SPRITE_ID`), with its enemies' names in the tooltip (`QuestTrackView.enemyIds`). The
+icon and the reward square sit on the client's stone slot (`STONE_SLOT_SPRITE` through `useStoneSlot`, drawn at its own
+size and used as a `border-image`, so it's in `getGameSpriteIds`), and the reward square shows
+the coins (`QuestTrackView.coins`) or, with `unlockObjId` set, that item and "Unlock" (no quest
+sets it yet). The Loadout's worn equipment slots use it too. A
+weapon's Damage line wears its kind of damage as its icon (`SlotView.kinds`, from
+`getWeaponDamageKinds` in `weapons.ts`: its style, then poison for venom and burn for burning
+ground, the extras after the name), the same icons as the Combat tab. The Loadout (`ui/PauseLoadout.tsx` and `.css`)
+has weapon and passive cards on the left (with free slots, and a weapon's evolution:
+`SlotView.evolution`) with the hero's stats under them, and at the right every gear slot with the
+active effects under it (one column on a narrow window: cards, equipment, effects, stats).
+What only the menu shows (a slot's `kinds`, `examine`, `form`, `statLines` and breakdowns, worn
+gear's `lineBreakdowns`, `statRows`) is built only while it's open: `updateHud`'s `details`,
+and the HUD under a run, rebuilt every `HUD_INTERVAL_MS`, goes without.
+The stat rows are `HudView.statRows`, made by `getStatRows` (`client/LoadoutViews.ts`): a new stat
+needs a group there (a test checks that all are in one). The tooltips on those numbers are
+`BreakdownView`s (`client/BreakdownViews.ts`), and their `about` (`content/statLore.ts`) is what the
+number means, how it's worked out, where more comes from (read off `PASSIVES`, `CASKET_GEAR`,
+`UTILITY` and `SHOP_UPGRADES`) and how far past its base it is. A new stat needs its words in
+`STAT_LORE` there (a test checks), and a new weapon stat label one in `WEAPON_LORE`; both land in
+`locales/en/gen.json` through the extractor, in English only. A weapon that can evolve shows the
+passive it still needs beside its square (`EvolutionBadge`).
+
+Every section of the pause menu's pages starts with the same strip, `.ui-loadout-heading` (a name and,
+at the right, a count): use it for any new section, and don't box the section. The Loadout draws
+the equipment screen's Weapon and Ammo squares locked (`LOCKED_GEAR_SLOTS`), and the hero's revives
+(`HudView.revives`, `getRevivesView`: the ring's and, in co-op, what teammates can still do, with
+the teammates they've revived; none left is the red last stand). The Combat tab's tiles carry what armour
+and Lil'viathan's bubble blocked (`Hero.damageBlocked`, only written, never read by play) and the
+revives (the last stand says it means no revives left); its weapon ranking gives the top two a medal (`rankMedalCount`: only the best with four, the top three past four) and the worst a
+plank in place of its number, the star and the plank with a joke each in their tooltip (`combat.rank.*`, one picked when the tab opens), and each tile a tooltip of what it counts (`combat.tip.*`) (`CombatReport`), and each weapon's row has the tooltip its Loadout square has, with its
+evolution's recipe when the player knows it (`DamageView.about`, from `getWeaponAbout` in
+`LoadoutViews.ts`, filled only for the pause menu: the results' rows go without). A weapon's Damage tooltip ends with its real hit (`getRealDamageLines`, from `Sim.weaponDamageFactors`,
+which reads the same factors `getEffectiveLevel` and `damageEnemy` multiply by: keep them together),
+and each line wears the icons of what gives it (`BreakdownLine.icons`, from `StatSource.iconObjId` and
+`iconSpriteId`, which `Sim.getStatSources` fills in: a source with no icon shows none).
+Recent messages are `PauseChat`: `GameStore.toast` keeps each with the
+run's clock and who said it (`toastSource`, set per sim event in `GameClient.handleEvents` from
+`EVENT_TOAST_SOURCES`, and `player:<name>` for a teammate's).
+
+Every number on the Loadout can have a tooltip that says how it got its size (`BreakdownTip`,
+`ui/BreakdownTip.tsx`, on the mouse over, a focus or a tap), made of a `BreakdownView` (`GameStore.ts`):
+parts, each in the colour of the rarity it was taken at. `client/BreakdownViews.ts` builds them: a
+weapon's stats from `weaponStatSteps` (`content/weaponStats.ts`: level 1's value and each level's
+change) with the damage bonus the picks' rarities gave, a passive's picks, worn gear's base and
+upgrades, and each of the hero's stats from `Sim.getStatSources`. It and `updateStats` both go
+through `Sim.eachStatPart`, so a new part of the stats goes there and its tooltip comes with it. The rarity of every pick is written by `Sim.apply` into
+`Hero.upgradeQualities`, by weapon and passive id; it's only written, so it's in no hash. A
+starting weapon's levels, and a weapon an evolution made, have none (uncoloured). What heals on a
+hit says when too: `getHealChanceLines` (the amulet's chance, its `BLOOD_FURY_HEAL` and its
+once-a-second roll, for the stat and the piece) and `getLifestealStat` (a weapon's `lifesteal`), so
+a new way to heal on a hit needs a line there.
+
+The pause panel keeps its buttons (Give up, Collection log, Settings, Resume) in view: it's a flex column whose
+page (`.ui-pause-page`) takes the room left and scrolls inside it, never shorter than a minimum
+that shows the main items. Only a window shorter than the title, tabs and that minimum scrolls the
+whole panel. The Loadout tightens to the room its page has: `useFit` (in `PauseLoadout.tsx`) draws
+it at the roomiest and, while its page still scrolls, tries a tighter one (smaller icons, then the
+gear as a grid of squares, then the empty slots left out); what still doesn't fit scrolls in the
+page, and nothing is scaled down. It starts again from the roomiest when the window or what's in it
+changes. Empty slots (`EmptyCard`, an empty gear row) show a dashed square, what the slot is and
+where one comes from. An evolution is `EvolutionBadge`: a square with what it makes and a count of how
+many of what it takes are there, and `RecipePanel` as its tooltip (`BreakdownTip`'s `content`),
+laid out as a make menu is; only weapons have one, not passives. A `BreakdownLine` whose parts
+say what they're of (`BreakdownPart.label`, "Level 7") or that has several is a list, a row for each
+level up and never joined up (an endless run has a pick for every level, hundreds): the lines scroll
+under the head with the mouse wheel, the arrow keys or a finger. The Loadout marks an evolved
+weapon (`SlotView.evolved`: a violet frame and a star) and a finished item (last level, no
+evolution, not endless: `.ui-loadout-card-final`, all CSS: the glowing edge, the bracketed corners
+(`.ui-loadout-corners`), the embers, the MAX badge (`MaxBadge`, a plate) and `Glow`, motes of light
+over the icon). The mouse over an item's icon shows `ExamineTip`: its name, an examine text from
+`content/examine.ts` (`WEAPON_EXAMINE`, `PASSIVE_EXAMINE`: a test needs one for every weapon and
+passive, of four lines at most; they're in `locales/en/items.json` as `.examine`, and the extractor
+writes them), and where it stands (`SlotView.form`, from `getWeaponForm` and `getLevellingForm`:
+best form, ready to evolve, can evolve, evolution not unlocked yet, or still levelling). A weapon that circles the hero (`orbitObjIds`) has `SlotView.orbit`, the runes
+now in the circle, and `SlotIcon` draws them all in one icon (the HUD's slots too). An item in a
+square can't leave it: icons are sized to fit and the squares clip.
+
+### Damage by type, kills by monster
+
+Each `Hero` keeps its damage by kind (`damageByKind`) and kills by enemy id (`killsByEnemy`), for
+the Combat tabs; `getRunStats` copies them, and `RunStatsViews` turns them into `DamageKindView`s
+and `KillView`s. `Sim.damageKind` decides a hit's kind as it lands in `damageEnemy`, from the
+damage source: a weapon's by its style (`getWeaponStyle`), venom (`damageEnemy`'s `poison`) as
+`poison` and a weapon's burning ground (`stepFires` sets `burning`) as `burn`, even though both
+still count as their weapon's damage by source. Then `recoil`, `powerUp` (the cannon, thralls),
+`item` (a utility item, like chinchompas), `arena` (`ability:` and `court`, the fight's button and
+its arena turned on the boss) and `other` for the rest (an enemy's blast catching its own pack, a
+floor's burns, Het's beam). The kinds, their names and their cache icons are in
+`content/damageKinds.ts`; a new kind needs its `combat.kind.<kind>` and `.desc` keys in `ui.json`.
+Kills by enemy count a boss's co-op copies once, as `enemyKills` does.
 
 A loc blocks only the ground its model stands on (below about waist height, from
 `RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
@@ -1437,19 +1589,16 @@ adventurer can have:
   always in view. Narrower than 600px, or on a phone held upright (the rotate notice's own
   query), the entries are a dropdown, and the log is the one screen the rotate notice leaves
   readable there (`GameUi.tsx`).
-- **The log in a run**: the pause menu's Collection log opens the same screen over it
-  (`CollectionLogScreen`'s `inRun`, the store's `runLog`, `GameClient.openRunLog`). It's only the
-  UI's: a solo run stays paused under it, and a co-op run goes on, as it does under co-op's menu,
-  except that the run's out of reach while the log hides it. The hero stands still (a zero move,
-  as while choosing a level up: `updateCoop`'s `deciding`), and Space and 1 to 4, which work
-  under co-op's menu, do nothing (`onKeyPress`'s `coopMenu`). Escape and P are the client's
-  pause keys there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's
-  back and Start (P, with no `.ui-button-go` in the log) do the same. The panel saying nothing's
-  being saved comes before either, as it does for `useMenuKeys`. Anything that leaves the menu
-  shuts the log with it (`leavePauseMenu`: resuming, giving up, a run starting or left), so the
-  next pause opens on the menu. A co-op level up or casket takes the menu away a moment, the log
-  with it, and the log opens again where it was left (`LogPlace`, kept by `RunScreen`). The log
-  is a `memo`, so the menu under it drawing again as a co-op run goes on doesn't redraw it.
+- **The log in a run**: a page of the pause menu, from its Collection log button, as the settings
+  are (`CollectionLogScreen`'s `inRun`): the same log without its window or X
+  (`.ui-log-in-pause`), filling the page, which holds it rather than scrolling it whole
+  (`.ui-pause-page-log`), as the log scrolls its own entries and items. It's only the UI's, with
+  nothing in the client or the store: a solo run stays paused, and a co-op run goes on behind it
+  as behind any of the menu's pages, in reach. Escape and P resume, and a pad's Start presses
+  Resume, as on the menu's other pages. A co-op level up or casket takes the menu away a moment,
+  the log with it, and the menu opens again on the log (`lastPauseTab`), where it was left
+  (`LogPlace`, kept by `RunScreen`). The log is a `memo`, so the menu drawing again as a co-op
+  run goes on doesn't redraw it.
 - **What the run's found**: marked New in the log in a run (`LogItem.thisRun`).
   `GameClient.getRunLogSaves` gives the save and a copy with the run's result banked on it as it
   stands, by the same `bankRun` that `finishRun` banks the run with, and `getRunLogEntries`
@@ -2464,7 +2613,10 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
-                                                        how damage keeps up with the rounds)
+                                                        how damage keeps up with the rounds;
+                                                        CA=1 which Combat Achievements each run
+                                                        did, what spoilt the rest, and each
+                                                        boss's time from arrival to kill)
 scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
                                                         on one room, boss or the whole raid
                                                         (ROOM=apmeken, het, scabaras,
@@ -2576,8 +2728,11 @@ dear), or a refused action would hold up the real one.
 
 Auto alch and Auto equip are local `DisplaySettings`, off by default, so never apply them in `Sim`:
 `GameClient.autoAnswerChest` sends the casket's usual action through `act`, as a click would, and
-Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip` (the stats as upgraded, none lower
-and at least one higher, give or take float rounding), not the rarity-based `shouldWear`, and never
+Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip`, as Production Prodigy does in
+the sim: the stats as upgraded and rounded as the casket shows them (`stats.compareStatValues`,
+which its lines use too), none lower and at least one higher. So it takes what the casket lists
+only in green, though a stat can be lower by less than a shown step (2.5% and 3% both show +3%).
+It's not the rarity-based `shouldWear`, and it never
 replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
 remembers which casket it was). In co-op the casket stays hidden, though the menu still opens,
 until the host's frame brings the answer back. One that's lost or turned away would leave nothing
@@ -3276,6 +3431,20 @@ preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
 (`ui-shop-help-coins`) and the refund hint under the cards are left out there, as the
 balance's label says as much.
 
+Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
+(task id to kills so far, `task:map` to 1 for each map a beat-them-all task has had beaten, or
+`task:enemy` to 1 for each enemy a one-of-each kill count has had killed). A
+save from before it gets the kill counts, wins and endless rounds its records show, once, without
+coins; later saves never look at those records for them, since co-op runs add to them and co-op
+doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
+only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
+Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
+run earn: `task:style` for each combat style a beat-with-each task has been won with. The
+optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
+were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it. The Wardrobe sold Ghommal's
+hilts until 12 made them the tiers' rewards: a save from before it gets back what each one it
+bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and its outfits.
+
 ### Languages
 
 The game is in English and Português (BR). Only English is checked: the other languages are
@@ -3303,7 +3472,8 @@ in `i18n/store.ts`.
   patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
   language without that key keeps the whole sentence in English, and a new sentence of the kind
   needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
-  the accessors, for the level-up cards.
+  the accessors, for the level-up cards. `CombatTracker` keeps why a task failed as data, a
+  `CombatReason`, and `describeCombatReason` (`content/combatTasks.ts`) words it as it's shown.
 - `items.json`, `world.json` and `gen.json` are generated from the content by
   `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
   `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
@@ -3322,6 +3492,11 @@ in `i18n/store.ts`.
   that isn't a stat gives `StatLine` its `icon` (a potion's duration has `DURATION_ICON`).
   `statIcons.test.ts` runs every language in `LANGS` over every such line, so a new language is
   checked by adding it there.
+- `scripts/i18n/find-untranslated.ts` lists English a screen shows without the language files
+  (JSX text, what a player sees or hears in `title`, `aria-label`, `placeholder` and `alt`, and
+  strings a JSX expression shows straight). It's a list to look through, not a check: the dev
+  screens and `?devtools` buttons are left out, and text a view builds in a `.ts` file (a label
+  `GameClient` hands the HUD) isn't seen, so that goes through `tl()` where it's shown.
 - Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
   keys there, and `tr()` and `tl()` English.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English

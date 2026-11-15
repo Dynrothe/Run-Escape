@@ -1,4 +1,5 @@
 import { tr } from "../i18n";
+import { CombatTier } from "./types";
 
 // Trophies: rare finds, kept in the Collection log, and in the save once they're
 // found. They do nothing in a run, but a few bring a weapon or a passive into the game (the
@@ -24,7 +25,9 @@ export type TrophySource =
     // The Tombs of Amascut's chest (Sim's openTombsChest), from raid level `level` up: a purple's
     // one of those with a weight, its chance going by the raid level; the rest (`chance`) a roll
     // of their own
-    | { kind: "tombs"; level: number; weight?: number; chance?: number };
+    | { kind: "tombs"; level: number; weight?: number; chance?: number }
+    // Combat Achievements: a tier's reward, once enough points are had (combatTasks.ts)
+    | { kind: "combatTier"; tier: CombatTier };
 
 export type TrophyDef = {
     id: string;
@@ -445,6 +448,27 @@ TROPHIES.push(
             hard: true,
         },
     },
+);
+
+// Combat Achievements' tier rewards, as in OSRS. Last, so nothing that rolls for a trophy meets
+// them first.
+TROPHIES.push(
+    ...(
+        [
+            ["easy", "Easy", 1, 25926],
+            ["medium", "Medium", 2, 25928],
+            ["hard", "Hard", 3, 25930],
+            ["elite", "Elite", 4, 25932],
+            ["master", "Master", 5, 25934],
+            ["grandmaster", "Grandmaster", 6, 25936],
+        ] as const
+    ).map(([tier, name, n, objId]) => ({
+        id: `ghommals_hilt_${n}`,
+        name: `Ghommal's hilt ${n}`,
+        objId,
+        how: `The ${name} tier's reward in Combat Achievements.`,
+        from: { kind: "combatTier", tier } as const,
+    })),
 );
 
 export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => [t.id, t]));

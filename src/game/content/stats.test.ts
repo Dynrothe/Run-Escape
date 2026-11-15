@@ -1,4 +1,5 @@
-import { compareStats, pairStats } from "./stats";
+import { overrideMessages } from "../i18n/catalog";
+import { compareStats, formatStat, formatStatValue, statChanges } from "./stats";
 
 describe("stats", () => {
     it("compares a piece's stats before and after an upgrade", () => {
@@ -24,44 +25,46 @@ describe("stats", () => {
         ]);
     });
 
-    it("goes by the values as shown, so pieces that show the same don't differ", () => {
-        expect(pairStats({ might: 0.05, armor: 1.04 }, { might: 0.0498, armor: 1.26 })).toEqual([
-            { key: "might", label: "Damage", worn: "+5%", found: "+5%", better: true },
-            {
-                key: "armor",
-                label: "Armour",
-                worn: "+1",
-                found: "+1.3",
-                change: "+0.3",
-                better: true,
-            },
+    it("goes by the values as shown, so stats that show the same don't change", () => {
+        expect(statChanges({ might: 0.05, armor: 1.04 }, { might: 0.0498, armor: 1.26 })).toEqual([
+            { key: "armor", text: "+0.3 armour", better: true },
         ]);
     });
 
-    it("pairs a worn piece's stats with a found one's, each that either has", () => {
+    it("shows a rounded-zero penalty as neutral, without a minus sign", () => {
+        expect(formatStat("might", -0.0002)).toBe("+0% damage");
+        expect(formatStatValue("might", -0.0002)).toBe("+0%");
+        expect(statChanges({}, { might: -0.0002 })).toEqual([]);
+        expect(formatStatValue("might", -0.005)).toBe("-1%");
+    });
+
+    it("gives each stat a found piece changes against a worn one, as a stat line", () => {
         expect(
-            pairStats(
+            statChanges(
                 { might: 0.03, speed: 0.15, armor: 1 },
                 { might: 0.05, maxHp: 0.13, armor: 1 },
             ),
         ).toEqual([
-            {
-                key: "might",
-                label: "Damage",
-                worn: "+3%",
-                found: "+5%",
-                change: "+2%",
-                better: true,
-            },
-            { key: "armor", label: "Armour", worn: "+1", found: "+1", better: true },
-            { key: "maxHp", label: "Max hitpoints", found: "+13%", change: "+13%", better: true },
-            {
-                key: "speed",
-                label: "Projectile speed",
-                worn: "+15%",
-                change: "-15%",
-                better: false,
-            },
+            { key: "might", text: "+2% damage", better: true },
+            { key: "maxHp", text: "+13% max hitpoints", better: true },
+            { key: "speed", text: "-15% projectile speed", better: false },
         ]);
+    });
+
+    it("words a change the way the language words a stat line", () => {
+        const restore = overrideMessages({
+            en: { "statline.percent": "{label} {sign}{value}%" },
+        });
+        try {
+            expect(statChanges({ might: 0.08 }, { might: 0.05 })).toEqual([
+                { key: "might", text: "damage -3%", better: false },
+            ]);
+        } finally {
+            restore();
+        }
+    });
+
+    it("finds nothing to change between pieces that read the same", () => {
+        expect(statChanges({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 })).toEqual([]);
     });
 });

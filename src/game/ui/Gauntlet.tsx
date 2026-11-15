@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { GauntletView, UiSnapshot } from "../client/GameStore";
-import { formatTime } from "../client/GameView";
 import { characterName, getCharacter } from "../content/characters";
+import { formatTime } from "../content/format";
 import {
     AWAKENERS_ORB_OBJ,
     BLESSINGS,

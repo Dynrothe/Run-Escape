@@ -378,14 +378,11 @@ function ChestCard({
                         {t("chest.found")} <Coins amount={chest.coins} />
                     </div>
                 </div>
-                {/* Against a worn piece its stats are in the table */}
-                {!replaces && (
-                    <ul className="ui-chest-lines">
-                        <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
-                    </ul>
-                )}
+                <ul className="ui-chest-lines">
+                    <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
+                </ul>
                 <SetLine item={item} />
-                {replaces && <GearCompare chest={chest} replaces={replaces} />}
+                {replaces && <GearCompare replaces={replaces} />}
                 {chest.isGear && !replaces && (
                     <div className="ui-chest-compare">
                         {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
@@ -447,16 +444,9 @@ function SetLine({ item }: { item: ItemView }): JSX.Element | null {
     ) : null;
 }
 
-// Gear against the piece it would replace: that piece, its set, and a row
-// for each stat either has, the found piece's value and the difference
-// coloured by whether it's better
-function GearCompare({
-    chest,
-    replaces,
-}: {
-    chest: ChestView;
-    replaces: NonNullable<ChestView["replaces"]>;
-}): JSX.Element {
+// The piece it would replace, its set, and only the stats that would change,
+// green for better and red for worse
+function GearCompare({ replaces }: { replaces: NonNullable<ChestView["replaces"]> }): JSX.Element {
     const worn = replaces.item;
     return (
         <div className="ui-chest-compare">
@@ -468,45 +458,18 @@ function GearCompare({
                 {t("chest.alched_for", { coins: fmtNum(replaces.alchCoins) })}
             </div>
             <SetLine item={worn} />
-            <table className="ui-chest-table">
-                <thead>
-                    <tr>
-                        <td />
-                        <th scope="col">
-                            <ItemIcon objId={worn.objId} size={18} />
-                            {t("chest.wearing")}
-                        </th>
-                        <th scope="col">
-                            <ItemIcon objId={chest.item.objId} size={18} />
-                            {t("chest.new")}
-                        </th>
-                        {/* Named for screen readers; the brackets say it on screen */}
-                        <th scope="col" aria-label={t("chest.difference")} />
-                    </tr>
-                </thead>
-                <tbody>
-                    {replaces.stats.map((pair) => {
-                        const tone =
-                            pair.change === undefined
-                                ? undefined
-                                : pair.better
-                                  ? "ui-good"
-                                  : "ui-bad";
-                        return (
-                            <tr key={pair.key}>
-                                <th scope="row">
-                                    <StatLine text={pair.label} statKey={pair.key} />
-                                </th>
-                                <td>{pair.worn ?? "—"}</td>
-                                <td className={tone}>{pair.found ?? "—"}</td>
-                                <td className={tone}>
-                                    {pair.change !== undefined && `(${pair.change})`}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+            {replaces.changes.length > 0 && (
+                <div className="ui-chest-changes">
+                    {replaces.changes.map((change) => (
+                        <StatLine
+                            key={change.key}
+                            text={change.text}
+                            statKey={change.key}
+                            className={change.better ? "ui-good" : "ui-bad"}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

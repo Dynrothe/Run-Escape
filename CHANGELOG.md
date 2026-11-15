@@ -5,8 +5,41 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
+  blocked, your revives, and every monster you've killed, by its face. The results have it too.
+- Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got
+  its size, each level up in the colour of the rarity it was taken at.
+- Restart, by Iakee: Give up in the pause menu can start the run again from the beginning. What
+  you'd found is kept, as Give up keeps it.
+- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
+  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
+  Your kill counts, wins and endless rounds so far already count, without the coins.
+- Combat Achievements reach Act II's maps, the Awakened fights, Beneath Cursed Sands and the Tombs
+  of Amascut (raid levels, no deaths, a perfect run of each puzzle room), along with remixes,
+  invocations, invaders and an awakened final boss.
+- Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
+  says what spoilt one. The pause menu's Quests tab shows how every task the run is following is
+  going.
+
+### Changed
+
+- Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
+  the piece it would replace, in green or red, in place of the Wearing/New table.
+- The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
+  and Settings as pages of it. It opens on the tab you left it on.
+- Settings are in sections with the game's own icons, by Iakee, a card for each setting. The
+  language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
+- The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
+  be translated, by Iakee.
+- The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
+  Achievements earn them. Any you bought are refunded.
+
 ### Fixed
 
+- Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
+  lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
 - High alching plays the original spell's animation, glow and sound, including for replaced gear,
   with legs continuing to run while casting on the move. Fixed by Deivid Smarzaro.
 
