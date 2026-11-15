@@ -105,7 +105,10 @@ version and how to run it.
   your starting adventurer's card. In the album, pressing a found card opens it big in a window,
   with the versions you own.
 - **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
-  card of, no rarer than your best version of it, and reward caskets give only gear you have a card
+  card of, no rarer than your best version of it, and a weapon whose levels are metals (Bronze to
+  Dragon, Strike to Wave) only up to the best metal you have a card of; each metal is a card of its
+  own, rarer up the metals, and a higher one brings the lower ones you haven't got. Reward caskets
+  give only gear you have a card
   of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
   your collection has enough cards to fill a level up (the godswords count as one weapon, since
   only one is ever held), nor as an adventurer whose starting weapon's

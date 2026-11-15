@@ -9,8 +9,10 @@ import {
     PACK_SIZE,
     PackDef,
     STARTER_PACKS,
+    cardDefId,
     cardVersions,
     cardWeight,
+    lowerTierCards,
     packCards,
     packFoilChance,
     parseVersionKey,
@@ -57,7 +59,8 @@ export function isCardUnlocked(save: SaveData, card: CardDef): boolean {
 }
 
 function cardUnlocked(save: SaveData, card: CardDef, unlocked: ReadonlySet<string>): boolean {
-    const id = card.id.slice(card.id.indexOf(":") + 1);
+    // A weapon's tiers are unlocked with it
+    const id = cardDefId(card);
     switch (card.kind) {
         case "weapon": {
             const weapon = getWeapon(id);
@@ -235,8 +238,31 @@ export function packRoller(
     };
 }
 
-// A card from a pack, at its version; new: that version wasn't owned before; foil: a foil copy
-export type PackCard = { card: CardDef; rarity: Rarity; isNew: boolean; foil?: boolean };
+// A card from a pack, at its version; new: that version wasn't owned before; foil: a foil copy;
+// alsoUnlocks: the lower tiers of its weapon it brought with it (giveLowerTiers)
+export type PackCard = {
+    card: CardDef;
+    rarity: Rarity;
+    isNew: boolean;
+    foil?: boolean;
+    alsoUnlocks?: CardDef[];
+};
+
+// A weapon tier's card brings its lower tiers with it (a Steel scimitar, the Bronze and Iron): each
+// never owned, in any version, is given a copy at its own rarity, the commonest version it comes in
+// (Common for most; a Steel scimitar's own is Uncommon), whatever the version pulled. One already
+// owned is left as it is. Not foils: the foil's the card pulled. The lower cards given, into
+// `cards` (SaveData.cards' shape).
+export function giveLowerTiers(cards: Record<string, number>, card: CardDef): CardDef[] {
+    const given: CardDef[] = [];
+    for (const lower of lowerTierCards(card)) {
+        if (!cardVersions(lower).some((r) => (cards[versionKey(lower, r)] ?? 0) > 0)) {
+            cards[versionKey(lower, lower.rarity)] = 1;
+            given.push(lower);
+        }
+    }
+    return given;
+}
 
 // A pack's PACK_SIZE cards, added to the save's copies. A version counts as new only the first
 // time it's in a pack, not again later in the same one.
@@ -253,8 +279,15 @@ function rollPack(
     for (const { card, rarity, foil } of packRoller(pack, pool)(random, size)) {
         const key = versionKey(card, rarity);
         const copies = owned[key] ?? 0;
-        cards.push({ card, rarity, isNew: copies === 0, ...(foil && { foil }) });
         owned[key] = Math.min(copies + 1, MAX_CARD_COPIES);
+        const lower = giveLowerTiers(owned, card);
+        cards.push({
+            card,
+            rarity,
+            isNew: copies === 0,
+            ...(foil && { foil }),
+            ...(lower.length > 0 && { alsoUnlocks: lower }),
+        });
         // A foil's a copy of its version too, counted apart as well
         if (foil) {
             foils[key] = Math.min((foils[key] ?? 0) + 1, owned[key]);
@@ -359,6 +392,14 @@ export function migrateCards(data: Partial<CardFields>): CardFields {
             const copies = whole(count, MAX_CARD_COPIES);
             if (parseVersionKey(id) && copies) {
                 cards[id] = copies;
+            }
+        }
+        // A save from before tiers had cards of their own, or one that lost a lower tier's: each
+        // tier owned brings its missing lower ones (giveLowerTiers)
+        for (const id of Object.keys({ ...cards })) {
+            const parsed = parseVersionKey(id);
+            if (parsed && parsed.card.tier) {
+                giveLowerTiers(cards, parsed.card);
             }
         }
         if (Object.keys(cards).length > 0) {

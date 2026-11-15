@@ -19,8 +19,11 @@ import {
     cardWeight,
     packCards,
     packFoilChance,
+    parseVersionKey,
+    weaponTiers,
 } from "../content/cards";
 import { RARITY_ORDER, atLeast } from "../content/rarity";
+import { getWeapon } from "../content/weapons";
 import { exactPackOdds } from "./cardOdds";
 import { getStarterCards } from "./cardRuns";
 import {
@@ -32,6 +35,7 @@ import {
     getCardFoils,
     getCardPacks,
     getOwnedVersions,
+    giveLowerTiers,
     isCardUnlocked,
     lastCardRarities,
     migrateCards,
@@ -451,5 +455,79 @@ describe("cards in the save", () => {
             migrateCards({ cards: ["weapon:scimitar"] as unknown as Record<string, number> }),
         ).toEqual({});
         expect(migrateCards({ cardPacks: 1e9 })).toEqual({ cardPacks: MAX_CARD_PACKS });
+    });
+});
+
+describe("a weapon's metals", () => {
+    const scimitar = (n: number) => card(n === 1 ? "weapon:scimitar" : `weapon:scimitar.${n}`);
+
+    it("are cards of their own, its first the card it always had, rarer up the metals", () => {
+        const tiers = weaponTiers(getWeapon("scimitar"));
+        expect(tiers.map((tier) => tier.toLevel)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(scimitar(1).name()).toBe("Bronze scimitar");
+        expect(scimitar(8).name()).toBe("Dragon scimitar");
+        expect([1, 2, 3, 4, 5, 6, 7, 8].map((n) => scimitar(n).rarity)).toEqual([
+            "common",
+            "common",
+            "uncommon",
+            "uncommon",
+            "rare",
+            "rare",
+            "veryRare",
+            "veryRare",
+        ]);
+        // A version key and a foil keep the same shape
+        expect(parseVersionKey("weapon:scimitar.3@rare")).toEqual({
+            card: scimitar(3),
+            rarity: "rare",
+        });
+        // A weapon with one name for every level has one card
+        expect(weaponTiers(getWeapon("dark_bow"))).toEqual([]);
+    });
+
+    it("unlocks the lower metals never owned, once, as their commonest version", () => {
+        // A Very rare Steel scimitar pulled: Bronze and Iron come with it, as Commons
+        const save = { ...createSave(), platinum: BASIC_PACK.price };
+        const [pulled] = buyCardPack(save, BASIC_PACK, sequence(0.999, 0, 0.999), [scimitar(3)])!;
+        expect(pulled.card).toBe(scimitar(3));
+        expect(pulled.alsoUnlocks?.map((c) => c.id)).toEqual([scimitar(1).id, scimitar(2).id]);
+        expect(getOwnedVersions(save, scimitar(1))).toEqual([{ rarity: "common", copies: 1 }]);
+        expect(getOwnedVersions(save, scimitar(2))).toEqual([{ rarity: "common", copies: 1 }]);
+    });
+
+    it("leaves a lower metal already owned as it is, and a repeat pull adds only its own copy", () => {
+        const cards: Record<string, number> = { "weapon:scimitar@rare": 2 };
+        // Steel pulled: Iron's new, Bronze (a Rare owned) untouched
+        expect(giveLowerTiers(cards, scimitar(3)).map((c) => c.id)).toEqual([scimitar(2).id]);
+        expect(cards).toEqual({ "weapon:scimitar@rare": 2, "weapon:scimitar.2": 1 });
+        // Steel again: nothing more below
+        expect(giveLowerTiers(cards, scimitar(3))).toEqual([]);
+        expect(cards).toEqual({ "weapon:scimitar@rare": 2, "weapon:scimitar.2": 1 });
+        // A Dragon's missing lower metals come at their own commonest version (Steel's Uncommon)
+        giveLowerTiers(cards, scimitar(8));
+        expect(cards["weapon:scimitar.3"]).toBe(1);
+        expect(scimitar(3).rarity).toBe("uncommon");
+    });
+
+    it("never brings a foil with it: the foil's the card pulled", () => {
+        const save = { ...createSave(), platinum: BASIC_PACK.price };
+        // Every roll lowest: each card a foil
+        buyCardPack(save, BASIC_PACK, () => 0, [scimitar(3)]);
+        expect(getCardFoils(save, scimitar(3))).toBe(PACK_SIZE);
+        expect(getCardFoils(save, scimitar(1))).toBe(0);
+        expect(getCardFoils(save, scimitar(2))).toBe(0);
+    });
+
+    it("gives an older save holding a higher metal the lower ones it's missing, on loading", () => {
+        const loaded = migrateCards({
+            cards: { "weapon:scimitar.4@rare": 1, "weapon:scimitar.2@veryRare": 1 },
+        });
+        expect(loaded.cards).toEqual({
+            "weapon:scimitar.4@rare": 1,
+            "weapon:scimitar.2@veryRare": 1,
+            // Bronze and Steel were missing: their commonest versions; Iron kept as it was
+            "weapon:scimitar": 1,
+            "weapon:scimitar.3": 1,
+        });
     });
 });

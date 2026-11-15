@@ -176,7 +176,7 @@ function previewPack(showScreen: () => void): void {
     // No word of how the figures are got on the screen itself: that's the info's
     expect(within(dialog).queryByText(/simulated/)).toBeNull();
     expect(within(dialog).queryByText("Working out the odds...")).toBeNull();
-    const scimitar = within(dialog).getByText("Scimitar").closest("li")!;
+    const scimitar = within(dialog).getByText("Bronze scimitar").closest("li")!;
     expect(within(scimitar).getByText(/^\d+(\.\d+)?% per pack$/)).toBeInTheDocument();
     expect(within(keris).queryByText(/per pack/)).toBeNull();
     // A tab for each rarity, with its count: only that rarity's cards
@@ -184,7 +184,7 @@ function previewPack(showScreen: () => void): void {
     fireEvent.click(rare);
     expect(rare).toHaveAttribute("aria-pressed", "true");
     expect(within(dialog).getByText("Keris partisan")).toBeInTheDocument();
-    expect(within(dialog).queryByText("Scimitar")).toBeNull();
+    expect(within(dialog).queryByText("Bronze scimitar")).toBeNull();
     // The info icon's popover: each rarity's chance, as the thing on the card and as its
     // version, the packs with a Very rare item, and how the figures are got
     const icon = within(dialog).getByRole("button", { name: "About these odds" });

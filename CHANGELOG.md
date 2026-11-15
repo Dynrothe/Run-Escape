@@ -9,6 +9,7 @@ the version in the corner).
 
 - Runs earn twice as many platinum tokens, and three times that in a Cards only run. The tokens a run has earned show beside its coins, and on the results.
 - Cards show Common in green and Uncommon in yellow, as the rest of the game does.
+- Each of a weapon's metals is a card of its own, rarer up the metals: Bronze to Dragon scimitars, thrownaxes and 2h swords, Bronze to Rune knives, the shortbows' woods, Fire spells' Strike to Wave and the Crystal staff's three. In a Cards only run a weapon now levels up only to the best metal you have a card of, so a Bronze thrownaxe card stays Bronze; weapon cards you already have count as the first metal. A higher metal's card brings the lower ones you haven't got.
 
 ## 0.33.1 - 2026-11-15
 
