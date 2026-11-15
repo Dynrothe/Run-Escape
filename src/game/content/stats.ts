@@ -70,6 +70,10 @@ function shownSteps(key: StatKey, value: number): number {
     return Math.sign(value) * Math.round(Math.abs(value) * statStep(key));
 }
 
+export function compareStatValues(key: StatKey, before: number, after: number): number {
+    return shownSteps(key, after) - shownSteps(key, before);
+}
+
 // A stat's size as a number: whole percent, or flat to a tenth
 function statNumber(key: StatKey, abs: number): string {
     const steps = Math.round(abs * statStep(key));
@@ -79,7 +83,7 @@ function statNumber(key: StatKey, abs: number): string {
 // "+10% damage", "-1 armour"
 export function formatStat(key: StatKey, value: number): string {
     return t(`statline.${STAT_INFO[key].unit}`, {
-        sign: value < 0 ? "-" : "+",
+        sign: shownSteps(key, value) < 0 ? "-" : "+",
         value: statNumber(key, Math.abs(value)),
         label: statLabel(key),
     });
@@ -105,7 +109,7 @@ export function formatStats(stats: Partial<Stats>): StatText[] {
 // A stat's value on its own: "+10%", "-1"
 export function formatStatValue(key: StatKey, value: number): string {
     return t(`statline.value.${STAT_INFO[key].unit}`, {
-        sign: value < 0 ? "-" : "+",
+        sign: shownSteps(key, value) < 0 ? "-" : "+",
         value: statNumber(key, Math.abs(value)),
     });
 }
@@ -124,7 +128,7 @@ export function compareStats(
         if (!was && !now) {
             continue;
         }
-        const change = shownSteps(key, now) - shownSteps(key, was);
+        const change = compareStatValues(key, was, now);
         lines.push({
             key,
             label: statHeading(key),
@@ -158,7 +162,7 @@ export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair
         if (!was && !now) {
             continue;
         }
-        const change = shownSteps(key, now) - shownSteps(key, was);
+        const change = compareStatValues(key, was, now);
         pairs.push({
             key,
             label: statHeading(key),

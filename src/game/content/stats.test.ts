@@ -1,4 +1,4 @@
-import { compareStats, pairStats } from "./stats";
+import { compareStats, formatStat, formatStatValue, pairStats } from "./stats";
 
 describe("stats", () => {
     it("compares a piece's stats before and after an upgrade", () => {
@@ -36,6 +36,15 @@ describe("stats", () => {
                 better: true,
             },
         ]);
+    });
+
+    it("shows a rounded-zero penalty as neutral, without a minus sign", () => {
+        expect(formatStat("might", -0.0002)).toBe("+0% damage");
+        expect(formatStatValue("might", -0.0002)).toBe("+0%");
+        expect(pairStats({}, { might: -0.0002 })).toEqual([
+            { key: "might", label: "Damage", found: "+0%", better: true },
+        ]);
+        expect(formatStatValue("might", -0.005)).toBe("-1%");
     });
 
     it("pairs a worn piece's stats with a found one's, each that either has", () => {
