@@ -56,3 +56,15 @@ export class Rng {
         return weights.length - 1;
     }
 }
+
+// [0, 1) from a few whole numbers, the same every time for the same ones, without drawing on an
+// Rng: for choices that mustn't move a run's rolls (a floor's tiles, a polymorphed sheep's way).
+// salt tells apart choices made from the same numbers.
+export function hashChance(a: number, b: number, c: number, salt: number): number {
+    let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b);
+    h = Math.imul(h ^ (b + 1) ^ (h >>> 13), 0xc2b2ae35);
+    h = Math.imul(h ^ (c + 1) ^ (h >>> 16), 0x27d4eb2f);
+    h = Math.imul(h ^ (salt + 7) ^ (h >>> 15), 0x165667b1);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+}

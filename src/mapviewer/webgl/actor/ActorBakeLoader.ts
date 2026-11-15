@@ -3,6 +3,7 @@ import { LocModelType } from "../../../rs/config/loctype/LocModelType";
 import { NpcModelLoader } from "../../../rs/config/npctype/NpcModelLoader";
 import { NpcType } from "../../../rs/config/npctype/NpcType";
 import { SpotAnimModelLoader } from "../../../rs/config/spotanimtype/SpotAnimModelLoader";
+import { SpotAnimType } from "../../../rs/config/spotanimtype/SpotAnimType";
 import {
     SpotAnimTypeLoader,
     createSpotAnimTypeLoader,
@@ -14,12 +15,14 @@ import { RenderDataLoader, RenderDataResult } from "../../worker/RenderDataLoade
 import { WorkerState } from "../../worker/RenderDataWorker";
 import { SceneBuffer } from "../buffer/SceneBuffer";
 import { createTextureIdIndexMap, getSdTextureIds } from "../loader/TextureIndex";
+import { FrameAdder, Frames } from "./ActorBakeFrames";
 import { Segments } from "./ActorBakeSegments";
 import {
     ActorBakeInput,
     ActorBakeResult,
     BakedAnim,
     BakedSet,
+    ModelBakeRequest,
     NPC_IDLE_SEQ,
     NPC_WALK_SEQ,
 } from "./ActorBakeTypes";
@@ -60,6 +63,47 @@ function getModelBounds(model: Model): { height: number; radius: number } {
     return { height, radius };
 }
 
+// A model's top alone (ModelBakeRequest.topOnly): every face but those looking up hidden, as the
+// cache hides one (a third colour of -2), on a copy. Which way is up for its faces' winding is
+// the way the face highest in it looks.
+function topOnly(model: Model): Model {
+    const { verticesX: vx, verticesY: vy, verticesZ: vz } = model;
+    const normals = new Float32Array(model.faceCount);
+    let highest = Infinity;
+    let up = -1;
+    for (let f = 0; f < model.faceCount; f++) {
+        const a = model.indices1[f];
+        const b = model.indices2[f];
+        const c = model.indices3[f];
+        const ux = vx[b] - vx[a];
+        const uy = vy[b] - vy[a];
+        const uz = vz[b] - vz[a];
+        const wx = vx[c] - vx[a];
+        const wy = vy[c] - vy[a];
+        const wz = vz[c] - vz[a];
+        const nx = uy * wz - uz * wy;
+        const ny = uz * wx - ux * wz;
+        const nz = ux * wy - uy * wx;
+        const length = Math.hypot(nx, ny, nz);
+        normals[f] = length > 0 ? ny / length : 0;
+        // Up is negative: the highest flat face looks up
+        const middle = (vy[a] + vy[b] + vy[c]) / 3;
+        if (Math.abs(normals[f]) > 0.9 && middle < highest) {
+            highest = middle;
+            up = Math.sign(normals[f]);
+        }
+    }
+    const colors = model.faceColors3.slice();
+    for (let f = 0; f < model.faceCount; f++) {
+        if (normals[f] * up < 0.5) {
+            colors[f] = -2;
+        }
+    }
+    const copy: Model = Object.assign(Object.create(Object.getPrototypeOf(model)), model);
+    copy.faceColors3 = colors;
+    return copy;
+}
+
 function getModelReach(model: Model): number {
     let reach = 0;
     for (let i = 0; i < model.verticesCount; i++) {
@@ -76,7 +120,7 @@ function getModelReach(model: Model): number {
 
 function bakeAnim(
     state: WorkerState,
-    segments: Segments,
+    frames: FrameAdder,
     getModel: ModelSource,
     seqId: number,
 ): { anim: BakedAnim; firstFrame: Model | undefined; reach: number } {
@@ -98,6 +142,7 @@ function bakeAnim(
     const ranges = new Int32Array(frameCount * 4);
     const frameSegments = new Uint16Array(frameCount);
     const frameLengths = new Uint16Array(frameCount);
+    const positionStarts = new Int32Array(frameCount).fill(-1);
     let firstFrame: Model | undefined;
     let reach = 0;
 
@@ -109,8 +154,10 @@ function bakeAnim(
                 firstFrame = model;
             }
             reach = Math.max(reach, getModelReach(model));
-            ranges.set(segments.addFrame(model, frameCount - i), i * 4);
-            frameSegments[i] = segments.current;
+            const added = frames.add(model, frameCount - i);
+            ranges.set(added.ranges, i * 4);
+            frameSegments[i] = added.segment;
+            positionStarts[i] = added.positionStart;
         }
         let length = 1;
         if (skeletalTicks > 0) {
@@ -127,6 +174,7 @@ function bakeAnim(
             ranges,
             segments: frameSegments,
             frameLengths,
+            positionStarts,
             looping: seqType ? seqType.looping || seqType.frameStep !== -1 : true,
         },
         firstFrame,
@@ -134,18 +182,77 @@ function bakeAnim(
     };
 }
 
+// A seq's interleave order as groups, without the end marker it's decoded
+// with (SeqType.masks)
+export function getMovementGroups(masks: number[] | undefined): number[] {
+    return masks?.filter((group) => group < 0x100) ?? [];
+}
+
+// One frame of an attack over the run: a frame for each of the run's, timed
+// as the run, so the legs go on as they were while the upper body holds the
+// pose. getModel poses run frame r. Undefined if any of them can't be put
+// together (a skeletal one, or another skeleton): a frame missing would draw
+// nothing, so the run shows instead.
+export function bakeRunPose(
+    state: Pick<WorkerState, "seqTypeLoader">,
+    frames: FrameAdder,
+    getModel: (runFrame: number) => Model | undefined,
+    seqId: number,
+    runSeqId: number,
+): { anim: BakedAnim; reach: number } | undefined {
+    const runType = state.seqTypeLoader.load(runSeqId);
+    const count = runType.frameIds?.length ?? 0;
+    if (count === 0) {
+        return undefined;
+    }
+    const models: Model[] = [];
+    for (let i = 0; i < count; i++) {
+        const model = getModel(i);
+        if (!model) {
+            return undefined;
+        }
+        models.push(model);
+    }
+    const ranges = new Int32Array(count * 4);
+    const frameSegments = new Uint16Array(count);
+    const frameLengths = new Uint16Array(count);
+    const positionStarts = new Int32Array(count);
+    let reach = 0;
+    models.forEach((model, i) => {
+        reach = Math.max(reach, getModelReach(model));
+        const added = frames.add(model, count - i);
+        ranges.set(added.ranges, i * 4);
+        frameSegments[i] = added.segment;
+        positionStarts[i] = added.positionStart;
+        frameLengths[i] = runType.frameLengths?.[i] || 1;
+    });
+    return {
+        anim: {
+            seqId,
+            ranges,
+            segments: frameSegments,
+            frameLengths,
+            positionStarts,
+            looping: true,
+            runPose: true,
+        },
+        reach,
+    };
+}
+
 function bakeSet(
     state: WorkerState,
-    segments: Segments,
+    frames: Frames,
     key: string,
     getModel: ModelSource,
     seqIds: number[],
 ): BakedSet {
+    frames.beginSet();
     const anims: BakedAnim[] = [];
     let bounds = { height: 0, radius: 0 };
     let setReach = 0;
     for (const seqId of seqIds.length > 0 ? seqIds : [-1]) {
-        const { anim, firstFrame, reach } = bakeAnim(state, segments, getModel, seqId);
+        const { anim, firstFrame, reach } = bakeAnim(state, frames, getModel, seqId);
         if (anims.length === 0 && firstFrame) {
             bounds = getModelBounds(firstFrame);
         }
@@ -199,6 +306,74 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
         return this.extra;
     }
 
+    // A floor tile's model (ModelBakeRequest) as a spot animation of its own, under an id no
+    // real one has (its loader keeps models by id), so the spot animation path recolours, lights
+    // and scales it
+    private floorSpotAnim(
+        state: WorkerState,
+        spotAnims: { load(id: number): SpotAnimType },
+        request: ModelBakeRequest,
+    ): SpotAnimType | undefined {
+        const id = -1 - this.floorModels++;
+        let spotAnim: SpotAnimType;
+        let recolorFrom: number[] = [];
+        let recolorTo: number[] = [];
+        let retextureFrom: number[] = [];
+        let retextureTo: number[] = [];
+        if (request.spotAnimId !== undefined) {
+            const base = spotAnims.load(request.spotAnimId);
+            spotAnim = Object.assign(Object.create(SpotAnimType.prototype), base);
+            recolorFrom = base.recolorFrom ?? [];
+            recolorTo = base.recolorTo ?? [];
+            retextureFrom = base.retextureFrom ?? [];
+            retextureTo = base.retextureTo ?? [];
+        } else {
+            spotAnim = Object.assign(Object.create(SpotAnimType.prototype), {
+                sequenceId: -1,
+                widthScale: 128,
+                heightScale: 128,
+                orientation: 0,
+                ambient: 0,
+                contrast: 0,
+            });
+            if (request.locId !== undefined) {
+                const loc = state.locTypeLoader.load(request.locId);
+                const modelId = loc.models?.[0]?.[0];
+                if (modelId === undefined) {
+                    return undefined;
+                }
+                spotAnim.modelId = modelId;
+                spotAnim.ambient = loc.ambient;
+                spotAnim.contrast = loc.contrast;
+                recolorFrom = loc.recolorFrom ?? [];
+                recolorTo = loc.recolorTo ?? [];
+                retextureFrom = loc.retextureFrom ?? [];
+                retextureTo = loc.retextureTo ?? [];
+            } else if (request.modelId !== undefined) {
+                spotAnim.modelId = request.modelId;
+            } else {
+                return undefined;
+            }
+        }
+        const scale = request.scale ?? 1;
+        (spotAnim as { id: number }).id = id;
+        spotAnim.recolorFrom = [...recolorFrom, ...(request.recolor ?? []).map(([from]) => from)];
+        spotAnim.recolorTo = [...recolorTo, ...(request.recolor ?? []).map(([, to]) => to)];
+        spotAnim.retextureFrom = [
+            ...retextureFrom,
+            ...(request.retexture ?? []).map(([from]) => from),
+        ];
+        spotAnim.retextureTo = [...retextureTo, ...(request.retexture ?? []).map(([, to]) => to)];
+        spotAnim.widthScale = Math.round(spotAnim.widthScale * scale);
+        spotAnim.heightScale = Math.round(spotAnim.heightScale * scale);
+        if (request.still) {
+            spotAnim.sequenceId = -1;
+        }
+        return spotAnim;
+    }
+
+    private floorModels = 0;
+
     init(): void {}
 
     async load(
@@ -210,6 +385,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
 
         const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 50000);
         const segments = new Segments(sceneBuf);
+        const frames = new Frames(segments, input.wholeFrames ? 0 : undefined);
 
         const extra = this.getExtraLoaders(state);
 
@@ -226,7 +402,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                               ? npcType.walkSeqId
                               : id,
                     );
-                    const set = bakeSet(state, segments, request.key, getModel, seqIds);
+                    const set = bakeSet(state, frames, request.key, getModel, seqIds);
                     // Found under the ids they were asked for
                     set.anims.forEach((anim, i) => (anim.seqId = request.seqIds[i] ?? anim.seqId));
                     sets.push(set);
@@ -236,22 +412,69 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const appearance = request.appearance;
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
-                    sets.push(bakeSet(state, segments, request.key, getModel, request.seqIds));
+                    const set = bakeSet(state, frames, request.key, getModel, request.seqIds);
+                    set.layered = true;
+                    const runPoses = request.runPoses;
+                    // The groups the run keeps, without the order's end
+                    // marker. With none, the swing would take the legs too,
+                    // so no pose is baked and the run shows.
+                    const movementGroups = runPoses
+                        ? getMovementGroups(state.seqTypeLoader.load(runPoses.maskSeqId).masks)
+                        : [];
+                    if (runPoses && movementGroups.length > 0) {
+                        for (const { seqId, frame } of runPoses.poses) {
+                            const baked = bakeRunPose(
+                                state,
+                                frames,
+                                (runFrame) =>
+                                    extra.playerModelLoader.getInterleavedModel(
+                                        appearance,
+                                        seqId,
+                                        frame,
+                                        runPoses.runSeqId,
+                                        runFrame,
+                                        movementGroups,
+                                    ),
+                                seqId,
+                                runPoses.runSeqId,
+                            );
+                            if (baked) {
+                                set.anims.push(baked.anim);
+                                set.reach = Math.max(set.reach, baked.reach);
+                            }
+                        }
+                    }
+                    sets.push(set);
                     break;
                 }
                 case "spotanim": {
                     const spotAnim = extra.spotAnimTypeLoader.load(request.spotAnimId);
                     const getModel: ModelSource = (_seqId, frame) =>
                         extra.spotAnimModelLoader.getModel(spotAnim, frame);
-                    sets.push(
-                        bakeSet(state, segments, request.key, getModel, [spotAnim.sequenceId]),
-                    );
+                    sets.push(bakeSet(state, frames, request.key, getModel, [spotAnim.sequenceId]));
+                    break;
+                }
+                case "model": {
+                    const spotAnim = this.floorSpotAnim(state, extra.spotAnimTypeLoader, request);
+                    if (!spotAnim) {
+                        break;
+                    }
+                    const getFull: ModelSource = (_seqId, frame) =>
+                        extra.spotAnimModelLoader.getModel(spotAnim, frame);
+                    const getModel: ModelSource = request.topOnly
+                        ? (seqId, frame) => {
+                              const model = getFull(seqId, frame);
+                              return model && topOnly(model);
+                          }
+                        : getFull;
+                    const seqIds = spotAnim.sequenceId !== -1 ? [spotAnim.sequenceId] : [];
+                    sets.push(bakeSet(state, frames, request.key, getModel, seqIds));
                     break;
                 }
                 case "obj": {
                     const { objId, count } = request;
                     const getModel: ModelSource = () => state.objModelLoader.getModel(objId, count);
-                    sets.push(bakeSet(state, segments, request.key, getModel, []));
+                    sets.push(bakeSet(state, frames, request.key, getModel, []));
                     break;
                 }
                 case "loc": {
@@ -286,7 +509,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         return model;
                     };
                     const seqIds = request.seqs ?? (request.animated ? [locType.seqId] : []);
-                    sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
+                    sets.push(bakeSet(state, frames, request.key, getModel, seqIds));
                     break;
                 }
             }
@@ -297,6 +520,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
         const vertexBuf = sceneBuf.vertexBuf;
         const vertices = exactBytes(vertexBuf.bytes, vertexBuf.byteOffset());
         const { indices, segmentStarts } = segments.finish(sets);
+        const positions = frames.finish();
 
         const loadedTextures = new Map<number, Int32Array>();
         for (const textureId of sceneBuf.usedTextureIds) {
@@ -314,6 +538,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
             vertices.buffer,
             indices.buffer,
             segmentStarts.buffer,
+            positions.buffer,
             ...Array.from(loadedTextures.values()).map((pixels) => pixels.buffer),
         ];
         for (const set of sets) {
@@ -322,12 +547,13 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     anim.ranges.buffer,
                     anim.segments.buffer,
                     anim.frameLengths.buffer,
+                    anim.positionStarts.buffer,
                 );
             }
         }
 
         return {
-            data: { vertices, indices, segmentStarts, sets, loadedTextures },
+            data: { vertices, indices, segmentStarts, positions, sets, loadedTextures },
             transferables,
         };
     }

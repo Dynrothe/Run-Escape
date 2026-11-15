@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { CASKET_GEAR, getGear } from "./items";
 import { GearDef, GearSlot, ItemDef, SetDef } from "./types";
 
@@ -92,10 +93,33 @@ export function getActiveSets(worn: Partial<Record<GearSlot, string>>): SetDef[]
 export function describeSetProgress(set: SetDef, worn?: number): string {
     const total = getSetPieces(set.id).length;
     if (worn === undefined) {
-        return `Part of the ${set.name} set: ${set.needed} of its ${total} pieces worn give ${set.bonus}.`;
+        return tr(
+            "set.progress.requirement",
+            "Part of the {name} set: {needed} of its {total} pieces worn give {bonus}.",
+            { name: setName(set), needed: set.needed, total, bonus: setBonus(set) },
+        );
     }
     if (worn >= set.needed) {
-        return `${set.name} ${worn}/${total}: set bonus on, ${set.bonus}.`;
+        return tr("set.progress.active", "{name} {worn}/{total}: set bonus on, {bonus}.", {
+            name: setName(set),
+            worn,
+            total,
+            bonus: setBonus(set),
+        });
     }
-    return `${set.name} ${worn}/${total}: ${set.needed} worn give ${set.bonus}.`;
+    return tr("set.progress.inactive", "{name} {worn}/{total}: {needed} worn give {bonus}.", {
+        name: setName(set),
+        worn,
+        total,
+        needed: set.needed,
+        bonus: setBonus(set),
+    });
+}
+
+export function setName(set: SetDef): string {
+    return tr(`set.${set.id}.name`, set.name);
+}
+
+export function setBonus(set: SetDef): string {
+    return tr(`set.${set.id}.bonus`, set.bonus);
 }

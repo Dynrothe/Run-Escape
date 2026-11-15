@@ -7,6 +7,7 @@ import { Model } from "../Model";
 import { ModelData } from "../ModelData";
 import { ModelLoader } from "../ModelLoader";
 import { SeqModelAnimator } from "../seq/SeqModelAnimator";
+import { liftDecals } from "./liftDecals";
 
 // Equipment slots, as the client numbers them
 export enum EquipSlot {
@@ -40,6 +41,9 @@ const BODY_PART_SLOTS = [
 
 // The default male look from character creation
 export const DEFAULT_MALE_KITS = [0, 10, 18, 26, 33, 36, 42];
+// and the female one (body type B), clean-shaven. A jaw is the chin and mouth (the hair kits have
+// none), so without one the face has a hole.
+export const DEFAULT_FEMALE_KITS = [45, 296, 56, 61, 67, 70, 79];
 
 // Body colours: hair, torso, legs, feet, skin. Each player colour index picks a
 // replacement for the first colour in its row (index 0 keeps the original).
@@ -48,7 +52,8 @@ const BODY_COLOR_SOURCE = [6798, 8741, 25238, 4626, 4550];
 const BODY_COLORS: number[][] = [
     [
         6798, 107, 10283, 16, 4797, 7744, 5799, 4634, -31839, 22433, 2983, -11343, 8, 5281, 10438,
-        3650, -27322, -21845, 200, 571, 908, 21830, 28946, -15701, -14010,
+        3650, -27322, -21845, 200, 571, 908, 21830, 28946, -15701, -14010, -22122, 937, 8130,
+        -13422, 30385,
     ],
     [
         8741, 12, -1506, -22374, 7735, 8404, 1701, -27106, 24094, 10153, -8915, 4783, 1341, 16578,
@@ -64,6 +69,50 @@ const BODY_COLORS: number[][] = [
     [4550, 4537, 5681, 5673, 5790, 6806, 8076, 4574, 17050, 0, 127, -31821, -17991],
 ];
 
+// Hair and tops have a second colour (a newer hairstyle's or beard's streaks, a shirt's trim),
+// made in a pink or a brown and painted with the first by the same choice: index 0 too, as no
+// choice keeps it. Without it they're left that colour. From the same tables.
+const BODY_COLOR_SOURCE_2 = [-10304, 9104, -1, -1, -1];
+const BODY_COLORS_2: number[][] = [
+    [
+        6554, 115, 10304, 28, 5702, 7756, 5681, 4510, -31835, 22437, 2859, -11339, 16, 5157, 10446,
+        3658, -27314, -21965, 472, 580, 784, 21966, 28950, -15697, -14002, -22116, 945, 8144,
+        -13414, 30389,
+    ],
+    [
+        9104, 10275, 7595, 3610, 7975, 8526, 918, -26734, 24466, 10145, -6882, 5027, 1457, 16565,
+        -30545, 25486, 24, 5392, 10429, 3673, -27335, -21957, 192, 687, 412, 21821, 28835, -15460,
+        -14019,
+    ],
+    [],
+    [],
+    [],
+];
+
+// How many choices each body colour has
+export const BODY_COLOR_COUNTS: readonly number[] = BODY_COLORS.map((row) => row.length);
+
+// Skin as models paint it, for the skin choice to recolour (the last of BODY_COLOR_SOURCE)
+const SKIN = 4550;
+// Worn models that paint some skin a shade off 4550 by mistake (mostly where the item's other
+// body has 4550), so it stayed the default whatever skin was picked: model id -> that shade. It
+// goes by model, as a shade can be something else's own colour (4544 is the Camel mask's fur).
+const STRAY_SKIN = new Map<number, number>([
+    [47964, 4548], // Dragon plateskirt (cr)'s legs, body type A
+    [50061, 4548], // the Icy jumper's midriff, body type A
+    [46846, 4678], // the Christmas jumper's midriff, body type A
+    [42949, 4678], // the Group ironman bracers' hands, body type B
+    [44533, 4678], // the Mask of Rebirth's neck, body type A
+    [46504, 4678], // and body type B
+    [55498, 4544], // the Zombie helmet's face, body type B
+]);
+
+// The colour a body colour's choice paints (HSL, as the cache packs it), for a swatch
+export function getBodyColorHsl(part: number, choice: number): number {
+    const choices = BODY_COLORS[part] ?? [];
+    return (choices[choice] ?? choices[0] ?? 0) & 0xffff;
+}
+
 export type PlayerAppearance = {
     female: boolean;
     // Kit per body part (7), -1 for none
@@ -72,15 +121,47 @@ export type PlayerAppearance = {
     colors: number[];
     // Worn item per equipment slot (12), -1 for none
     equipment: number[];
+    // Colours repainted on the item worn in a slot, as pairs of from and to (HSL, as the cache
+    // packs it), all at once: the Wardrobe's customisable max cape
+    recolors?: Partial<Record<number, readonly number[]>>;
 };
 
 export function getAppearanceKey(appearance: PlayerAppearance): string {
-    return [
+    const key = [
         appearance.female ? 1 : 0,
         appearance.kits.join(","),
         appearance.colors.join(","),
         appearance.equipment.join(","),
-    ].join("|");
+    ];
+    for (const [slot, pairs] of Object.entries(appearance.recolors ?? {})) {
+        if (pairs && pairs.length > 0) {
+            key.push(`${slot}:${pairs.join(",")}`);
+        }
+    }
+    return key.join("|");
+}
+
+// The colours the body colours repaint once the model's merged (BODY_COLOR_SOURCE and its second)
+const BODY_SOURCES = new Set<number>(
+    [...BODY_COLOR_SOURCE, ...BODY_COLOR_SOURCE_2].filter((c) => c !== -1).map((c) => c & 0xffff),
+);
+
+// Repaints a worn item's colours, every pair at once, so one pair's new colour isn't another's
+// old one. A colour the body colours would repaint after (the hair's, the skin's) goes a shade
+// lighter or darker instead, or the cape would come out in the player's hair colour.
+export function recolorAtOnce(model: ModelData, pairs: readonly number[]): void {
+    const to = new Map<number, number>();
+    for (let i = 0; i + 1 < pairs.length; i += 2) {
+        const color = pairs[i + 1] & 0xffff;
+        to.set(pairs[i] & 0xffff, BODY_SOURCES.has(color) ? color ^ 1 : color);
+    }
+    const colors = model.faceColors;
+    for (let i = 0; i < model.faceCount; i++) {
+        const color = to.get(colors[i]);
+        if (color !== undefined) {
+            colors[i] = color;
+        }
+    }
 }
 
 export function createAppearance(
@@ -128,6 +209,10 @@ export class PlayerModelLoader {
             }
             const part = this.modelLoader.getModel(id);
             if (part) {
+                const straySkin = STRAY_SKIN.get(id);
+                if (straySkin !== undefined) {
+                    part.recolor(straySkin, SKIN);
+                }
                 parts.push(part);
             }
         }
@@ -135,6 +220,8 @@ export class PlayerModelLoader {
             return undefined;
         }
         const model = parts.length === 1 ? parts[0] : ModelData.merge(parts, parts.length);
+        // An emblem drawn over its cloth by priority, as the client paints it
+        liftDecals(model);
         const offset = female ? objType.femaleOffset : objType.maleOffset;
         if (offset !== 0) {
             model.translate(0, offset, 0);
@@ -222,6 +309,10 @@ export class PlayerModelLoader {
             let part: ModelData | undefined;
             if (objType) {
                 part = this.getWornModel(objType, appearance.female);
+                const pairs = appearance.recolors?.[slot];
+                if (part && pairs) {
+                    recolorAtOnce(part, pairs);
+                }
             } else if (!hidden.has(slot)) {
                 const kitId = kitBySlot.get(slot);
                 if (kitId !== undefined) {
@@ -243,6 +334,10 @@ export class PlayerModelLoader {
             if (color > 0 && color < choices.length) {
                 merged.recolor(BODY_COLOR_SOURCE[i], choices[color] & 0xffff);
             }
+            const second = BODY_COLORS_2[i];
+            if (color < second.length) {
+                merged.recolor(BODY_COLOR_SOURCE_2[i] & 0xffff, second[color] & 0xffff);
+            }
         }
 
         const model = merged.light(this.textureLoader, 64, 850, -30, -50, -30);
@@ -260,6 +355,30 @@ export class PlayerModelLoader {
         }
         const seqType = this.seqTypeLoader.load(seqId);
         return this.animator.animate(model, seqType, frame);
+    }
+
+    // An action's frame on the upper body over a movement's on the legs (see
+    // SeqModelAnimator.animateInterleaved)
+    getInterleavedModel(
+        appearance: PlayerAppearance,
+        seqId: number,
+        frame: number,
+        movementSeqId: number,
+        movementFrame: number,
+        movementGroups: number[],
+    ): Model | undefined {
+        const model = this.getBaseModel(appearance);
+        if (!model) {
+            return undefined;
+        }
+        return this.animator.animateInterleaved(
+            model,
+            this.seqTypeLoader.load(seqId),
+            frame,
+            this.seqTypeLoader.load(movementSeqId),
+            movementFrame,
+            movementGroups,
+        );
     }
 
     clearCache(): void {

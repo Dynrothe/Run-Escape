@@ -1,7 +1,7 @@
 // What a real place's outer wall is made of: the wall and big scenery locs in a rectangle by
 // level, ranked, and a compact map of one level. A city wall shows as a few ids with long runs.
 //
-//   npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY [level] [map]
+//   bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY [level] [map]
 import { openWorld } from "./lib";
 
 const [x0, y0, sizeX, sizeY, mapLevel] = process.argv.slice(2).map(Number);

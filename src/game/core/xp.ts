@@ -1,3 +1,4 @@
+import { LevelXpDef } from "../content/types";
 import { fm } from "./fmath";
 
 // The OSRS experience table: the XP needed for each level, from level 1.
@@ -99,4 +100,14 @@ export function endlessLevelForXp(xp: number, from = 1): number {
         level++;
     }
     return level;
+}
+
+// A level's experience on a map whose levels need more (MapDef.levelXp): none more up to from,
+// then more for each level, up to times as much from to on
+export function stretchedXp(xp: number, level: number, stretch: LevelXpDef | undefined): number {
+    if (stretch === undefined || level <= stretch.from) {
+        return xp;
+    }
+    const share = Math.min(1, (level - stretch.from) / (stretch.to - stretch.from));
+    return Math.ceil(xp * (1 + (stretch.times - 1) * share));
 }

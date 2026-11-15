@@ -17,8 +17,8 @@
 // KIT_PIECES (catalogue.ts); the listed ones are marked *, and the summary says which signal
 // found each. Reads every map square in the cache, all levels, so it takes a minute or two.
 //
-//   npx tsx scripts/scaperune/research/kit-scan.ts [out.json]
-//   TOP=200 FROM=32000 TO=33200 npx tsx scripts/scaperune/research/kit-scan.ts    # some ids only
+//   bun run tsx scripts/scaperune/research/kit-scan.ts [out.json]
+//   TOP=200 FROM=32000 TO=33200 bun run tsx scripts/scaperune/research/kit-scan.ts    # some ids only
 import fs from "node:fs";
 
 import { KIT_PIECES, findRule } from "../../../src/game/scaperune/catalogue";

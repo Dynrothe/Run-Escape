@@ -4,7 +4,9 @@ import { PLAYER_SPEED, Sim } from "../core/Sim";
 import { moveCircle } from "../core/world/Collision";
 
 // Pets follow their players about, a tick at a time on the sim's ticks, but only on screen: the
-// sim knows nothing of them, so they can't change a run or a co-op party's agreement on it.
+// sim knows nothing of where they are, so they can't change a run or a co-op party's agreement on
+// it. A fighting pet's leap (PetDef.power) is the sim's; here it's only shown, the pet flying to
+// where it landed (leap) and walking back after.
 // Each walks to just behind its player as they're drawn (a co-op guest's own hero is drawn ahead
 // of the sim, where prediction has them), inside the thralls (which stand fanned out to either
 // side further back), and keeps clear of them.
@@ -25,6 +27,9 @@ const PET_STOP = 0.25;
 const PET_STILL = 0.01;
 // Ticks caught up at once: past this (the tab was away), they're put back beside their players
 const MAX_CATCH_UP = 20;
+// A leap's ticks in the air, and then stood where it landed before walking back
+const LEAP_TICKS = 4;
+const LEAP_STAND = 6;
 
 // Where a player is drawn, and the way they face (RS yaw)
 export type PetLeader = { x: number; y: number; yaw: number };
@@ -38,6 +43,8 @@ export type PetFollower = {
     prevY: number;
     yaw: number;
     moving: boolean;
+    // A fighting pet's leap (PetDef.power): from where, to where, and the tick it began
+    leap?: { fromX: number; fromY: number; toX: number; toY: number; start: number };
 };
 
 export class PetFollowers {
@@ -86,6 +93,15 @@ export class PetFollowers {
         }
     }
 
+    // A hero's fighting pet leaps onto x, y (the sim's petLeap)
+    leap(hero: number, x: number, y: number, tick: number): void {
+        const pet = this.pets.find((p) => p.hero === hero);
+        if (pet) {
+            pet.leap = { fromX: pet.x, fromY: pet.y, toX: x, toY: y, start: tick };
+            pet.yaw = yawToward(x - pet.x, y - pet.y, pet.yaw);
+        }
+    }
+
     // Whether it's drawn: not once its player's left the party
     shown(sim: Sim, pet: PetFollower): boolean {
         const hero = sim.heroes[pet.hero];
@@ -113,6 +129,18 @@ export class PetFollowers {
         const hero = sim.heroes[pet.hero];
         if (!leader || !hero) {
             return;
+        }
+        const leap = pet.leap;
+        if (leap) {
+            // Through the air, straight there (it's only drawn), then a moment where it landed
+            const t = Math.min(1, (tick + 1 - leap.start) / LEAP_TICKS);
+            pet.x = leap.fromX + (leap.toX - leap.fromX) * t;
+            pet.y = leap.fromY + (leap.toY - leap.fromY) * t;
+            pet.moving = t < 1;
+            if (tick + 1 - leap.start < LEAP_TICKS + LEAP_STAND) {
+                return;
+            }
+            pet.leap = undefined;
         }
         let [goalX, goalY] = goal(leader);
         // Out of a thrall's way
@@ -144,6 +172,14 @@ export class PetFollowers {
             this.place(sim, pet, leader);
         }
     }
+}
+
+// RS yaw facing along dx, dy (0 south, 512 west), or the same as before for no way at all
+function yawToward(dx: number, dy: number, yaw: number): number {
+    if (Math.hypot(dx, dy) < 0.01) {
+        return yaw;
+    }
+    return Math.round((Math.atan2(-dx, -dy) / (2 * Math.PI)) * 2048 + 2048) % 2048;
 }
 
 // Just behind the player, from the way they're facing: yaw 0 faces south (0, -1), 512 west

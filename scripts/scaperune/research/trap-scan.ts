@@ -1,7 +1,7 @@
 // Goes through what a map is made of and flags locs that read wrong anywhere but where they
 // were built for. The classes are the draft of a catalogue check: see the research doc.
 //
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/trap-scan.ts world.json out.json map map ...
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/trap-scan.ts world.json out.json map map ...
 import fs from "node:fs";
 
 import { SCAPERUNE_DEV_MAPS } from "../../../src/game/scaperune/maps/devMaps";

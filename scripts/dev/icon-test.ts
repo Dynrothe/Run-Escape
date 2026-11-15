@@ -1,7 +1,7 @@
 // Draws a few inventory icons in Node and prints them as ASCII, to check the
 // icon renderer without a browser.
 //
-//   npx tsx scripts/dev/icon-test.ts 1321 995
+//   bun run tsx scripts/dev/icon-test.ts 1321 995
 import { ICON_HEIGHT, ICON_WIDTH, renderItemIcon } from "../../src/mapviewer/worker/ItemIconLoader";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

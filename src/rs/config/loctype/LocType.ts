@@ -4,7 +4,7 @@ import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
 import { VarManager } from "../vartype/VarManager";
 import { LocModelType } from "./LocModelType";
-import { LOC_OVERRIDES } from "./LocOverrides";
+import { CHARRED_LOCS, getLocOverride } from "./LocOverrides";
 import { LocTypeLoader } from "./LocTypeLoader";
 
 export class LocType extends Type {
@@ -93,6 +93,11 @@ export class LocType extends Type {
 
     params!: ParamsMap;
 
+    // A loc of our own burnt black (LocOverrides.ts CHARRED_LOCS): LocModelLoader darkens its colours
+    charred = false;
+    // A burnt loc's lightness, of what it was (LocOverride.charLight; LocModelLoader's own if unset)
+    charLight?: number;
+
     constructor(id: number, cacheInfo: CacheInfo) {
         super(id, cacheInfo);
         this.lowDetail = false;
@@ -160,6 +165,25 @@ export class LocType extends Type {
 
     isLargeModelId(): boolean {
         return this.cacheInfo.game === "runescape" && this.cacheInfo.revision >= 670;
+    }
+
+    // OSRS 242 ran out of 16 bit loc ids: transforms moved from 77 and 92 to 97 and 98, which
+    // write each id in 3 bytes
+    isMediumTransformOpcode(opcode: number): boolean {
+        return (
+            (opcode === 97 || opcode === 98) &&
+            this.cacheInfo.game === "oldschool" &&
+            this.cacheInfo.revision >= 242
+        );
+    }
+
+    readTransformId(buffer: ByteBuffer, medium: boolean): number {
+        if (medium) {
+            const id = buffer.readUnsignedMedium();
+            return id === 0xffffff ? -1 : id;
+        }
+        const id = this.isLargeModelId() ? buffer.readBigSmart() : buffer.readUnsignedShort();
+        return id === 65535 ? -1 : id;
     }
 
     override decodeOpcode(opcode: number, buffer: ByteBuffer): void {
@@ -341,7 +365,8 @@ export class LocType extends Type {
             this.isHollow = true;
         } else if (opcode === 75) {
             this.supportItems = buffer.readUnsignedByte();
-        } else if (opcode === 77 || opcode === 92) {
+        } else if (opcode === 77 || opcode === 92 || this.isMediumTransformOpcode(opcode)) {
+            const medium = opcode === 97 || opcode === 98;
             this.transformVarbit = buffer.readUnsignedShort();
             if (this.transformVarbit === 65535) {
                 this.transformVarbit = -1;
@@ -353,23 +378,15 @@ export class LocType extends Type {
             }
 
             let var3 = -1;
-            if (opcode === 92) {
-                var3 = this.isLargeModelId() ? buffer.readBigSmart() : buffer.readUnsignedShort();
-                if (var3 === 65535) {
-                    var3 = -1;
-                }
+            if (opcode === 92 || opcode === 98) {
+                var3 = this.readTransformId(buffer, medium);
             }
 
             const count = buffer.readUnsignedByte();
             this.transforms = new Array(count + 2);
 
             for (let i = 0; i <= count; i++) {
-                this.transforms[i] = this.isLargeModelId()
-                    ? buffer.readBigSmart()
-                    : buffer.readUnsignedShort();
-                if (this.transforms[i] === 65535) {
-                    this.transforms[i] = -1;
-                }
+                this.transforms[i] = this.readTransformId(buffer, medium);
             }
 
             this.transforms[count + 1] = var3;
@@ -557,12 +574,51 @@ export class LocType extends Type {
     }
 
     override post(): void {
-        const override = LOC_OVERRIDES.get(this.id);
-        if (override) {
-            this.models = override.models ? [override.models] : this.models;
-            this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+        const override = getLocOverride(this.id);
+        if (override?.base !== undefined) {
+            // A loc of our own: only what's set changes
+            if (override.models) {
+                this.models = [override.models];
+                this.types = undefined;
+            }
+            if (override.size !== undefined) {
+                this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size;
+            }
             if (override.solid) {
                 this.clipType = 2;
+                this.blocksProjectile = false;
+            }
+            if (override.walkable) {
+                this.clipType = 0;
+                this.blocksProjectile = false;
+            }
+            if (override.height !== undefined) {
+                this.offsetHeight = -override.height;
+            }
+            this.sizeX = override.sizeX ?? this.sizeX;
+            this.sizeY = override.sizeY ?? this.sizeY;
+            if (override.seq !== undefined) {
+                this.seqId = override.seq;
+                this.randomSeqIds = undefined;
+            }
+            if (override.charred) {
+                this.charred = true;
+                this.charLight = override.charLight;
+                // A burnt loc that changes with a varbit changes into burnt ones
+                this.transforms = this.transforms?.map((id) =>
+                    id === -1 || id >= CHARRED_LOCS ? id : CHARRED_LOCS + id,
+                );
+            }
+        } else if (override) {
+            this.models = override.models ? [override.models] : this.models;
+            if (!override.ownSize) {
+                this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+            }
+            if (override.solid) {
+                this.clipType = 2;
+                this.blocksProjectile = false;
+            } else if (override.solid === false) {
+                this.clipType = 0;
                 this.blocksProjectile = false;
             }
             // Model space points down, so up is negative

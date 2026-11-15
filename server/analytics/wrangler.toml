@@ -10,6 +10,8 @@ RAW_RETENTION_DAYS = "30"
 DAILY_RETENTION_DAYS = "365"
 # Runs stored a day at most, to stay inside D1 Free's daily writes (README, Free-tier budget)
 MAX_RUNS_PER_DAY = "10000"
+# Rows a day at most from the co-op relays' run checks (README, Run checks)
+MAX_CHECKS_PER_DAY = "1000"
 
 # No database_id: the first `wrangler deploy` creates the database by this name, and the d1
 # commands find it by name.

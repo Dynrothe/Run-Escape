@@ -2,7 +2,7 @@
 // its whole buffer. A new cache revision that adds opcodes shows up here as
 // "not implemented" or "leftover bytes" instead of silently desynced types.
 //
-//   npx tsx scripts/cache/validate-decoders.ts
+//   bun run tsx scripts/cache/validate-decoders.ts
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { ConfigType } from "../../src/rs/cache/ConfigType";

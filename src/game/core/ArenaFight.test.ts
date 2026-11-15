@@ -770,6 +770,17 @@ describe("the gaze, and hiding from it", () => {
         expect(hpOf(sim)).toBeLessThan(hp);
     });
 
+    test("it leaves no ring where it lands: it's everywhere it sees (a red box, out to the camera)", () => {
+        const { sim, boss } = fight();
+        place(sim, MIDDLE, BASE + 36);
+        use(sim, boss, "Gaze");
+        sim.takeEvents();
+        run(sim, gaze.windup + 0.05);
+        const events = sim.takeEvents();
+        expect(events.some((e) => e.type === "playerHit")).toBe(true);
+        expect(events.some((e) => e.type === "bossSwing")).toBe(false);
+    });
+
     test("without cover, a pillar's no help", () => {
         const { sim, boss } = fight();
         boss.def.boss!.attacks[0] = { ...gaze, cover: undefined };

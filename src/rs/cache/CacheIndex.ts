@@ -171,7 +171,7 @@ function decodeArchiveData<A extends ApiType>(
         // Listed but not stored: a slim cache leaves out what the game doesn't use
         throw new Error(
             `Group ${index.id}:${id} is missing from the cache. If it's a slim cache, ` +
-                "make it again: npm run slim-cache",
+                "make it again: bun run slim-cache",
         );
     }
     const container = Container.decode(new ByteBuffer(data), key);

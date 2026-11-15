@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { ShopUpgradeDef } from "./types";
 
 // Permanent upgrades bought with banked coins, themed as skills.
@@ -158,6 +159,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         perRank: 1,
         maxRank: 1,
         baseCost: 10000,
+        objId: 2570,
     },
     {
         id: "woodcutting",
@@ -201,7 +203,34 @@ export const SHOP_UPGRADE_BY_ID: Map<string, ShopUpgradeDef> = new Map(
     SHOP_UPGRADES.map((u) => [u.id, u]),
 );
 
-// Each rank costs more, and every rank bought makes all of them a bit dearer.
-export function getUpgradeCost(upgrade: ShopUpgradeDef, rank: number, totalBought: number): number {
-    return Math.round(upgrade.baseCost * (rank + 1) * (1 + 0.1 * totalBought));
+// What a page with these ranks costs in all. It goes only by the ranks, so
+// buying them in any order costs the same. Each rank of a skill costs more
+// than the last, and every rank on the page makes all of them a bit dearer.
+export function getPageCost(upgrades: Record<string, number>): number {
+    let base = 0;
+    let ranks = 0;
+    for (const [id, rank] of Object.entries(upgrades)) {
+        const upgrade = SHOP_UPGRADE_BY_ID.get(id);
+        if (!upgrade) {
+            continue;
+        }
+        // Its ranks at base price: baseCost, then twice that, and so on
+        base += (upgrade.baseCost * rank * (rank + 1)) / 2;
+        ranks += rank;
+    }
+    return ranks === 0 ? 0 : Math.round(base * (1 + 0.05 * (ranks - 1)));
+}
+
+// The price of one more rank of a skill: what it adds to the page's cost
+export function getUpgradeCost(upgradeId: string, upgrades: Record<string, number>): number {
+    const more = { ...upgrades, [upgradeId]: (upgrades[upgradeId] ?? 0) + 1 };
+    return getPageCost(more) - getPageCost(upgrades);
+}
+
+export function shopUpgradeName(upgrade: ShopUpgradeDef): string {
+    return tr(`shop.${upgrade.id}.name`, upgrade.name);
+}
+
+export function shopUpgradeDescription(upgrade: ShopUpgradeDef): string {
+    return tr(`shop.${upgrade.id}.desc`, upgrade.description);
 }

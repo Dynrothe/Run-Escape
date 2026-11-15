@@ -1,15 +1,22 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { getEnemy } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
+import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
-import { getRoomPoints } from "../content/raids";
-import { EXPERT_HAGIOS_KEEP } from "../content/theatre";
-import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
+import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
+import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED, RING_REST } from "../content/theatre";
+import {
+    TROPHIES,
+    TROPHY_BY_ID,
+    getRaidChestTrophiesFound,
+    isEveryTimeTrophy,
+} from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
+import { LUMBRIDGE_WAVES } from "../content/waves";
 import { getWeapon } from "../content/weapons";
 import { yawFromVector } from "./PlayerMovement";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm } from "./fmath";
 import {
     createSave,
@@ -71,11 +78,17 @@ afterAll(() => {
 });
 
 // raidTeleports: with a teleporter in every hall, as if each boss had been killed before
-function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
+function raid(
+    expert = false,
+    raidTeleports = 0,
+    raidPortals?: boolean[],
+    trophiesFound?: ReadonlySet<string>,
+): Sim {
     const sim = new Sim({
         grid: makeGrid(field(), 1000, 1000),
         mapId: TEST_RAID.id,
         expert,
+        trophiesFound,
         raidTeleports,
         raidPortals: raidPortals ?? TEST_RAID.raid!.rooms.map(() => raidTeleports > 0),
         characterId: "warrior",
@@ -188,7 +201,9 @@ describe("raids", () => {
         // And it's on the result, for the result screen
         const chest = sim.getResult().raidChest!;
         expect(chest.points).toBe(400);
-        expect(chest.chance).toBeGreaterThan(0);
+        // The test raid has no uniques of its own, so nothing to roll for (the Theatre's chance
+        // is tested below)
+        expect(chest.chance).toBe(0);
     });
 
     it("rolls the Theatre's uniques from its chest, more often with more points", () => {
@@ -218,6 +233,126 @@ describe("raids", () => {
         expect(few).toBeGreaterThan(2);
         expect(few).toBeLessThan(25);
         expect(many).toBeGreaterThan(100);
+    });
+
+    it("gives a Lil' Zik look not found yet from expert's chest, and none once all are found", () => {
+        const sim = raid(true);
+        Object.assign(sim, { map: getMap("theatre_of_blood") });
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
+        expect(looks).toHaveLength(5);
+        const lookIn = () => [...sim.trophies].filter((id) => looks.includes(id));
+        // Five chests in a row, each run's found kept: all five, none twice
+        const found = new Set<string>();
+        for (let i = 0; i < looks.length; i++) {
+            sim.trophies.clear();
+            sim.heroes[0].trophiesFound = new Set(found);
+            sim["openRaidChest"]();
+            const got = lookIn();
+            expect(got).toHaveLength(1);
+            expect(found.has(got[0])).toBe(false);
+            found.add(got[0]);
+        }
+        expect([...found].sort()).toEqual([...looks].sort());
+        // Once they're all found, none again: they're unlocks, so a second does nothing
+        sim.heroes[0].trophiesFound = new Set(found);
+        for (let i = 0; i < 20; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            expect(lookIn()).toEqual([]);
+        }
+        // And the last one missing is the one given, with the found ones brought in as a run
+        // starts
+        const last = raid(true, 0, undefined, new Set(looks.slice(1)));
+        Object.assign(last, { map: getMap("theatre_of_blood") });
+        for (let i = 0; i < 20; i++) {
+            last.trophies.clear();
+            last["openRaidChest"]();
+            expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
+        }
+        // Every raid chest's trophy is brought in, the Theatre's and the Tombs', and nothing else
+        expect(
+            getRaidChestTrophiesFound([
+                "lil_bloat",
+                "ghrazi_rapier",
+                "jewel_of_the_sun",
+                "jar_of_dreams",
+                "lil_zik",
+            ]),
+        ).toEqual(["lil_bloat", "ghrazi_rapier", "jewel_of_the_sun"]);
+    });
+
+    it("never gives a Theatre unique found already, normal or hard, and none once all are", () => {
+        const tob = TROPHIES.filter(
+            (t) => t.from.kind === "raid" && t.from.mapId === "theatre_of_blood",
+        );
+        const normal = tob.filter(
+            (t) => t.from.kind === "raid" && !t.from.hard && !isEveryTimeTrophy(t),
+        );
+        const hard = tob.filter((t) => t.from.kind === "raid" && t.from.hard);
+        expect(normal.length).toBeGreaterThan(1);
+        expect(hard.length).toBeGreaterThan(0);
+        // All but one of each found: that one's the only unique a chest ever gives
+        const owned = new Set([...normal.slice(1), ...hard.slice(1)].map((t) => t.id));
+        const sim = raid(false, 0, undefined, owned);
+        Object.assign(sim, { map: getMap("theatre_of_blood"), hard: true });
+        sim.heroes[0].raidPointsEarned = 5000;
+        const given = new Set<string>();
+        for (let i = 0; i < 300; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            for (const id of sim.trophies) {
+                expect(owned.has(id)).toBe(false);
+                given.add(id);
+            }
+        }
+        expect([...given].sort()).toEqual([normal[0].id, hard[0].id].sort());
+        // Found this run counts too: a second chest in it gives nothing the first did
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        sim.trophies.add(hard[0].id);
+        sim.takeEvents();
+        sim["openRaidChest"]();
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
+        // Every purple found but a hard one left: no chance to show, the hard roll still made
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        let hardGiven = 0;
+        for (let i = 0; i < 200; i++) {
+            sim.trophies.delete(hard[0].id);
+            sim.takeEvents();
+            sim["openRaidChest"]();
+            expect(sim.heroes[0].raidChest!.chance).toBe(0);
+            expect(sim.heroes[0].raidChest!.purpleLeft).toBe(false);
+            const found = sim.heroes[0].raidChest!.found;
+            hardGiven += found.length;
+            if (found.length === 0) {
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time.",
+                    }),
+                );
+            }
+        }
+        expect(hardGiven).toBeGreaterThan(0);
+        expect(hardGiven).toBeLessThan(200);
+        // Everything found: no chance shown, and the chest says so
+        const all = raid(false, 0, undefined, new Set(tob.map((t) => t.id)));
+        Object.assign(all, { map: getMap("theatre_of_blood"), hard: true });
+        all.heroes[0].raidPointsEarned = 5000;
+        all.takeEvents();
+        all["openRaidChest"]();
+        const notices = all.takeEvents().flatMap((e) => (e.type === "notice" ? [e.message] : []));
+        expect([...all.trophies]).toEqual([]);
+        expect(all.getResult().raidChest!.chance).toBe(0);
+        expect(notices.some((m) => m.includes("nothing you haven't found"))).toBe(true);
     });
 
     it("keeps a raid's wins, normal and hard, when the save's loaded again", () => {
@@ -347,7 +482,8 @@ describe("raids", () => {
     });
 
     it("lists its raids' rooms in order, each with a boss", () => {
-        for (const map of RAID_MAPS) {
+        // The Theatre's rooms; the Tombs of Amascut's paths are its own (MapDef.tombs)
+        for (const map of RAID_MAPS.filter((m) => m.raid)) {
             const rooms = map.raid!.rooms;
             expect(rooms.length).toBeGreaterThan(1);
             const bossEvents = map.events.filter(
@@ -372,6 +508,43 @@ const TEST_BOSS_IDS = [
     "tob_verzik_vitur_risen",
     "tob_verzik_vitur_spider",
 ];
+
+describe("the Theatre's Nylocas", () => {
+    it("are the raid's own copies, slower than the campaign's by RAID_NYLOCAS_SPEED", () => {
+        // Everything the raid can bring on: its waves, elites, rings, and its bosses' summons and
+        // splits
+        const ids = getMapEnemies(getMap("theatre_of_blood")).map((def) => def.id);
+        // The three that chase you (the Matomenos crawl to the Maiden)
+        const nylocas = ids.filter((id) => /ischyros|toxobolos|hagios/.test(id));
+        expect(nylocas.length).toBe(6);
+        for (const id of nylocas) {
+            expect(id.startsWith("tob_"), id).toBe(true);
+            const campaign = getEnemy(id.slice("tob_".length));
+            expect(getEnemy(id).speed, id).toBeCloseTo(campaign.speed * RAID_NYLOCAS_SPEED);
+            expect(getEnemy(id).speed, id).toBeLessThan(PLAYER_SPEED * TICKS_PER_SECOND);
+        }
+    });
+
+    it("come to their hall NYLOCAS_HALL_CROWD as many as the raid's pace, and to its ring", () => {
+        // Most of them shoot, so the raid's pace for the third hall swamped players with them
+        expect(NYLOCAS_HALL_CROWD).toBeLessThan(1);
+        const rooms = getMap("theatre_of_blood").raid!.rooms;
+        const index = rooms.findIndex((room) => room.boss === "nylocas_vasilias");
+        const hall = rooms[index];
+        hall.waves.forEach((wave, i) => {
+            // The pace roomWaves keeps: room n starts at Lumbridge's wave 2.5n
+            const pace =
+                LUMBRIDGE_WAVES[Math.min(Math.round(index * 2.5) + i, LUMBRIDGE_WAVES.length - 1)];
+            expect(wave.spawnRate, `wave ${i}`).toBeCloseTo(pace.spawnRate * NYLOCAS_HALL_CROWD);
+            expect(wave.minAlive, `wave ${i}`).toBe(Math.round(pace.minAlive * NYLOCAS_HALL_CROWD));
+            expect(wave.maxAlive, `wave ${i}`).toBe(Math.round(pace.maxAlive * NYLOCAS_HALL_CROWD));
+        });
+        const ring = hall.events.find((e) => e.kind === "ring");
+        expect(ring?.kind === "ring" && ring.count).toBe(
+            Math.round(NYLOCAS_RING * NYLOCAS_HALL_CROWD),
+        );
+    });
+});
 
 describe("the Theatre's bullet shapes", () => {
     // One volley of a boss's attack, from its own spot
@@ -406,7 +579,7 @@ describe("the Theatre's bullet shapes", () => {
                 vy: bullets.vy[slot],
             });
         }
-        return { attack, shot };
+        return { attack, shot, bullets, sim, boss };
     }
 
     it("a wall is a line across, all going one way, with its gap left out", () => {
@@ -521,6 +694,106 @@ describe("the Theatre's bullet shapes", () => {
             expect(dx * bullet.vx + dy * bullet.vy).toBeLessThan(0);
         }
     });
+
+    it("every closing ring stands where it forms for its hold before it comes in", () => {
+        for (const id of TEST_BOSS_IDS) {
+            for (const attack of getEnemy(id).boss!.attacks) {
+                if (attack.pattern?.shape === "closing") {
+                    expect(attack.pattern.hold ?? 0, `${id}: ${attack.name}`).toBeGreaterThan(0);
+                }
+            }
+        }
+        const { attack, bullets } = volley("Blood tide", "maiden_of_sugadinti");
+        const hold = Math.round(attack.pattern!.hold! * TICKS_PER_SECOND);
+        const slot = bullets.order[0];
+        const at = () => [bullets.x[slot], bullets.y[slot]];
+        const formed = at();
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        for (let i = 0; i < hold; i++) {
+            bullets.step(targets);
+        }
+        expect(at()).toEqual(formed);
+        bullets.step(targets);
+        expect(at()).not.toEqual(formed);
+    });
+
+    it("an enraged Maiden's rings come one at a time, each in and rested before the next", () => {
+        const sim = raid();
+        sim.player.invulnerable = 1e9;
+        const def = getEnemy("maiden_of_sugadinti");
+        const maiden = sim.spawnEnemy(def, "boss", { x: 1018.5, y: 1040.5 })!;
+        maiden.bossState!.enraged = true;
+        const rings: { tick: number; interval: number }[] = [];
+        const fire = sim["fireVolley"].bind(sim);
+        sim["fireVolley"] = (...args: Parameters<typeof fire>) => {
+            const pattern = args[0].attack.pattern!;
+            if (pattern.shape === "closing") {
+                rings.push({ tick: sim.tick, interval: pattern.interval });
+            }
+            fire(...args);
+        };
+        for (let i = 0; i < 90 * TICKS_PER_SECOND; i++) {
+            sim.player.x = sim.player.prevX = 1018.5;
+            sim.player.y = sim.player.prevY = 1030.5;
+            maiden.hp = maiden.maxHp;
+            sim.step();
+        }
+        expect(rings.length).toBeGreaterThan(4);
+        for (let i = 1; i < rings.length; i++) {
+            const gap = rings[i].tick - rings[i - 1].tick;
+            // A tick's rounding
+            expect(gap).toBeGreaterThanOrEqual(
+                Math.round(rings[i - 1].interval * TICKS_PER_SECOND) - 1,
+            );
+        }
+    });
+
+    // Every boss's, not only the Theatre's: Sim.startPattern's ringsUntil goes by the interval
+    it("every ring that holds has closed in and rested before its next volley", () => {
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        let checked = 0;
+        for (const { id, boss } of ENEMIES) {
+            for (const attack of boss?.attacks ?? []) {
+                const pattern = attack.pattern;
+                if (pattern?.hold === undefined) {
+                    continue;
+                }
+                const { bullets } = volley(attack.name, id);
+                let ticks = 0;
+                while (bullets.count > 0) {
+                    bullets.step(targets);
+                    ticks++;
+                }
+                const rest = Math.round(RING_REST * TICKS_PER_SECOND);
+                const name = `${id}: ${attack.name}`;
+                // The next volley, a tick's rounding either way
+                expect(ticks + rest, name).toBeLessThanOrEqual(
+                    Math.round(pattern.interval * TICKS_PER_SECOND) + 1,
+                );
+                checked++;
+            }
+        }
+        expect(checked).toBeGreaterThanOrEqual(5);
+    });
+
+    it("a closing ring hurts whoever walks into it while it stands", () => {
+        const { attack, shot, bullets, sim, boss } = volley("Blood tide", "maiden_of_sugadinti");
+        // The source a real attack would have taken (Sim.startPattern)
+        sim.bulletSources[0] = { attack, enemy: boss };
+        sim.player.invulnerable = 0;
+        const slot = bullets.order[0];
+        sim.player.x = sim.player.prevX = bullets.x[slot];
+        sim.player.y = sim.player.prevY = bullets.y[slot];
+        sim["stepBullets"]();
+        expect(sim.damageByAttack[attack.name]).toBeGreaterThan(0);
+        // Spent on the hit, and the rest still where they formed
+        expect(bullets.count).toBe(shot.length - 1);
+        for (let i = 0; i < bullets.count; i++) {
+            const other = bullets.order[i];
+            expect(bullets.x[other]).toBe(bullets.prevX[other]);
+            expect(bullets.y[other]).toBe(bullets.prevY[other]);
+        }
+    });
 });
 
 describe("the Theatre's bosses", () => {
@@ -609,16 +882,30 @@ describe("the Theatre's bosses", () => {
             fired = sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid);
         }
         expect(fired).toBe(true);
+        const pattern = swarm.pattern!;
+        const patternTicks = Math.ceil(pattern.volleys * pattern.interval * TICKS_PER_SECOND);
+        // And what he's winding up then landing first
+        const longestWindup = Math.max(...def.boss!.attacks.map((a) => a.windup));
+        const waitTicks = patternTicks + Math.ceil(longestWindup * TICKS_PER_SECOND);
         bloat.bossState!.nextNap = sim.tick;
         sim.step();
         expect(sim["isNapping"](bloat)).toBe(false);
-        // Down once the last ring's out, with nothing new started meanwhile
-        for (let i = 0; i < 5 * TICKS_PER_SECOND && !sim["isNapping"](bloat); i++) {
+        // Down once the last ring's out. Meanwhile he fights on with nothing that fires more,
+        // rather than standing idle for the seconds between the swarm's rings.
+        const started: string[] = [];
+        let last = bloat.bossState!.windup;
+        for (let i = 0; i < waitTicks && !sim["isNapping"](bloat); i++) {
             sim.step();
-            expect(bloat.bossState!.windup).toBeUndefined();
+            const windup = bloat.bossState!.windup;
+            if (windup && windup !== last) {
+                started.push(windup.attack.name);
+                expect(windup.attack.pattern, windup.attack.name).toBeUndefined();
+            }
+            last = windup;
         }
         expect(sim["isNapping"](bloat)).toBe(true);
         expect(sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid)).toBe(false);
+        expect(started.length).toBeGreaterThan(0);
     });
 
     it("drop nothing off their adds, and have no visitors, in their rooms", () => {
@@ -770,14 +1057,14 @@ describe("expert mode", () => {
 
     it("lets each colour of Nylocas take only its own style, and only on expert", () => {
         const expert = raid(true);
-        expect(hits(expert, "nylocas_ischyros", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
-        expect(hits(expert, "nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_hagios", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_hagios", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
         // Anywhere else, any style will do
-        expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(raid(false), "tob_nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
     it("has a wave's Nylocas take more from their own style on expert, but not Vasilias", () => {
@@ -796,11 +1083,11 @@ describe("expert mode", () => {
         };
         const ratio = (id: string, weapon: string) =>
             dealt(true, id, weapon) / dealt(false, id, weapon);
-        const bonus = getEnemy("nylocas_hagios").expertOwnStyle!;
+        const bonus = getEnemy("tob_nylocas_hagios").expertOwnStyle!;
         expect(bonus).toBeGreaterThan(1);
-        expect(ratio("nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
         expect(ratio("tob_nylocas_toxobolos", "twisted_bow")).toBeCloseTo(bonus, 1);
-        expect(ratio("nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
         // Nylocas Vasilias keeps hers: a colour's own style, no more than off expert
         expect(ratio("nylocas_vasilias_magic", "sanguinesti_staff")).toBeLessThan(1.5);
     });
@@ -1045,8 +1332,21 @@ describe("expert mode", () => {
         expect(boss.hp).toBe(boss.maxHp - 10000 + Math.round(boss.maxHp * smother.heal));
         expect(sim.hazards).not.toContain(left);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
+        // A step's enough: walked across at a player's speed, even off its middle, one's smothered
+        // (they come up in threes, tiles apart)
+        const home = { x: sim.player.x, y: sim.player.y };
+        for (const off of [0, 0.8]) {
+            const stepped = exhumed(home.x, home.y + off);
+            for (let x = home.x - 3; x <= home.x + 3; x += PLAYER_SPEED) {
+                sim.player.x = x;
+                sim["stepHazards"]();
+            }
+            expect(sim.hazards, `${off} off its middle`).not.toContain(stepped);
+        }
+        sim.player.x = home.x;
         // Each one stood on is smothered, and once they all are he rises
-        for (let i = 0; i < exhumes.count; i++) {
+        for (let still = exhumes.count - 2; still > 0; still--) {
+            expect(boss.bossState!.ordeal!.left).toBe(still);
             const one = exhumed(sim.player.x, sim.player.y);
             for (let t = 0; t <= Math.round(smother.seconds * TICKS_PER_SECOND); t++) {
                 sim["stepHazards"]();
@@ -1128,9 +1428,7 @@ describe("expert mode", () => {
         Object.assign(sim, { map: getMap("theatre_of_blood") });
         sim.trophies.clear();
         sim["openRaidChest"]();
-        const looks = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.expert).map(
-            (t) => t.id,
-        );
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
         expect([...sim.trophies].some((id) => looks.includes(id))).toBe(true);
     });
 
@@ -1205,7 +1503,7 @@ describe("expert mode", () => {
 
     it("leaves a Nylocas a weapon can't hurt alone: no aiming at it, and no venom", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 2,
             y: sim.player.y,
         })!;
@@ -1227,7 +1525,7 @@ describe("expert mode", () => {
         sim.weapons = [];
         sim.addWeapon("twisted_bow");
         sim.addWeapon("scythe_of_vitur");
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 1,
             y: sim.player.y,
         })!;
@@ -1251,7 +1549,7 @@ describe("expert mode", () => {
 
     it("stops a weapon's venom once the enemy's colour is one it can't hurt", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 6,
             y: sim.player.y,
         })!;

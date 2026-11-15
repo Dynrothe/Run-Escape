@@ -4,6 +4,7 @@ import {
     getCacheLoaderFactory,
 } from "../../rs/cache/loader/CacheLoaderFactory";
 import { BasTypeLoader } from "../../rs/config/bastype/BasTypeLoader";
+import { FloorTypeLoader, OverlayFloorTypeLoader } from "../../rs/config/floortype/FloorTypeLoader";
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocTypeLoader } from "../../rs/config/loctype/LocTypeLoader";
 import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
@@ -12,6 +13,7 @@ import { ObjModelLoader } from "../../rs/config/objtype/ObjModelLoader";
 import { ObjTypeLoader } from "../../rs/config/objtype/ObjTypeLoader";
 import { SeqTypeLoader } from "../../rs/config/seqtype/SeqTypeLoader";
 import { VarManager } from "../../rs/config/vartype/VarManager";
+import { VarBitTypeLoader } from "../../rs/config/vartype/bit/VarBitTypeLoader";
 import { MapImageRenderer } from "../../rs/map/MapImageRenderer";
 import { SeqFrameLoader } from "../../rs/model/seq/SeqFrameLoader";
 import { SkeletalSeqLoader } from "../../rs/model/skeletal/SkeletalSeqLoader";
@@ -52,6 +54,30 @@ export type WorkerState = {
     npcSpawns: NpcSpawn[];
 };
 
+// The config type loaders, which can take a while to make: a script can make
+// them once and share them between states (slim-load.ts)
+export type TypeLoaders = {
+    underlayTypeLoader: FloorTypeLoader;
+    overlayTypeLoader: OverlayFloorTypeLoader;
+    varBitTypeLoader: VarBitTypeLoader;
+    locTypeLoader: LocTypeLoader;
+    objTypeLoader: ObjTypeLoader;
+    npcTypeLoader: NpcTypeLoader;
+    seqTypeLoader: SeqTypeLoader;
+};
+
+export function createTypeLoaders(loaderFactory: CacheLoaderFactory): TypeLoaders {
+    return {
+        underlayTypeLoader: loaderFactory.getUnderlayTypeLoader(),
+        overlayTypeLoader: loaderFactory.getOverlayTypeLoader(),
+        varBitTypeLoader: loaderFactory.getVarBitTypeLoader(),
+        locTypeLoader: loaderFactory.getLocTypeLoader(),
+        objTypeLoader: loaderFactory.getObjTypeLoader(),
+        npcTypeLoader: loaderFactory.getNpcTypeLoader(),
+        seqTypeLoader: loaderFactory.getSeqTypeLoader(),
+    };
+}
+
 // The loaders a render worker works with. Also built in Node by the slim cache
 // script, to load what the game loads.
 export function createWorkerState(
@@ -59,25 +85,27 @@ export function createWorkerState(
     objSpawns: ObjSpawn[],
     npcSpawns: NpcSpawn[],
     mapImageCache: Cache,
+    typeLoaders: Partial<TypeLoaders> = {},
 ): WorkerState {
     const cacheSystem = CacheSystem.fromFiles(cache.type, cache.files);
 
     const loaderFactory = getCacheLoaderFactory(cache.info, cacheSystem);
-    const underlayTypeLoader = loaderFactory.getUnderlayTypeLoader();
-    const overlayTypeLoader = loaderFactory.getOverlayTypeLoader();
+    const underlayTypeLoader =
+        typeLoaders.underlayTypeLoader ?? loaderFactory.getUnderlayTypeLoader();
+    const overlayTypeLoader = typeLoaders.overlayTypeLoader ?? loaderFactory.getOverlayTypeLoader();
 
-    const varBitTypeLoader = loaderFactory.getVarBitTypeLoader();
+    const varBitTypeLoader = typeLoaders.varBitTypeLoader ?? loaderFactory.getVarBitTypeLoader();
 
-    const locTypeLoader = loaderFactory.getLocTypeLoader();
-    const objTypeLoader = loaderFactory.getObjTypeLoader();
-    const npcTypeLoader = loaderFactory.getNpcTypeLoader();
+    const locTypeLoader = typeLoaders.locTypeLoader ?? loaderFactory.getLocTypeLoader();
+    const objTypeLoader = typeLoaders.objTypeLoader ?? loaderFactory.getObjTypeLoader();
+    const npcTypeLoader = typeLoaders.npcTypeLoader ?? loaderFactory.getNpcTypeLoader();
 
     const basTypeLoader = loaderFactory.getBasTypeLoader();
 
     const modelLoader = loaderFactory.getModelLoader();
     const textureLoader = loaderFactory.getTextureLoader();
 
-    const seqTypeLoader = loaderFactory.getSeqTypeLoader();
+    const seqTypeLoader = typeLoaders.seqTypeLoader ?? loaderFactory.getSeqTypeLoader();
     const seqFrameLoader = loaderFactory.getSeqFrameLoader();
     const skeletalSeqLoader = loaderFactory.getSkeletalSeqLoader();
 

@@ -5,6 +5,12 @@ export type DisplaySettings = {
     menuSpin: boolean;
     // The camera shakes a little when a boss's blow lands hard (ImpactDef.shake)
     screenShake: boolean;
+    // A countdown pie over each power-up on the ground (GameView.drawPickupTimers)
+    pickupTimers: boolean;
+    // The Tombs of Amascut's Scabaras room shows what to step on, as OSRS's ToA plugin does
+    // (GameView.drawScabarasHelper): at Entry, and at any raid level once it's been beaten
+    // (SaveData.scabarasBeaten)
+    puzzleHelper: boolean;
     // A run pauses when the window loses focus or the tab is hidden
     pauseOnBlur: boolean;
     // The quest tracker on the HUD is open (Q, or its title, opens and shuts it)
@@ -12,6 +18,9 @@ export type DisplaySettings = {
     // The damage panel under the HUD's DPS is open (Tab, or the DPS, opens
     // and shuts it)
     damagePanel: boolean;
+    // Worn gear in its own panel under the damage panel, in two columns that can be hidden (and
+    // on a phone too), rather than a row under the weapons and passives
+    gearPanel: boolean;
     // Caskets are high alched as they're opened, with no casket screen
     autoAlch: boolean;
     // Equip only unambiguous casket upgrades, never replacing a set piece
@@ -60,9 +69,12 @@ export function getDefaultDisplaySettings(): DisplaySettings {
     return {
         menuSpin: !reducedMotion,
         screenShake: !reducedMotion,
+        pickupTimers: true,
+        puzzleHelper: true,
         pauseOnBlur: true,
         questTracker: true,
         damagePanel: false,
+        gearPanel: false,
         autoAlch: false,
         autoEquip: false,
         movePrediction: true,
@@ -84,6 +96,12 @@ export function loadDisplaySettings(): DisplaySettings {
             if (typeof data.screenShake === "boolean") {
                 settings.screenShake = data.screenShake;
             }
+            if (typeof data.pickupTimers === "boolean") {
+                settings.pickupTimers = data.pickupTimers;
+            }
+            if (typeof data.puzzleHelper === "boolean") {
+                settings.puzzleHelper = data.puzzleHelper;
+            }
             if (typeof data.pauseOnBlur === "boolean") {
                 settings.pauseOnBlur = data.pauseOnBlur;
             }
@@ -92,6 +110,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.damagePanel === "boolean") {
                 settings.damagePanel = data.damagePanel;
+            }
+            if (typeof data.gearPanel === "boolean") {
+                settings.gearPanel = data.gearPanel;
             }
             if (typeof data.autoAlch === "boolean") {
                 settings.autoAlch = data.autoAlch;

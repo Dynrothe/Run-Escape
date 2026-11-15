@@ -38,8 +38,9 @@ import {
     isModelFaceTransparent,
 } from "../buffer/SceneBuffer";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
+import { addPlantBarrierBases } from "../loc/PlantBarriers";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
-import { getSceneLocs, isLowDetail } from "../loc/SceneLocs";
+import { getLocLeftOut, getSceneLocs, isLowDetail } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
 import { NpcSpawnGroup } from "../npc/NpcSpawnGroup";
 import { SdMapData } from "./SdMapData";
@@ -727,6 +728,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             cullCellSize = 0,
             skipMinimap = false,
             keepArea,
+            hiddenLocs,
             loadedTextureIds,
         }: SdMapLoaderInput,
     ): Promise<RenderDataResult<SdMapData | undefined>> {
@@ -761,8 +763,16 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         sceneBuf.keepBox = getKeepBox(keepArea, mapX, mapY, borderSize);
         sceneBuf.addTerrain(scene, borderSize, minLevel, maxLevel);
 
-        const sceneLocs = getSceneLocs(locTypeLoader, scene, borderSize, minLevel, maxLevel);
+        const sceneLocs = getSceneLocs(
+            locTypeLoader,
+            scene,
+            borderSize,
+            minLevel,
+            maxLevel,
+            getLocLeftOut(hiddenLocs, baseX, baseY),
+        );
         const sceneModels = sceneLocs.locs;
+        addPlantBarrierBases(locModelLoader, sceneModels, scene, borderSize);
 
         // Create loc animated groups and add transformed locs
         const locAnimatedGroups = addLocEntities(
@@ -960,6 +970,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 smoothTerrain,
                 cullCellSize,
                 keepArea,
+                hiddenLocs,
 
                 borderSize,
                 tileRenderFlags: scene.tileRenderFlags,

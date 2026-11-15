@@ -2,7 +2,7 @@
 // tile's local class is the commonest in 15 by 15 tiles round it. Then: what's along the lines
 // between classes, and how far from a line a tile's own colour stops matching its side's.
 //
-//   npx tsx scripts/scaperune/research/biome-edges.ts out.json
+//   bun run tsx scripts/scaperune/research/biome-edges.ts out.json
 import fs from "node:fs";
 
 import { TILE_BLOCKED, TILE_INSIDE, cacheFloorId } from "../../../src/game/scaperune/format";

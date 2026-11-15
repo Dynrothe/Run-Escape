@@ -3,7 +3,7 @@
 // out once the doors are gone, and no stray walls round them, are printed as rectangles
 // that loc-sheet.ts can draw.
 //
-//   npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50      # squares from, to
+//   bun run tsx scripts/scaperune/find-buildings.ts 50 50 51 50      # squares from, to
 import { findExits } from "../../src/game/scaperune/building";
 import { TileGrid } from "../../src/game/scaperune/format";
 import { cutPrefab } from "../../src/game/scaperune/prefab";

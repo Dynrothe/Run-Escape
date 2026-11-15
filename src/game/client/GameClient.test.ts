@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { VARROCK_OPENING } from "../content/fun/varrockOpening";
+import { YAMA_WAKES } from "../content/fun/yamaWakes";
+import { MAX_INVOCATION_PRESETS } from "../content/invocations";
+import { getMap } from "../content/maps";
+import { Rarity } from "../content/rarity";
+import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { encodeCardCaps } from "../core/cardRuns";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -13,6 +20,7 @@ import {
     getMetaStats,
 } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
+import { CinematicCamera, CinematicPlayer } from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -22,9 +30,22 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import {
+    GameClient,
+    TICK_MS,
+    cleanLoadout,
+    getHpShare,
+    getObjectiveView,
+    getPhaseBarFraction,
+    getShownHp,
+    loadoutStats,
+    partyLoadouts,
+} from "./GameClient";
+import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
+import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
+import { CoopTicker } from "./coop/CoopTicker";
 import { UpMessage } from "./coop/protocol";
 
 function createSim(focus?: number): Sim {
@@ -63,6 +84,7 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
         shownDpsTick: 0,
         damageMeter: new DamageMeter(),
         lastHudUpdate: 0,
+        coopPlayerIds: sim.heroes.map((hero) => `hero-${hero.index}`),
         display: {
             ...getDefaultDisplaySettings(),
             menuSpin: false,
@@ -79,6 +101,55 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
     };
     return { client, store, sync };
 }
+
+describe("the sound's on and off", () => {
+    function createMuteClient() {
+        const { client, store } = createClient(createSim(), false);
+        const settings = { muted: false, volume: 0.6, music: 0.6 };
+        Object.assign(client, {
+            audio: {
+                settings,
+                setSettings: (changes: Partial<typeof settings>) =>
+                    Object.assign(settings, changes),
+            },
+        });
+        // As M or the orb do
+        const pressM = () => client.toggleMute(true);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        return { client, store, pressM, toasts };
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    test("M and the orb say which way it went in a run, only the last way, and nothing on the menus", () => {
+        const { client, store, pressM, toasts } = createMuteClient();
+        pressM();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        pressM();
+        expect(toasts()).toEqual(["Sound on"]);
+        pressM();
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        Object.assign(client, { sim: undefined, soundToast: undefined });
+        store.set({ toasts: [] });
+        pressM();
+        expect(store.getSnapshot().audio.muted).toBe(false);
+        expect(toasts()).toEqual([]);
+    });
+
+    test("the setting shows it itself, and a controller has no M to name", () => {
+        const { client, store, toasts } = createMuteClient();
+        client.toggleMute();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toEqual([]);
+        vi.spyOn(padHints, "get").mockReturnValue("xbox");
+        client.toggleMute(true);
+        client.toggleMute(true);
+        expect(toasts()).toEqual(["Sound off"]);
+    });
+});
 
 describe("movement prediction", () => {
     test("is on unless it's been turned off, and is remembered", () => {
@@ -121,6 +192,31 @@ describe("movement prediction", () => {
     });
 });
 
+describe("a co-op player's loadout", () => {
+    // Their raid chests' trophies, so their chest gives none twice: only those, whatever their
+    // game sends
+    it("keeps only raid chests' trophies, from a list of strings", () => {
+        const loadout = makeLoadout({}, [], {}, undefined, undefined, ["lil_sot", "lil_xarp"]);
+        expect([...cleanLoadout(loadout).trophiesFound]).toEqual(["lil_sot", "lil_xarp"]);
+        const junk = {
+            ...loadout,
+            trophies: [
+                "lil_bloat",
+                7,
+                null,
+                "ghrazi_rapier",
+                "jar_of_dreams",
+                "nope",
+                {},
+            ] as unknown as string[],
+        };
+        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat", "ghrazi_rapier"]);
+        const notAList = { ...loadout, trophies: "lil_bloat" as unknown as string[] };
+        expect(cleanLoadout(notAList).trophiesFound.size).toBe(0);
+        expect(cleanLoadout(undefined).trophiesFound.size).toBe(0);
+    });
+});
+
 describe("the co-op flag", () => {
     test("shows unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();
@@ -158,13 +254,399 @@ describe("the co-op flag", () => {
     });
 });
 
+describe("power-up timers", () => {
+    test("show unless they've been turned off, and are remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ menuSpin: false }));
+        expect(loadDisplaySettings().pickupTimers).toBe(true);
+        saveDisplaySettings({ ...loadDisplaySettings(), pickupTimers: false });
+        expect(loadDisplaySettings().pickupTimers).toBe(false);
+        vi.unstubAllGlobals();
+    });
+
+    // The view draws a timer from the tick and this, so it stops with the run
+    test("stand still while a solo run is paused", () => {
+        const sim = createSim();
+        sim.state = "playing";
+        const { client } = createClient(sim, false);
+        const getAlpha = () => (client as unknown as { getAlpha(): number }).getAlpha();
+        Object.assign(client, { accumulator: TICK_MS / 2 });
+        expect(getAlpha()).toBe(0.5);
+        Object.assign(client, { paused: true });
+        expect(getAlpha()).toBe(1);
+    });
+});
+
 function displayOf(client: GameClient): DisplaySettings {
     return (client as unknown as { display: DisplaySettings }).display;
 }
 
+describe("co-op without render frames", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            "URL",
+            class extends URL {
+                static createObjectURL() {
+                    return "blob:background-test";
+                }
+                static revokeObjectURL() {}
+            },
+        );
+        vi.stubGlobal(
+            "Worker",
+            class {
+                onmessage?: () => void;
+                private timer = setInterval(() => this.onmessage?.(), TICK_MS);
+                terminate() {
+                    clearInterval(this.timer);
+                }
+            },
+        );
+    });
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    test.each([false, true])(
+        "keeps the guest in step for 30 seconds without drawing (host down: %s)",
+        async (down) => {
+            // No visibilitychange occurs: this is the hole in the former loop.
+            vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+            const hostSim = createSim(0);
+            const guestSim = createSim(1);
+            for (const sim of [hostSim, guestSim]) sim.heroes[0].down = down;
+            const heroes = new Map([
+                ["host", 0],
+                ["guest", 1],
+            ]);
+            let host: CoopRun;
+            const guest = new CoopRun(
+                guestSim,
+                false,
+                {
+                    sendUp: (m) => host.receiveUp("guest", m),
+                    sendDown() {},
+                },
+                heroes,
+                "host",
+            );
+            let lastFrameAt = performance.now();
+            let largestGap = 0;
+            host = new CoopRun(
+                hostSim,
+                true,
+                {
+                    sendUp() {},
+                    sendDown(m) {
+                        const now = performance.now();
+                        largestGap = Math.max(largestGap, now - lastFrameAt);
+                        lastFrameAt = now;
+                        guest.receiveDown(m);
+                        while (guest.canStep()) {
+                            guest.stepFrame();
+                            guestSim.takeEvents();
+                        }
+                    },
+                },
+                heroes,
+                "host",
+            );
+            host.receiveUp("guest", { loaded: true });
+            const { client } = createClient(hostSim, false);
+            Object.assign(client, {
+                coopRun: host,
+                coopStopped: false,
+                accumulator: 0,
+                coop: { keepAlive() {} },
+                input: { getMoveVector: () => ({ x: 0, y: 0 }) },
+                handleEvents() {},
+                syncOverlay() {},
+                getDecisionKey: () => "playing",
+                resendAutoChest() {},
+            });
+            const ticking = client as unknown as {
+                startCoopTicker(): void;
+                stopCoopTicker(): void;
+                coopTicker: CoopTicker;
+            };
+            ticking.startCoopTicker();
+            for (let frame = 0; frame < 50; frame++) {
+                await vi.advanceTimersByTimeAsync(TICK_MS);
+                ticking.coopTicker.render();
+            }
+            const before = guest.frame;
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(guest.frame - before).toBe(1500);
+            expect(largestGap).toBeLessThanOrEqual(60);
+            expect(guest.desynced).toBe(false);
+            expect(syncHash(hostSim)).toBe(syncHash(guestSim));
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1550);
+            await vi.advanceTimersByTimeAsync(TICK_MS);
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1551);
+            ticking.stopCoopTicker();
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(host.frame).toBe(1551);
+            expect(vi.getTimerCount()).toBe(0);
+        },
+    );
+});
+
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
+
+    test.each([undefined, 0, 1])(
+        "shows only the focused hero's unspent ring of life (focus %s)",
+        (focus) => {
+            const sim = createSim(focus);
+            const { client, store } = createClient(sim, false);
+            for (const hero of sim.heroes) {
+                hero.revivesLeft = hero.index === sim.focus ? 0 : 1;
+            }
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+            sim.revivesLeft = 1;
+            updateHud(client, true);
+            const buffs = store.getNumbers()!.buffs;
+            expect(buffs).toEqual([
+                {
+                    id: "ring_of_life",
+                    name: "Ring of life",
+                    description: "Revives you once if you fall.",
+                    objId: 2570,
+                    harmful: false,
+                },
+            ]);
+            sim.tick += 50;
+            updateHud(client);
+            expect(store.getNumbers()!.buffs).toBe(buffs);
+            sim.player.invulnerable = 0;
+            sim["damagePlayer"](99999, "goblin", false);
+            expect(sim.revivesLeft).toBe(0);
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+        },
+    );
+
+    // The Pyromancer's own revive is theirs, not a ring of life, and goes first
+    test.each([0, 1])("shows the Pyromancer's phoenix apart from %s ring of life", (rings) => {
+        const metaStats = emptyStats();
+        metaStats.revival = rings;
+        const party = ["warrior", "pyromancer"].map((characterId) => ({
+            name: characterId,
+            characterId,
+            metaStats,
+        }));
+        const row = ".".repeat(72);
+        const sim = new Sim({
+            grid: makeGrid(Array(72).fill(row), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "pyromancer",
+            metaStats,
+            seed: 5,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party,
+            focus: 1,
+        });
+        const { client, store } = createClient(sim, false);
+        const handleEvents = (
+            client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }
+        ).handleEvents;
+        const shown = () => store.getNumbers()!.buffs.map((buff) => buff.name);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        const die = (hero: number) => {
+            sim["as"](hero, () => {
+                sim.player.invulnerable = 0;
+                sim["damagePlayer"](99999, "goblin", false);
+            });
+            handleEvents.call(client, sim, sim.takeEvents());
+            updateHud(client, true);
+        };
+        updateHud(client, true);
+        expect(shown()).toEqual(rings ? ["Phoenix", "Ring of life"] : ["Phoenix"]);
+        die(1);
+        expect(shown()).toEqual(rings ? ["Ring of life"] : []);
+        if (rings) {
+            die(1);
+            expect(shown()).toEqual([]);
+        }
+        // A teammate's toast names theirs, and the warrior's ring isn't the HUD's
+        sim.heroes[0].revivesLeft = 1;
+        die(0);
+        expect(shown()).toEqual([]);
+        expect(toasts()).toEqual([
+            "Your phoenix saves you!",
+            ...(rings ? ["Your ring of life saves you!"] : []),
+            "warrior's ring of life saves them!",
+        ]);
+    });
+
+    test("every adventurer with a revive of their own has a look for it", () => {
+        for (const character of CHARACTERS) {
+            if (character.bonus.revival) {
+                expect(character.reviveLook, character.id).toBeDefined();
+            }
+        }
+    });
+
+    test.each([
+        [0, "boss"],
+        [1, "boss"],
+        [0, "finalBoss"],
+        [1, "finalBoss"],
+    ] as const)("co-op hero %i sees the nearest living %s", (focus, type) => {
+        const sim = createSim(focus);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        sim.heroes[0].player.x = 1020.5;
+        sim.heroes[1].player.x = 1050.5;
+        const bosses = [1022.5, 1048.5].map(
+            (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
+        );
+
+        bosses[0].hp = bosses[0].maxHp / 4;
+        bosses[1].hp = (bosses[1].maxHp * 3) / 4;
+        const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        const other = 1 - focus;
+        sim.player.x = bosses[other].x;
+        sim.player.y = bosses[other].y;
+        // A regular enemy even closer must not take the boss bar.
+        sim.spawnEnemy(getEnemy("goblin"), "normal", { x: sim.player.x, y: sim.player.y });
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(other));
+
+        // Distance includes both axes, and is reconsidered as bosses move.
+        bosses[other].y += 40;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+        bosses[other].y = sim.player.y;
+        bosses[other].dead = true;
+        bosses[other].hp = 0;
+        updateHud(client);
+        expect(store.getNumbers()!.boss?.fraction).toBe(fraction(focus));
+
+        bosses[focus].dead = true;
+        bosses[focus].hp = 0;
+        updateHud(client);
+        if (type === "finalBoss") {
+            expect(store.getNumbers()!.boss).toMatchObject({
+                name: bosses[focus].def.name,
+                fraction: 0,
+                enraged: false,
+            });
+        } else {
+            expect(store.getNumbers()!.boss).toBeUndefined();
+        }
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
+
+    test("co-op chooses the closest boss even when a final boss is farther away", () => {
+        const sim = createSim(1);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        expect(sim.shownBoss).toBe(finalBoss);
+    });
+
+    test("co-op keeps the final boss's empty bar to the victory screen, over a living boss", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        const boss = sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(boss.def.name);
+        sim.damageEnemy(finalBoss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        expect(boss.dead).toBe(false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toMatchObject({ name: finalBoss.def.name, fraction: 0 });
+    });
+
+    test("co-op's bar stays on its boss until another is clearly nearer", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const x = sim.player.x;
+        const [left, right] = [-3, 3].map(
+            (dx) =>
+                sim.spawnEnemy(getEnemy("wise_old_man"), "boss", { x: x + dx, y: sim.player.y })!,
+        );
+        left.hp = left.maxHp / 4;
+        right.hp = (right.maxHp * 3) / 4;
+        const shown = () => store.getNumbers()!.boss?.fraction;
+        sim.player.x = x - 0.1;
+        updateHud(client, true);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        // A tile nearer the other isn't enough
+        sim.player.x = x + 0.5;
+        updateHud(client);
+        expect(shown()).toBe(left.hp / left.maxHp);
+        sim.player.x = x + 1.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+        // Nor does it go straight back
+        sim.player.x = x - 0.5;
+        updateHud(client);
+        expect(shown()).toBe(right.hp / right.maxHp);
+    });
+
+    test("solo keeps the final boss's priority over a nearer boss", () => {
+        const sim = createSim();
+        const { client, store } = createClient(sim, false);
+        const finalBoss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: sim.player.x + 12,
+            y: sim.player.y,
+        })!;
+        sim.spawnEnemy(getEnemy("count_draynor"), "boss", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        });
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss?.name).toBe(finalBoss.def.name);
+    });
+
+    test("co-op without bosses has no boss bar", () => {
+        const sim = createSim(1);
+        const legacyBoss = vi.spyOn(sim, "shownBoss", "get");
+        const { client, store } = createClient(sim, false);
+        updateHud(client, true);
+        expect(store.getNumbers()!.boss).toBeUndefined();
+        expect(legacyBoss).not.toHaveBeenCalled();
+        legacyBoss.mockRestore();
+    });
 
     test("keeps what hasn't changed the same object, so its parts don't draw again", () => {
         vi.stubGlobal("window", { localStorage: { setItem() {} } });
@@ -208,6 +690,22 @@ describe("the HUD", () => {
         expect(ui).not.toHaveBeenCalled();
         expect(numbers).not.toHaveBeenCalled();
         vi.unstubAllGlobals();
+    });
+
+    test("drops co-op's countdown when a run ends early while the party's choosing", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        Object.assign(client, { coopRun: { decisionSeconds: 12 }, coopStopped: false });
+        updateHud(client, true);
+        expect(store.getNumbers()!.decisionSeconds).toBe(12);
+        // The host left mid-choice: the results show, and the run stays as it stopped
+        (client as unknown as { endCoopRunEarly(why: string): void }).endCoopRunEarly(
+            "The host left, so the run ended.",
+        );
+        expect(store.getSnapshot().overlay).toBe("dead");
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+        updateHud(client);
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
     });
 });
 
@@ -284,6 +782,29 @@ describe("the frame cap", () => {
         // The title screen
         Object.assign(client, { sim: undefined, coopRun: undefined });
         expect(stopped(client)).toBe(true);
+    });
+});
+
+describe("the gear panel", () => {
+    test("is off unless it's been turned on, and is remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ damagePanel: true }));
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        const { client } = createClient(createSim(), false);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(true);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        vi.unstubAllGlobals();
     });
 });
 
@@ -650,6 +1171,163 @@ describe("auto equip", () => {
     });
 });
 
+describe("a co-op run that breaks", () => {
+    // The client mid-run with a stand-in for the run, as updateCoop drives it
+    function coopClient(run: Partial<Record<string, unknown>>) {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const coop = { keepAlive: vi.fn(), leave: vi.fn() };
+        const finishRun = vi.fn();
+        const flush = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            flush,
+            stepFrame,
+            ...run,
+        };
+        Object.assign(client, {
+            coop,
+            coopRun: fake,
+            coopStopped: false,
+            accumulator: 0,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+            finishRun,
+            updateHud() {},
+        });
+        const update = (ms = TICK_MS * 2) =>
+            (
+                client as unknown as {
+                    updateCoop(ms: number, sim: Sim, run: unknown): void;
+                }
+            ).updateCoop(ms, sim, fake);
+        return { client, store, coop, finishRun, flush, stepFrame, update };
+    }
+
+    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+        const setMove = vi.fn();
+        const { client, store, update } = coopClient({ setMove });
+        Object.assign(client, {
+            input: {
+                getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
+            },
+        });
+        client.pause();
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(1, 0);
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(0, 0);
+    });
+
+    it("uses items and the hero's button under co-op's menu, not under the Collection log over it", () => {
+        const { client } = coopClient({});
+        const useItem = vi.fn();
+        const useAbility = vi.fn();
+        Object.assign(client, { useItem, useAbility });
+        const press = (code: string) =>
+            (client as unknown as { onKeyPress(code: string): void }).onKeyPress(code);
+        client.pause();
+        press("Space");
+        press("Digit1");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledWith(0);
+        client.openRunLog();
+        press("Space");
+        press("Digit2");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledOnce();
+        // Back on the menu, in reach again
+        press("Escape");
+        press("Digit3");
+        expect(useItem).toHaveBeenLastCalledWith(2);
+    });
+
+    it("sends the host's frames even when something after a step throws", () => {
+        const { client, flush, stepFrame, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        expect(update).toThrow("a bug in what's drawn");
+        expect(stepFrame).toHaveBeenCalledOnce();
+        expect(flush).toHaveBeenCalledOnce();
+    });
+
+    it("keeps no time back to make up when something after a step throws", () => {
+        const { client, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        // A slow frame's worth of steps due, and only one taken
+        expect(() => update(TICK_MS * 8)).toThrow("a bug in what's drawn");
+        expect((client as unknown as { accumulator: number }).accumulator).toBeLessThanOrEqual(
+            TICK_MS,
+        );
+    });
+
+    it("steps nothing once checking the room's connection has lost it", () => {
+        const { client, coop, stepFrame, flush, update } = coopClient({});
+        // The connection found dead and the room given up on, which ends the run
+        coop.keepAlive.mockImplementation(() =>
+            Object.assign(client, { coopRun: undefined, coopStopped: true }),
+        );
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        expect(flush).not.toHaveBeenCalled();
+    });
+
+    it("checks the room's connection on every update", () => {
+        const { coop, update } = coopClient({ canStep: () => false });
+        update();
+        update();
+        expect(coop.keepAlive).toHaveBeenCalledTimes(2);
+    });
+
+    it("ends a run whose frame won't step, and leaves the room, which ends it for everyone", () => {
+        const { client, coop, finishRun, stepFrame, update } = coopClient({ stuck: true });
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect(finishRun).toHaveBeenCalledWith("Something went wrong in the run, so it ended.");
+        expect(stepFrame).not.toHaveBeenCalled();
+        // And it's over: nothing more's stepped, and it doesn't leave again
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect((client as unknown as { coopStopped: boolean }).coopStopped).toBe(true);
+    });
+
+    it("tells a guest that can't catch up why, on its results or, if they're up, a toast", () => {
+        const behind = coopClient({ isHost: false, cantCatchUp: true });
+        behind.update();
+        expect(behind.coop.leave).toHaveBeenCalledOnce();
+        expect(behind.finishRun).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+        );
+
+        // Their hero's run was over already, so its results are showing
+        const spectating = coopClient({ isHost: false, cantCatchUp: true });
+        Object.assign(spectating.client, { runRecorded: true });
+        const toast = vi.spyOn(spectating.store, "toast");
+        spectating.update();
+        expect(spectating.coop.leave).toHaveBeenCalledOnce();
+        expect(toast).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+            6000,
+        );
+    });
+});
+
 describe("auto alch", () => {
     test("is off unless it's been turned on, and is remembered", () => {
         const stored = new Map<string, string>();
@@ -875,6 +1553,28 @@ describe("saving", () => {
         },
     );
 
+    // For the raid chests, which give nothing found already
+    test("a solo run and a co-op loadout bring the save's raid chest trophies, only those", async () => {
+        expect.hasAssertions();
+        const { client } = createSaving(true);
+        client.save.trophies = ["lil_bloat", "jar_of_dreams", "ghrazi_rapier", "lil_sot"];
+        const enterRun = vi.fn<(sim: Sim) => void>();
+        Object.assign(client, {
+            grid: createSim().grid,
+            travelTo: vi.fn().mockResolvedValue(true),
+            enterRun,
+            options: { stress: 0 },
+        });
+        await client.startRun("lumbridge");
+        const sim = enterRun.mock.calls[0][0];
+        const raidOnes = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(raidOnes);
+        const loadout = (
+            client as unknown as { getLoadout(): Parameters<typeof loadoutStats>[0] }
+        ).getLoadout();
+        expect(loadout?.trophies).toEqual(raidOnes);
+    });
+
     test("a co-op map's forced adventurer determines the skill page", () => {
         expect.hasAssertions();
         const { client, store } = createSaving(true);
@@ -889,6 +1589,38 @@ describe("saving", () => {
         expect(loadoutStats(loadout)).toEqual(
             getMetaStats(client.save, getCharacter("durial321").style),
         );
+    });
+
+    test("the co-op host plays everyone as the Avian Assaulter on Thanksgiving", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "warrior", ready: true },
+            { id: "guest", name: "Guest", characterId: "ranger", ready: true },
+        ];
+        const room = { mapId: "thanksgiving", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["avian_assaulter", "avian_assaulter"]);
+    });
+
+    test("the co-op host plays an adventurer it hasn't got (a newer guest's) as the first", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "wizard", ready: true },
+            { id: "guest", name: "Guest", characterId: "someone_new", ready: true },
+        ];
+        const room = { mapId: "lumbridge", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["wizard", CHARACTERS[0].id]);
     });
 
     test("a single skill refund is saved and refreshes the shop", () => {
@@ -919,7 +1651,7 @@ describe("saving", () => {
         expect(saved).toEqual([]);
     });
 
-    test("refunding an early skill persists later purchases' lower prices", () => {
+    test("refunding an early skill saves what the page costs without it", () => {
         expect.hasAssertions();
         const { client, store, saved } = createSaving(true);
         client.save.coins = 50000;
@@ -930,22 +1662,9 @@ describe("saving", () => {
         expect(client.save.skillPages.melee).toEqual({
             upgrades: { smithing: 1 },
             upgradesSpent: 10000,
-            upgradeOrder: ["smithing"],
         });
         expect(saved).toEqual([client.save]);
         expect(store.getSnapshot().save).toEqual(client.save);
-    });
-
-    test("a single-rank refund on a page with no order changes and saves nothing", () => {
-        expect.hasAssertions();
-        const { client, saved } = createSaving(true);
-        client.save.coins = 10000;
-        buyUpgrade(client.save, "strength");
-        delete client.save.skillPages.melee.upgradeOrder;
-        const before = structuredClone(client.save);
-        client.refundUpgrade("strength");
-        expect(client.save).toEqual(before);
-        expect(saved).toEqual([]);
     });
 
     test("nothing's saved while another tab has the game", () => {
@@ -1013,7 +1732,12 @@ describe("saving", () => {
         setStored({ save: { ...createSave(), coins: 70 }, newer: { gameVersion: "0.23.0" } });
         lockChanged(true);
         client.exportSave();
-        expect(spy).toHaveBeenLastCalledWith("run-escape-save.json", "stored", "application/json");
+        expect(spy).toHaveBeenLastCalledWith(
+            "run-escape-save.json",
+            "stored",
+            "application/json",
+            expect.any(Function),
+        );
         // This game's own is marked with its version
         setStored({ save: { ...createSave(), coins: 80 } });
         lockChanged(true);
@@ -1021,6 +1745,30 @@ describe("saving", () => {
         const text = spy.mock.lastCall![1];
         expect(JSON.parse(text)).toMatchObject({ coins: 80, gameVersion: "0.22.1" });
         spy.mockRestore();
+    });
+
+    test("an export says when it was made, and the save remembers it once it's kept", async () => {
+        const saveFile = await import("./saveFile");
+        const spy = vi.spyOn(saveFile, "saveFile").mockImplementation(() => {});
+        vi.spyOn(Date, "now").mockReturnValue(1_790_000_000_000);
+        try {
+            const { client, store, saved, lockChanged } = createSaving(false);
+            lockChanged(true);
+            const writes = saved.length;
+            client.exportSave();
+            const [, text, , kept] = spy.mock.lastCall!;
+            expect(JSON.parse(text).lastExported).toBe(1_790_000_000_000);
+            // Not yet: the player can still cancel the app's picker or the share sheet
+            expect(client.save.lastExported).toBeUndefined();
+            expect(saved.length).toBe(writes);
+            vi.mocked(Date.now).mockReturnValue(1_790_000_060_000);
+            kept!();
+            expect(saved.at(-1)?.lastExported).toBe(1_790_000_000_000);
+            expect(store.getSnapshot().save.lastExported).toBe(1_790_000_000_000);
+        } finally {
+            vi.mocked(Date.now).mockRestore();
+            spy.mockRestore();
+        }
     });
 
     test("another tab taking the save pauses a solo run, once, and not co-op's", () => {
@@ -1088,7 +1836,7 @@ describe("saving", () => {
             const { client, store, saved, setCharacterLook, setMe } = createPicking();
             client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
             expect(store.getSnapshot().characterId).toBe("ranger");
-            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setCharacterLook.mock.calls).toEqual([["ranger", undefined, undefined]]);
             expect(setMe).toHaveBeenCalledTimes(1);
             expect(saved.map((s) => s.favouriteCharacter)).toEqual(["ranger"]);
         });
@@ -1107,7 +1855,7 @@ describe("saving", () => {
             store.set({ characterId: locked });
             client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
             expect(store.getSnapshot().characterId).toBe("ranger");
-            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setCharacterLook.mock.calls).toEqual([["ranger", undefined, undefined]]);
             expect(setMe).toHaveBeenCalledTimes(1);
         });
 
@@ -1180,6 +1928,53 @@ describe("a boss bar in phases", () => {
     });
 });
 
+describe("the hitpoints bar", () => {
+    test("fills with the hitpoints as they are, not a whole one at a time, within the bar", () => {
+        // A tick of 4 hitpoints a minute's regeneration shows within a few seconds
+        expect(getHpShare(37.6, 38)).toBe(0.989);
+        expect(getHpShare(19, 38)).toBe(0.5);
+        expect(getHpShare(-2, 38)).toBe(0);
+        expect(getHpShare(40, 38)).toBe(1);
+        expect(getHpShare(0, 0)).toBe(0);
+    });
+
+    test("says a whole number of hitpoints, never 0 while some are left", () => {
+        expect(getShownHp(37.6)).toBe(38);
+        expect(getShownHp(19.2)).toBe(19);
+        expect(getShownHp(0.3)).toBe(1);
+        expect(getShownHp(0)).toBe(0);
+        expect(getShownHp(-2)).toBe(0);
+    });
+});
+
+describe("a map's objectives", () => {
+    // Just what they read: the map's objectives and its lairs' states
+    function objectiveOf(states: Record<string, string>) {
+        const map = getMap("battle_for_varrock");
+        const sim = { map, lairById: (id: string) => ({ state: states[id] ?? "asleep" }) };
+        return getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]);
+    }
+
+    test("the Battle for Varrock's: his generals, then Yama, then nothing", () => {
+        expect(objectiveOf({})).toEqual({
+            text: "Find and slay Yama's two generals",
+            done: 0,
+            count: 2,
+        });
+        expect(objectiveOf({ kril: "beaten" })?.done).toBe(1);
+        const yama = objectiveOf({ xarth: "beaten", kril: "beaten" });
+        expect(yama).toEqual({ text: "Slay Yama in Varrock Palace", done: 0, count: 1 });
+        expect(objectiveOf({ xarth: "beaten", kril: "beaten", yama: "beaten" })).toBeUndefined();
+    });
+
+    test("a map without any has none", () => {
+        const sim = { map: getMap("lumbridge"), lairById: () => undefined };
+        expect(
+            getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]),
+        ).toBeUndefined();
+    });
+});
+
 describe("raid modes", () => {
     test("turning hard mode off turns expert off with it, as expert is hard mode too", () => {
         const { client, store } = createClient(createSim(), false);
@@ -1188,5 +1983,873 @@ describe("raid modes", () => {
         client.toggleHard();
         expect(store.getSnapshot().hard).toBe(false);
         expect(store.getSnapshot().expert).toBe(false);
+    });
+});
+
+describe("the opening cinematic", () => {
+    // The client mid-run with the Battle for Varrock's opening playing, a second in
+    function cinematicClient() {
+        const { client, store } = createClient(createSim(), false);
+        const cinematic = new CinematicPlayer(VARROCK_OPENING);
+        cinematic.advance(1);
+        const view = { cinematic: cinematic as CinematicPlayer | undefined, onEvents() {} };
+        const useAbility = vi.fn();
+        const play = vi.fn();
+        Object.assign(client, {
+            cinematic,
+            view,
+            useAbility,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned: vi.fn() } },
+        });
+        store.set({ cinematic: true });
+        const state = client as unknown as { cinematic?: CinematicPlayer; paused: boolean };
+        return { client, store, cinematic, view, useAbility, play, state };
+    }
+
+    test.each(["Space", "Escape", "KeyW", "Enter", "Digit1"])(
+        "is skipped by any key (or a controller's button), %s, which does nothing else",
+        (code) => {
+            const { client, store, view, useAbility, state } = cinematicClient();
+            (client as unknown as { pressKey(code: string): void }).pressKey(code);
+            expect(state.cinematic).toBeUndefined();
+            expect(view.cinematic).toBeUndefined();
+            expect(store.getSnapshot().cinematic).toBe(false);
+            expect(useAbility).not.toHaveBeenCalled();
+            expect(state.paused).toBe(false);
+        },
+    );
+
+    test("is skipped by a click or a tap, but not by one as it begins", () => {
+        const { client, store, state } = cinematicClient();
+        state.cinematic!.seconds = 0.1;
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        state.cinematic!.seconds = 0.5;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+    });
+
+    test("plays its sounds as it goes, and hands the camera back to the run's at the end", () => {
+        const { client, store, play, state } = cinematicClient();
+        const update = (ms: number, camera: CinematicCamera) =>
+            (
+                client as unknown as {
+                    updateCinematic(
+                        ms: number,
+                        sim: Sim,
+                        alpha: number,
+                        play: CinematicCamera,
+                    ): unknown;
+                }
+            ).updateCinematic(ms, client.sim!, 0, camera);
+        const run: CinematicCamera = {
+            x: 4747.5,
+            y: 10609.5,
+            height: -0.6,
+            pitch: -400,
+            yaw: 0,
+            distance: 18,
+        };
+        // A long first frame moves it on by a frame's worth, not all of it
+        expect(update(20000, run)).toBeDefined();
+        expect(state.cinematic!.seconds).toBeLessThan(1.2);
+        let last: unknown;
+        for (let i = 0; i < 2000 && state.cinematic; i++) {
+            last = update(50, run) ?? last;
+        }
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+        // Yama's click, heard once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
+        const end = last as CinematicCamera;
+        expect(end.x).toBeCloseTo(run.x, 1);
+        expect(end.y).toBeCloseTo(run.y, 1);
+        expect(end.distance).toBeCloseTo(run.distance, 1);
+        expect(end.pitch).toBeCloseTo(run.pitch, 0);
+    });
+
+    test("keeps a co-op player still while it plays", () => {
+        const { client, state } = cinematicClient();
+        const moves: number[][] = [];
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => false,
+            setMove: (x: number, y: number) => moves.push([x, y]),
+            flush() {},
+        };
+        Object.assign(client, {
+            coop: { keepAlive() {} },
+            coopRun: fake,
+            coopStopped: false,
+            input: {
+                getMoveVector: (into: { x: number; y: number }) =>
+                    Object.assign(into, { x: 1, y: 0 }),
+            },
+            move: { x: 0, y: 0 },
+        });
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, fake);
+        update();
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        update();
+        expect(moves).toEqual([
+            [0, 0],
+            [1, 0],
+        ]);
+    });
+
+    // A lair's (LairDef.opening): the client mid-run, with Yama's lair asleep, on its own or in
+    // co-op
+    function lairClient(coop: boolean) {
+        const { client, store } = createClient(createSim(), false);
+        const skipLairOpening = vi.fn();
+        const sim = {
+            tick: 500,
+            lair: { state: "asleep", wakeTick: -1, def: { opening: YAMA_WAKES } },
+            skipLairOpening,
+        };
+        const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
+        const play = vi.fn();
+        Object.assign(client, {
+            sim,
+            view,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned: vi.fn() } },
+            coopRun: coop ? {} : undefined,
+        });
+        const state = client as unknown as { cinematic?: CinematicPlayer };
+        const run: CinematicCamera = {
+            x: 4749.5,
+            y: 10699.5,
+            height: -0.6,
+            pitch: -400,
+            yaw: 0,
+            distance: 18,
+        };
+        const update = () =>
+            (
+                client as unknown as {
+                    updateCinematic(
+                        ms: number,
+                        sim: unknown,
+                        alpha: number,
+                        play: CinematicCamera,
+                    ): CinematicCamera | undefined;
+                }
+            ).updateCinematic(20, sim, 0.5, run);
+        return { client, store, sim, view, play, state, update, skipLairOpening };
+    }
+
+    test("a lair's plays as its boss wakes, on the sim's clock, and only once", () => {
+        const { store, sim, view, play, state, update } = lairClient(false);
+        expect(update()).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
+        sim.tick = 500 + 2 * TICKS_PER_SECOND;
+        expect(update()).toBeDefined();
+        const cinematic = state.cinematic!;
+        expect(cinematic.def).toBe(YAMA_WAKES.cinematic);
+        expect(cinematic.seconds).toBeCloseTo(2 + 0.5 / TICKS_PER_SECOND, 5);
+        expect(cinematic.holdsRun).toBe(false);
+        expect(view.cinematic).toBe(cinematic);
+        expect(store.getSnapshot().cinematic).toBe(true);
+        // Its sounds as the sim's clock passes them, and over once it's had its time
+        sim.tick = 500 + Math.ceil(YAMA_WAKES.cinematic.seconds + 1) * TICKS_PER_SECOND;
+        expect(update()).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+        const sounds = YAMA_WAKES.cinematic.cues.flatMap((cue) => cue.sound ?? []);
+        expect(play.mock.calls.map(([id]) => id)).toEqual(sounds);
+        // and not again while it's still waking
+        update();
+        expect(state.cinematic).toBeUndefined();
+    });
+
+    test("a lair's unsealing plays as it's unsealed, on the sim's clock from then, and only once", () => {
+        const { client, sim, state, update } = lairClient(false);
+        const unsealing = getMap("battle_for_varrock").lairs!.find((lair) => lair.id === "yama")!
+            .requires!.unsealing!;
+        Object.assign(sim, {
+            player: { x: 4792, y: 10707.5 },
+            unsealing: { unsealTick: 400, def: { requires: { unsealing } } },
+        });
+        Object.assign(client, { cameraRig: { pitch: -400, yaw: 0, distance: 18 } });
+        sim.tick = 400 + TICKS_PER_SECOND;
+        expect(update()).toBeDefined();
+        const cinematic = state.cinematic!;
+        expect(cinematic.def).toBe(unsealing.cinematic);
+        expect(cinematic.seconds).toBeCloseTo(1 + 0.5 / TICKS_PER_SECOND, 5);
+        // What it flies over is kept loaded
+        const pinned = (
+            client as unknown as {
+                renderer: { mapManager: { setPinned: ReturnType<typeof vi.fn> } };
+            }
+        ).renderer.mapManager.setPinned;
+        expect(pinned.mock.calls[0][0].length).toBeGreaterThan(0);
+        sim.tick = 400 + Math.ceil(unsealing.cinematic.seconds + 1) * TICKS_PER_SECOND;
+        expect(update()).toBeUndefined();
+        expect(pinned).toHaveBeenLastCalledWith([]);
+        update();
+        expect(state.cinematic).toBeUndefined();
+    });
+
+    test.each([
+        [false, 1],
+        [true, 0],
+    ])(
+        "a lair's skipped in co-op (%s) has its boss come straight on only on your own",
+        (coop, calls) => {
+            const { client, sim, state, update, skipLairOpening } = lairClient(coop);
+            sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
+            sim.tick = 500 + TICKS_PER_SECOND;
+            update();
+            client.skipCinematic();
+            expect(state.cinematic).toBeUndefined();
+            expect(skipLairOpening).toHaveBeenCalledTimes(calls);
+            update();
+            expect(state.cinematic).toBeUndefined();
+        },
+    );
+
+    test("is skipped from the loading screen before it, once that's been up a moment", () => {
+        const { client, store, state } = cinematicClient();
+        const loading = client as unknown as { cinematicLoading?: number };
+        state.cinematic!.seconds = 0;
+        store.set({ screen: "loading" });
+        loading.cinematicLoading = performance.now();
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        loading.cinematicLoading = performance.now() - 1000;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(loading.cinematicLoading).toBeUndefined();
+        expect(store.getSnapshot().screen).toBe("run");
+    });
+
+    test("in co-op, a guest's ready once its squares are in, and the host waits for its own", () => {
+        const { client, store } = cinematicClient();
+        const progress = { total: 2, left: 2 };
+        const sendUp = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const run = {
+            isHost: false,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            stepFrame,
+            flush() {},
+        };
+        Object.assign(client, {
+            cinematicLoading: performance.now(),
+            renderer: { mapManager: { setPinned: vi.fn(), getPinnedProgress: () => progress } },
+            coop: { isHost: false, sendUp, keepAlive() {} },
+            coopRun: run,
+            coopStopped: false,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+        });
+        store.set({ screen: "loading" });
+        const loading = client as unknown as { isCinematicLoading(): boolean };
+        expect(loading.isCinematicLoading()).toBe(true);
+        expect(sendUp).not.toHaveBeenCalled();
+        progress.left = 0;
+        expect(loading.isCinematicLoading()).toBe(false);
+        expect(sendUp).toHaveBeenCalledWith({ loaded: true });
+        expect(store.getSnapshot().screen).toBe("run");
+
+        // The host: no frames while its own squares load
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, run);
+        run.isHost = true;
+        Object.assign(client, { cinematicLoading: performance.now(), accumulator: 0 });
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        Object.assign(client, { cinematicLoading: undefined });
+        update();
+        expect(stepFrame).toHaveBeenCalled();
+    });
+
+    test("isn't played again on a retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, {
+            sim: { map: { id: "zachariah", fight: {} } },
+            leaveRun: vi.fn(),
+            startRun,
+        });
+        client.retry();
+        // and starts at its lair, if it has one (getRetryLair)
+        expect(startRun).toHaveBeenCalledWith("zachariah", false, undefined, undefined, true);
+    });
+});
+
+describe("the shot editor", () => {
+    // The client mid-run in burnt Varrock, with the editor open on its opening
+    async function directorClient() {
+        const { client, store } = createClient(createSim(), false);
+        const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
+        const play = vi.fn();
+        const setPinned = vi.fn();
+        Object.assign(client, {
+            sim: { map: getMap("battle_for_varrock"), player: { x: 3212.5, y: 3400.5 } },
+            view,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned } },
+            cameraRig: { pitch: -400, yaw: 0, distance: 18 },
+            input: { isDown: () => false },
+        });
+        await client.direct();
+        const state = client as unknown as {
+            cinematic?: CinematicPlayer;
+            pressKey(code: string): void;
+            endCinematic(): void;
+            updateCinematic(
+                ms: number,
+                sim: unknown,
+                alpha: number,
+                play: CinematicCamera,
+            ): CinematicCamera | undefined;
+        };
+        return { client, store, view, play, setPinned, state };
+    }
+
+    test("opens on the map's opening, held, with what its camera sees loaded", async () => {
+        const { client, store, view, setPinned, state } = await directorClient();
+        const director = client.director!;
+        expect(director.def.cast).toBe(VARROCK_OPENING.cast);
+        expect(state.cinematic).toBe(director.player);
+        expect(view.cinematic).toBe(director.player);
+        expect(store.getSnapshot()).toMatchObject({ cinematic: true, director });
+        expect(setPinned.mock.calls[0][0].length).toBeGreaterThan(0);
+    });
+
+    test("has its own keys, which do nothing else, and F3 and M as ever", async () => {
+        const { client, state } = await directorClient();
+        const onKeyPress = vi.fn();
+        Object.assign(client, { onKeyPress });
+        for (const code of ["Space", "KeyQ", "Digit1", "Escape", "F3", "KeyM"]) {
+            state.pressKey(code);
+        }
+        expect(client.director!.getSnapshot().playing).toBe(true);
+        expect(state.cinematic).toBeDefined();
+        expect(onKeyPress.mock.calls.map(([code]) => code)).toEqual(["F3", "KeyM"]);
+    });
+
+    test("isn't paused or skipped, and goes with the run", async () => {
+        const { client, store, state } = await directorClient();
+        client.pause();
+        expect(client.paused).toBe(false);
+        client.director!.seek(5);
+        client.skipCinematic();
+        expect(client.director).toBeDefined();
+        state.endCinematic();
+        expect(client.director).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().director).toBeUndefined();
+    });
+
+    test("takes no keys while a trailer's recorded, but Escape, which stops it", async () => {
+        const { client, state } = await directorClient();
+        const cancel = vi.fn();
+        Object.assign(client, { trailer: { recorder: { cancel }, live: false, rolling: true } });
+        state.pressKey("Space");
+        state.pressKey("Enter");
+        expect(client.director!.getSnapshot()).toMatchObject({ playing: false, edited: false });
+        expect(cancel).not.toHaveBeenCalled();
+        state.pressKey("Escape");
+        expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    test("plays on from its playhead, its sounds heard, its camera the run's", async () => {
+        const { client, play, state } = await directorClient();
+        const director = client.director!;
+        director.seek(15);
+        director.togglePlay();
+        const run: CinematicCamera = { x: 1, y: 2, height: 0, pitch: -400, yaw: 0, distance: 18 };
+        let camera: CinematicCamera | undefined;
+        for (let i = 0; i < 20; i++) {
+            // A long frame moves it on by a frame's worth, as a cinematic does
+            camera = state.updateCinematic(1000, client.sim, 0, run);
+        }
+        expect(director.seconds).toBeCloseTo(17);
+        // Yama's click, once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
+        expect(camera).toEqual(director.getCamera());
+        expect(state.cinematic).toBe(director.player);
+    });
+
+    test("plays the next part's entrance on a fight in parts' Next fight, not on its retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        const chosen = { stage: 3 };
+        Object.assign(client, {
+            sim: {
+                map: { id: "beneath_cursed_sands", fight: {}, stages: [{}, {}, {}, {}] },
+                stage: 2,
+            },
+            leaveRun: vi.fn(),
+            startRun,
+            chosenStage: () => chosen.stage,
+        });
+        // The Champion won: on to the Akh
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith(
+            "beneath_cursed_sands",
+            true,
+            undefined,
+            undefined,
+            true,
+        );
+        // The Champion lost: him again
+        chosen.stage = 2;
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith(
+            "beneath_cursed_sands",
+            false,
+            undefined,
+            undefined,
+            true,
+        );
+    });
+});
+
+describe("the fight button's hint", () => {
+    // Just what the button reads of a run: its ability, the clock, and the boss on the bar
+    function createFight() {
+        const sim = {
+            ability: { name: "Amascut's bane", iconObjId: 1, cooldown: 4, guide: true } as {
+                name: string;
+                iconObjId: number;
+                cooldown: number;
+                guide?: boolean;
+            },
+            heroes: [{ characterId: "warrior" }],
+            focus: 0,
+            map: {},
+            tick: 0,
+            shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,
+            abilityTarget: () => undefined,
+            abilitySecondsLeft: () => 0,
+            isExposed: () => false,
+        };
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, { abilityUsed: false });
+        const hint = (seconds: number): boolean => {
+            sim.tick = seconds * TICKS_PER_SECOND;
+            const view = (
+                client as unknown as { getAbilityView(sim: unknown): { hint: boolean } }
+            ).getAbilityView(sim);
+            return view.hint;
+        };
+        return { sim, client, hint };
+    }
+
+    test("goes by when the boss came up, not the run's clock, as the Tombs' Nexus comes first", () => {
+        const { sim, hint } = createFight();
+        // The Nexus: no boss, however long it takes
+        expect(hint(5)).toBe(false);
+        expect(hint(40)).toBe(false);
+        // The room's boss, rising till 62 s: not yet
+        sim.shownBoss = { dead: false, risingEnd: 62 * TICKS_PER_SECOND };
+        expect(hint(60)).toBe(false);
+        expect(hint(62)).toBe(false);
+        // A moment after it's up, and long enough to read
+        expect(hint(66)).toBe(true);
+        expect(hint(76)).toBe(true);
+        expect(hint(80)).toBe(false);
+        // Beaten, and the next room's boss: from that one's start again
+        sim.shownBoss = { dead: true, risingEnd: 0 };
+        expect(hint(100)).toBe(false);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(101)).toBe(false);
+        expect(hint(105)).toBe(true);
+    });
+
+    test("isn't shown again once the button's been used this session", () => {
+        const { sim, client, hint } = createFight();
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(true);
+        Object.assign(client, { abilityUsed: true });
+        expect(hint(6)).toBe(false);
+        sim.shownBoss = undefined;
+        hint(20);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(21);
+        expect(hint(25)).toBe(false);
+    });
+
+    test("isn't put away by a press the button says no to", () => {
+        const { sim, client, hint } = createFight();
+        Object.assign(client, { act: () => undefined, paused: false });
+        const press = (takes: boolean): void => {
+            Object.assign(client, { sim: { ...sim, abilityPressTakes: () => takes } });
+            client.useAbility();
+        };
+        // Nothing to land on, or not ready: the Sim says no
+        press(false);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(0);
+        expect(hint(5)).toBe(true);
+        // One it takes (going off, or held a moment)
+        press(true);
+        expect(hint(6)).toBe(false);
+    });
+
+    test("is only for a button that coaches, so Zachariah's Smite stays as it was", () => {
+        const { sim, hint } = createFight();
+        sim.ability = { name: "Smite", iconObjId: 1, cooldown: 4 };
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(false);
+    });
+});
+
+describe("invocation presets", () => {
+    function createClient() {
+        const save = createSave();
+        const sent: unknown[] = [];
+        const writes = { count: 0 };
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            save,
+            persist: () => writes.count++,
+            getLoadout: () => ({ invocations: save.invocations }),
+            coop: { room: {}, setMe: (me: unknown) => sent.push(me) },
+        });
+        return { client, save, sent, writes };
+    }
+
+    test("load onto the board and tell the lobby, as a toggle does", () => {
+        const { client, save, sent } = createClient();
+        save.invocations = ["on_a_diet"];
+        client.saveInvocationPreset("Diet");
+        save.invocations = [];
+        client.loadInvocationPreset("Diet");
+        expect(save.invocations).toEqual(["on_a_diet"]);
+        expect(sent).toEqual([{ loadout: { invocations: ["on_a_diet"] } }]);
+        // Not one of them, nothing happens
+        client.loadInvocationPreset("Nope");
+        client.deleteInvocationPreset("Nope");
+        expect(save.invocationPresets).toHaveLength(1);
+        expect(sent).toHaveLength(1);
+    });
+
+    test("leave none at all once the last is deleted, as a save loads it", () => {
+        const { client, save } = createClient();
+        client.saveInvocationPreset("");
+        client.deleteInvocationPreset("Raid level 0");
+        expect(save.invocationPresets).toBeUndefined();
+    });
+
+    test("write nothing for a new one when they're all used", () => {
+        const { client, save, writes } = createClient();
+        for (let i = 0; i < MAX_INVOCATION_PRESETS; i++) {
+            client.saveInvocationPreset(`Set ${i}`);
+        }
+        const presets = save.invocationPresets;
+        writes.count = 0;
+        client.saveInvocationPreset("One more");
+        expect(writes.count).toBe(0);
+        expect(save.invocationPresets).toBe(presets);
+    });
+});
+
+describe("boss attacks' instructions", () => {
+    function createClient() {
+        const now = vi.spyOn(performance, "now").mockReturnValue(0);
+        const store = new GameStore(createSave());
+        const shown: { text: string; ms?: number }[] = [];
+        const toast = store.toast.bind(store);
+        store.toast = (text: string, ms?: number) => {
+            shown.push({ text, ms });
+            return toast(text, ms);
+        };
+        let playing = true;
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            instructionsSeen: new Set<string>(),
+            instructions: [],
+            instructionsUp: [],
+            instructionShownAt: -Infinity,
+            instructionPumpedAt: 0,
+            isPlaying: () => playing,
+            store,
+        });
+        const inner = client as unknown as {
+            queueInstruction(text: string): void;
+            showInstruction(now: number): void;
+        };
+        // A frame at t, as GameClient.update has it: toasts past their time go, then the next
+        // instruction
+        const frame = (t: number) => {
+            now.mockReturnValue(t);
+            store.expireToasts();
+            inner.showInstruction(t);
+        };
+        return {
+            store,
+            shown,
+            texts: () => shown.map((s) => s.text),
+            queue: (text: string) => inner.queueInstruction(text),
+            frame,
+            // Frames from one time to another, 100 ms apart
+            play: (from: number, to: number) => {
+                for (let t = from; t <= to; t += 100) {
+                    frame(t);
+                }
+            },
+            pause: (on: boolean) => (playing = !on),
+            restore: () => now.mockRestore(),
+        };
+    }
+
+    test("show once a run, one after another, each held long enough to read", () => {
+        const c = createClient();
+        try {
+            c.frame(1000);
+            c.queue("Dodge the spears!");
+            c.queue("Hide behind a rock!");
+            c.queue("Dodge the spears!");
+            expect(c.texts()).toEqual(["Dodge the spears!"]);
+            expect(c.shown[0].ms).toBeGreaterThanOrEqual(4000);
+            // Not on top of the first
+            c.play(1100, 3900);
+            expect(c.shown).toHaveLength(1);
+            c.play(4000, 4100);
+            expect(c.texts()).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
+            // Its attack again later: not said again this run
+            c.play(4200, 20000);
+            c.queue("Dodge the spears!");
+            c.play(20100, 25000);
+            expect(c.shown).toHaveLength(2);
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("come back after a level up that covered them, till they've been read", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            c.queue("First");
+            c.queue("Second");
+            c.play(100, 500);
+            expect(c.texts()).toEqual(["First"]);
+            // A level up's choice half a second after it came up: it's taken down, not read
+            c.pause(true);
+            c.frame(600);
+            expect(c.store.getSnapshot().toasts).toEqual([]);
+            c.play(700, 30000);
+            expect(c.texts()).toEqual(["First"]);
+            // Back in play: the first again straight away, then the second
+            c.pause(false);
+            c.play(30100, 33100);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+            // Each read once it's been up long enough: a pause after that brings neither back
+            c.play(33200, 37000);
+            c.pause(true);
+            c.frame(37100);
+            c.pause(false);
+            c.play(37200, 45000);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("come again when newer notices push one off before it's read", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            c.queue("Get behind a boulder!");
+            c.play(100, 1000);
+            // Four of the game's other notices at once: the store keeps four
+            for (const text of ["Zebak roars!", "A casket drops!", "Power up!", "Level 5!"]) {
+                c.store.toast(text);
+            }
+            c.frame(1100);
+            expect(c.texts().filter((t) => t === "Get behind a boulder!")).toHaveLength(2);
+            expect(c.store.getSnapshot().toasts.map((t) => t.text)).toContain(
+                "Get behind a boulder!",
+            );
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("drop one that waited too long in play, but not for time in a hidden tab", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            // Six at once, 3 s apart: the fifth's and sixth's turns come after 12 s of play, too
+            // late, and they go
+            ["A", "B", "C", "D", "E", "F"].forEach(c.queue);
+            c.play(100, 20000);
+            expect(c.texts()).toEqual(["A", "B", "C", "D"]);
+            // Time away in a hidden tab isn't time waited, or time read: back after minutes, the
+            // one that was up comes again, and the one behind it isn't dropped
+            c.queue("G");
+            c.queue("H");
+            c.frame(20100);
+            c.frame(200000);
+            c.play(200100, 203100);
+            expect(c.texts().slice(-3)).toEqual(["G", "G", "H"]);
+        } finally {
+            c.restore();
+        }
+    });
+});
+
+describe("the Collection log over the pause menu", () => {
+    test("opens only on the pause menu, and Escape or P goes back to the menu before resuming", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        const snapshot = () => store.getSnapshot();
+        client.openRunLog();
+        expect(snapshot().runLog).toBeFalsy();
+        press("Escape");
+        expect(snapshot().overlay).toBe("paused");
+        for (const code of ["Escape", "KeyP"]) {
+            client.openRunLog();
+            expect(snapshot().runLog).toBe(true);
+            press(code);
+            expect(snapshot().runLog).toBe(false);
+            expect(snapshot().overlay).toBe("paused");
+        }
+        press("Escape");
+        expect(snapshot().overlay).toBe("none");
+    });
+
+    test("shuts with the menu however the run leaves it, so the next pause opens on the menu", () => {
+        const { client, store } = createClient(createSim(), false);
+        Object.assign(client, { updateHud() {} });
+        client.pause();
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        // As starting a run and leaving one do (leavePauseMenu)
+        client.quitRun();
+        expect(store.getSnapshot().runLog).toBe(false);
+    });
+
+    test("leaves Escape and P to the panel saying nothing's being saved, over the menu or the log", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        client.pause();
+        client.openRunLog();
+        store.set({ saveBlock: { kind: "otherTab" } });
+        for (const code of ["Escape", "KeyP"]) {
+            press(code);
+            expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: true });
+        }
+        // Played on without saving: the keys are the log's and the menu's again
+        store.set({ saveBlockClosed: true });
+        press("Escape");
+        expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: false });
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("shows the run's finds from a copy of the save, saving nothing", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const trophy = TROPHIES[0];
+        sim.trophies.add(trophy.id);
+        const save = structuredClone(client.save);
+        const result = sim.getResult();
+        const { saved, withRun } = client.getRunLogSaves();
+        expect(saved).toEqual(save);
+        expect(withRun?.trophies).toEqual([trophy.id]);
+        expect(client.save).toEqual(save);
+        expect(sim.getResult()).toEqual(result);
+        // Once it's recorded, the save has them
+        Object.assign(client, { runRecorded: true });
+        expect(client.getRunLogSaves().withRun).toBeUndefined();
+    });
+
+    test("finds nothing the run wouldn't bank: a result with a number that isn't", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        sim.trophies.add(TROPHIES[0].id);
+        Object.assign(sim, { coins: NaN });
+        expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
+    });
+});
+
+describe("a co-op room's Cards only", () => {
+    const caps = encodeCardCaps(new Map<string, Rarity>([["weapon:scimitar", "common"]]));
+    const loadout = (cardCaps?: string) => ({
+        metaStats: {},
+        unlockedItems: [],
+        armoury: {},
+        ...(cardCaps !== undefined && { cardCaps }),
+    });
+    it("keeps everyone's cards when the host plays it", () => {
+        const heroes = [
+            { id: "host", loadout: { ...loadout(caps), cardsOnly: true as const } },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "host").map((l) => l?.cardCaps)).toEqual([caps, caps]);
+    });
+    it("drops a guest's cards when the host doesn't: no one plays it alone", () => {
+        const heroes = [
+            { id: "host", loadout: loadout() },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        const party = partyLoadouts(heroes, "host");
+        expect(party.map((l) => l?.cardCaps)).toEqual([undefined, undefined]);
+        expect(cleanLoadout(party[1]).cardCaps).toBeUndefined();
+    });
+    it("drops a new host's cards from before, when their own tab isn't on", () => {
+        // A guest who became host keeps the caps they sent as a guest, but the room's off
+        const heroes = [
+            { id: "newHost", loadout: loadout(caps) },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "newHost").map((l) => l?.cardCaps)).toEqual([
+            undefined,
+            undefined,
+        ]);
+    });
+});
+
+describe("a co-op player's Card collection only pet", () => {
+    const butch = "butch";
+    it("keeps a co-op player's pet to one whose card they've sent, in a Cards only run", () => {
+        const caps = new Map<string, Rarity>([["weapon:scimitar", "common"]]);
+        const withCard = new Map(caps).set(`trophy:${butch}`, "veryRare");
+        const loadout = (cardCaps?: string) => ({
+            metaStats: {},
+            unlockedItems: [],
+            armoury: {},
+            pet: butch,
+            ...(cardCaps !== undefined && { cardCaps }),
+        });
+        expect(cleanLoadout(loadout(encodeCardCaps(withCard))).pet).toBe(butch);
+        expect(cleanLoadout(loadout(encodeCardCaps(caps))).pet).toBeUndefined();
+        // Not playing Cards only: their found pet, as before
+        expect(cleanLoadout(loadout()).pet).toBe(butch);
     });
 });

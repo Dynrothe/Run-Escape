@@ -25,6 +25,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 - **6 fun maps**, open from the start and endless: the Grand Exchange's scammers, East Varrock's
   F2P pkers past the Wilderness Ditch, Falador on 6 June 2006, Last Man Standing, Castle Wars and
   Pest Control.
+- **The Battle for Varrock**: the city burnt to ruins, played as Justiciar Zachariah with his own
+  buttons. Farm Yama's demon hordes, take on his two generals, Xarth in the Grand Exchange and
+  K'ril Tsutsaroth in the church, in either order, and then Yama in the palace.
 - **34 adventurers**, each with a starting weapon and a bonus, unlocked by beating maps and doing
   tasks on them.
 - **Weapons that upgrade the OSRS way** (bronze to dragon, Fire Strike to Fire Wave) and
@@ -32,7 +35,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a Godsword whose hilt you
   pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
-  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
+  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
+  and passive effects, levels and unlocks.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
@@ -52,28 +56,29 @@ has what changed in each version.
 The game is built on one Old School RuneScape cache, and only runs on that one: every NPC, item,
 animation and spot animation id in `src/game/content/` was checked against it.
 
-| Cache                 | Game build        | Date              | OpenRS2 Archive                                                 |
-| --------------------- | ----------------- | ----------------- | --------------------------------------------------------------- |
-| `osrs-241_2026-09-30` | OSRS revision 241 | 30 September 2026 | [cache 2727](https://archive.openrs2.org/caches/runescape/2727) |
+| Cache                 | Game build        | Date            | OpenRS2 Archive                                                 |
+| --------------------- | ----------------- | --------------- | --------------------------------------------------------------- |
+| `osrs-242_2026-11-03` | OSRS revision 242 | 3 November 2026 | [cache 2757](https://archive.openrs2.org/caches/runescape/2757) |
 
 It's set by `GAME_CACHE_NAME` in [`src/game/cache.ts`](src/game/cache.ts), and a test checks this
-table names the same cache. Moving to a newer cache means checking the content against it first
-(`scripts/cache/validate-decoders.ts`, `check-items.ts` and `check-fun-outfits.ts` help), then
-changing both.
+table names the same cache. Moving to a newer cache means checking the content against it first,
+then changing both: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#a-newer-cache) has the steps.
 
 ## Getting started
 
-You need [Node.js](https://nodejs.org/) 20 or newer.
+You need [Bun](https://bun.com/) (the version in `package.json`'s `packageManager`) and
+[Node.js](https://nodejs.org/) 20 or newer. Bun installs the packages and runs the project's
+commands, and Node runs Vite, Vitest and the co-op relay.
 
 ```sh
-npm install
-npm run download-caches
-npm start
+bun install --frozen-lockfile
+bun run download-caches
+bun run start
 ```
 
 and open http://localhost:5173.
 
-`npm run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
+`bun run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
 [OpenRS2 Archive](https://archive.openrs2.org/) into `caches/`; you can also copy a `caches/` folder
 over from another checkout. The download gives up when nothing has arrived for a minute; on a
 connection that drops out for longer, set `CACHE_DOWNLOAD_TIMEOUT_MS` to a longer wait in
@@ -86,12 +91,18 @@ loads are quick.
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
 the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
-**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button. In the
+menus, **Esc** goes back and **Enter** starts the run, or plays again from the results.
 
-Hover over an item in your bag to read the description shown when you found it.
+Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
+upgrades) to read their descriptions.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
+Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
+On small screens, tap Zoom beside the timer to show the camera zoom slider. The pause menu lists
+worn equipment and its descriptions, and with the Gear panel setting on, GEAR below DPS shows or
+hides it on the HUD too.
 Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
@@ -105,32 +116,36 @@ doesn't recognise the layout of only moves.
 ### Tests and tools
 
 ```sh
-npm test                   # the game's tests (vitest)
-npx tsc --noEmit -p .      # type check
-npm run lint               # format everything with Prettier
+bun run test               # the game's tests (vitest)
+bun run test:maps          # ScapeRune's tests with its long map checks (needs the game's cache)
+bun run tsc --noEmit -p .  # type check
+bun run lint               # format everything with Prettier
 ```
 
 `scripts/game/simulate-run.ts` has a bot play full runs for balancing, and `scripts/cache/` has
 tools for finding NPCs, items, animations and scenery in the cache.
+Generate collectible card PNGs from the same cache with `bun run cards 841 22481 --foil`.
+The [card generator guide](scripts/cards/README.md) covers deck files, numbering and the library API.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) lists them all, with how the code is laid out and how
 to host a build.
 
 ## Hosting
 
 ```sh
-npm run build
-npm run slim-cache
+bun run build
+bun run slim-cache
 ```
 
 writes the game to `dist/` with a slim copy of the cache in `dist/caches/` (only what the game
-reads, about 26 MB instead of 227 MB). The page has to be served with
-`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, over
-HTTPS. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details, with nginx and Apache
-examples. `npm run serve` serves the build with those headers from one Node process with no
-packages, co-op's relay included (`npm run serve:singleplayer` leaves it out). The game only offers
-Multiplayer where a relay answers, so a plain static host serves it as a single-player game; see
-[Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
-`npm run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
+reads, about 22 MB instead of 227 MB, in chunks so an update downloads only what changed). The
+page has to be served with `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, over HTTPS, and `caches/caches.json` with
+`Cache-Control: no-cache`. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#hosting) has the details,
+with nginx and Apache examples. `bun run serve` serves the build with those headers from one Node
+process with no packages, co-op's relay included (`bun run serve:singleplayer` leaves it out). The
+game only offers Multiplayer where a relay answers, so a plain static host serves it as a
+single-player game; see [Co-op relay](docs/DEVELOPMENT.md#co-op-relay).
+`bun run serve` and the relay also serve player and room counts for monitoring (Prometheus), on the
 server itself only, at `http://127.0.0.1:8788/coop/metrics`; `MULTIPLAYER_METRICS=off` turns them
 off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics).
 
@@ -138,9 +153,27 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
-plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
-and Export and Import in Settings carry one across.
+plays offline, and updates the game by itself when it can, keeping to the website's version so it
+can play co-op with the website's players between releases.
+Saves are kept apart from a browser's, and
+Export and Import in Settings carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
+
+## Android
+
+And an Android one, only here on GitHub: open `Run-Escape-<version>-android.apk` from a
+[release](https://github.com/Dynrothe/Run-Escape/releases) on your phone, and let your browser
+install apps when Android asks. The whole game's in it, so it plays offline, even the first time,
+and co-op works when there's a connection. On opening, it checks GitHub for a newer release and
+offers to download its APK, then asks before installing it. Android asks you to allow installs from
+Run Escape, then confirm the update. If the check fails or you're offline, the current game keeps
+working. You can also install a new APK over the old one yourself (uninstalling first deletes your
+progress). Like the Windows app, it also keeps to the website's version of the game, so it can
+play co-op with the website's players between releases: on Wi-Fi, a newer one downloads in the
+background, and plays when you restart the game from its menu (Back) or reopen the app. It needs a
+current Android System WebView, and says so if the phone's is too old. Its saves are apart from a
+browser's too, and Export and Import carry one across, as cloud save does where it's set up.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.
 
 ## Contributing
 
@@ -150,8 +183,9 @@ if you work with one.
 
 - Base your branch on the current `release-<version>` branch (or `main` if there isn't one), and
   point the pull request at it.
-- Format what you changed with Prettier (`npx prettier --write <files>`), and keep `npm test` and
-  the type check passing.
+- Format what you changed with Prettier (`bun run prettier --write <files>`), and keep
+  `bun run test` and the type check passing. A change to maps or collision needs
+  `bun run test:maps` passing too (PR-REVIEW.md says when).
 - Content is plain data in `src/game/content/`, with real cache ids; the tools in `scripts/cache/`
   find them. Say in the pull request if it uses anything new from the cache.
 - Note what you change under Unreleased in [CHANGELOG.md](CHANGELOG.md). It's written for players,

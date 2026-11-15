@@ -1,3 +1,5 @@
+import type { CacheChunk } from "./ChunkedCache";
+
 export type GameType = "classic" | "runescape" | "oldschool";
 
 export type CacheInfo = {
@@ -10,6 +12,13 @@ export type CacheInfo = {
     // Set on a slim cache (scripts/cache/slim-cache.ts): the cache it was cut
     // from, keeping only the groups the game uses
     slimOf?: string;
+    // A slim cache is in chunks (ChunkedCache.ts) in caches/chunks/, with how
+    // many archive ids each index has room for, and its map keys
+    chunks?: CacheChunk[];
+    indexSizes?: number[];
+    xteas?: Record<string, number[]>;
+    // The build a slim cache was made for: the game won't load another's
+    build?: string;
 };
 
 export function sortCachesNewToOld(caches: CacheInfo[]): void {

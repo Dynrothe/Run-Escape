@@ -2,8 +2,8 @@
 // block T, water or blocked floor ~, floors o, bridges B. Lists what stands on it and its floors
 // (ids as the map files store them), to survey a kind of ground.
 //
-//   npx tsx scripts/scaperune/find-prefabs.ts 50 50                # one map square
-//   npx tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1 pieces=1
+//   bun run tsx scripts/scaperune/find-prefabs.ts 50 50                # one map square
+//   bun run tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1 pieces=1
 //
 // Options, after the square or instead of it:
 //   rect=x,y,w,h  a rectangle in world tiles, across squares if it likes (cutPrefab's)

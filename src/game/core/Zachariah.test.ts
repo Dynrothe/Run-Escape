@@ -901,6 +901,160 @@ describe("fighting back", () => {
     });
 });
 
+// Mechanics Coenus has (Beneath Cursed Sands), tried on him: his court has a guard and a square
+describe("a lunge that tracks, a charge that opens", () => {
+    function fight(): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        const boss = startFight(sim);
+        boss.speed = 0;
+        placeBoss(boss, at(31, 33));
+        place(sim, at(31, 29));
+        return { sim, boss };
+    }
+    const tracking = (track: number): BossAttackDef => ({
+        ...attackNamed("Lunge"),
+        line: { ...attackNamed("Lunge").line!, track },
+    });
+
+    test("its strip turns after them while it tracks, no quicker than it can, then it's locked", () => {
+        const { sim, boss } = fight();
+        sim["startBossAttack"](boss, tracking(0.4));
+        boss.attackCooldown = 1e9;
+        const windup = boss.bossState!.windup!;
+        expect(windup.dirX).toBeCloseTo(0, 5);
+        // A step aside too soon: it turns after them, a little each tick
+        place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+        run(sim, 0.06);
+        const turned = Math.atan2(windup.dirX, -windup.dirY);
+        expect(turned).toBeGreaterThan(0.05);
+        expect(turned).toBeLessThan(0.44);
+        run(sim, 0.4);
+        // On them by now (they're 0.44 rad round), and locked: a step now gets them off it
+        const locked = { x: windup.dirX, y: windup.dirY };
+        expect(Math.atan2(locked.x, -locked.y)).toBeCloseTo(Math.atan2(1.9, 4), 1);
+        place(sim, { x: sim.player.x - 1.9, y: sim.player.y });
+        run(sim, 0.1);
+        expect(windup.dirX).toBe(locked.x);
+        expect(windup.dirY).toBe(locked.y);
+        run(sim, 0.5);
+        expect(hp(sim)).toBe(sim.player.maxHp);
+        expect(sim.isExposed(boss)).toBe(true);
+    });
+
+    test("one that tracks catches a step taken too soon; one that doesn't, doesn't", () => {
+        for (const track of [0.4, undefined]) {
+            const { sim, boss } = fight();
+            const lunge = track === undefined ? attackNamed("Lunge") : tracking(track);
+            sim["startBossAttack"](boss, lunge);
+            boss.attackCooldown = 1e9;
+            place(sim, { x: sim.player.x + 1.9, y: sim.player.y });
+            run(sim, 1);
+            expect(hp(sim) < sim.player.maxHp).toBe(track !== undefined);
+        }
+    });
+
+    const charge: BossAttackDef = {
+        name: "Charge",
+        kind: "surge",
+        damage: 3,
+        windup: 0.5,
+        cooldown: 0,
+        range: 99,
+        weight: 0,
+        radius: 1,
+        speed: 14,
+        opens: 2,
+    };
+
+    test("a charge that crosses without hitting anyone leaves its guard down", () => {
+        const { sim, boss } = fight();
+        sim["startBossAttack"](boss, charge);
+        boss.attackCooldown = 1e9;
+        const lane = boss.bossState!.windup!.lane!;
+        const length = Math.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY);
+        // Out of its lane, three tiles across it
+        place(sim, {
+            x: sim.player.x + ((lane.toY - lane.fromY) / length) * 3,
+            y: sim.player.y - ((lane.toX - lane.fromX) / length) * 3,
+        });
+        let opened = false;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && !opened; i++) {
+            run(sim, 0.02);
+            opened = sim.isExposed(boss);
+        }
+        expect(hp(sim)).toBe(sim.player.maxHp);
+        expect(opened).toBe(true);
+        expect(boss.bossState!.surge).toBeUndefined();
+    });
+
+    test("a charge that hits them keeps its guard up", () => {
+        const { sim, boss } = fight();
+        sim["startBossAttack"](boss, charge);
+        boss.attackCooldown = 1e9;
+        let opened = false;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+            run(sim, 0.02);
+            opened ||= sim.isExposed(boss);
+        }
+        expect(hp(sim)).toBeLessThan(sim.player.maxHp);
+        expect(opened).toBe(false);
+    });
+});
+
+// A finale on a boss fought by its hitpoints (the Menaphite Akh's last stand), tried on him
+describe("a last stand at no hitpoints", () => {
+    const finale = {
+        seconds: 2,
+        attacks: ["Lunge"],
+        interval: 1,
+        message: "He won't fall!",
+        shout: "Not yet!",
+    };
+    function lastPhase(withFinale: boolean): { sim: Sim; boss: Enemy } {
+        const sim = createSim();
+        const boss = startFight(sim);
+        const phases = zachariah().boss!.phases!;
+        if (withFinale) {
+            boss.def = {
+                ...boss.def,
+                boss: { ...boss.def.boss!, phases: { ...phases, finale } },
+            };
+        }
+        boss.bossState!.phase!.index = phases.phases.length - 1;
+        boss.hp = 10;
+        sim.player.invulnerable = 1e9;
+        sim.takeEvents();
+        return { sim, boss };
+    }
+
+    test("brought to none, it stands its finale untouchable, guard and all, then falls", () => {
+        const { sim, boss } = lastPhase(true);
+        sim.damageEnemy(boss, 1e6, 0, boss.x, boss.y, 0);
+        expect(boss.dead).toBe(false);
+        expect(boss.hp).toBe(1);
+        const phase = boss.bossState!.phase!;
+        expect(phase.stage).toBe("finale");
+        const events = sim.takeEvents();
+        expect(events.some((e) => e.type === "bossStage" && e.stage === "finale")).toBe(true);
+        expect(events.some((e) => e.type === "bossShout" && e.text === finale.shout)).toBe(true);
+        // Nothing gets through, and nothing it misses opens it up
+        sim.damageEnemy(boss, 1e6, 0, boss.x, boss.y, 0);
+        expect(boss.hp).toBe(1);
+        sim["dropGuard"](boss, 2, false, "Lunge");
+        expect(sim.isExposed(boss)).toBe(false);
+        run(sim, finale.seconds - 0.2);
+        expect(boss.dead).toBe(false);
+        run(sim, 0.4);
+        expect(boss.dead).toBe(true);
+    });
+
+    test("without a finale it falls at none, as before", () => {
+        const { sim, boss } = lastPhase(false);
+        sim.damageEnemy(boss, 1e6, 0, boss.x, boss.y, 0);
+        expect(boss.dead).toBe(true);
+    });
+});
+
 describe("the dark squirrel", () => {
     // Down in his last phase, with what the kill rolls for its trophies
     function kill(sim: Sim, roll?: boolean): number[] {

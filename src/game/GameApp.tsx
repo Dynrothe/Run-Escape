@@ -10,12 +10,19 @@ import { DownloadProgress } from "../rs/cache/CacheFiles";
 import { formatBytes } from "../util/BytesUtil";
 import { isCoarsePointer } from "../util/DeviceUtil";
 import "./GameApp.css";
-import { GAME_CACHE_NAME, deleteOtherGameCaches, findGameCache } from "./cache";
+import {
+    GAME_CACHE_NAME,
+    deleteOtherGameCaches,
+    findGameCache,
+    getCacheMismatch,
+    shouldReloadForCache,
+} from "./cache";
 import { GameClient } from "./client/GameClient";
 import { GameStore } from "./client/GameStore";
 import { SaveLock } from "./client/SaveLock";
 import { MAPS } from "./content/maps";
 import { LocalSaveStore } from "./core/save";
+import { t } from "./i18n";
 import { GameWebGLRenderer } from "./render/GameWebGLRenderer";
 import { GameUi } from "./ui/GameUi";
 import { iconCache } from "./ui/ItemIcon";
@@ -23,7 +30,7 @@ import { GAME_VERSION } from "./ui/changelog";
 
 WebFont.load({
     custom: {
-        families: ["OSRS Bold", "OSRS Small"],
+        families: ["OSRS Bold", "OSRS Small", "OSRS Plain"],
     },
 });
 
@@ -60,15 +67,23 @@ async function loadViewer(
                 "and Cross-Origin-Embedder-Policy: require-corp (see Hosting in the README).",
         );
     }
-    const cacheList = await fetchCacheList();
+    const cacheList = await fetchCacheList(__BUILD_ID__);
     if (!cacheList) {
         throw new Error("Failed to load the cache list (caches/caches.json).");
     }
     const cacheInfo = findGameCache(cacheList.caches);
     if (!cacheInfo) {
         throw new Error(
-            `Cache ${GAME_CACHE_NAME} is missing. Download it with npm run download-caches.`,
+            `Cache ${GAME_CACHE_NAME} is missing. Download it with bun run download-caches.`,
         );
+    }
+    const mismatch = getCacheMismatch(cacheInfo, __BUILD_ID__);
+    if (shouldReloadForCache(mismatch)) {
+        window.location.reload();
+        return new Promise<never>(() => {});
+    }
+    if (mismatch) {
+        throw new Error(mismatch);
     }
     const cache = await loadCacheFiles(cacheInfo, signal, onProgress);
     deleteOtherGameCaches(cacheInfo.name).catch(console.error);
@@ -110,13 +125,14 @@ export function GameApp(): JSX.Element {
     useEffect(() => {
         const abortController = new AbortController();
         loadViewer(abortController.signal, (progress: DownloadProgress) => {
+            const doing = progress.saving ? "canvas.saving_cache" : "canvas.downloading_cache";
             store.set({
-                loadingText: `Downloading cache (${formatBytes(progress.total)})`,
+                loadingText: t(doing, { size: formatBytes(progress.total) }),
                 loadingProgress: ((progress.current / progress.total) * 100) | 0,
             });
         })
             .then((loaded) => {
-                store.set({ loadingText: "Loading Lumbridge", loadingProgress: 0 });
+                store.set({ loadingText: t("canvas.loading_lumbridge"), loadingProgress: 0 });
                 setLoaded(loaded);
                 if (import.meta.env.DEV) {
                     (window as any).mapViewer = loaded.mapViewer;
@@ -146,6 +162,8 @@ export function GameApp(): JSX.Element {
             {
                 stress: parseInt(params.get("stress") ?? "0") || 0,
                 autostart: params.get("autostart") ?? undefined,
+                invade: import.meta.env.DEV ? (params.get("invade") ?? undefined) : undefined,
+                director: (import.meta.env.DEV && params.get("director")) || undefined,
                 raidTest:
                     import.meta.env.DEV && params.has("raidtest")
                         ? params.get("raidtest") === "short"
@@ -162,6 +180,18 @@ export function GameApp(): JSX.Element {
                 created = gameClient;
                 loaded.renderer.game = gameClient;
                 setClient(gameClient);
+                if (params.has("movementDiagnostics")) {
+                    gameClient.setMovementDiagnostics(true);
+                    (window as any).movementDiagnostics = {
+                        start: () => gameClient.setMovementDiagnostics(true),
+                        snapshot: () => gameClient.getMovementDiagnostics(),
+                        stop: () => {
+                            const snapshot = gameClient.getMovementDiagnostics();
+                            gameClient.setMovementDiagnostics(false);
+                            return snapshot;
+                        },
+                    };
+                }
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
                     import("./render/FrameProbe").then(({ FrameProbe }) => {
@@ -176,6 +206,7 @@ export function GameApp(): JSX.Element {
         return () => {
             disposed = true;
             created?.dispose();
+            if (params.has("movementDiagnostics")) delete (window as any).movementDiagnostics;
         };
     }, [loaded, store, saveStore]);
 
@@ -207,22 +238,27 @@ export function GameApp(): JSX.Element {
 
     return (
         <div className="game-root">
-            {loaded && <RendererCanvas renderer={loaded.renderer} />}
+            {loaded && <RendererCanvas renderer={loaded.renderer} focusable={false} />}
             <canvas className="game-overlay" ref={overlayRef} />
             {errorMessage ? (
-                <div className="game-status content-text">{errorMessage}</div>
+                <div className="game-status game-status-lost content-text">
+                    <p>{t("canvas.start_failed")}</p>
+                    <p>{errorMessage}</p>
+                    <button className="ui-button" onClick={() => window.location.reload()}>
+                        {t("save.reload")}
+                    </button>
+                </div>
             ) : graphicsLost ? (
                 <div className="game-status game-status-lost content-text">
                     <p>
-                        Your device took the game's graphics away, as it can when it's short of
-                        memory, and they can't come back without reloading.
-                        {graphicsLost === "solo" && " Your run is paused."}
+                        {t("canvas.graphics_lost")}
+                        {graphicsLost === "solo" && t("canvas.run_paused")}
                         {graphicsLost === "none"
-                            ? " Reload to carry on."
-                            : " Reload to play again: the coins and quests from this run are kept."}
+                            ? t("canvas.reload_continue")
+                            : t("canvas.reload_kept")}
                     </p>
                     <button className="ui-button" onClick={reloadAfterLoss}>
-                        Reload
+                        {t("save.reload")}
                     </button>
                 </div>
             ) : (

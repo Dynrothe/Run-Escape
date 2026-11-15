@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { CASKET_GEAR, UTILITY } from "./items";
 import { SOUNDS } from "./sounds";
 import { ItemDef, RandomEventDef } from "./types";
@@ -145,6 +146,13 @@ export const RANDOM_EVENT_BY_ID: Map<string, RandomEventDef> = new Map(
     RANDOM_EVENTS.map((event) => [event.id, event]),
 );
 
+// Whether a visitor gives an item: a casket, the old man's wares or a quiz's prize. Never on a map
+// with blessings (MapDef.blessings), which has no items.
+export function givesItems(event: RandomEventDef): boolean {
+    const kind = event.effect.kind;
+    return kind === "casket" || kind === "shop" || kind === "quiz";
+}
+
 export function getRandomEvent(id: string): RandomEventDef {
     const event = RANDOM_EVENT_BY_ID.get(id);
     if (!event) {
@@ -171,4 +179,9 @@ export function getQuizGroups(): ItemDef[][] {
         }
     }
     return [...groups.values()].filter((group) => group.length >= 3);
+}
+
+// A random event's name in the language chosen (event.<id>.name)
+export function eventName(event: Pick<RandomEventDef, "id" | "name">): string {
+    return tr(`event.${event.id}.name`, event.name);
 }

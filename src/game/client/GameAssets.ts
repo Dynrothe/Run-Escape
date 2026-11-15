@@ -3,6 +3,8 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
+    PlayerBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -17,22 +19,75 @@ import {
     createAppearance,
     getAppearanceKey,
 } from "../../rs/model/player/PlayerModelLoader";
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
-import { ENEMIES } from "../content/enemies";
-import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { MAPS } from "../content/maps";
-import { getPassive } from "../content/passives";
+import { ENEMIES, getEnemy } from "../content/enemies";
+import { FLAG_SPRITE } from "../content/flags";
+import { BLOOD_SOULREAPER_AXE_OBJ, SOULREAPER_AXE_OBJ } from "../content/gauntlet";
+import {
+    INVOCATIONS,
+    OFF_SPRITE,
+    RAID_BAND_SPRITES,
+    RUN_INVOCATIONS,
+} from "../content/invocations";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { getHeroNpcSeqs } from "../content/justiciarKit";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
+import { applyCapeColours } from "../content/maxCape";
+import { SAME_NPC_LOOK } from "../content/npcLooks";
+import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import {
+    CHECKBOX_SPRITES,
+    CLOSE_SPRITES,
+    CLOUD_SAVE_SPRITES,
+    REFUND_SPRITE,
+    SOUND_ORB_SPRITES,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
+import {
+    AKKHA,
+    APMEKEN_BARRIER_LOC,
+    APMEKEN_SPOTANIMS,
+    CRONDIS,
+    HET,
+    JUNGLE_JAPES,
+    KEPHRI,
+    KEPHRI_ARCANE_BLAST,
+    KEPHRI_EGG_BLAST,
+    SARCOPHAGI,
+    SARCOPHAGUS_BLAST,
+    SCABARAS,
+    TOMBS_SPIRIT,
+    TOMBS_SPOTANIMS,
+    WARDENS,
+    ZEBAK,
+    getTombsFightSeqs,
+} from "../content/tombs";
+import {
+    CharacterDef,
+    EnemyDef,
+    EnemyOutfit,
+    FloorSkinDef,
+    GearSlot,
+    ImpactDef,
+    MapDef,
+    PolymorphKind,
+    RootsRuleDef,
+    WeaponDef,
+} from "../content/types";
+import { WardrobeLook, applyBody, applyOutfit, wearsWardrobe } from "../content/wardrobe";
+import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -40,6 +95,12 @@ export const PLAYER_SEQS = {
     run: 824,
     death: 836,
 };
+
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
 
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
@@ -133,11 +194,48 @@ export function getPrayerHeadicon(styles: readonly string[]): number | undefined
     return PRAYER_HEADICON_FRAMES[[...styles].sort().join(",")];
 }
 
+// The sprites the game view draws, which loadSprites loads as the game starts
+export const GAME_VIEW_SPRITES: readonly number[] = [
+    ...Object.values(HITSPLAT_SPRITES),
+    HINT_ARROW_SPRITE,
+];
+
+// Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
+// save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
+// button, co-op's flags and the overhead prayers (every frame comes with the first) and the
+// passives with a sprite for an icon. The slim cache keeps these and no others, so a sprite the
+// game shows has to be in here.
+export function getGameSpriteIds(): number[] {
+    const ids = [
+        ...GAME_VIEW_SPRITES,
+        PRAYER_HEADICON_SPRITE,
+        ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(CLOUD_SAVE_SPRITES),
+        ...Object.values(SOUND_ORB_SPRITES),
+        ...Object.values(CHECKBOX_SPRITES),
+        ...Object.values(CLOSE_SPRITES),
+        ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
+        REFUND_SPRITE,
+        FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
+        ...PASSIVES.flatMap((passive) =>
+            passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
+        ),
+        // The invocation boards (the Tombs and a run's): each icon lit and dark, and Amascut's faces
+        ...[...INVOCATIONS, ...RUN_INVOCATIONS].flatMap((invocation) => [
+            invocation.icon,
+            invocation.icon + OFF_SPRITE,
+        ]),
+        ...Object.values(RAID_BAND_SPRITES),
+    ];
+    return [...new Set(ids)];
+}
+
 // Every spot animation the content uses, plus the fixed ones (cannonball,
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -170,12 +268,24 @@ function getSpotAnimIds(): number[] {
             }
         }
     };
+    for (const character of CHARACTERS) {
+        add(character.overheadSpotAnim);
+    }
     for (const weapon of WEAPONS) {
         for (const level of weapon.levels) {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
-        add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim);
+        add(
+            weapon.special?.spotAnim,
+            weapon.lifesteal?.spotAnim,
+            weapon.siphon?.projectileSpotAnim,
+        );
+        add(
+            weapon.chain?.spotAnim,
+            weapon.breach?.spotAnim,
+            weapon.souls?.harvest.spotAnim,
+            weapon.heavy?.hit?.spotAnim,
+        );
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -184,24 +294,122 @@ function getSpotAnimIds(): number[] {
     for (const { effect } of POWER_UPS) {
         add("spotAnim" in effect ? effect.spotAnim : undefined);
     }
+    // Apmeken's issues
+    add(...Object.values(APMEKEN_SPOTANIMS));
+    // Ba-Ba's sarcophagi's blasts, which are no attack of hers
+    add(SARCOPHAGUS_BLAST.spotAnim);
+    // The Het room's beam, along and across, and where it stops
+    add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // Kephri's shield (up, and taking a swarm), her flies, dung coming down, her eggs going
+    // off, the Arcane Scarab's charge, and what her specials' shards are drawn as
+    add(
+        TOMBS_SPOTANIMS.kephriShield,
+        TOMBS_SPOTANIMS.kephriShieldSwarm,
+        KEPHRI.dung.spotAnim,
+        KEPHRI.dung.dropSpotAnim,
+        KEPHRI.eggs.spotAnim,
+    );
+    add(KEPHRI.arcane.spotAnim, TOMBS_SPOTANIMS.arcaneCharge);
+    add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
+    // The Crondis room's poison, pale and dark, and its water poured
+    add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
+    // The Wardens: their seals as they discharge, their shots and where those land, and the one
+    // that loses blowing up
+    add(
+        ...Object.values(WARDENS.wardens).flatMap((w) => [
+            w.pyramidsSpotAnim,
+            w.shotSeal,
+            w.shotSpotAnim,
+        ]),
+        WARDENS.shot.impactSpotAnim,
+        TOMBS_SPOTANIMS.wardenBlowsUp,
+    );
+    // The obelisk's specials in the second phase (their warning rings, glows and strikes, its
+    // skulls and their shadows), and in the last, the siphons' skulls and beams, the phantoms
+    // coming, and the enraged lightning and its shadows
+    const { beam, windmill, skulls } = WARDENS.two;
+    add(beam.warnSpotAnim, beam.spotAnim, windmill.warnSpotAnim, windmill.glowSpotAnim);
+    add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
+    add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
+    add(WARDENS.three.phantomSpotAnim);
+    // The Het room's circles to stand in, and the glow under a loose mirror
+    add(HET.circleSpotAnim);
+    add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
+    // Zebak's roar, and his jugs breaking and splashing
+    add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
+    // The Scabaras room's falling roof
+    add(SCABARAS.rockSpotAnim);
+    // Akkha's quadrants' elements, which are no attack of his
+    add(...AKKHA.elements.map((element) => element.spotAnim));
     const addImpact = (impact: ImpactDef | undefined) => {
         add(...(impact?.spots ?? []).map((spot) => spot.spotAnim), impact?.trail?.spotAnim);
     };
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
     }
+    // The Tombs' button
+    for (const map of ALL_MAPS) {
+        addImpact(map.tombs?.ability?.impact);
+    }
+    // A hero's own buttons (CharacterDef.abilities): what they land as, and mark first
+    for (const character of CHARACTERS) {
+        for (const ability of character.abilities ?? []) {
+            addImpact(ability.impact);
+            add(ability.spotAnim, ability.markSpotAnim, ability.cellImpact?.spotAnim);
+        }
+    }
+    for (const map of ALL_MAPS) {
+        // What a cut through a map's roots throws up (MapDef.rule)
+        // and the ripple as a map of two worlds turns; under the cold, a vent's puff and a relight
+        const rule = map.rule;
+        if (rule?.kind === "roots") {
+            add(rule.look.cutSpotAnim);
+        } else if (rule?.kind === "realm") {
+            add(rule.look.flipSpotAnim);
+        } else if (rule?.kind === "cold") {
+            add(rule.look.relightSpotAnim, rule.look.puffSpotAnim);
+        }
+        // What comes down on a hero as they're blessed (MapDef.blessings)
+        add(map.blessings?.spotAnim);
+        // Its lairs' seals going out (LairDef.seal.smoke), and their heals (LairDef.heals)
+        add(...(map.lairs ?? []).map((lair) => lair.seal.smoke));
+        add(...(map.lairs ?? []).map((lair) => lair.heals?.spotAnim));
+        // What plays in its cinematics (MapDef.cinematic, a fight's parts', and its lairs')
+        add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
+        // A floor's slabs (the Wardens', and dev maps')
+        add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
+        const effects = map.floor?.effects;
+        add(effects?.dust, effects?.fallDust, effects?.rock);
+        // and each skin's own (FloorSkinDef.material)
+        for (const skin of map.floor?.skins ?? []) {
+            const { rise, fall, crack } = skin.material ?? {};
+            add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
+        }
+    }
     for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
-            add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
+            add(
+                attack.castSpotAnim,
+                attack.spotAnim,
+                attack.impactSpotAnim,
+                attack.shards?.spotAnim,
+            );
             add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
             // An exhumed's orb as it heals its boss, and its end as it's smothered
             add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);
             add(...(attack.impactSpotAnims ?? []));
             addImpact(attack.impact);
         }
+        // A meteor falling and its shadow, and what's left of it when it's stopped; what a boss
+        // raises against a gaze throws up (BossDef.gazeWard)
+        for (const attack of enemy.boss?.attacks ?? []) {
+            add(attack.meteor?.spotAnim, attack.meteor?.shadowSpotAnim);
+            addImpact(attack.interruptedBy?.broken);
+        }
+        addImpact(enemy.boss?.gazeWard?.impact);
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
@@ -219,16 +427,14 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId = getProjectileObjId(weapon, level);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {
@@ -248,6 +454,32 @@ function getWeaponSeqs(weapons: WeaponDef[]): number[] {
 // reviver performs
 export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
+}
+
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves. The look's weapon is the sim's
+// (Sim.getHeldWeapon, through getCurrentAppearance) as long as nothing else
+// is worn in the weapon slot, which a test checks.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    let held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    // The blood-touched axe is the axe's poses
+    if (held === BLOOD_SOULREAPER_AXE_OBJ) {
+        held = SOULREAPER_AXE_OBJ;
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
 }
 
 // The attack animations a hero's bake needs: their weapons', and in co-op the
@@ -284,17 +516,40 @@ export function getCharacterAttackSeqs(characterId: string): number[] {
 }
 
 // The player's look in a run: the character's outfit, the held weapon tier,
-// any gear their passives add, and what they've equipped from caskets (which
-// goes over the rest).
-export function getRunAppearance(sim: Sim, hero = sim.focus): PlayerAppearance {
-    return sim.as(hero, () => getCurrentAppearance(sim));
+// any gear their passives add, and what they've equipped from caskets. A
+// character's fixed outfit slots stay visible over that gear.
+// look: the hero's own from the Wardrobe, only for show.
+export function getRunAppearance(
+    sim: Sim,
+    hero = sim.focus,
+    look?: WardrobeLook,
+): PlayerAppearance {
+    return sim.as(hero, () => getCurrentAppearance(sim, hero === sim.focus, look));
 }
 
-function getCurrentAppearance(sim: Sim): PlayerAppearance {
-    const appearance = getCharacterAppearance(sim.characterId);
+// The Forgotten Four's first clean clear (SaveData.gauntlet): this player's Soulreaper axe and
+// fighting pets blood-touched (setGauntletLooks). Only their own hero's, in co-op.
+let gauntletLooks = false;
+
+export function hasBloodLooks(): boolean {
+    return gauntletLooks;
+}
+
+// From the save (hasGauntletLooks): a hero baked from now on, and the pets drawn
+export function setGauntletLooks(on: boolean): void {
+    gauntletLooks = on;
+}
+
+function getCurrentAppearance(
+    sim: Sim,
+    own: boolean,
+    look: WardrobeLook | undefined,
+): PlayerAppearance {
+    const appearance = getCharacterAppearance(sim.characterId, look);
     const held = sim.getHeldObjId();
     if (held !== -1) {
-        appearance.equipment[EquipSlot.WEAPON] = held;
+        appearance.equipment[EquipSlot.WEAPON] =
+            held === SOULREAPER_AXE_OBJ && gauntletLooks && own ? BLOOD_SOULREAPER_AXE_OBJ : held;
     }
     for (const passive of sim.passives) {
         const def = getPassive(passive.id);
@@ -313,6 +568,19 @@ function getCurrentAppearance(sim: Sim): PlayerAppearance {
             appearance.equipment[equipSlot] = getItem(itemId).objId;
         }
     }
+    const character = getCharacter(sim.characterId);
+    if (look?.overGear && wearsWardrobe(character)) {
+        applyOutfit(appearance, look.outfit);
+    }
+    if (character.fixedOutfit) {
+        for (const [slot, objId] of Object.entries(character.equipment)) {
+            if (objId !== undefined) {
+                appearance.equipment[Number(slot)] = objId;
+            }
+        }
+    }
+    // Again, as gear can have gone over the customisable max cape
+    applyCapeColours(appearance, wearsWardrobe(character) ? look?.capeColours : undefined);
     return appearance;
 }
 
@@ -340,7 +608,88 @@ export function getPowerUpLookRequests(appearance: PlayerAppearance): BakeReques
 // The baked model for an enemy: its NPC, or the outfit it wears (the fun
 // maps' players, one model per outfit)
 export function getEnemyModelKey(def: EnemyDef, variant: number): string {
-    return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
+    // A look of its (EnemyDef.looks) past the first is its own model; the first is npcId's
+    return def.outfits || (def.looks && variant > 0) ? `npc:${def.id}:${variant}` : "npc:" + def.id;
+}
+
+// A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
+export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): FloorSkinDef {
+    return { spotAnim: floor.slam.spotAnim };
+}
+
+// A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
+export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
+    return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
+}
+
+// A map of two worlds' puddle or portal (RealmRuleDef.look), or the cold's braziers, gas and ice
+// block (ColdRuleDef.look): a rule's locs the game draws, animated
+export function getRealmLocKey(locId: number): string {
+    return "realmloc:" + locId;
+}
+
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
+}
+
+// A lair's seal (MapDef.lair), burning: its own key, as the same loc may be baked still elsewhere
+export function getLairSealKey(locId: number): string {
+    return "lairSeal:" + locId;
+}
+
+// A boss's pool (BossAttackDef.pool), on its own animation (a fire flickers): its own key, as the
+// same loc may be baked still elsewhere
+export function getPoolKey(locId: number): string {
+    return "pool:" + locId;
+}
+
+// A hero drawn as an NPC (CharacterDef.npcLook)
+export function getHeroLookKey(characterId: string): string {
+    return "heroLook:" + characterId;
+}
+
+// What a polymorph power-up turns enemies into (EnemyPolymorph's look and variant)
+export function getPolymorphKey(powerUpId: string, look: PolymorphKind, variant: number): string {
+    return `polymorph:${powerUpId}:${look}:${variant}`;
+}
+
+// What runs out of a polymorph's penguin (PolymorphEscapees)
+export function getPolymorphEscapeeKey(powerUpId: string): string {
+    return `polymorph:${powerUpId}:escapee`;
+}
+
+// A piece of what's under a floor (FloorDef.under)
+export function getFloorPieceKey(locId: number): string {
+    return "floorpiece:" + locId;
+}
+
+// A floor's tile skin (FloorDef.skins): what it's baked from is all there is to it
+export function getFloorSkinKey(skin: FloorSkinDef): string {
+    const { spotAnim, loc, model, recolor, retexture, scale } = skin;
+    return "floorskin:" + JSON.stringify([spotAnim, loc, model, recolor, retexture, scale]);
+}
+
+// The same, its top alone, for a tile at rest among others (FloorView: none of its sides show)
+export function getFloorLidKey(skin: FloorSkinDef): string {
+    return getFloorSkinKey(skin) + ":top";
+}
+
+function getFloorSkinRequest(skin: FloorSkinDef, topOnly = false): BakeRequest {
+    return {
+        kind: "model",
+        key: topOnly ? getFloorLidKey(skin) : getFloorSkinKey(skin),
+        topOnly,
+        spotAnimId: skin.spotAnim,
+        locId: skin.loc,
+        modelId: skin.model,
+        recolor: skin.recolor,
+        retexture: skin.retexture,
+        scale: skin.scale,
+        // A spot animation's baked with its own animation even when it rises in code: its first
+        // frame is it at rest (the Wardens' slab's model unposed is nowhere near)
+        still: skin.spotAnim === undefined,
+    };
 }
 
 // The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
@@ -387,9 +736,23 @@ export function getOutfitAppearance(outfit: EnemyOutfit): PlayerAppearance {
     return appearance;
 }
 
-export function getCharacterAppearance(characterId: string): PlayerAppearance {
+// The Wardrobe's body with nothing on, not even a weapon
+export function getBareAppearance(look?: WardrobeLook): PlayerAppearance {
+    const appearance = createAppearance();
+    applyBody(appearance, look?.body);
+    return appearance;
+}
+
+// An adventurer's look, in the player's own body and outfit from the Wardrobe (look) unless
+// they're someone in particular (wearsWardrobe)
+export function getCharacterAppearance(characterId: string, look?: WardrobeLook): PlayerAppearance {
     const character = getCharacter(characterId);
     const appearance = createAppearance(character.equipment);
+    if (look && wearsWardrobe(character)) {
+        applyBody(appearance, look.body);
+        applyOutfit(appearance, look.outfit);
+        applyCapeColours(appearance, look.capeColours);
+    }
     if (character.kits) {
         appearance.kits = character.kits.slice();
     }
@@ -404,17 +767,21 @@ export function getCharacterAppearance(characterId: string): PlayerAppearance {
 const SMALL_BAKE_BATCH = 64;
 
 // Everything a request's bake depends on but its key and animations: requests
-// with the same body and first animation bake the same model
+// with the same body and first animation bake the same model. An NPC goes by
+// its look, so a boss's forms that are ids of their own (the Wardens', Akkha's)
+// are baked once (content/npcLooks.ts).
 function getRequestBody(request: BakeRequest): string {
     switch (request.kind) {
         case "npc":
-            return `npc:${request.npcId}:${request.seqIds[0]}`;
+            return `npc:${SAME_NPC_LOOK[request.npcId] ?? request.npcId}:${request.seqIds[0]}`;
         case "player":
             return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
             return `obj:${request.objId}:${request.count}`;
+        case "model":
+            return request.key;
         case "loc":
             // A statue's (seqs) isn't plain scenery
             return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
@@ -466,13 +833,20 @@ export class GameAssets {
         string,
         Promise<{ models: Map<string, ActorModel>; stance: PlayerStance }>
     >();
-    // The current map's enemies
+    // The current map's enemies: their pages, the keys the run wants (loadEnemies: a page with
+    // none of them is freed, and a bake that lands after it's stopped being wanted is let go),
+    // and the keys being baked, each to its bake
     private enemyPages: ActorPage[] = [];
+    private wantedEnemies = new Set<string>();
+    private readonly bakingEnemies = new Map<string, Promise<void>>();
     private readonly requestedEnemies = new Set<string>();
-    // Counts the times the enemies were dropped: a bake from before is stale
-    private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    // Heroes drawn as NPCs (CharacterDef.npcLook) baked or being baked, by id
+    private readonly heroLookBakes = new Map<string, Promise<void>>();
+    // Maps' props, cinematic casts and lairs' locs baked or being baked, by model key (getPropKey,
+    // getLairSealKey)
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -492,6 +866,7 @@ export class GameAssets {
             enemy.revives?.seq ?? -1,
             enemy.blinks?.seq ?? -1,
             enemy.blinks?.surface?.seq ?? -1,
+            enemy.echoes?.seq ?? -1,
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
             enemy.boss?.intro?.seq ?? -1,
             enemy.boss?.surgeSeq ?? -1,
@@ -499,6 +874,7 @@ export class GameAssets {
             enemy.boss?.leash?.jump?.upSeq ?? -1,
             enemy.boss?.phases?.threshold?.seq ?? -1,
             enemy.boss?.phases?.threshold?.riseSeq ?? -1,
+            ...getTombsFightSeqs(enemy.id),
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -516,6 +892,17 @@ export class GameAssets {
                 ? { kind: "obj", key: "npc:" + enemy.id, objId: enemy.objId, count: 1 }
                 : { kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds },
         ];
+        // Its other looks, with the same animations
+        enemy.looks?.forEach((npcId, variant) => {
+            if (variant > 0) {
+                requests.push({
+                    kind: "npc",
+                    key: getEnemyModelKey(enemy, variant),
+                    npcId,
+                    seqIds,
+                });
+            }
+        });
         const shielded = enemy.shield?.look;
         if (shielded) {
             requests.push({
@@ -527,8 +914,21 @@ export class GameAssets {
         }
         // Scenery its attacks grow, here rather than in what every run bakes
         for (const attack of enemy.boss?.attacks ?? []) {
+            if (attack.projectileObjId !== undefined) {
+                requests.push({
+                    kind: "obj",
+                    key: "obj:" + attack.projectileObjId,
+                    objId: attack.projectileObjId,
+                    count: 1,
+                });
+            }
             const quarters = attack.quarters;
-            for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
+            for (const locId of [
+                quarters?.safeLocId,
+                quarters?.hurtLocId,
+                attack.ground?.locId,
+                attack.debris?.locId,
+            ]) {
                 if (locId !== undefined) {
                     requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
                 }
@@ -549,6 +949,23 @@ export class GameAssets {
 
     static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
         return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // A hero drawn as an NPC (CharacterDef.npcLook, Justiciar Zachariah's): baked with the map
+    // that has everyone play them (travelTo), not with every run
+    static getHeroLookRequests(characters: readonly CharacterDef[]): BakeRequest[] {
+        return characters.flatMap((character): BakeRequest[] =>
+            character.npcLook
+                ? [
+                      {
+                          kind: "npc",
+                          key: getHeroLookKey(character.id),
+                          npcId: character.npcLook.npcId,
+                          seqIds: getHeroNpcSeqs(character),
+                      },
+                  ]
+                : [],
+        );
     }
 
     // Pets aren't in every run's bake, as most players haven't found one: they're baked as
@@ -604,6 +1021,64 @@ export class GameAssets {
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
         }
+        // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
+        const rootLooks = new Set<string>();
+        const realmLocs = new Set<number>();
+        for (const map of ALL_MAPS) {
+            // A map of two worlds' puddles and portal (RealmRuleDef.look), as they move
+            if (map.rule?.kind === "realm") {
+                realmLocs.add(map.rule.look.puddleLocId).add(map.rule.look.portalLocId);
+            }
+            // The cold's braziers, lit and out, its vents' gas and the ice block (ColdRuleDef.look)
+            if (map.rule?.kind === "cold") {
+                const cold = map.rule.look;
+                realmLocs.add(cold.brazierLocId).add(cold.fireLocId).add(cold.gasLocId);
+                realmLocs.add(cold.iceBlockLocId).add(cold.embersLocId);
+            }
+            const look = map.rule?.kind === "roots" ? map.rule.look : undefined;
+            for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
+                const key = getRootLookKey(locId, look!);
+                if (!rootLooks.has(key)) {
+                    rootLooks.add(key);
+                    requests.push({ kind: "model", key, locId, recolor: look!.recolor });
+                }
+            }
+        }
+        // The remixes' fires in the dark and ice (content/remixes.ts)
+        realmLocs.add(REMIX_FIRE_LOC).add(REMIX_ICE_LOC);
+        for (const locId of realmLocs) {
+            requests.push({ kind: "loc", key: getRealmLocKey(locId), locId, animated: true });
+        }
+        // The tree an adventurer's trait fells (CharacterDef.trait)
+        const traitLocs = new Set<number>();
+        for (const character of CHARACTERS) {
+            if (character.trait?.kind === "timber") {
+                traitLocs.add(character.trait.locId);
+            }
+        }
+        for (const locId of traitLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId });
+        }
+        // The wreck a fight stands round its boss (ArenaFeatures.wreckage), drawn as its debris
+        const wreckLocs = new Set(
+            ALL_MAPS.flatMap((map) => map.features?.wreckage ?? []).map((wreck) => wreck.locId),
+        );
+        for (const locId of wreckLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
+        }
+        // What's under a floor (the Wardens', as its slabs are)
+        for (const map of ALL_MAPS) {
+            for (const locId of Object.values(map.floor?.under ?? {})) {
+                requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
+            }
+            for (const skin of map.floor?.skins ?? []) {
+                requests.push(getFloorSkinRequest(skin), getFloorSkinRequest(skin, true));
+            }
+            // The slam's own slab, for a floor with no skins of its own
+            if (map.floor && !map.floor.skins) {
+                requests.push(getFloorSkinRequest(DEFAULT_FLOOR_SKIN(map.floor), true));
+            }
+        }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {
             requests.push({ kind: "obj", key: "pickup:" + kind, objId, count: 1 });
         }
@@ -636,21 +1111,49 @@ export class GameAssets {
                     npcId: effect.npcId,
                     seqIds: [effect.walkSeq],
                 });
+            } else if (effect.kind === "polymorph") {
+                for (const { look, variant, def } of getPolymorphLooks(effect)) {
+                    requests.push({
+                        kind: "npc",
+                        key: getPolymorphKey(id, look, variant),
+                        npcId: def.npcId,
+                        seqIds: [
+                            def.idleSeq,
+                            def.walkSeq,
+                            def.deathSeq,
+                            def.attackSeq ?? -1,
+                        ].filter((s) => s !== -1),
+                    });
+                }
+                const { npcId, walkSeq } = effect.penguin.escapees;
+                requests.push({
+                    kind: "npc",
+                    key: getPolymorphEscapeeKey(id),
+                    npcId,
+                    seqIds: [walkSeq],
+                });
             }
         }
-        for (const { id, npcId, idleSeq } of RANDOM_EVENTS) {
+        // The visitors, and the Tombs' Helpful Spirit drawn as one
+        for (const { id, npcId, idleSeq } of [...RANDOM_EVENTS, TOMBS_SPIRIT]) {
             if (npcId !== undefined && idleSeq !== undefined) {
                 requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }
         }
         const objIds = new Set(getThrownObjIds());
+        // The Soulreaper axe's souls (GameView.drawSouls): soul runes
+        objIds.add(566);
         const locIds = new Set([CANNON_LOC]);
+        const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {
-                    locIds.add(attack.pool.locId);
+                    poolLocIds.add(attack.pool.locId);
                 }
             }
+        }
+        for (const locId of poolLocIds) {
+            requests.push({ kind: "loc", key: getPoolKey(locId), locId, animated: true });
         }
         for (const powerUp of POWER_UPS) {
             if (powerUp.locId !== undefined) {
@@ -662,12 +1165,90 @@ export class GameAssets {
                 locIds.add(powerUp.effect.locId);
             }
         }
+        // The Tombs of Amascut's
+        // Jungle Japes's banana peels
+        objIds.add(JUNGLE_JAPES.objId);
+        // Ba-Ba's sarcophagi, open
+        locIds.add(SARCOPHAGI.loc);
+        // Zebak's acid
+        locIds.add(ZEBAK.acid.loc);
+        // The Crondis room's spears
+        locIds.add(CRONDIS.locs.spear);
+        // Kephri's dung, a wall where it's dropped
+        locIds.add(KEPHRI.dung.pileLoc);
+        // The Scabaras room's plates, as they stand
+        const { locs: scabaras } = SCABARAS;
+        for (const id of [
+            scabaras.plate,
+            scabaras.lightsPlate,
+            scabaras.tablet,
+            scabaras.button,
+            ...scabaras.symbols,
+            ...scabaras.shown,
+        ]) {
+            locIds.add(id);
+        }
+        // The Wardens' charging platforms, empty to full
+        for (const id of WARDENS.charge.platforms) {
+            locIds.add(id);
+        }
+        // The Het room's mirrors (clean, dirty, fixed), their spots and its barriers
+        locIds.add(HET.mirrorLoc);
+        locIds.add(HET.dirtyLoc);
+        locIds.add(HET.fixedLoc);
+        locIds.add(HET.spotLoc);
+        locIds.add(HET.barrierLoc);
+        locIds.add(HET.wornLoc);
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
+        // The Tombs' barriers, glowing
+        requests.push({
+            kind: "loc",
+            key: "loc:" + APMEKEN_BARRIER_LOC,
+            locId: APMEKEN_BARRIER_LOC,
+            animated: true,
+        });
+
+        // The Crondis room's waterfalls, running and dry
+        for (const id of [CRONDIS.locs.waterfall, CRONDIS.locs.dry]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Scabaras room's plates' glows
+        for (const id of [
+            SCABARAS.locs.plateLit,
+            SCABARAS.locs.platePressed,
+            SCABARAS.locs.lightsOn,
+            SCABARAS.locs.stepped,
+            SCABARAS.locs.matched,
+        ]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Wardens' pyramids, glowing
+        for (const { pyramid } of Object.values(WARDENS.wardens)) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + pyramid,
+                locId: pyramid,
+                animated: true,
+            });
+        }
+
+        // Akkha's symbols, glowing
+        for (const { symbolLoc } of AKKHA.elements) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + symbolLoc,
+                locId: symbolLoc,
+                animated: true,
+            });
+        }
+
         // A raid hall's teleporter, swirling
         requests.push({
             kind: "loc",
@@ -689,10 +1270,19 @@ export class GameAssets {
         return requests;
     }
 
+    // Bakes every frame whole, sharing no meshes (?wholeFrames): to compare with, or to rule
+    // shared meshes out if a GPU draws actors wrong
+    wholeFrames =
+        typeof location !== "undefined" && new URLSearchParams(location.search).has("wholeFrames");
+
     private async bake(requests: BakeRequest[]): Promise<ActorBakeResult> {
         return await this.workerPool.queueLoad<ActorBakeInput, ActorBakeResult, ActorBakeLoader>(
             new ActorBakeLoader(),
-            { requests, loadedTextureIds: this.renderer.loadedTextureIds },
+            {
+                requests,
+                loadedTextureIds: this.renderer.loadedTextureIds,
+                wholeFrames: this.wholeFrames || undefined,
+            },
         );
     }
 
@@ -735,6 +1325,138 @@ export class GameAssets {
         return Promise.all(waits).then(() => undefined);
     }
 
+    // A map's NPCs posed as scenery (MapDef.props), the cast of its cinematics (its opening's, each
+    // part's and its lairs') with everything they play, and its lairs' locs (getLairRequests):
+    // baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+        return [...GameAssets.getPropNpcRequests(maps), ...GameAssets.getLairRequests(maps)];
+    }
+
+    // The NPCs of getPropRequests, each once, with what every one of maps plays on it
+    private static getPropNpcRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
+            }
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+            // and what it's drawn as once its lair's woken (MapPropDef.awake)
+            if (prop.awake) {
+                add(prop.awake.npcId, [prop.awake.seq]);
+            }
+        }
+        for (const def of maps.flatMap(getMapCinematics)) {
+            for (const [npcId, seqIds] of getCinematicSeqs(def)) {
+                add(npcId, seqIds);
+            }
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    // A lair's seal, burning (MapDef.lairs), its pillars (LairDef.pillars), and the pillars its
+    // boss raises against a gaze (BossDef.gazeWard)
+    private static getLairRequests(maps: readonly MapDef[]): BakeRequest[] {
+        const requests: BakeRequest[] = [];
+        const keys = new Set<string>();
+        const addLoc = (request: BakeRequest) => {
+            if (!keys.has(request.key)) {
+                keys.add(request.key);
+                requests.push(request);
+            }
+        };
+        for (const map of maps) {
+            for (const lair of map.lairs ?? []) {
+                const locId = lair.seal.locId;
+                addLoc({ kind: "loc", key: getLairSealKey(locId), locId, animated: true });
+                if (lair.pillars) {
+                    const pillar = lair.pillars.locId;
+                    addLoc({ kind: "loc", key: "loc:" + pillar, locId: pillar });
+                }
+                const ward = getEnemy(lair.enemyId).boss?.gazeWard;
+                if (ward) {
+                    addLoc({ kind: "loc", key: "loc:" + ward.locId, locId: ward.locId });
+                }
+            }
+        }
+        return requests;
+    }
+
+    // Bakes a map's props, cinematics' casts (its opening's, each part's and its lairs') and its
+    // lairs' locs, unless they're baked already or on their way. Each NPC's baked once, under one
+    // key, so it's baked with what every map plays on it (maps), as the slim cache has it: one
+    // map's alone would leave another's animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            // and what a prop's drawn as once its lair's woken (MapPropDef.awake)
+            ...(map.props ?? []).flatMap((prop) =>
+                prop.awake ? [prop.npcId, prop.awake.npcId] : [prop.npcId],
+            ),
+            ...getMapCinematics(map).flatMap((cinematic) =>
+                cinematic.cast.map((actor) => actor.npcId),
+            ),
+        ]);
+        if (npcIds.size === 0 && !map.lairs) {
+            return Promise.resolve();
+        }
+        // This map's own def first: a dev map's is made again for each run
+        const requests = [
+            ...GameAssets.getPropNpcRequests([
+                map,
+                ...maps.filter((other) => other.id !== map.id),
+            ]).filter((request) => npcIds.has(request.npcId)),
+            ...GameAssets.getLairRequests([map]),
+        ];
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
+        }
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
+    }
+
+    // Bakes a hero's NPC look (CharacterDef.npcLook), unless it's baked or on its way
+    loadHeroLook(characterId: string): Promise<void> {
+        const character = getCharacter(characterId);
+        if (!character.npcLook) {
+            return Promise.resolve();
+        }
+        let baking = this.heroLookBakes.get(characterId);
+        if (!baking) {
+            baking = this.bakeInTasks(
+                GameAssets.getHeroLookRequests([character]),
+                this.loadBake,
+            ).catch((e) => console.error("Couldn't bake", characterId, e));
+            this.heroLookBakes.set(characterId, baking);
+        }
+        return baking;
+    }
+
+    // A hero's NPC look, or nothing yet: it's baked now, and shows up when it's ready
+    getHeroLook(characterId: string): ActorModel | undefined {
+        const model = this.models.get(getHeroLookKey(characterId));
+        if (!model && !this.heroLookBakes.has(characterId)) {
+            void this.loadHeroLook(characterId);
+        }
+        return model;
+    }
+
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
     getPet(id: string): ActorModel | undefined {
         const model = this.models.get(getPetModelKey(id));
@@ -748,70 +1470,120 @@ export class GameAssets {
         return GameAssets.getEnemyRequests(enemies).every((r) => this.models.has(r.key));
     }
 
-    // Bakes the enemies a run needs in place of the last run's. A map played
-    // again has them already.
+    // Bakes the enemies a run needs, in place of what it doesn't: what's baked and still wanted
+    // stays (another map's goblins, the Tombs' Nexus from room to room), and the rest is freed
+    // first, so the two lots aren't in memory together. A map played again has them already.
+    // Resolves once they're all in, those already on their way too.
     async loadEnemies(
         enemies: EnemyDef[],
         onProgress?: (done: number, total: number) => void,
     ): Promise<void> {
-        if (this.hasEnemies(enemies)) {
-            return;
-        }
         const requests = GameAssets.getEnemyRequests(enemies);
-        // Freed first, so the two lots aren't in memory together
-        this.dropEnemies();
-        await this.bakeEnemies(requests, onProgress);
+        this.wantedEnemies = new Set(requests.map((request) => request.key));
+        this.freeUnwantedEnemies();
+        const coming = requests.flatMap((request) => this.bakingEnemies.get(request.key) ?? []);
+        const missing = requests.filter(
+            (request) => !this.models.has(request.key) && !this.bakingEnemies.has(request.key),
+        );
+        await Promise.all([this.bakeEnemies(missing, onProgress), ...coming]);
     }
 
     // A model that isn't baked is baked now, for a run with an enemy the map's
-    // list doesn't have (the console's spawnBoss). It shows up when it's ready.
+    // list doesn't have (the console's spawnBoss). It shows up when it's ready, as one that's
+    // on its way already does (a Tombs room's, before it's in).
     requestEnemy(enemy: EnemyDef): void {
         if (this.requestedEnemies.has(enemy.id)) {
             return;
         }
         this.requestedEnemies.add(enemy.id);
-        console.warn(`${enemy.id} isn't baked for this map`);
-        this.bakeEnemies(GameAssets.getEnemyRequests([enemy])).catch(console.error);
+        const requests = GameAssets.getEnemyRequests([enemy]);
+        for (const request of requests) {
+            this.wantedEnemies.add(request.key);
+        }
+        const missing = requests.filter(
+            (request) => !this.models.has(request.key) && !this.bakingEnemies.has(request.key),
+        );
+        if (missing.length > 0) {
+            console.warn(`${enemy.id} isn't baked for this map`);
+            this.bakeEnemies(missing).catch(console.error);
+        }
     }
 
     // Frees the enemies' models (on a phone, at the title screen)
     dropEnemies(): void {
-        this.enemyBakes++;
-        for (const page of this.enemyPages) {
+        this.wantedEnemies = new Set();
+        this.freeUnwantedEnemies();
+    }
+
+    // Frees the pages with nothing on them the run wants. A page is a bake task's: one NPC's or
+    // player's model, or a batch of small ones.
+    private freeUnwantedEnemies(): void {
+        const kept = new Set<ActorPage>();
+        for (const [key, model] of this.models) {
+            if (this.wantedEnemies.has(key)) {
+                kept.add(model.page);
+            }
+        }
+        const freed = new Set(this.enemyPages.filter((page) => !kept.has(page)));
+        if (freed.size === 0) {
+            return;
+        }
+        for (const page of freed) {
             this.actors.removePage(page);
         }
         for (const [key, model] of this.models) {
-            if (this.enemyPages.includes(model.page)) {
+            if (freed.has(model.page)) {
                 this.models.delete(key);
             }
         }
-        this.enemyPages = [];
+        this.enemyPages = this.enemyPages.filter((page) => !freed.has(page));
+        // One the console spawned may be among them: asked for again, it's baked again
         this.requestedEnemies.clear();
     }
 
-    // What lands after the enemies are dropped is a dropped map's, and isn't kept
+    // Each model's kept as it lands, under its own key and its aliases', if the run still wants
+    // one of them; one it's stopped wanting meanwhile never goes on the GPU
     private async bakeEnemies(
         requests: BakeRequest[],
         onProgress?: (done: number, total: number) => void,
     ): Promise<void> {
+        if (requests.length === 0) {
+            return;
+        }
         const { requests: merged, aliases } = GameAssets.mergeRequests(requests);
-        const bakes = this.enemyBakes;
+        const keysOf = new Map(merged.map((request) => [request.key, [request.key]]));
+        for (const [alias, key] of aliases) {
+            keysOf.get(key)?.push(alias);
+        }
         const onBake = (bake: ActorBakeResult) => {
-            if (bakes === this.enemyBakes) {
-                const [model] = this.addBake(bake).values();
+            const keys = bake.sets.flatMap((set) => keysOf.get(set.key) ?? [set.key]);
+            if (!keys.some((key) => this.wantedEnemies.has(key))) {
+                // Its textures go in anyway: the workers bake later models without them
+                this.renderer.updateTextureArray(bake.loadedTextures);
+                return;
+            }
+            const models = this.addBake(bake);
+            for (const [key, model] of models) {
+                for (const alias of keysOf.get(key) ?? []) {
+                    this.models.set(alias, model);
+                }
+            }
+            const [model] = models.values();
+            if (model) {
                 this.enemyPages.push(model.page);
             }
         };
-        await this.bakeInTasks(merged, onBake, onProgress);
-        if (bakes !== this.enemyBakes) {
-            return;
-        }
-        for (const [alias, key] of aliases) {
-            const model = this.models.get(key);
-            if (model) {
-                this.models.set(alias, model);
+        const baking = this.bakeInTasks(merged, onBake, onProgress).finally(() => {
+            for (const request of requests) {
+                if (this.bakingEnemies.get(request.key) === baking) {
+                    this.bakingEnemies.delete(request.key);
+                }
             }
+        });
+        for (const request of requests) {
+            this.bakingEnemies.set(request.key, baking);
         }
+        await baking;
     }
 
     private loadBake = (bake: ActorBakeResult): void => {
@@ -833,7 +1605,8 @@ export class GameAssets {
         await Promise.all(
             tasks.map(async (task) => {
                 const bake = await this.bake(task);
-                bytes += bake.vertices.byteLength + bake.indices.byteLength;
+                bytes +=
+                    bake.vertices.byteLength + bake.indices.byteLength + bake.positions.byteLength;
                 onBake(bake);
                 onProgress?.(++done, tasks.length);
             }),
@@ -869,8 +1642,14 @@ export class GameAssets {
         return tasks.sort((a, b) => animations(b) - animations(a));
     }
 
-    // Sprites' first frames, or each one's frame in frames (the overhead prayers' past the first)
-    async loadSprites(spriteIds: number[], frames?: number[]): Promise<void> {
+    // The game view's sprites and the overhead prayers' frames, for getSprite.
+    // Only these: the slim cache has what getGameSpriteIds lists.
+    async loadSprites(): Promise<void> {
+        const spriteIds = [
+            ...GAME_VIEW_SPRITES,
+            ...PRAYER_HEADICON_FRAME_IDS.map(() => PRAYER_HEADICON_SPRITE),
+        ];
+        const frames = [...GAME_VIEW_SPRITES.map(() => 0), ...PRAYER_HEADICON_FRAME_IDS];
         const images = await this.workerPool.queueLoad<
             SpriteDataInput,
             SpriteImage[],
@@ -927,10 +1706,14 @@ export class GameAssets {
     }
 
     // The character's look on the menus, with their starting weapon's swing:
-    // the look a run starts with, so it needn't bake again then
-    setCharacterLook(characterId: string): Promise<void> {
+    // the look a run starts with, so it needn't bake again then. bare: the body alone, with nothing
+    // worn (the Wardrobe's Appearance tab, so what's changing can be seen).
+    setCharacterLook(characterId: string, look?: WardrobeLook, bare = false): Promise<void> {
+        if (bare && wearsWardrobe(getCharacter(characterId))) {
+            return this.setPlayerAppearance(getBareAppearance(look));
+        }
         return this.setPlayerAppearance(
-            getCharacterAppearance(characterId),
+            getCharacterAppearance(characterId, look),
             0,
             getCharacterAttackSeqs(characterId),
         );
@@ -984,6 +1767,37 @@ export class GameAssets {
         this.releasePlayerModel(previous);
     }
 
+    // A player's look as baked: the walk, their weapon's stance, the death and these swings
+    // (scripts/cache/check-actor-frames.ts bakes heroes with it too)
+    static getLookRequest(
+        appearance: PlayerAppearance,
+        attackSeqs: number[],
+    ): { request: PlayerBakeRequest; stance: PlayerStance } {
+        const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
+        // Walk goes first: a model's height comes from its first seq, and a stance that raises
+        // the weapon shouldn't lift the health bar with it
+        const seqIds = [
+            PLAYER_SEQS.walk,
+            stance.idle,
+            stance.run,
+            PLAYER_SEQS.death,
+            ...attackSeqs,
+        ].filter((id, i, all) => all.indexOf(id) === i);
+        // The held weapon's aim over the run, for a moment after each shot on the move
+        const poses = getHeldRunPoses(appearance, attackSeqs);
+        const request: PlayerBakeRequest = {
+            kind: "player",
+            key: "player",
+            appearance,
+            seqIds,
+            runPoses:
+                poses.length > 0
+                    ? { poses, runSeqId: stance.run, maskSeqId: PLAYER_INTERLEAVE_SEQ }
+                    : undefined,
+        };
+        return { request, stance };
+    }
+
     // A look's models, baked once however many players ask for it at a time
     private bakeLook(
         key: string,
@@ -993,22 +1807,8 @@ export class GameAssets {
         let baking = this.bakingLooks.get(key);
         if (!baking) {
             baking = (async () => {
-                const stance =
-                    getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
-                // Walk goes first: a model's height comes from its first seq,
-                // and a stance that raises the weapon shouldn't lift the health
-                // bar with it
-                const seqIds = [
-                    PLAYER_SEQS.walk,
-                    stance.idle,
-                    stance.run,
-                    PLAYER_SEQS.death,
-                    ...attackSeqs,
-                ].filter((id, i, all) => all.indexOf(id) === i);
-                const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
-                    ...getPowerUpLookRequests(appearance),
-                ]);
+                const { request, stance } = GameAssets.getLookRequest(appearance, attackSeqs);
+                const bake = await this.bake([request, ...getPowerUpLookRequests(appearance)]);
                 this.renderer.updateTextureArray(bake.loadedTextures);
                 return { models: this.actors.addBake(bake), stance };
             })().finally(() => this.bakingLooks.delete(key));

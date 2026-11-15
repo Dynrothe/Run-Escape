@@ -20,7 +20,11 @@ const OPPOSITE = [2, 3, 0, 1, 6, 7, 4, 5];
 const DIR_INDEX = [6, 3, 7, 2, -1, 0, 5, 1, 4];
 
 // What canStep needs of a grid, and its table of steps if it has one
-export type StepGrid = Pick<ArenaGrid, "isSolid" | "getFlags"> & { readonly steps?: Steps };
+export type StepGrid = Pick<ArenaGrid, "isSolid" | "getFlags"> & {
+    readonly steps?: Steps;
+    // ArenaGrid.version: a grid that can change says when it has
+    readonly version?: number;
+};
 
 // Whether a one tile step is allowed, with the OSRS rules: walls on either side
 // of the edge block it, and a diagonal step needs both straight routes around
@@ -52,9 +56,9 @@ export function canStep(grid: StepGrid, x: number, y: number, dx: number, dy: nu
 }
 
 // canStep's answer for each of the eight steps out of every tile of a grid,
-// worked out once when the grid's made: a grid doesn't change during a run,
-// and each flow field update asks tens of thousands of them. Tiles off the
-// grid ask canStep.
+// worked out when the grid's made, and again round a tile that changes (a floor
+// that falls away, ArenaGrid.dropTile): each flow field update asks tens of
+// thousands of them. Tiles off the grid ask canStep.
 export class Steps {
     // One bit per direction in DIR_X/DIR_Y
     private readonly allowed: Uint8Array;
@@ -67,10 +71,32 @@ export class Steps {
         private readonly sizeY: number,
     ) {
         this.allowed = new Uint8Array(sizeX * sizeY);
+        this.fill(0, 0, sizeX - 1, sizeY - 1);
+    }
+
+    // After a tile's changed (ArenaGrid.dropTile): the straight steps into it and out of it, and
+    // the diagonals that go round its corners
+    refresh(tileX: number, tileY: number): void {
+        this.fill(
+            tileX - this.baseX - 2,
+            tileY - this.baseY - 2,
+            tileX - this.baseX + 2,
+            tileY - this.baseY + 2,
+        );
+    }
+
+    // Works out the steps out of the tiles in a box of the grid (grid tiles, both ends in): the
+    // straight ones a tile further out each way, then the diagonals from them
+    private fill(x0: number, y0: number, x1: number, y1: number): void {
+        const { grid, baseX, baseY, sizeX, sizeY } = this;
+        x0 = Math.max(0, x0);
+        y0 = Math.max(0, y0);
+        x1 = Math.min(sizeX - 1, x1);
+        y1 = Math.min(sizeY - 1, y1);
         // The straight steps, then the diagonals from them: canStep's are the
         // four straight ones round the corner, and the corner tile not solid
-        for (let y = 0; y < sizeY; y++) {
-            for (let x = 0; x < sizeX; x++) {
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
                 let bits = 0;
                 for (let d = 0; d < 4; d++) {
                     if (canStep(grid, baseX + x, baseY + y, DIR_X[d], DIR_Y[d])) {
@@ -80,11 +106,11 @@ export class Steps {
                 this.allowed[x + y * sizeX] = bits;
             }
         }
-        for (let y = 0; y < sizeY; y++) {
-            for (let x = 0; x < sizeX; x++) {
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
                 const tileX = baseX + x;
                 const tileY = baseY + y;
-                let bits = this.allowed[x + y * sizeX];
+                let bits = this.allowed[x + y * sizeX] & 0xf;
                 for (let d = 4; d < 8; d++) {
                     const dx = DIR_X[d];
                     const dy = DIR_Y[d];
@@ -171,6 +197,8 @@ export class FlowField {
     originY = 0;
     targetX = -1;
     targetY = -1;
+    // The grid's version it was worked out for (StepGrid.version)
+    gridVersion = -1;
     // The south row of a ditch enemies jump (MapDef.ditch)
     ditchY: number | undefined;
 
@@ -213,6 +241,7 @@ export class FlowField {
     update(grid: StepGrid, targetX: number, targetY: number): void {
         this.targetX = targetX;
         this.targetY = targetY;
+        this.gridVersion = grid.version ?? 0;
         this.originX = targetX - (this.size >> 1);
         this.originY = targetY - (this.size >> 1);
         this.version++;

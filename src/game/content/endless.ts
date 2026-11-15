@@ -1,4 +1,5 @@
 import { fm } from "../core/fmath";
+import { t } from "../i18n";
 import { GearDef, StatKey, Stats } from "./types";
 
 // Endless runs: a beaten map's fifteen minutes over and over until the player
@@ -89,5 +90,10 @@ export function getGearStats(item: GearDef, upgrades: number): Partial<Stats> {
 // "Slayer helmet +2", and weapons and passives past their last level the
 // same way
 export function upgradedName(name: string, upgrades: number): string {
-    return upgrades > 0 ? `${name} +${upgrades}` : name;
+    return upgrades > 0 ? t("endless.upgraded", { name, n: upgrades }) : name;
 }
+
+// The endless runs' words, for locales/en/gen.json
+export const ENDLESS_MESSAGES: Record<string, string> = {
+    "endless.upgraded": "{name} +{n}",
+};

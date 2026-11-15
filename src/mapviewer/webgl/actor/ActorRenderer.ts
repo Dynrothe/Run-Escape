@@ -9,15 +9,22 @@ import PicoGL, {
 } from "picogl";
 
 import { Frustum } from "../../Frustum";
+import { readsLightMap } from "../shaders/ShaderUtil";
+import { POSITIONS_WIDTH } from "./ActorBakeFrames";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
-const TEXELS_PER_INSTANCE = 2;
+const TEXELS_PER_INSTANCE = 5;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 
 // Tiles added to an actor's reach before it's culled, for the depth nudge in its
 // shader and rounding
 const CULL_MARGIN = 0.25;
+
+// How much nearer the camera a layered actor's faces (a player's) are drawn for each priority, in
+// tiles, seen from behind (actor.vert.glsl): enough for a cape to cover the platebody poking a few
+// units through it
+const LAYER_DEPTH = 3 / 128;
 
 export const NO_TINT = 0xffffff;
 
@@ -34,6 +41,10 @@ export class ActorAnim {
         readonly segments: Uint16Array,
         readonly frameLengths: Uint16Array,
         readonly looping: boolean,
+        // A frame of seqId over the run (BakedAnim.runPose), not seqId
+        readonly runPose: boolean = false,
+        // Where each frame's positions start in its page's (BakedAnim.positionStarts)
+        readonly positionStarts: Int32Array = new Int32Array(frameLengths.length).fill(-1),
     ) {
         this.frameCount = frameLengths.length;
         this.frameStarts = new Uint32Array(this.frameCount);
@@ -68,6 +79,8 @@ export class ActorAnim {
 
 export class ActorModel {
     readonly animIndices: Map<number, number> = new Map();
+    // Attacks' poses over the run (BakedAnim.runPose), by the attack's seq
+    readonly runPoses: Map<number, ActorAnim> = new Map();
 
     constructor(
         readonly page: ActorPage,
@@ -78,9 +91,13 @@ export class ActorModel {
         // Furthest any frame gets from its origin
         readonly reach: number,
         readonly anims: ActorAnim[],
+        // Its faces drawn in layers by priority (BakedSet.layered)
+        readonly layered = false,
     ) {
         anims.forEach((anim, i) => {
-            if (!this.animIndices.has(anim.seqId)) {
+            if (anim.runPose) {
+                this.runPoses.set(anim.seqId, anim);
+            } else if (!this.animIndices.has(anim.seqId)) {
                 this.animIndices.set(anim.seqId, i);
             }
         });
@@ -93,6 +110,7 @@ export class ActorModel {
 
 export type ActorDrawOptions = {
     scale?: number;
+    // 0 to 1, towards white; negative, towards the tint's own colour (a glow)
     flash?: number;
     tint?: number;
     alpha?: number;
@@ -100,6 +118,30 @@ export type ActorDrawOptions = {
     // Drawn with an outline: the model this much bigger in a flat colour
     // (ActorRenderer.outlineColor) behind it
     outline?: number;
+    // Drawn with a glow: see-through shells of the model this much bigger (each of glow's
+    // scales), in glowColor at glowAlpha, blended behind it, so a soft rim of it shows round the
+    // actor (an orb's awakened boss, client/GameView.ts)
+    glow?: readonly number[];
+    glowColor?: number;
+    glowAlpha?: number;
+    // Light along the edges of a tile-sized model (one tile across, centred), as if from under
+    // it: 0 to 1, how strongly; how far in it reaches, of the way to the middle; and its colour
+    // (the Wardens' floor, client/FloorView.ts)
+    edge?: number;
+    edgeWidth?: number;
+    edgeColor?: number;
+    // Stretched along x and z (a floor's slab of several tiles), and tipped over about x and z
+    // before it's turned (RS angle units), from its origin
+    stretchX?: number;
+    stretchZ?: number;
+    pitch?: number;
+    roll?: number;
+    // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
+    // the world: a floor's pillars and raised tiles, which hide the player as walls would
+    early?: boolean;
+    // On a lit map (MapDef.lighting), how much it's drawn at full brightness whatever the light,
+    // 0 to 1: warnings and spells, which have to be seen in the dark. Elsewhere it does nothing.
+    unlit?: number;
 };
 
 class InstanceList {
@@ -121,6 +163,7 @@ class InstanceList {
 
     push(
         ranges: Int32Array,
+        positionStart: number,
         frame: number,
         x: number,
         y: number,
@@ -130,6 +173,16 @@ class InstanceList {
         flash: number,
         tint: number,
         alpha: number,
+        edge: number,
+        edgeWidth: number,
+        edgeColor: number,
+        stretchX: number,
+        stretchZ: number,
+        pitch: number,
+        roll: number,
+        unlit: number,
+        // Tiles nearer the camera for each priority (LAYER_DEPTH), 0 for none
+        layerDepth = 0,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -152,6 +205,16 @@ class InstanceList {
         data[o + 5] = flash;
         data[o + 6] = tint;
         data[o + 7] = alpha;
+        data[o + 8] = edge;
+        data[o + 9] = edgeWidth;
+        data[o + 10] = edgeColor;
+        data[o + 11] = unlit;
+        data[o + 12] = stretchX;
+        data[o + 13] = stretchZ;
+        data[o + 14] = pitch;
+        data[o + 15] = roll;
+        data[o + 16] = positionStart;
+        data[o + 17] = layerDepth;
     }
 
     grow(capacity: number): void {
@@ -242,19 +305,24 @@ export class ActorSegment {
     readonly instances = new InstanceList();
     readonly silhouettes = new InstanceList();
     readonly outlines = new InstanceList();
-    readonly lists = [this.instances, this.silhouettes, this.outlines];
+    readonly glows = new InstanceList();
+    readonly early = new InstanceList();
+    readonly lists = [this.instances, this.silhouettes, this.outlines, this.glows, this.early];
 
     constructor(
         readonly vertexArray: VertexArray,
-        readonly drawCall: DrawCall,
+        // Made again with the other program as lights come or go (ActorRenderer.setProgram)
+        public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
+        readonly drawCallGlow: DrawCall,
     ) {}
 
     setActorData(texture: Texture): void {
         this.drawCall.texture("u_actorData", texture);
         this.drawCallSilhouette.texture("u_actorData", texture);
         this.drawCallOutline.texture("u_actorData", texture);
+        this.drawCallGlow.texture("u_actorData", texture);
     }
 }
 
@@ -263,6 +331,8 @@ export class ActorPage {
     constructor(
         readonly vertexBuffer: VertexBuffer,
         readonly indexBuffer: VertexBuffer,
+        // Its frames' positions (ActorBakeResult.positions), if any frame keeps only those
+        readonly positions: Texture | undefined,
         readonly segments: ActorSegment[],
     ) {}
 
@@ -270,7 +340,7 @@ export class ActorPage {
     get instanceCount(): number {
         let count = 0;
         for (const segment of this.segments) {
-            count += segment.instances.count;
+            count += segment.instances.count + segment.early.count;
         }
         return count;
     }
@@ -281,6 +351,7 @@ export class ActorPage {
         }
         this.vertexBuffer.delete();
         this.indexBuffer.delete();
+        this.positions?.delete();
     }
 }
 
@@ -304,16 +375,24 @@ export class ActorRenderer {
 
     dataTexture: Texture;
     dataArray: Float32Array;
+    // What a page with no positions texture has bound in its place: a sampler needs one there
+    private readonly noPositions: Texture;
 
     private frustum?: Frustum;
 
+    // Every draw's unlit (ActorDrawOptions.unlit) is at least this, while a caller's drawing only
+    // warnings (a boss fight's view)
+    unlitAtLeast = 0;
+
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
+    // A negative alpha: each glow shell's own colour (actor-silhouette.frag.glsl)
+    readonly glowColor = new Float32Array([0, 0, 0, -1]);
 
     constructor(
         readonly app: PicoApp,
         readonly hasMultiDraw: boolean,
-        readonly program: Program,
+        public program: Program,
         readonly silhouetteProgram: Program,
         readonly textureArray: Texture,
         readonly textureMaterials: Texture,
@@ -321,6 +400,18 @@ export class ActorRenderer {
     ) {
         this.dataArray = new Float32Array(DATA_WIDTH * 4 * 4);
         this.dataTexture = this.createDataTexture(this.dataArray);
+        this.noPositions = this.createPositionsTexture(new Int16Array(3), 1, 1);
+    }
+
+    // An integer texture of a page's positions, read texel by texel
+    private createPositionsTexture(data: Int16Array, width: number, height: number): Texture {
+        return this.app.createTexture2D(data, width, height, {
+            internalFormat: PicoGL.RGB16I,
+            minFilter: PicoGL.NEAREST,
+            magFilter: PicoGL.NEAREST,
+            wrapS: PicoGL.CLAMP_TO_EDGE,
+            wrapT: PicoGL.CLAMP_TO_EDGE,
+        });
     }
 
     createDataTexture(data: Float32Array): Texture {
@@ -343,13 +434,16 @@ export class ActorRenderer {
             bake.indices,
         );
 
+        const positions =
+            bake.positions.length > 0
+                ? this.createPositionsTexture(
+                      bake.positions,
+                      POSITIONS_WIDTH,
+                      bake.positions.length / 3 / POSITIONS_WIDTH,
+                  )
+                : undefined;
         const createDrawCall = (program: Program, vertexArray: VertexArray) =>
-            app
-                .createDrawCall(program, vertexArray)
-                .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
-                .texture("u_textures", this.textureArray)
-                .texture("u_textureMaterials", this.textureMaterials)
-                .texture("u_actorData", this.dataTexture);
+            this.createDrawCall(program, vertexArray, positions);
 
         const segments = Array.from(bake.segmentStarts, (start) => {
             const vertexArray = app
@@ -373,9 +467,13 @@ export class ActorRenderer {
                     "u_silhouetteColor",
                     this.outlineColor,
                 ),
+                createDrawCall(this.silhouetteProgram, vertexArray).uniform(
+                    "u_silhouetteColor",
+                    this.glowColor,
+                ),
             );
         });
-        const page = new ActorPage(vertexBuffer, indexBuffer, segments);
+        const page = new ActorPage(vertexBuffer, indexBuffer, positions, segments);
         this.pages.push(page);
 
         const models = new Map<string, ActorModel>();
@@ -388,14 +486,63 @@ export class ActorRenderer {
                         anim.segments,
                         anim.frameLengths,
                         anim.looping,
+                        anim.runPose,
+                        anim.positionStarts,
                     ),
             );
             models.set(
                 set.key,
-                new ActorModel(page, set.key, set.height, set.radius, set.reach, anims),
+                new ActorModel(
+                    page,
+                    set.key,
+                    set.height,
+                    set.radius,
+                    set.reach,
+                    anims,
+                    set.layered ?? false,
+                ),
             );
         }
         return models;
+    }
+
+    private createDrawCall(
+        program: Program,
+        vertexArray: VertexArray,
+        positions: Texture | undefined,
+    ): DrawCall {
+        const drawCall = this.app
+            .createDrawCall(program, vertexArray)
+            .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
+            .texture("u_textures", this.textureArray)
+            .texture("u_textureMaterials", this.textureMaterials)
+            .texture("u_actorData", this.dataTexture)
+            .texture("u_positions", positions ?? this.noPositions);
+        if (this.lightMap && readsLightMap(program)) {
+            drawCall.texture("u_lightMap", this.lightMap);
+        }
+        return drawCall;
+    }
+
+    // A lit map's light map (GameWebGLRenderer), for a program that reads it (setProgram)
+    lightMap?: Texture;
+
+    // Draws the actors with another program from now on (a lit map's, with its lights, or back)
+    setProgram(program: Program, lightMap?: Texture): void {
+        this.lightMap = lightMap;
+        if (program === this.program) {
+            return;
+        }
+        this.program = program;
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                segment.drawCall = this.createDrawCall(
+                    program,
+                    segment.vertexArray,
+                    page.positions,
+                );
+            }
+        }
     }
 
     removePage(page: ActorPage): void {
@@ -404,6 +551,12 @@ export class ActorRenderer {
             this.pages.splice(index, 1);
             page.delete();
         }
+    }
+
+    // Whether a sphere (world tiles, y as draw's) is in this frame's view, for a caller that
+    // knows better than a model's reach where it'll be (a model laid flat along a line)
+    inView(x: number, y: number, z: number, radius: number): boolean {
+        return !this.frustum || this.frustum.intersectsSphere(x, y, z, radius + CULL_MARGIN);
     }
 
     // Actors outside the frustum aren't drawn. Models are tested as a sphere,
@@ -415,6 +568,8 @@ export class ActorRenderer {
                 segment.instances.reset();
                 segment.silhouettes.reset();
                 segment.outlines.reset();
+                segment.glows.reset();
+                segment.early.reset();
             }
         }
     }
@@ -432,8 +587,14 @@ export class ActorRenderer {
         options?: ActorDrawOptions,
     ): void {
         const scale = options?.scale ?? 1;
+        const stretchX = options?.stretchX ?? 1;
+        const stretchZ = options?.stretchZ ?? 1;
         if (this.frustum) {
-            const biggest = scale * Math.max(options?.outline ?? 1, 1);
+            const glow = options?.glow;
+            const biggest =
+                scale *
+                Math.max(options?.outline ?? 1, glow ? Math.max(...glow) : 1, 1) *
+                Math.max(stretchX, stretchZ, 1);
             const reach = (model.reach * biggest) / 128 + CULL_MARGIN;
             if (!this.frustum.intersectsSphere(x, y, z, reach)) {
                 return;
@@ -442,14 +603,107 @@ export class ActorRenderer {
         const flash = options?.flash ?? 0;
         const tint = options?.tint ?? NO_TINT;
         const alpha = options?.alpha ?? 1;
+        const edge = options?.edge ?? 0;
+        const edgeWidth = options?.edgeWidth ?? 0;
+        const edgeColor = options?.edgeColor ?? NO_TINT;
         const segment = model.page.segments[anim.segments[frame]];
-        segment.instances.push(anim.ranges, frame, x, y, z, yaw, scale, flash, tint, alpha);
+        const positionStart = anim.positionStarts[frame];
+        (options?.early ? segment.early : segment.instances).push(
+            anim.ranges,
+            positionStart,
+            frame,
+            x,
+            y,
+            z,
+            yaw,
+            scale,
+            flash,
+            tint,
+            alpha,
+            edge,
+            edgeWidth,
+            edgeColor,
+            stretchX,
+            stretchZ,
+            options?.pitch ?? 0,
+            options?.roll ?? 0,
+            Math.max(options?.unlit ?? 0, this.unlitAtLeast),
+            model.layered ? LAYER_DEPTH : 0,
+        );
         if (options?.silhouette) {
-            segment.silhouettes.push(anim.ranges, frame, x, y, z, yaw, scale, 0, NO_TINT, 1);
+            segment.silhouettes.push(
+                anim.ranges,
+                positionStart,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                scale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+            );
         }
         if (options?.outline) {
             const outlineScale = scale * options.outline;
-            segment.outlines.push(anim.ranges, frame, x, y, z, yaw, outlineScale, 0, NO_TINT, 1);
+            segment.outlines.push(
+                anim.ranges,
+                positionStart,
+                frame,
+                x,
+                y,
+                z,
+                yaw,
+                outlineScale,
+                0,
+                NO_TINT,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+        if (options?.glow) {
+            // A full negative flash: the vertex shader's colour is the tint itself, at the alpha
+            const color = options.glowColor ?? NO_TINT;
+            const glowAlpha = (options.glowAlpha ?? 0.5) * alpha;
+            for (const glowScale of options.glow) {
+                segment.glows.push(
+                    anim.ranges,
+                    positionStart,
+                    frame,
+                    x,
+                    y,
+                    z,
+                    yaw,
+                    scale * glowScale,
+                    -1,
+                    color,
+                    glowAlpha,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                );
+            }
         }
     }
 
@@ -552,13 +806,25 @@ export class ActorRenderer {
         }
     }
 
+    // Expects depth test on, blending off: what's drawn early (ActorDrawOptions.early), before
+    // the silhouettes, so they show through it as through the world.
+    renderEarly(): void {
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                const list = segment.early;
+                this.drawList(segment.drawCall, list, list.opaqueOffsets, list.opaqueCounts);
+            }
+        }
+    }
+
     // Expects blending on.
     renderAlpha(): void {
         for (const page of this.pages) {
             for (const segment of page.segments) {
-                const list = segment.instances;
-                if (list.alphaElements > 0) {
-                    this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                for (const list of [segment.early, segment.instances]) {
+                    if (list.alphaElements > 0) {
+                        this.drawList(segment.drawCall, list, list.alphaOffsets, list.alphaCounts);
+                    }
                 }
             }
         }
@@ -582,6 +848,26 @@ export class ActorRenderer {
             }
         }
         this.app.depthMask(true);
+    }
+
+    // Draw after the opaque world and before the actors themselves: the glowing
+    // actors' see-through shells, blended without writing depth, so the actors
+    // drawn over them leave a soft rim of it showing (ActorDrawOptions.glow).
+    // Leaves blending off and depth writes on.
+    renderGlows(): void {
+        if (!this.pages.some((page) => page.segments.some((s) => s.glows.count > 0))) {
+            return;
+        }
+        this.app.enable(PicoGL.BLEND);
+        this.app.depthMask(false);
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                const list = segment.glows;
+                this.drawList(segment.drawCallGlow, list, list.opaqueOffsets, list.opaqueCounts);
+            }
+        }
+        this.app.depthMask(true);
+        this.app.disable(PicoGL.BLEND);
     }
 
     // Draw after the opaque world and before the actors themselves: fragments
@@ -622,5 +908,6 @@ export class ActorRenderer {
         }
         this.pages = [];
         this.dataTexture.delete();
+        this.noPositions.delete();
     }
 }

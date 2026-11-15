@@ -2,7 +2,7 @@
 // slim cache with the palette in it can serve any seed. Loads each map the way
 // the slim cache does and compares the cache groups they touch.
 //
-//   npx tsx scripts/scaperune/check-palette.ts
+//   bun run tsx scripts/scaperune/check-palette.ts
 import { BIOMES, BiomeId } from "../../src/game/scaperune/biomes";
 import { GeneratorSettings, generatedRecipe } from "../../src/game/scaperune/generator";
 import { PALETTE_RECIPE } from "../../src/game/scaperune/palette";

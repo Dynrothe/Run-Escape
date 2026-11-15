@@ -77,11 +77,13 @@ export class CombatTracker {
     private readonly style: CombatStyle;
 
     // The tracker for a run, or none for one Combat Achievements don't follow: co-op, the fun and
-    // dev maps, and the raid test (?raidtest)
+    // dev maps, the raid test (?raidtest), and a fight of the Forgotten Four's gauntlet, which
+    // records the gauntlet rather than the run (and starts on the last fight's hitpoints)
     static forRun(sim: Sim, save: Readonly<SaveData>): CombatTracker | undefined {
         if (
             sim.heroes.length !== 1 ||
             sim.testing ||
+            sim.gauntlet !== undefined ||
             isFunMap(sim.map.id) ||
             isDevMap(sim.map.id)
         ) {
@@ -683,7 +685,12 @@ function startWatch(task: CombatTaskDef): Watch {
 // reaching it, a healer healing it
 function whatSpoils(e: SimEvent, goal: Extract<CombatGoal, { kind: "kill" }>): string | undefined {
     const without = goal.without ?? [];
-    if (e.type === "playerHit" && without.includes("hits") && goal.bossIds.includes(e.enemyId)) {
+    if (
+        e.type === "playerHit" &&
+        !e.missed &&
+        without.includes("hits") &&
+        goal.bossIds.includes(e.enemyId)
+    ) {
         return `hit by ${e.attack ?? enemyName(e.enemyId)}`;
     }
     if (e.type === "bossAbsorbBlast" && e.absorbed > 0 && without.includes("sleepwalkers")) {
@@ -696,7 +703,8 @@ function whatSpoils(e: SimEvent, goal: Extract<CombatGoal, { kind: "kill" }>): s
 }
 
 // The last hit on this player in these events (only from these attacks, if given), as "hit by"
-// its attack or whoever landed it
+// its attack or whoever landed it. Not one that missed (Trickster's, a pet's bubble), or a
+// Harvest's cost (the Soulreaper axe's, which names the weapon).
 function lastHit(
     events: readonly SimEvent[],
     sim: Sim,
@@ -706,6 +714,8 @@ function lastHit(
         const e = events[i];
         if (
             e.type === "playerHit" &&
+            !e.missed &&
+            ENEMY_BY_ID.has(e.enemyId) &&
             (e.hero === undefined || e.hero === sim.focus) &&
             (!attacks || (e.attack !== undefined && attacks.includes(e.attack)))
         ) {

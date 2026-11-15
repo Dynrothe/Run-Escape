@@ -1,7 +1,7 @@
 // Locs that draw nothing, by type, and how much of the surface uses them. The real world seals
 // edges with these: they're walls with an empty model.
 //
-//   npx tsx scripts/scaperune/research/invisible.ts world.json
+//   bun run tsx scripts/scaperune/research/invisible.ts world.json
 import fs from "node:fs";
 
 import { openWorld } from "./lib";

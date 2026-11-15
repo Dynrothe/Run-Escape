@@ -21,17 +21,47 @@ function canUseShareSheet(file: File): boolean {
     return standalone === true && !!navigator.canShare?.({ files: [file] });
 }
 
-// Gives the player a file to keep. Has to be called from a tap.
-export function saveFile(name: string, text: string, type: string): void {
+// The Android app puts this in its page (android/, MainActivity.java): a WebView can't download a
+// file itself, so the app asks the player where to keep it, and answers "saved" once it's written
+type AppDownloads = {
+    postMessage(message: string): void;
+    onmessage: ((event: { data: unknown }) => void) | null;
+};
+
+// What to do once the app says the file it was given last is written. The app takes one at a time.
+let appKept: (() => void) | undefined;
+
+// Gives the player a file to keep. Has to be called from a tap. kept runs once it's kept, as far
+// as the game can tell: the app and the share sheet say, but a browser's download doesn't, so
+// that counts as soon as it starts.
+export function saveFile(name: string, text: string, type: string, kept?: () => void): void {
+    const app = (globalThis as { NativeDownloads?: AppDownloads }).NativeDownloads;
+    if (app) {
+        appKept = kept;
+        app.onmessage = (event) => {
+            if (event.data === "saved") {
+                const done = appKept;
+                appKept = undefined;
+                done?.();
+            }
+        };
+        app.postMessage(JSON.stringify({ name, text }));
+        return;
+    }
     const file = new File([text], name, { type });
     if (!canUseShareSheet(file)) {
         download(file);
+        kept?.();
         return;
     }
-    navigator.share({ files: [file] }).catch((error: Error) => {
-        // That's only the player closing the sheet
-        if (error.name !== "AbortError") {
-            download(file);
-        }
-    });
+    navigator.share({ files: [file] }).then(
+        () => kept?.(),
+        (error: Error) => {
+            // That's only the player closing the sheet
+            if (error.name !== "AbortError") {
+                download(file);
+                kept?.();
+            }
+        },
+    );
 }

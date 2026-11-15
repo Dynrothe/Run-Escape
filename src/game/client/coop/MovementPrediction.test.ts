@@ -62,6 +62,68 @@ test("moves and turns immediately without writing any confirmed player state", (
     expect(getPlayerPose(sim, 99, 1).x).toBe(sim.player.x);
 });
 
+test("input sent before the first host frame stays pending until its echo", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    const initialX = sim.player.x;
+    now = 100;
+    const seq = prediction.sample([127, 0]);
+    now = 110;
+    expect(prediction.render()).toBeUndefined();
+    now = 120;
+    sim.tick = 1;
+    prediction.confirm([]);
+    expect(prediction.render()!.x).toBeCloseTo(initialX + PLAYER_SPEED, 8);
+    now = 340;
+    sim.tick = 2;
+    sim.player.x += PLAYER_SPEED;
+    prediction.confirm([{ frame: 2, hero: 1, move: [127, 0], moveSeq: seq }]);
+    expect(prediction.render()!.x).toBeCloseTo(initialX + 12 * PLAYER_SPEED, 8);
+});
+
+test("a long wait for the first host frame doesn't hold the picture at a late frame", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    // The run loading: drawn, but no frames come
+    for (now = 0; now < 5000; now += 10) prediction.render();
+    let tick = 0;
+    let last = 0;
+    for (now = 5000; now <= 5500; now += 10) {
+        if (now === 5200) prediction.sample([127, 0]);
+        // Frames stop for a moment, before the start's echo
+        if (now % 20 === 0 && (now <= 5240 || now >= 5380)) {
+            sim.tick = ++tick;
+            prediction.confirm([]);
+        }
+        const pose = prediction.render()!;
+        if (now > 5200) {
+            expect(pose.moving).toBe(true);
+            expect(pose.x).toBeGreaterThan(last);
+        }
+        last = pose.x;
+    }
+});
+
+test("a stop whose echo never comes is waited for only so long", () => {
+    const { sim, prediction, time } = setup();
+    prediction.sample([127, 0]);
+    time(100);
+    prediction.render();
+    prediction.sample([0, 0]);
+    const stopped = prediction.render()!.x;
+    expect(stopped).toBeGreaterThan(sim.player.x + 0.2);
+    // Frames keep coming, but neither the tap's start nor its stop got there
+    for (let now = 120; now <= 4000; now += 20) {
+        time(now);
+        prediction.confirm([]);
+        const pose = prediction.render()!;
+        if (now < 2000) expect(pose.x).toBe(stopped);
+    }
+    expect(prediction.render()!.x).toBeCloseTo(sim.player.x, 2);
+});
+
 test("replays terrain collision, movement speed and cursed controls", () => {
     const { sim, prediction, time } = setup(true);
     sim.heroes[1].stats.moveSpeed = 4;
@@ -192,13 +254,15 @@ test("the newest stop is replayed even when the confirmation lead exceeds the bu
     const before = prediction.render()!.x;
     time(350);
     prediction.sample([0, 0]);
+    const stopped = prediction.render()!.x;
     for (let now = 360; now <= 480; now += 20) {
         time(now);
         // Frames keep coming from a host that hasn't moved us yet
         prediction.confirm([]);
         prediction.render();
     }
-    expect(prediction.render()!.x).toBeLessThan(before - 0.2);
+    expect(stopped).toBeGreaterThanOrEqual(before);
+    expect(prediction.render()!.x).toBe(stopped);
     expect(prediction.render()!.moving).toBe(false);
     expect(sim.player.moving).toBe(false);
 });
@@ -304,7 +368,8 @@ test("a direction changed back inside the send throttle still gets acknowledged"
     );
     guest.setMove(1, 0);
     now = 20;
-    guest.setMove(0, 1);
+    // A stick eased off the same way is still coalesced by the ordinary throttle
+    guest.setMove(0.5, 0);
     now = 40;
     guest.setMove(1, 0);
     expect(messages).toHaveLength(1);
@@ -313,6 +378,104 @@ test("a direction changed back inside the send throttle still gets acknowledged"
     expect(messages).toHaveLength(2);
     expect(messages[1]).toEqual({ move: [127, 0], moveSeq: 3 });
 });
+
+test.each([true, false])("short taps and reversals send promptly (prediction: %s)", (on) => {
+    let now = 0;
+    const messages: { at: number; move?: [number, number] }[] = [];
+    const guest = new CoopRun(
+        makeSim(),
+        false,
+        { sendUp: (message) => messages.push({ at: now, ...message }), sendDown() {} },
+        new Map([
+            ["p0", 0],
+            ["p1", 1],
+        ]),
+        "p0",
+        () => now,
+    );
+    guest.setPrediction(on);
+    guest.setMove(1, 0);
+    now = 20;
+    guest.setMove(0, 0);
+    now = 30;
+    guest.setMove(-1, 0);
+    now = 40;
+    guest.setMove(0, 0);
+    expect(messages.map(({ at, move }) => [at, move])).toEqual([
+        [0, [127, 0]],
+        [20, [0, 0]],
+        [30, [-127, 0]],
+        [40, [0, 0]],
+    ]);
+    now = 300;
+    guest.setMove(1, 0);
+    now = 320;
+    guest.setMove(-1, 0);
+    expect(messages.at(-1)).toMatchObject({ at: 320, move: [-127, 0] });
+    now = 500;
+    guest.setMove(1, 0);
+    now = 520;
+    guest.setMove(0, 1);
+    expect(messages.at(-1)).toMatchObject({ at: 520, move: [0, 127] });
+    now = 700;
+    guest.setMove(0.6, 0.8);
+    now = 720;
+    guest.setMove(-0.6, 0.8);
+    expect(messages.at(-1)).toMatchObject({ at: 720, move: [-76, 102] });
+    // Pressing a second key while running (east to northeast)
+    now = 900;
+    guest.setMove(1, 0);
+    now = 920;
+    guest.setMove(Math.SQRT1_2, Math.SQRT1_2);
+    expect(messages.at(-1)).toMatchObject({ at: 920, move: [90, 90] });
+});
+
+test.each([true, false])(
+    "rapid taps and reversals stay below the relay limit (prediction: %s)",
+    (on) => {
+        let now = 0;
+        const messages: number[] = [];
+        const guest = new CoopRun(
+            makeSim(),
+            false,
+            { sendUp: () => messages.push(now), sendDown() {} },
+            new Map([
+                ["p0", 0],
+                ["p1", 1],
+            ]),
+            "p0",
+            () => now,
+        );
+        guest.setPrediction(on);
+        const turns = [
+            [1, 0],
+            [0, 1],
+            [-1, 0],
+            [0, -1],
+        ];
+        // A second key pressed and let go, then everything let go
+        const keys = [
+            [1, 0],
+            [Math.SQRT1_2, Math.SQRT1_2],
+            [0, 0],
+        ];
+        for (now = 0; now < 9000; now++) {
+            if (now < 3000) guest.setMove([1, 0, -1, 0][now % 4], 0);
+            else if (now < 6000) guest.setMove(turns[now % 4][0], turns[now % 4][1]);
+            else guest.setMove(keys[now % 3][0], keys[now % 3][1]);
+        }
+        for (const at of messages) {
+            expect(
+                messages.filter((time) => time >= at && time < at + 1000).length,
+            ).toBeLessThanOrEqual(36);
+        }
+        now = 9000;
+        guest.setMove(0, 0);
+        guest.resumed();
+        guest.setMove(0, 0);
+        expect(messages.at(-1)).toBe(9000);
+    },
+);
 
 test.each([false, true])(
     "delayed starts, stops and reversals preserve confirmed hashes (jitter: %s)",
@@ -402,7 +565,8 @@ function link(delay: (up: boolean) => number, cut = () => false) {
         if (cut()) return;
         const at = Math.max(now + delay(channel === 1), lastDelivery[channel]);
         lastDelivery[channel] = at;
-        deliveries.push({ at, fn });
+        if (at <= now) fn();
+        else deliveries.push({ at, fn });
     };
     const heroes = new Map([
         ["p0", 0],
@@ -425,14 +589,15 @@ function link(delay: (up: boolean) => number, cut = () => false) {
         () => now,
     );
     host.receiveUp("p1", { loaded: true });
-    // One 20ms frame: deliveries, the guest's input, a host tick, guest catch-up
-    const frame = (at: number, move: number, hostSteps = 1) => {
+    // One render: deliveries, the guest's input, host ticks, then guest catch-up
+    const frame = (at: number, move: number | [number, number], hostSteps = 1) => {
         now = at;
         for (let i = 0; i < deliveries.length; ) {
             if (deliveries[i].at <= now) deliveries.splice(i, 1)[0].fn();
             else i++;
         }
-        guest.setMove(move, 0);
+        if (typeof move === "number") guest.setMove(move, 0);
+        else guest.setMove(...move);
         for (let i = 0; i < hostSteps; i++) host.stepFrame();
         host.flush();
         while (guest.canStep()) guest.stepFrame();
@@ -440,6 +605,209 @@ function link(delay: (up: boolean) => number, cut = () => false) {
     };
     return { host, guest, frame };
 }
+
+test.each(
+    [0, 60, 120].flatMap((delay) =>
+        [0, 10].flatMap((phase) =>
+            [
+                { from: [0, 1], to: [1, 0] },
+                { from: [1, 0], to: [0, 1] },
+                { from: [0, -1], to: [-1, 0] },
+                { from: [-1, 0], to: [0, -1] },
+                { from: [Math.SQRT1_2, Math.SQRT1_2], to: [1, 0] },
+                { from: [-Math.SQRT1_2, -Math.SQRT1_2], to: [0, -1] },
+                // A second key pressed while running
+                { from: [1, 0], to: [Math.SQRT1_2, Math.SQRT1_2] },
+                { from: [0, -1], to: [-Math.SQRT1_2, -Math.SQRT1_2] },
+            ].map(({ from, to }) => ({ delay, phase, from, to })),
+        ),
+    ),
+)(
+    "a continuous turn after a held refresh avoids sideways drift ($from -> $to, delay $delay, phase $phase)",
+    ({ delay, phase, from, to }) => {
+        const { guest, frame } = link(() => delay);
+        let across = 0;
+        let lastAcross = 0;
+        let maxDrift = 0;
+        for (let now = 0; now <= 1200; now += 10) {
+            // The held input refresh goes at 300 + phase. Turning just after it
+            // mustn't keep the old axis moving on the host until the throttle ends.
+            const move = now < 100 + phase ? [0, 0] : now < 320 + phase ? from : to;
+            const pose = frame(now, move as [number, number], now % 20 === 0 ? 1 : 0);
+            const perpendicular = pose.x * -to[1] + pose.y * to[0];
+            lastAcross = perpendicular;
+            if (now === 320 + phase) across = perpendicular;
+            if (now > 320 + phase) maxDrift = Math.max(maxDrift, Math.abs(perpendicular - across));
+        }
+        // Host tick quantization can differ by half a tick; the send throttle
+        // mustn't add several ticks of movement on the released axis.
+        expect(maxDrift).toBeLessThanOrEqual(PLAYER_SPEED / 2 + 1e-6);
+        // Still converge to the host's line, rather than hiding a lasting offset.
+        const confirmedAcross = guest.sim.player.x * -to[1] + guest.sim.player.y * to[0];
+        expect(Math.abs(lastAcross - confirmedAcross)).toBeLessThan(0.001);
+        expect(guest.desynced).toBe(false);
+    },
+);
+
+test.each([0, 60, 120, 250].flatMap((delay) => [0, 10].map((phase) => ({ delay, phase }))))(
+    "a short tap has no idle slide (delay: $delay ms, input phase: $phase ms)",
+    ({ delay, phase }) => {
+        const { guest, frame } = link(() => delay);
+        let stopped = 0;
+        for (let now = 0; now <= 1000; now += 10) {
+            const pose = frame(
+                now,
+                now >= 300 + phase && now < 320 + phase ? 1 : 0,
+                now % 20 === 0 ? 1 : 0,
+            );
+            if (now === 320 + phase) stopped = pose.x;
+            if (now > 320 + phase) {
+                expect(pose.moving).toBe(false);
+                expect(pose.x).toBeCloseTo(stopped, 8);
+            }
+        }
+        expect(Math.abs(stopped - guest.sim.player.x)).toBeLessThan(0.1);
+        expect(guest.desynced).toBe(false);
+    },
+);
+
+test.each([0, 60, 120].flatMap((delay) => [0, 10].map((phase) => ({ delay, phase }))))(
+    "a quick reversal settles without idle sliding (delay: $delay ms, input phase: $phase ms)",
+    ({ delay, phase }) => {
+        const { guest, frame } = link(() => delay);
+        let stopped = 0;
+        let turned = 0;
+        for (let now = 0; now <= 1000; now += 10) {
+            const move =
+                now >= 300 + phase && now < 320 + phase
+                    ? 1
+                    : now >= 320 + phase && now < 400 + phase
+                      ? -1
+                      : 0;
+            const pose = frame(now, move, now % 20 === 0 ? 1 : 0);
+            if (now === 320 + phase) turned = pose.x;
+            if (now === 360 + phase) expect(pose.x).toBeLessThan(turned);
+            if (now === 400 + phase) stopped = pose.x;
+            if (now > 400 + phase) expect(pose.x).toBeCloseTo(stopped, 8);
+        }
+        expect(Math.abs(stopped - guest.sim.player.x)).toBeLessThan(0.1);
+        expect(guest.desynced).toBe(false);
+    },
+);
+
+test("diagnostics separate send delay from confirmation delay, counting each echo once", () => {
+    const { prediction, time } = setup();
+    expect(prediction.getDiagnostics()).toBeUndefined();
+    prediction.setDiagnostics(true);
+    const seq = prediction.sample([127, 0]);
+    time(50);
+    prediction.sent(seq);
+    time(70);
+    prediction.sent(seq);
+    time(150);
+    const echo = { frame: 1, hero: 1, move: [127, 0] as [number, number], moveSeq: seq };
+    prediction.confirm([echo]);
+    prediction.confirm([echo]);
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.inputToSendMs).toEqual({ count: 1, mean: 50, max: 50 });
+    expect(capture.sendToConfirmMs).toEqual({ count: 1, mean: 100, max: 100 });
+    expect(capture.inputToConfirmMs).toEqual({ count: 1, mean: 150, max: 150 });
+    prediction.setDiagnostics(true);
+    expect(prediction.getDiagnostics()!.inputToSendMs.count).toBe(0);
+    prediction.setDiagnostics(false);
+    expect(prediction.getDiagnostics()).toBeUndefined();
+});
+
+test("diagnostic capture is bounded and changes neither poses nor confirmed state", () => {
+    usePortableMath(true);
+    const measured = link(() => 60);
+    const plain = link(() => 60);
+    measured.guest.prediction!.setDiagnostics(true);
+    let first = measured.guest.prediction!.getDiagnostics()!;
+    for (let now = 0; now <= 8000; now += 20) {
+        const move = now % 800 < 200 ? 1 : now % 800 < 400 ? -1 : 0;
+        const pose = measured.frame(now, move);
+        expect(pose).toEqual(plain.frame(now, move));
+        expect(syncHash(measured.guest.sim)).toBe(syncHash(plain.guest.sim));
+        expect(syncHash(measured.host.sim)).toBe(syncHash(plain.host.sim));
+        if (now === 1000) first = measured.guest.prediction!.getDiagnostics()!;
+    }
+    const capture = measured.guest.prediction!.getDiagnostics()!;
+    expect(capture.samples).toHaveLength(64);
+    expect(capture.samples[0].atMs).toBeGreaterThan(1000);
+    // Taken a sample interval apart, from the first host frame
+    expect(first.samples.at(-1)!.atMs).toBeGreaterThan(900);
+    expect(first.samples.at(-1)!.atMs).toBeLessThanOrEqual(1000);
+    expect(capture.inputToSendMs.max).toBe(0);
+    expect(capture.sendToConfirmMs.mean).toBe(120);
+    expect(capture.pendingStopFrames).toBeGreaterThan(0);
+    expect(capture.idleCorrectionTiles).toBe(0);
+    expect(capture.longRenderFrames).toBe(0);
+});
+
+test("diagnostics measure actual stationary corrections and render stalls", () => {
+    const { sim, prediction, time } = setup();
+    prediction.setDiagnostics(true);
+    prediction.render();
+    sim.player.x += 0.5;
+    prediction.confirm([]);
+    time(100);
+    const pose = prediction.render()!;
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.errorTiles.max).toBeCloseTo(0.5);
+    expect(capture.idleCorrectionTiles).toBeCloseTo(pose.x - 1033.5);
+    expect(capture.longRenderFrames).toBe(1);
+    time(700);
+    prediction.render();
+    expect(prediction.getDiagnostics()!.stalledFrames).toBe(1);
+});
+
+test("diagnostics leave out the wait for the first host frame", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    prediction.setDiagnostics(true);
+    for (now = 0; now < 5000; now += 10) prediction.render();
+    for (now = 5000; now < 6000; now += 20) {
+        sim.tick++;
+        prediction.confirm([]);
+        prediction.render();
+    }
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.renderGapMs.count).toBe(50);
+    expect(capture.leadMs.max).toBeLessThanOrEqual(20);
+    expect(capture.confirmedAgeMs.max).toBe(0);
+});
+
+test("diagnostics don't count a reconnect's resend as send delay", () => {
+    let now = 0;
+    const guest = new CoopRun(
+        makeSim(),
+        false,
+        { sendUp() {}, sendDown() {} },
+        new Map([
+            ["p0", 0],
+            ["p1", 1],
+        ]),
+        "p0",
+        () => now,
+    );
+    guest.setMove(1, 0);
+    now = 20;
+    guest.setMove(0, 0);
+    now = 5000;
+    guest.prediction!.setDiagnostics(true);
+    // The stop goes again, but it was sampled and sent before the capture
+    guest.resumed();
+    guest.setMove(0, 0);
+    now = 5100;
+    guest.setMove(1, 0);
+    expect(guest.prediction!.getDiagnostics()!.inputToSendMs).toEqual({
+        count: 1,
+        mean: 0,
+        max: 0,
+    });
+});
 
 test("echoes of a held move a tick early or late leave the walk steady", () => {
     let sent = 0;
@@ -479,6 +847,7 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
     );
     let last = 0;
     let largest = 0;
+    let stopped = 0;
     let resumed = false;
     for (now = 0; now <= 3000; now += 20) {
         if (now >= 2000 && !resumed) {
@@ -492,6 +861,9 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
             expect(pose.x).toBe(last);
             expect(pose.moving).toBe(false);
         }
+        if (now === 2600) stopped = pose.x;
+        // And no sliding on after the stop
+        if (now > 2600) expect(pose.x).toBe(stopped);
         if (now > 100) largest = Math.max(largest, pose.x - last);
         last = pose.x;
     }
@@ -499,7 +871,9 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
     // over several frames
     expect(guest.sim.player.x - 1033.5).toBeGreaterThan(5);
     expect(largest).toBeLessThan(1);
-    expect(last).toBeCloseTo(guest.sim.player.x, 1);
+    // Walking, the picture can trail the host by a tick or two (an echo only
+    // re-times it past DRIFT_MS). Standing, that stays inside DEAD_ZONE.
+    expect(Math.abs(last - guest.sim.player.x)).toBeLessThan(0.1);
     expect(guest.desynced).toBe(false);
 });
 

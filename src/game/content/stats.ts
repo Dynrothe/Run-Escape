@@ -1,3 +1,4 @@
+import { fmtNum, t, tr } from "../i18n";
 import { StatKey, Stats } from "./types";
 
 // How each stat reads to the player, for gear, potions and comparisons
@@ -28,6 +29,7 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
     thorns: { label: "recoil damage", unit: "flat" },
     healChance: { label: "chance to heal on hit", unit: "percent" },
     meleeKnockback: { label: "melee knockback", unit: "percent" },
+    meleeSpeed: { label: "melee attack speed", unit: "percent" },
     weaponSlots: { label: "weapon slots", unit: "flat" },
     passiveSlots: { label: "passive slots", unit: "flat" },
     powerUpRate: { label: "power-up drops", unit: "percent" },
@@ -36,23 +38,65 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
 // The order stats are listed in
 const STAT_ORDER = Object.keys(STAT_INFO) as StatKey[];
 
-// "+10% damage", "-1 armour"
-export function formatStat(key: StatKey, value: number): string {
-    const info = STAT_INFO[key];
-    const sign = value < 0 ? "-" : "+";
-    const abs = Math.abs(value);
-    if (info.unit === "percent") {
-        return `${sign}${Math.round(abs * 100)}% ${info.label}`;
-    }
-    return `${sign}${Math.round(abs * 10) / 10} ${info.label}`;
+// The sentences stats are shown in, for locales/en/gen.json (stat.<key>.label for each stat's
+// label, then statline.*): {sign} is "+" or "-", so a language can put the number after the label
+export const STAT_MESSAGES: Record<string, string> = {
+    ...Object.fromEntries(STAT_ORDER.map((key) => [`stat.${key}.label`, STAT_INFO[key].label])),
+    "statline.percent": "{sign}{value}% {label}",
+    "statline.flat": "{sign}{value} {label}",
+    "statline.value.percent": "{sign}{value}%",
+    "statline.value.flat": "{sign}{value}",
+};
+
+// What a stat is called: "damage", "armour"
+export function statLabel(key: StatKey): string {
+    return tr(`stat.${key}.label`, STAT_INFO[key].label);
 }
 
-export function formatStats(stats: Partial<Stats>): string[] {
-    const lines: string[] = [];
+// A stat's name to head a row: "Damage", "Armour"
+function statHeading(key: StatKey): string {
+    const label = statLabel(key);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// The steps a stat's lines show it in: whole percent, or tenths
+function statStep(key: StatKey): number {
+    return STAT_INFO[key].unit === "percent" ? 100 : 10;
+}
+
+// A value in those steps, rounded as it's shown, so two values that read the same compare as
+// the same (an upgraded piece's stats have fractions)
+function shownSteps(key: StatKey, value: number): number {
+    return Math.sign(value) * Math.round(Math.abs(value) * statStep(key));
+}
+
+// A stat's size as a number: whole percent, or flat to a tenth
+function statNumber(key: StatKey, abs: number): string {
+    const steps = Math.round(abs * statStep(key));
+    return fmtNum(STAT_INFO[key].unit === "percent" ? steps : steps / 10, { useGrouping: false });
+}
+
+// "+10% damage", "-1 armour"
+export function formatStat(key: StatKey, value: number): string {
+    return t(`statline.${STAT_INFO[key].unit}`, {
+        sign: value < 0 ? "-" : "+",
+        value: statNumber(key, Math.abs(value)),
+        label: statLabel(key),
+    });
+}
+
+// A line as a screen shows it, in the player's language. english is what the line says in
+// English, or the label it starts with ("damage", "Venom lasts"), when the game built the line
+// itself: its icon goes by the English (statLineIcon), as no language file holds the line.
+export type StatText = { text: string; english?: string };
+
+// Each stat that isn't zero, a line each: "+10% damage", "-1 armour"
+export function formatStats(stats: Partial<Stats>): StatText[] {
+    const lines: StatText[] = [];
     for (const key of STAT_ORDER) {
         const value = stats[key];
         if (value) {
-            lines.push(formatStat(key, value));
+            lines.push({ text: formatStat(key, value), english: STAT_INFO[key].label });
         }
     }
     return lines;
@@ -60,16 +104,15 @@ export function formatStats(stats: Partial<Stats>): string[] {
 
 // A stat's value on its own: "+10%", "-1"
 export function formatStatValue(key: StatKey, value: number): string {
-    const sign = value < 0 ? "-" : "+";
-    const abs = Math.abs(value);
-    return STAT_INFO[key].unit === "percent"
-        ? `${sign}${Math.round(abs * 100)}%`
-        : `${sign}${Math.round(abs * 10) / 10}`;
+    return t(`statline.value.${STAT_INFO[key].unit}`, {
+        sign: value < 0 ? "-" : "+",
+        value: statNumber(key, Math.abs(value)),
+    });
 }
 
 // Every stat a piece has after an upgrade, with what it had before: for the
-// Armoury's "Damage +10% → +15%". from is undefined when it's unchanged, and
-// "+0" for a stat the upgrade adds.
+// Armoury's "Damage +10% → +15%". from is undefined when it shows the same,
+// and "+0" for a stat the upgrade adds.
 export function compareStats(
     before: Partial<Stats>,
     after: Partial<Stats>,
@@ -81,30 +124,49 @@ export function compareStats(
         if (!was && !now) {
             continue;
         }
-        const label = STAT_INFO[key].label;
+        const change = shownSteps(key, now) - shownSteps(key, was);
         lines.push({
             key,
-            label: label[0].toUpperCase() + label.slice(1),
-            ...(Math.abs(now - was) > 1e-9 && { from: formatStatValue(key, was) }),
+            label: statHeading(key),
+            ...(change !== 0 && { from: formatStatValue(key, was) }),
             to: formatStatValue(key, now),
-            better: now >= was,
+            better: change >= 0,
         });
     }
     return lines;
 }
 
-// What changes going from one set of stats to another: for comparing a new
-// piece of gear with the one it replaces
-export function diffStats(
-    from: Partial<Stats>,
-    to: Partial<Stats>,
-): { key: StatKey; delta: number; text: string }[] {
-    const diffs: { key: StatKey; delta: number; text: string }[] = [];
+// Every stat either of two pieces has, side by side: a casket's gear against
+// the piece it would replace, for its table. worn or found is undefined where
+// that piece hasn't got the stat. change (found less worn) is undefined when
+// the two show the same: it and better go by the values as shown, so the
+// difference is always what the two columns say, never "-0%".
+export type StatPair = {
+    key: StatKey;
+    label: string;
+    worn?: string;
+    found?: string;
+    change?: string;
+    better: boolean;
+};
+
+export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair[] {
+    const pairs: StatPair[] = [];
     for (const key of STAT_ORDER) {
-        const delta = (to[key] ?? 0) - (from[key] ?? 0);
-        if (Math.abs(delta) > 1e-9) {
-            diffs.push({ key, delta, text: formatStat(key, delta) });
+        const was = worn[key] ?? 0;
+        const now = found[key] ?? 0;
+        if (!was && !now) {
+            continue;
         }
+        const change = shownSteps(key, now) - shownSteps(key, was);
+        pairs.push({
+            key,
+            label: statHeading(key),
+            ...(was !== 0 && { worn: formatStatValue(key, was) }),
+            ...(now !== 0 && { found: formatStatValue(key, now) }),
+            ...(change !== 0 && { change: formatStatValue(key, change / statStep(key)) }),
+            better: change >= 0,
+        });
     }
-    return diffs;
+    return pairs;
 }

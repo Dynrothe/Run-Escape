@@ -1,3 +1,5 @@
+import { tr } from "../i18n";
+
 // OSRS drop table rarities, with the wiki's colours for them.
 //
 // Every weapon and passive has a rarity that sets how often it turns up in
@@ -96,4 +98,8 @@ export function rollRarityFrom(
         }
     }
     return "common";
+}
+
+export function rarityName(rarity: Rarity): string {
+    return tr(`rarity.${rarity}.name`, RARITIES[rarity].name);
 }

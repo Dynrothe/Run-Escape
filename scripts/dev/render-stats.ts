@@ -2,9 +2,9 @@
 // game's loader and counts triangles, draw ranges and bytes, then works out what
 // each spot's camera has in view.
 //
-//   npx tsx scripts/dev/render-stats.ts prifddinas falador lumbridge
-//   npx tsx scripts/dev/render-stats.ts --bake        # memory for the baked actors
-//   npx tsx scripts/dev/render-stats.ts --cull=8 prifddinas
+//   bun run tsx scripts/dev/render-stats.ts prifddinas falador lumbridge
+//   bun run tsx scripts/dev/render-stats.ts --bake        # memory for the baked actors
+//   bun run tsx scripts/dev/render-stats.ts --cull=8 prifddinas
 //
 // With --cull (the size of the cull cells, in tiles) it bakes the way the game
 // does, checks that every vertex is inside the box its draw is culled by (that's
@@ -13,6 +13,7 @@
 // Run it through a memory cap on a small machine: a big map is a few hundred MB.
 import { mat4, vec3 } from "gl-matrix";
 
+import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { GameAssets, PLAYER_SEQS, getCharacterAppearance } from "../../src/game/client/GameAssets";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
@@ -681,7 +682,13 @@ async function reportMap(mapId: string, state: ReturnType<typeof createWorkerSta
 
 async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<void> {
     const loader = new ActorBakeLoader();
-    const rows: { key: string; bytes: number; indexBytes: number; kind: string }[] = [];
+    const rows: {
+        key: string;
+        bytes: number;
+        indexBytes: number;
+        positionBytes: number;
+        kind: string;
+    }[] = [];
     // Each enemy model once, as the game bakes them (merged), and the player
     // with one weapon's swing (a run bakes the hero's weapons')
     const enemies = GameAssets.mergeRequests(GameAssets.getEnemyRequests(ENEMIES));
@@ -697,17 +704,23 @@ async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<
         });
         clearWorkerStateCaches(state);
         const indexBytes = result.data.indices.byteLength;
+        const positionBytes = result.data.positions.byteLength;
         rows.push({
             key: request.key,
             kind: request.kind,
-            bytes: result.data.vertices.byteLength + indexBytes,
+            bytes: result.data.vertices.byteLength + indexBytes + positionBytes,
             indexBytes,
+            positionBytes,
         });
     }
     rows.sort((a, b) => b.bytes - a.bytes);
     const total = rows.reduce((n, r) => n + r.bytes, 0);
     const indexBytes = rows.reduce((n, r) => n + r.indexBytes, 0);
-    console.log(`\nevery bake: ${rows.length} requests, ${mb(total)} (indices ${mb(indexBytes)})`);
+    const positionBytes = rows.reduce((n, r) => n + r.positionBytes, 0);
+    console.log(
+        `\nevery bake: ${rows.length} requests, ${mb(total)} (indices ${mb(indexBytes)},` +
+            ` positions ${mb(positionBytes)})`,
+    );
     const kinds = new Map<string, number>();
     for (const row of rows) {
         kinds.set(row.kind, (kinds.get(row.kind) ?? 0) + row.bytes);
@@ -741,9 +754,9 @@ function getPlayerBakeRequests(): BakeRequest[] {
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const infos = loadCacheInfos();
-    const info = infos.find((c) => c.name.startsWith("osrs-241"));
+    const info = infos.find((c) => c.name === GAME_CACHE_NAME);
     if (!info) {
-        throw new Error("No game cache in caches/");
+        throw new Error(`Cache ${GAME_CACHE_NAME} isn't in caches/`);
     }
     const state = createWorkerState(loadCache(info), [], [], undefined as unknown as Cache);
     if (args.includes("--bake")) {

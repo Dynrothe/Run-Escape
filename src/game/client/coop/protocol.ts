@@ -1,5 +1,6 @@
 // What the game and the co-op relay (server/coop-relay.mjs) say to each other,
 // as JSON over a WebSocket
+import { WardrobeLook } from "../../content/wardrobe";
 import { CoopAction, FrameEvent } from "../../core/lockstep";
 
 // What a player brings to a run from their save, for everyone's copy of it
@@ -7,8 +8,26 @@ export type Loadout = {
     metaStats: Record<string, number>;
     unlockedItems: string[];
     armoury: Record<string, number>;
-    // Their pet (pets.ts), only for looks: the sim never sees it
+    // Their pet (pets.ts): looks only, but a fighting one's (PetDef.power) in everyone's sim
     pet?: string;
+    // Their body and outfit from the Wardrobe (content/wardrobe.ts), only for looks as well
+    look?: WardrobeLook;
+    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby (and
+    // in a run's room, its invocation points). Only shown: the start carries the party's
+    // (GameStart.invocations), and the relay passes it as is
+    invocations?: string[];
+    // Their relics (content/relics.ts), the open tiers' picks, for their own hero
+    relics?: string[];
+    // The raid chests' trophies they've found (isRaidChestTrophy), so their chest only gives ones
+    // they haven't got
+    trophies?: string[];
+    // Playing Card collection only (core/cardRuns.ts): their weapon, passive and gear cards, each
+    // at its rarest version owned (encodeCardCaps), which their own level ups and caskets keep to.
+    // Only sent when their collection can play such a run.
+    cardCaps?: string;
+    // The host's on the Cards only tab: the whole room plays Cards only (roomPlaysCardsOnly), each
+    // player with their own cards. Only the host's counts.
+    cardsOnly?: true;
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which
@@ -60,8 +79,10 @@ export type RoomListing = {
     code: string;
     name: string;
     host: string;
-    // The host's, for their flag (see MemberView)
+    // The relay's measured country when countrySource is "server".
+    // Older/Node relays send the host player's country (see MemberView).
     country?: string;
+    countrySource?: "server";
     players: number;
     max: number;
     mapId: string;
@@ -76,6 +97,19 @@ export type GameStart = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // An act's map: the host's step (content/acts.ts), which everyone plays at
+    actStep?: number;
+    // A fight in parts (MapDef.stages): which, the host's next
+    stage?: number;
+    // The Tombs of Amascut: the host's invocations, the party's raid level; or a run's, the host's
+    // (Sim cleans the ids by the map's board)
+    invocations?: string[];
+    // A run's remixes (content/remixes.ts), the host's; the Sim keeps those the map takes
+    remixes?: string[];
+    // Awakened invasions are open for the host (content/invasions.ts): the run rolls by its seed
+    invasions?: boolean;
+    // The weekly Vault's run: its week (content/vault.ts); the seed and the rest are its
+    vault?: string;
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -90,6 +124,18 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
         typeof game.mapId === "string" &&
         typeof game.endless === "boolean" &&
         typeof game.hard === "boolean" &&
+        (game.actStep === undefined || (Number.isSafeInteger(game.actStep) && game.actStep >= 0)) &&
+        (game.stage === undefined || Number.isSafeInteger(game.stage)) &&
+        (game.invocations === undefined ||
+            (Array.isArray(game.invocations) &&
+                game.invocations.length <= 100 &&
+                game.invocations.every((id) => typeof id === "string" && id.length <= 64))) &&
+        (game.remixes === undefined ||
+            (Array.isArray(game.remixes) &&
+                game.remixes.length <= 8 &&
+                game.remixes.every((id) => typeof id === "string" && id.length <= 32))) &&
+        (game.invasions === undefined || typeof game.invasions === "boolean") &&
+        (game.vault === undefined || (typeof game.vault === "string" && game.vault.length <= 16)) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&
@@ -118,7 +164,10 @@ export type UpMessage =
     | { loaded: true }
     // The frames after this one again: some of the host's went missing (a
     // dropped connection)
-    | { resend: number };
+    | { resend: number }
+    // This guest's run stopped matching the host's at this frame, and it's
+    // leaving. For the relay (server/coop-checks.mjs): the host does nothing.
+    | { outOfStep: number };
 
 // The host to everyone: the frames up to `upTo` are out, with what happened
 // at them, and now and then a check that everyone's run still agrees
@@ -129,6 +178,8 @@ export type DownMessage = {
     upTo: number;
     events: FrameEvent[];
     hash?: [number, number];
+    // Wall-clock time until the next automatic choice, for display only.
+    decisionMs?: number;
 };
 
 export type ClientMessage =
@@ -145,7 +196,7 @@ export type ClientMessage =
       }
     | { t: "join"; code: string; me: Partial<Member> }
     | { t: "leave" }
-    | ({ t: "me" } & Partial<Member>)
+    | ({ t: "me"; meSeq?: number } & Partial<Member>)
     // A new name, from the relay (not during a run)
     | { t: "rename" }
     | { t: "settings"; open?: boolean; mapId?: string; endless?: boolean; hard?: boolean }
@@ -185,7 +236,15 @@ export type ServerMessage =
       }
     // token: to come back to the room with, should the connection drop (the
     // Cloudflare relay's; coop/room/<code>?resume=<token>)
-    | { t: "room"; room: RoomView; you: string; token?: string }
+    | {
+          t: "room";
+          room: RoomView;
+          you: string;
+          token?: string;
+          // Supports numbered member changes, acknowledged in room updates.
+          memberAcks?: true;
+          meSeq?: number;
+      }
     // The relay keeps each room on its own connection (the Cloudflare relay,
     // server/cloudflare): make or join it there, at coop/room/<code>, with
     // this ticket. The Node relay never sends it.

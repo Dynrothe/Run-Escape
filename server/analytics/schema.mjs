@@ -2,6 +2,9 @@
 // expert exists and so on are the game's rules, so new content reaches the collector without a
 // deploy. Ids are bounded by their format, and MAX_RUNS_PER_DAY bounds what anyone can add.
 export const ID = /^[a-z0-9_]{1,40}$/;
+export const BUILD = /^[a-zA-Z0-9._-]{1,80}$/;
+// The longest run, in seconds, a report or a relay's row can have
+export const MAX_RUN_SECONDS = 7 * 86400;
 export const PLAY_TYPES = new Set(["singleplayer", "multiplayer"]);
 export const OUTCOMES = new Set(["completed", "failed", "abandoned", "disconnected"]);
 export const RELAYS = new Set(["none", "node", "cloudflare"]);
@@ -34,7 +37,7 @@ function readV1(value, now) {
         !UUID.test(value.runId) ||
         !validVersion(value.version) ||
         typeof value.build !== "string" ||
-        !/^[a-zA-Z0-9._-]{1,80}$/.test(value.build) ||
+        !BUILD.test(value.build) ||
         !isId(value.mapId) ||
         !isId(value.mode) ||
         !PLAY_TYPES.has(value.playType) ||
@@ -51,7 +54,7 @@ function readV1(value, now) {
         // Old enough to be a replay, or a clock that's a day out
         !Number.isSafeInteger(value.endedAt) ||
         Math.abs(value.endedAt - now) > DAY_MS ||
-        !number(value.durationSeconds, 7 * 86400) ||
+        !number(value.durationSeconds, MAX_RUN_SECONDS) ||
         (value.durationSeconds > 0 && value.durationSeconds < 0.02) ||
         !number(value.round, 100_000, true) ||
         value.round < 1 ||
@@ -116,6 +119,62 @@ export function validateRun(value, now = Date.now()) {
         return undefined;
     }
     return READERS.get(value.schemaVersion)?.(value, now);
+}
+
+// What a co-op relay's run checks find (server/coop-checks.mjs's RUN_CHECKS), and the kinds a
+// host can be caught by
+export const CHECK_KINDS = ["ahead", "move", "action", "auto", "desync"];
+const CAUGHT_BY = new Set(CHECK_KINDS.filter((kind) => kind !== "desync"));
+const CHECK_RELAYS = new Set(["node", "cloudflare"]);
+
+// A relay's row for a run its checks found anything in (coop-checks.mjs's checkReport)
+export function validateRunCheck(value, now = Date.now()) {
+    const counts = value?.counts;
+    if (
+        !value ||
+        typeof value !== "object" ||
+        value.schemaVersion !== 1 ||
+        typeof value.checkId !== "string" ||
+        !UUID.test(value.checkId) ||
+        !CHECK_RELAYS.has(value.relay) ||
+        typeof value.build !== "string" ||
+        !BUILD.test(value.build) ||
+        !isId(value.mapId) ||
+        !isId(value.mode) ||
+        typeof value.endless !== "boolean" ||
+        !number(value.partySize, 4, true) ||
+        value.partySize < 1 ||
+        !Array.isArray(value.characters) ||
+        value.characters.length !== value.partySize ||
+        !value.characters.every(isId) ||
+        !number(value.runSeconds, MAX_RUN_SECONDS) ||
+        !counts ||
+        typeof counts !== "object" ||
+        Array.isArray(counts) ||
+        !Object.entries(counts).every(
+            ([kind, n]) => CHECK_KINDS.includes(kind) && number(n, 1_000_000_000, true),
+        ) ||
+        !(value.caught === null || CAUGHT_BY.has(value.caught)) ||
+        typeof value.ended !== "boolean"
+    ) {
+        return undefined;
+    }
+    return {
+        day: utcDay(now),
+        check_id: value.checkId.toLowerCase(),
+        received_at: now,
+        relay: value.relay,
+        build: value.build,
+        map_id: value.mapId,
+        mode: value.mode,
+        endless: Number(value.endless),
+        characters: [...value.characters].sort().join(","),
+        party_size: value.partySize,
+        run_seconds: value.runSeconds,
+        ...Object.fromEntries(CHECK_KINDS.map((kind) => [kind, counts[kind] ?? 0])),
+        caught: value.caught,
+        ended: Number(value.ended),
+    };
 }
 
 export function leaderboardQuery(params, now = Date.now()) {

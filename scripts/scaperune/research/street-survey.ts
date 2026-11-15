@@ -1,8 +1,8 @@
 // How a town's streets, blocks and buildings are laid out, real or made, by the same measures.
 //
-//   npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90        # world tiles
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/street-survey.ts map=scaperune_city
-//   npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=1 sideStreets=1
+//   bun run tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90        # world tiles
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/street-survey.ts map=scaperune_city
+//   bun run tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=1 sideStreets=1
 //
 // A made map's measured inside its first wall, or all over its arena if it has none. Paths are
 // any overlay you can walk on outside. Streets are straight runs of open ground between

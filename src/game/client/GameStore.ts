@@ -1,11 +1,23 @@
 import { Rarity } from "../content/rarity";
+import type { RemixId } from "../content/remixes";
+import { StatPair, StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
-import { RunResult } from "../core/Sim";
-import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import { RunResult, ScabarasPuzzleState } from "../core/Sim";
+import type { GauntletRun } from "../core/gauntlet";
+import {
+    GauntletRewards,
+    NewerSave,
+    SaveData,
+    UnreadableSave,
+    getStartingCharacter,
+} from "../core/save";
+import type { CinematicDirector } from "./CinematicDirector";
+import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
+import type { TrailerProgress } from "./TrailerRecorder";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
 export type Screen =
@@ -14,11 +26,20 @@ export type Screen =
     | "characters"
     | "shop"
     | "armoury"
+    // The Wardrobe: the body, the outfit, and its store of outfit pieces
+    | "wardrobe"
     | "quests"
     | "combatAchievements"
     | "collectionLog"
+    // Cards: the album and its packs (content/cards.ts)
+    | "cards"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
+    // The Forgotten Four: its order before the start, and its camp between fights
+    | "gauntlet"
+    | "camp"
+    // The weekly Vault (content/vault.ts)
+    | "vault"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -30,14 +51,18 @@ export type SlotView = {
     maxLevel: number;
     iconObjId: number;
     iconSpriteId?: number;
-    // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
-    detail: string;
+    // What it adds up to so far: "+18% damage", "+15% damage to this weapon" (none for a
+    // weapon with no bonus)
+    detail?: StatText;
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
-    stats?: string[];
+    stats?: StatText[];
     // Weapons that evolve: the passive it takes, and what's done of it
     evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
     rarityColor: string;
+    // A blessing (MapDef.blessings) rather than a weapon or passive: level is how many times it's
+    // been had, of maxLevel (Infinity for the fallback's)
+    blessing?: boolean;
 };
 
 export type ItemView = {
@@ -48,7 +73,9 @@ export type ItemView = {
     // "Head slot", "Utility"
     kindLabel: string;
     // What it does, a line per stat or effect
-    lines: string[];
+    lines: StatText[];
+    // A potion's stats last this long: in a run, stretched by the hero's effect duration
+    seconds?: number;
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };
@@ -61,13 +88,18 @@ export type InventorySlotView = { item: ItemView; count: number } | null;
 export type BuffView = {
     id: string;
     name: string;
+    description: string;
     objId: number;
-    secondsLeft: number;
-    // Time left, 1 when just drunk
-    fraction: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
-};
+} & (
+    | {
+          secondsLeft: number;
+          // Time left, 1 when just drunk
+          fraction: number;
+      }
+    | { secondsLeft?: never; fraction?: never }
+);
 
 // An opened reward casket, for the opening animation and the decision after
 export type ChestView = {
@@ -82,10 +114,9 @@ export type ChestView = {
     // Gear the Armoury has upgraded: the name of the piece it was found as
     upgradedFrom?: string;
     isGear: boolean;
-    // Gear: what it replaces (alched when the new piece goes on) and what
-    // changes
-    replaces?: { item: ItemView; alchCoins: number };
-    changes: { text: string; good: boolean }[];
+    // Gear: what it replaces (alched when the new piece goes on), and each
+    // stat either piece has, worn against found
+    replaces?: { item: ItemView; alchCoins: number; stats: StatPair[] };
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;
@@ -133,9 +164,12 @@ export type HudView = {
     maxPassives: number;
     weapons: SlotView[];
     passives: SlotView[];
+    // On a map with blessings (MapDef.blessings), what level ups have granted, in place of
+    // passives and gear
+    blessings?: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
-    stats: string[];
+    stats: StatText[];
     gear: GearSlotView[];
     inventory: InventorySlotView[];
     // Left this run, for a level up's rewards or a casket's item
@@ -144,6 +178,8 @@ export type HudView = {
     banishes: number;
     // What skipping the level up's rewards costs, while they can be skipped
     skip?: { cost: number; affordable: boolean };
+    // Reloaded (content/relics.ts): keeps left and offers kept, and whether each can be done now
+    keep?: { left: number; kept: number; canKeep: boolean; canTake: boolean };
 };
 
 // The HUD's numbers that change as the run's played, 10 times a second. They're
@@ -164,16 +200,59 @@ export type HudNumbers = {
         portal: boolean;
         first: boolean;
     };
+    // What the map wants of the players now (MapDef.objectives), and how many of its lairs are
+    // beaten
+    objective?: { text: string; done: number; count: number };
+    // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
+    // the party to walk through the barrier, or beaten
+    tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
+    // Akkha's shadows: how many are up, and seconds till they flood
+    tombsShadows?: { left: number; seconds: number };
+    // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
+    tombsScabaras?: {
+        solved: number;
+        of: number;
+        target: number;
+        sum: number;
+        readable: boolean;
+        reading?: "slate" | "tablet";
+        // Each puzzle: done, to be done now, or waiting on the others
+        puzzles: ScabarasPuzzleState[];
+    };
+    // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
+    tombsHet?: { held: number; charge: number };
+    // The Crondis room: your water, and the palm's growth against what it needs
+    tombsCrondis?: { water: number; growth: number; goal: number };
+    // Seconds till Zebak roars, while he's about to
+    tombsRoar?: number;
+    // Dev server only: god mode's on (GameClient.toggleDevGod)
+    devGod?: boolean;
+    // Dev only: in the Tombs' Nexus (or the Wardens' room), so the Wardens can be skipped to
+    devWardens?: boolean;
     hp: number;
     maxHp: number;
+    // Sanity, on a map of two worlds (RealmRuleDef.sanity), and its most: a bar under hitpoints
+    sanity?: number;
+    sanityMax?: number;
+    // Cold, on a map that's cold (ColdRuleDef.cold), and its most: a bar under hitpoints
+    cold?: number;
+    coldMax?: number;
+    // How full the hitpoints bar is, from the hitpoints as they are (regeneration's a little every
+    // tick), to a thousandth; hp/maxHp without it
+    hpShare?: number;
     // The hitpoints bar turns green, like the client's orb
     poisoned: boolean;
     // Progress to the next level, 0-1
     xpFraction: number;
     // Whole seconds into the run
     seconds: number;
+    // Co-op's next automatic choice, using the host's wall clock rather than sim ticks.
+    decisionSeconds?: number;
     kills: number;
     coins: number;
+    // Platinum tokens earned so far this run, the party's in co-op (Sim.platinum; a win adds its
+    // share at the end)
+    platinum: number;
     // Damage a second just now, every source counted
     dps: number;
     // For the damage panel (DamageMeter): each weapon's by its id, damage a
@@ -184,9 +263,11 @@ export type HudNumbers = {
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;
-    // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
+    // A fight's own button (Sim.ability): how charged it is (0 to 1, by twentieths),
     // whether the boss is in its reach, and whether its guard's down, when it's worth most
     ability?: AbilityView;
+    // A hero's own buttons (CharacterDef.abilities), in their order, in place of a fight's one
+    abilities?: AbilityView[];
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -250,6 +331,8 @@ export type BossView = {
         // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
         // and the player's out of it
         outOfReach?: boolean;
+        // Can't be hurt in the world the party's in (EnemyDef.hurtIn)
+        otherWorld?: boolean;
         // Its guard's down (BossDef.guard): exposed after a miss, or stunned
         guard?: "exposed" | "stunned";
         // How charged each totem is, 0 to 1
@@ -267,6 +350,15 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // A hero's own button (CharacterDef.abilities): its key, and what it does
+    keyLabel?: string;
+    description?: string;
+    // It coaches (FightAbilityDef.guide): the hint, and the guard-down tag and pulse
+    guide: boolean;
+    // The run has items (not a one-fight map): on a touch screen it goes above their corner
+    withItems: boolean;
+    // Say what it's for (it's not been used yet this session, early in a fight)
+    hint: boolean;
 };
 
 // One player's own numbers for the results screen (a teammate who fell or
@@ -325,6 +417,10 @@ export type ChoiceView = {
     isHilt: boolean;
     // A hilt pick that's the run's Ancient spell, not a godsword's hilt
     isSpell: boolean;
+    // One of the map's blessings (MapDef.blessings), offered in place of items
+    isBlessing: boolean;
+    // A hilt pick that's the run's keris partisan: plain, or the jewel it takes
+    isKeris: boolean;
     // The rolled rarity of this offer, if it has one
     rarity?: { name: string; color: string };
     // Weapons: what this level changes, or a new weapon's stats
@@ -370,6 +466,14 @@ export type ReviveView = {
     revivesLeft: number;
 };
 
+export type GauntletView = {
+    order: string[];
+    hard: boolean;
+    run?: GauntletRun;
+    campEnds?: number;
+    rewards?: GauntletRewards;
+};
+
 export type Toast = { id: number; text: string; until: number };
 
 // Why nothing's being saved: the game's open in another tab, the save's from
@@ -392,16 +496,29 @@ export type UiSnapshot = {
     unreadableSave?: string;
     // Saves that couldn't be read, kept to be exported
     unreadableSaves: UnreadableSave[];
+    // Cloud save, where the build has it and its Worker answers
+    cloud?: CloudView;
     characterId: string;
     // The map the next run is on, and whether it's endless and on hard mode
     // (once the map's been beaten)
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // The remixes switched on for it (content/remixes.ts), those open on it
+    remixes: RemixId[];
+    // An Awakener's orb to be spent on its final boss (act-2-fallen-empire.md 8.6), once one's held
+    awaken: boolean;
+    // The weekly Vault's week (content/vault.ts) the room's next run is, hosting one
+    vaultRoom?: string;
+    // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
+    // it's for ends; the next not beaten when unset
+    fightStage?: number;
     // A raid's expert mode (solo for now)
     expert: boolean;
     hud?: HudView;
     overlay: RunOverlay;
+    // The Collection log, open over the pause menu (or co-op's menu, with the run going on)
+    runLog?: boolean;
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
@@ -409,7 +526,15 @@ export type UiSnapshot = {
     waitingOn: string[];
     // Co-op: a revive you're part of, as the one down or the one reviving
     revive?: ReviveView;
+    // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
+    cinematic?: boolean;
+    // Dev only: the shot editor's open on it (GameClient.direct), with its panel for the HUD
+    director?: CinematicDirector;
+    // Dev only: the trailer being recorded from it, how far it's got
+    trailer?: TrailerProgress;
     choices: ChoiceView[];
+    // Level ups still to choose after the one showing
+    levelUpsLeft: number;
     chest?: ChestView;
     event?: EventView;
     // unlockedMap: the name of the map this run's win opened up;
@@ -437,12 +562,36 @@ export type UiSnapshot = {
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
+        // The weekly Vault's run: its week, and whether it's the week's best
+        vault?: { key: string; best: boolean };
+        // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
+        orbWon?: boolean;
+        // Played Card collection only (core/cardRuns.ts): it counts as any other run
+        cardsOnly?: boolean;
+        // Played in a room to its end, so the party goes back together: no Play again, even once
+        // the room closes on the results
+        coop?: boolean;
     };
     toasts: Toast[];
+    // The Forgotten Four (content/gauntlet.ts): the order and mode picked on its screen, and once
+    // it's started its run, when its camp ends (performance.now()), and its clear's rewards
+    gauntlet?: GauntletView;
+    // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
+    // of its Awakened fights falls, or played again from its card
+    actEnding?: string;
+    // The Card shop to open on this pack (content/cards.ts), from Card collection only's needs, and
+    // the screen it was opened from, which its Back goes back to
+    cardShopPack?: string;
+    cardShopFrom?: Screen;
+    // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
+    toastLog: string[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
 };
+
+// How many of the run's messages the pause menu keeps
+const TOAST_LOG_SIZE = 8;
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
 // read by React through useSyncExternalStore.
@@ -463,13 +612,17 @@ export class GameStore {
             mapId: "lumbridge",
             endless: false,
             hard: false,
+            remixes: [],
+            awaken: false,
             expert: false,
             overlay: "none",
             coop: OFFLINE,
             party: [],
             waitingOn: [],
             choices: [],
+            levelUpsLeft: 0,
             toasts: [],
+            toastLog: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
             display: getDefaultDisplaySettings(),
@@ -508,13 +661,27 @@ export class GameStore {
         }
     }
 
-    toast(text: string, ms = 3500): void {
+    // Its id, to find it again or take it down early (a boss's instruction: GameClient)
+    toast(text: string, ms = 3500): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
-        toasts.push({ id: this.nextToastId++, text, until: now + ms });
-        this.set({ toasts: toasts.slice(-4) });
+        const id = this.nextToastId++;
+        toasts.push({ id, text, until: now + ms });
+        const log = this.snapshot.toastLog;
+        this.set({
+            toasts: toasts.slice(-4),
+            toastLog: log[0] === text ? log : [text, ...log].slice(0, TOAST_LOG_SIZE),
+        });
+        return id;
+    }
+
+    dismissToast(id: number): void {
+        const toasts = this.snapshot.toasts;
+        if (toasts.some((t) => t.id === id)) {
+            this.set({ toasts: toasts.filter((t) => t.id !== id) });
+        }
     }
 
     expireToasts(): void {

@@ -29,6 +29,24 @@ export const FULL_TEXT = "All rooms are taken right now. Try again when one open
 export const OTHER_BUILD_TEXT =
     "That room's on another version of the game. Reload the page to get the latest.";
 
+// What a member readies up with: changing it un-readies them (setMember).
+// Not the host's invocations, which only show in the lobby: the start
+// carries the party's. Their skill page is the map's adventurer's on a
+// map with its own (Durial321's), so switching to or from one changes it
+// too, and the host's start waits for their loadout as for a new pick
+export function pickOf(member) {
+    const { invocations, ...loadout } = member.loadout ?? {};
+    return JSON.stringify([member.characterId, member.loadout && loadout]);
+}
+
+// The host's start, refused while someone's changed their pick since they
+// readied: the host's game may not have heard of the change yet
+export function repickedText(member, host) {
+    return member === host
+        ? "Your pick changed, so you need to ready up again."
+        : `${member.name}'s pick changed, so they need to ready up again.`;
+}
+
 export function isAnyMapOn(env) {
     return ["on", "1", "true"].includes((env.MULTIPLAYER_ANY_MAP ?? "").toLowerCase());
 }
@@ -89,6 +107,17 @@ export function addressKey(address) {
 export function countryCode(text) {
     const code = typeof text === "string" ? text.trim().toUpperCase() : "";
     return /^[A-Z]{2}$/.test(code) && code !== "XX" ? code : undefined;
+}
+
+// A country by its current code (UK as GB, FX as FR, SU as RU). Rooms measured
+// before colo-countries.json left out the old codes have them saved.
+export function currentCountry(code) {
+    if (typeof code !== "string") return undefined;
+    try {
+        return new Intl.Locale(`und-${code}`).region ?? code;
+    } catch {
+        return code;
+    }
 }
 
 export function guesserKey(address) {

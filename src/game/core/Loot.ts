@@ -8,13 +8,15 @@ import {
     getGear,
     getItem,
     getVariantScale,
+    utilityDescription,
 } from "../content/items";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
-import { formatStats } from "../content/stats";
+import { StatText, formatStats } from "../content/stats";
 import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
+import type { CardCaps } from "./Upgrades";
 
 // What's in a reward casket, and what the player does with it.
 
@@ -303,6 +305,12 @@ function itemWeight(
         : SIDEGRADE_WEIGHT;
 }
 
+// Whether a run's cards allow an item from a casket: gear with its card, and any utility item
+// (always, outside a Card collection only run)
+function hasGearCard(cards: CardCaps | undefined, item: ItemDef): boolean {
+    return !cards || item.kind !== "gear" || cards.has(`gear:${item.id}`);
+}
+
 // Rolls the casket's rarity from its tier, then an item of that rarity. If
 // nothing of that rarity can be given, the nearest rarity below (then above)
 // that can. Now and then it's a missing piece of a set the player has
@@ -332,6 +340,11 @@ export function rollCasketItem(
     declinedSets?: ReadonlySet<string>,
     party = false,
     banished?: BanishedItems,
+    // A Card collection only run's cards (Upgrades.CardCaps): gear only with its card. Gear has
+    // one rarity, its card's own, so no version can take it lower. A rarity rolled with no carded
+    // gear gives one of its utility items, as every rarity has some (the usual fallback to another
+    // rarity only comes when a rarity has nothing at all).
+    cards?: CardCaps,
 ): string {
     const rarity = rollRarityFrom(CASKETS[tier].rarityWeights, () => rng.next(), luck);
     const index = RARITY_ORDER.indexOf(rarity);
@@ -341,7 +354,7 @@ export function rollCasketItem(
     const missing = missingSetPieces(tier, gear, exclude, unlocked, armoury, declinedSets).filter(
         (piece) => {
             const above = RARITY_ORDER.indexOf(piece.rarity) - index;
-            return above >= 0 && above <= SET_PIECE_REACH;
+            return above >= 0 && above <= SET_PIECE_REACH && hasGearCard(cards, piece);
         },
     );
     if (missing.length > 0 && rng.chance(SET_PIECE_CHANCE)) {
@@ -356,7 +369,7 @@ export function rollCasketItem(
         const pool = CASKET_ITEMS.filter((item) => item.rarity === r);
         const pick = rng.weightedIndex(
             pool.map((item) =>
-                isBanished(item, banished)
+                isBanished(item, banished) || !hasGearCard(cards, item)
                     ? 0
                     : itemWeight(item, gear, poison, exclude, unlocked, upgrades, armoury, party),
             ),
@@ -380,9 +393,15 @@ export function getAlchValue(item: ItemDef, greed: number, upgrades = 0): number
     );
 }
 
-// What an item does, a line per stat or effect
-export function describeItem(item: ItemDef, upgrades = 0): string[] {
-    return item.kind === "gear" ? formatStats(getGearStats(item, upgrades)) : [item.description];
+// What an item does, a line per stat or effect. A potion that lasts a while is its stats, a
+// line each, as gear is, rather than its sentence (how long is ItemView's seconds).
+export function describeItem(item: ItemDef, upgrades = 0): StatText[] {
+    if (item.kind === "gear") {
+        return formatStats(getGearStats(item, upgrades));
+    }
+    return item.use.kind === "buff"
+        ? formatStats(item.use.stats)
+        : [{ text: utilityDescription(item) }];
 }
 
 // The slot a utility item would go in: its own stack, else the first empty one

@@ -5,6 +5,7 @@ import {
     levelForXp,
     runLevelForXp,
     runXpForLevel,
+    stretchedXp,
     xpForLevel,
 } from "./xp";
 
@@ -70,6 +71,24 @@ describe("endless levels", () => {
             expect(endlessLevelForXp(xp)).toBe(level);
             expect(endlessLevelForXp(xp + 1, 1)).toBe(level);
             expect(endlessLevelForXp(xp - 1, level + 5)).toBe(level - 1);
+        }
+    });
+});
+
+describe("a map's stretched levels (MapDef.levelXp)", () => {
+    test("need none more up to from, then more for each, to times as much from to on", () => {
+        const stretch = { times: 5, from: 3, to: 7 };
+        expect(stretchedXp(100, 2, undefined)).toBe(100);
+        expect(stretchedXp(100, 3, stretch)).toBe(100);
+        expect(stretchedXp(100, 4, stretch)).toBe(200);
+        expect(stretchedXp(100, 5, stretch)).toBe(300);
+        expect(stretchedXp(100, 7, stretch)).toBe(500);
+        expect(stretchedXp(100, 30, stretch)).toBe(500);
+        // Still more for every level than the one before
+        for (let level = 2; level < 60; level++) {
+            expect(stretchedXp(endlessXpForLevel(level + 1), level + 1, stretch)).toBeGreaterThan(
+                stretchedXp(endlessXpForLevel(level), level, stretch),
+            );
         }
     });
 });

@@ -1,4 +1,5 @@
-import { CombatStyle, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
+import { tr } from "../i18n";
+import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
 // changes, so each level only states its differences.
@@ -25,6 +26,22 @@ const SHORTBOWS = [841, 843, 849, 853, 857, 861];
 // Arrows in flight: one model the metals recolour (the Twisted bow's amethyst
 // arrows are another)
 const ARROWS = { bronze: 10, iron: 9, steel: 11, black: 14, mithril: 12, adamant: 13, rune: 15 };
+// Darts in flight: the metals recolour one model, and dragon has its own
+const DART_PROJECTILES = { bronze: 226, steel: 228, mithril: 229, rune: 231, dragon: 1122 };
+// Bolts in flight, as the items: the metals' flight graphic is the same for most of them
+const BOLT_PROJECTILES = { bronze: 877, steel: 9141, mithril: 9142, runite: 9144, dragon: 21905 };
+const ATLATL_DART = 28991;
+
+// Items whose models need help in flight. Bolts and knives point back the way they
+// fly, and the atlatl's dart lies at a slant in its model; bolts are a few pixels
+// across from the game's camera too.
+const BOLT_LOOK: ProjectileItemLook = { scale: 3, yawOffset: 1024 };
+export const PROJECTILE_ITEM_LOOKS: Partial<Record<number, ProjectileItemLook>> = {
+    ...Object.fromEntries(Object.values(BOLT_PROJECTILES).map((objId) => [objId, BOLT_LOOK])),
+    ...Object.fromEntries(KNIVES.map((objId) => [objId, { yawOffset: 1024 }])),
+    [ATLATL_DART]: { yawOffset: 812 },
+};
+
 // Bronze to rune, then dragon
 const THROWNAXES = [800, 801, 802, 803, 804, 805, 20849, 20849];
 // Thrownaxes in flight, spinning: one model the metals recolour, and the
@@ -178,7 +195,255 @@ function evolvedLevels(
     );
 }
 
+// The two-handed sword's levels, through the metals, which Justiciar Zachariah's Saradomin sword
+// has too (its levels' names and items its own)
+const TWO_HANDED_SWORD_LEVELS = levels(
+    {
+        name: "Bronze 2h sword",
+        damage: 19,
+        cooldown: 1.6,
+        amount: 1,
+        area: 2.5,
+        arc: 0.9,
+        pierce: 0,
+        speed: 0,
+        duration: 0,
+        knockback: 0.8,
+        objId: TWO_HANDED_SWORDS[0],
+    },
+    {
+        name: "Iron 2h sword",
+        objId: TWO_HANDED_SWORDS[1],
+        amount: 2,
+        description: "Also sweeps behind you.",
+    },
+    {
+        name: "Steel 2h sword",
+        objId: TWO_HANDED_SWORDS[2],
+        damage: 23,
+        description: "+4 damage.",
+    },
+    {
+        name: "Black 2h sword",
+        objId: TWO_HANDED_SWORDS[3],
+        area: 2.75,
+        description: "+10% reach.",
+    },
+    {
+        name: "Mithril 2h sword",
+        objId: TWO_HANDED_SWORDS[4],
+        damage: 27,
+        description: "+4 damage.",
+    },
+    {
+        name: "Adamant 2h sword",
+        objId: TWO_HANDED_SWORDS[5],
+        cooldown: 1.45,
+        description: "Swings a little faster.",
+    },
+    {
+        name: "Rune 2h sword",
+        objId: TWO_HANDED_SWORDS[6],
+        arc: 1.05,
+        description: "Sweeps a wider arc.",
+    },
+    {
+        name: "Dragon 2h sword",
+        objId: TWO_HANDED_SWORDS[7],
+        damage: 32,
+        description: "+5 damage.",
+    },
+);
+// The Saradomin sword
+const SARADOMIN_SWORD = 11838;
+// The keris partisans: quick stabs that hit kalphites and scarabs (Kephri too) a third harder.
+// The plain one comes from the Kalphite Queen; each jewel from the Tombs of Amascut's chest brings
+// in its own, as the Theatre's rapier comes from its chest. One a run (family). Only the plain one
+// is offered on a level up: at its pick level it takes a jewel found (KERIS_PICK), as a burst
+// picks the run's Ancient spell, so the jewelled ones are pickOnly.
+const KERIS_STAB = 381; // HUMAN_DSPEAR_STAB
+const KERIS_KALPHITES = { tags: ["kalphite" as const], damage: 0.33 };
+const KERIS_PICK = {
+    level: HILT_LEVEL,
+    into: [
+        { weaponId: "keris_partisan", hiltObjId: 25979 },
+        { weaponId: "keris_partisan_of_breaching", hiltObjId: 25981 },
+        { weaponId: "keris_partisan_of_corruption", hiltObjId: 27287 },
+        { weaponId: "keris_partisan_of_the_sun", hiltObjId: 27291 },
+        { weaponId: "keris_partisan_of_amascut", hiltObjId: 30891 },
+    ],
+};
+const kerisLevels = (objId: number): WeaponLevel[] =>
+    levels(
+        {
+            damage: 22,
+            cooldown: 0.8,
+            amount: 1,
+            area: 2.5,
+            pierce: 0,
+            speed: 0,
+            duration: 0,
+            knockback: 0.3,
+            objId,
+        },
+        { damage: 27, description: "+5 damage." },
+        { area: 2.8, description: "+12% reach." },
+        { cooldown: 0.72, description: "Stabs a little faster." },
+        { damage: 33, description: "+6 damage." },
+    );
+const keris = (
+    def: Pick<WeaponDef, "id" | "name" | "description" | "iconObjId" | "rarity" | "unlock"> &
+        Partial<WeaponDef>,
+): WeaponDef => ({
+    kind: "slash",
+    playerSeq: KERIS_STAB,
+    // hacksword_slash stands in for its sound, as the fang's
+    sound: 2500,
+    hitSound: -1,
+    // No class (style), so any adventurer can be offered it. Its hits are melee all the same, as
+    // a slash's are (getWeaponStyle).
+    family: "keris",
+    slayer: KERIS_KALPHITES,
+    levels: kerisLevels(def.iconObjId),
+    ...def,
+});
+// Wrath of Amascut: what it hits takes a quarter more from everything for 6 seconds
+const WRATH_OF_AMASCUT: SpecialAttackDef = {
+    name: "Wrath of Amascut",
+    every: 6,
+    damage: 1.5,
+    playerSeq: 9544, // TOA_KERIS_PARTISAN_SPECIAL01
+    spotAnim: 2128, // KERIS_PARTISAN_SPECIAL01
+    effect: { kind: "drain", amount: 0.25, seconds: 6 },
+};
+// Breach of the Scarab: now and then a gap in the shell, far more often in a kalphite's or scarab's
+const BREACH_OF_THE_SCARAB = {
+    chance: 0.06,
+    tagChance: 0.3,
+    tags: ["kalphite" as const],
+    damage: 3,
+    // Armour Piercing's, as the diamond bolts'
+    spotAnim: 758,
+};
+const SUN_KILL_HEAL = 0.2;
+const SUN_LOW_HEALTH = { below: 0.25, damage: 0.25 };
+const KERIS_PARTISANS: WeaponDef[] = [
+    keris({
+        id: "keris_partisan",
+        name: "Keris partisan",
+        description: "Quick stabs at the closest enemy. Kalphites and scarabs take a third more.",
+        iconObjId: 25979,
+        rarity: "rare",
+        unlock: { kind: "killBoss", mapId: "desert", enemyId: "kalphite_queen_risen" },
+        hilts: KERIS_PICK,
+    }),
+    keris({
+        id: "keris_partisan_of_breaching",
+        name: "Keris partisan of breaching",
+        description:
+            "Quick stabs that now and then find a gap in the shell for triple damage, far more often in kalphites and scarabs, which take a third more.",
+        iconObjId: 25981,
+        rarity: "veryRare",
+        breach: BREACH_OF_THE_SCARAB,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "breach_of_the_scarab",
+        },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_corruption",
+        name: "Keris partisan of corruption",
+        description:
+            "Quick stabs; kalphites and scarabs take a third more. Every sixth is Wrath of Amascut: what it hits takes 25% more from everything for 6 seconds.",
+        iconObjId: 27287,
+        rarity: "veryRare",
+        special: WRATH_OF_AMASCUT,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "eye_of_the_corruptor",
+        },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_the_sun",
+        name: "Keris partisan of the sun",
+        description:
+            "Quick stabs; kalphites and scarabs take a third more. Each kill heals you, it hits a quarter harder below a quarter of your hitpoints, and every fortieth is Tumeken's Light: healed to full, and poison cured.",
+        iconObjId: 27291,
+        rarity: "veryRare",
+        killHeal: SUN_KILL_HEAL,
+        lowHealth: SUN_LOW_HEALTH,
+        special: {
+            name: "Tumeken's Light",
+            every: 40,
+            damage: 1,
+            playerSeq: 9546, // TOA_TUMEKANS_LIGHT_CAST01
+            // Heal Group's light (QUEST_LUNAR_SPELLBOOK_HEAL_GROUP_SPOT_ANIM): the keris's own
+            // special graphic is the Wrath's
+            spotAnim: 745,
+            effect: { kind: "restore" },
+        },
+        unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_the_sun" },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_amascut",
+        name: "Keris partisan of amascut",
+        description:
+            "The jewels' powers in one, but Tumeken's Light: gaps in the shell for triple damage, Wrath of Amascut every sixth stab, a heal on each kill, and a quarter harder below a quarter of your hitpoints. Kalphites and scarabs take a third more.",
+        iconObjId: 30891,
+        rarity: "veryRare",
+        breach: BREACH_OF_THE_SCARAB,
+        special: WRATH_OF_AMASCUT,
+        killHeal: SUN_KILL_HEAL,
+        lowHealth: SUN_LOW_HEALTH,
+        unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_amascut" },
+        pickOnly: true,
+    }),
+];
+
 export const WEAPONS: WeaponDef[] = [
+    {
+        id: "rubber_chicken",
+        name: "Rubber chicken",
+        kind: "slash",
+        description:
+            "Whacks enemies in front and behind. 20% more damage to bosses, and hits heal you: 25% for 3 HP, growing with every upgrade (more with rarer ones).",
+        iconObjId: 4566,
+        playerSeq: 401,
+        sound: 2257,
+        hitSound: -1,
+        rarity: "common",
+        style: "melee",
+        pickOnly: true,
+        bloodHeal: { chance: 0.25, hp: 3, maxChance: 0.75, spotAnim: 1542 },
+        bossDamage: 0.2,
+        levels: levels(
+            {
+                damage: 25,
+                cooldown: 1,
+                amount: 2,
+                area: 4,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 2.5,
+                objId: 4566,
+            },
+            { damage: 30, description: "+5 damage. Heals more." },
+            { area: 4.5, description: "+13% reach. Heals more." },
+            { cooldown: 0.9, description: "Whacks a little faster. Heals more." },
+            { damage: 36, description: "+6 damage. Heals more." },
+            { damage: 42, description: "+6 damage. Heals more." },
+            { area: 5, description: "+11% reach. Heals more." },
+            { cooldown: 0.8, description: "Whacks faster still. Heals more." },
+            { damage: 50, description: "+8 damage. Heals more." },
+            { damage: 60, description: "+10 damage. Heals more." },
+        ),
+    },
     {
         id: "scimitar",
         name: "Scimitar",
@@ -781,64 +1046,33 @@ export const WEAPONS: WeaponDef[] = [
         sound: GODSWORD_SOUND,
         hitSound: -1,
         rarity: "common",
-        levels: levels(
-            {
-                name: "Bronze 2h sword",
-                damage: 19,
-                cooldown: 1.6,
-                amount: 1,
-                area: 2.5,
-                arc: 0.9,
-                pierce: 0,
-                speed: 0,
-                duration: 0,
-                knockback: 0.8,
-                objId: TWO_HANDED_SWORDS[0],
-            },
-            {
-                name: "Iron 2h sword",
-                objId: TWO_HANDED_SWORDS[1],
-                amount: 2,
-                description: "Also sweeps behind you.",
-            },
-            {
-                name: "Steel 2h sword",
-                objId: TWO_HANDED_SWORDS[2],
-                damage: 23,
-                description: "+4 damage.",
-            },
-            {
-                name: "Black 2h sword",
-                objId: TWO_HANDED_SWORDS[3],
-                area: 2.75,
-                description: "+10% reach.",
-            },
-            {
-                name: "Mithril 2h sword",
-                objId: TWO_HANDED_SWORDS[4],
-                damage: 27,
-                description: "+4 damage.",
-            },
-            {
-                name: "Adamant 2h sword",
-                objId: TWO_HANDED_SWORDS[5],
-                cooldown: 1.45,
-                description: "Swings a little faster.",
-            },
-            {
-                name: "Rune 2h sword",
-                objId: TWO_HANDED_SWORDS[6],
-                arc: 1.05,
-                description: "Sweeps a wider arc.",
-            },
-            {
-                name: "Dragon 2h sword",
-                objId: TWO_HANDED_SWORDS[7],
-                damage: 32,
-                description: "+5 damage.",
-            },
-        ),
+        levels: TWO_HANDED_SWORD_LEVELS,
         evolution: { into: "colossal_blade", requiresPassive: "dizanas_quiver" },
+    },
+    {
+        // Justiciar Zachariah's, in burnt Varrock (justiciarKit.ts): the two-handed sword's
+        // sweep, as Saradomin's sword, levelled by his blessings (blessings.ts, Blessed blade)
+        id: "saradomin_sword",
+        name: "Saradomin sword",
+        kind: "sweep",
+        description:
+            "Justiciar Zachariah's heavy sweep in front of him, which knocks back hard and staggers what it hits. Blessed blade makes it stronger.",
+        iconObjId: SARADOMIN_SWORD,
+        playerSeq: GODSWORD_SEQ,
+        sound: GODSWORD_SOUND,
+        hitSound: -1,
+        rarity: "common",
+        pickOnly: true,
+        // His blows land heavy: the camera shakes and what it hits staggers. Nothing's shown on
+        // what it hits: his blue impact read as Water Strike, and anything on every hit is too much
+        heavy: { shake: 0.2, stagger: 0.3 },
+        levels: TWO_HANDED_SWORD_LEVELS.map((level) => ({
+            ...level,
+            name: "Saradomin sword",
+            objId: SARADOMIN_SWORD,
+            // and knock back half as far again as a 2h sword's (before every other level's step)
+            knockback: level.knockback * 1.5,
+        })),
     },
     {
         id: "colossal_blade",
@@ -1588,6 +1822,9 @@ export const WEAPONS: WeaponDef[] = [
             { damage: 36, description: "+7 damage." },
         ),
     },
+    // Not melee's: any adventurer can be offered the keris. It stays here, as moving it would
+    // change the order offers are rolled in, and with it every seeded run.
+    ...KERIS_PARTISANS,
     {
         id: "tzhaar_ket_om",
         name: "Tzhaar-ket-om",
@@ -1957,13 +2194,22 @@ export const WEAPONS: WeaponDef[] = [
         name: "Toxic blowpipe",
         kind: "missile",
         description:
-            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads.",
+            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads. Now and then its special, Toxic Siphon, hits harder and heals you.",
         iconObjId: 12926,
         playerSeq: 5061,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
         style: "ranged",
+        // Its special attack, as in OSRS: half again the damage, and half of it back as hitpoints
+        siphon: {
+            name: "Toxic Siphon",
+            chance: 1 / 40,
+            damage: 1.5,
+            heal: 0.5,
+            max: 3,
+            projectileSpotAnim: 1043,
+        },
         levels: levels(
             {
                 damage: 5,
@@ -1976,13 +2222,30 @@ export const WEAPONS: WeaponDef[] = [
                 venom: 3,
                 knockback: 0.1,
                 objId: 12926,
-                // Dragon darts
-                projectileSpotAnim: 1122,
+                projectileSpotAnim: DART_PROJECTILES.bronze,
             },
-            { venom: 4, description: "Stronger venom: 4 damage a second." },
-            { amount: 2, description: "Fires one more dart." },
-            { damage: 7, cooldown: 0.35, description: "+2 damage, fires faster." },
-            { venom: 6, duration: 4, description: "Stronger venom that lasts longer." },
+            {
+                projectileSpotAnim: DART_PROJECTILES.steel,
+                venom: 4,
+                description: "Steel darts. Stronger venom: 4 damage a second.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.mithril,
+                amount: 2,
+                description: "Mithril darts. Fires one more dart.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.rune,
+                damage: 7,
+                cooldown: 0.35,
+                description: "Rune darts. +2 damage, fires faster.",
+            },
+            {
+                projectileSpotAnim: DART_PROJECTILES.dragon,
+                venom: 6,
+                duration: 4,
+                description: "Dragon darts. Stronger venom that lasts longer.",
+            },
         ),
     },
     {
@@ -2010,8 +2273,7 @@ export const WEAPONS: WeaponDef[] = [
                 duration: 0,
                 knockback: 0.5,
                 objId: 21012,
-                // A crossbow bolt
-                projectileSpotAnim: 27,
+                projectileObjId: BOLT_PROJECTILES.dragon,
             },
             { damage: 18, description: "+3 damage." },
             { amount: 2, description: "Fires one more bolt." },
@@ -2027,6 +2289,8 @@ export const WEAPONS: WeaponDef[] = [
             "Fires bolts at the nearest enemy that pass through it. One in five is enchanted: a ruby's takes a fifth of what's left of its hitpoints, a diamond's goes on through more, a dragonstone's burns.",
         iconObjId: 11785,
         playerSeq: 4230,
+        // Aimed, the bolt loosed: the frame that reaches out furthest, and holds longest
+        runPose: 7,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
@@ -2065,13 +2329,28 @@ export const WEAPONS: WeaponDef[] = [
                 duration: 0,
                 knockback: 0.4,
                 objId: 11785,
-                // A crossbow bolt
-                projectileSpotAnim: 27,
+                projectileObjId: BOLT_PROJECTILES.bronze,
             },
-            { damage: 18, description: "+3 damage." },
-            { amount: 2, description: "Fires one more bolt." },
-            { cooldown: 0.85, description: "Fires a little faster." },
-            { damage: 23, description: "+5 damage." },
+            {
+                projectileObjId: BOLT_PROJECTILES.steel,
+                damage: 18,
+                description: "Steel bolts. +3 damage.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.mithril,
+                amount: 2,
+                description: "Mithril bolts. Fires one more bolt.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.runite,
+                cooldown: 0.85,
+                description: "Runite bolts. Fires a little faster.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.dragon,
+                damage: 23,
+                description: "Dragon bolts. +5 damage.",
+            },
         ),
         unlock: { kind: "killBoss", mapId: "god_wars", enemyId: "kreearra" },
     },
@@ -2164,8 +2443,7 @@ export const WEAPONS: WeaponDef[] = [
                 venom: 2,
                 knockback: 0.2,
                 objId: 29000,
-                // Atlatl darts
-                projectileObjId: 28991,
+                projectileObjId: ATLATL_DART,
             },
             { venom: 3, description: "Burns hotter: 3 damage a second." },
             { amount: 3, description: "Throws one more dart." },
@@ -2633,6 +2911,63 @@ export const WEAPONS: WeaponDef[] = [
             },
         ),
     },
+    // Act II's (act-2-fallen-empire.md, 8.2): made from its four final bosses' pieces, melee only
+    {
+        id: "soulreaper_axe",
+        name: "Soulreaper axe",
+        kind: "sweep",
+        description:
+            "A heavy sweep ahead. Kills near you give it souls, each a harder hit; at five, its next swing is a Harvest, a spin all round you that costs you some hitpoints.",
+        iconObjId: 28338,
+        playerSeq: GODSWORD_SEQ,
+        sound: GODSWORD_SOUND,
+        hitSound: -1,
+        rarity: "rare",
+        style: "melee",
+        souls: {
+            reach: 4,
+            max: 5,
+            damage: 0.08,
+            harvest: {
+                radius: 3.5,
+                damage: 3,
+                perLevel: 0.2,
+                cost: 0.08,
+                floor: 0.2,
+                healsAt: 5,
+                // The Dragon axe's special's swirl (Lumber Up), round the player
+                spotAnim: 479,
+            },
+        },
+        unlock: {
+            kind: "pieces",
+            mapId: "scar",
+            trophyIds: [
+                "executioners_axe_head",
+                "sirens_staff",
+                "eye_of_the_duke",
+                "leviathans_lure",
+            ],
+        },
+        levels: levels(
+            {
+                damage: 42,
+                cooldown: 1.9,
+                amount: 1,
+                area: 2.8,
+                arc: 1.0,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 0.6,
+                objId: 28338,
+            },
+            { damage: 50, description: "+8 damage." },
+            { area: 3.0, description: "Sweeps further." },
+            { cooldown: 1.7, description: "Swings faster." },
+            { damage: 60, description: "+10 damage. Harvest heals 1 for each kill it makes." },
+        ),
+    },
 ];
 
 // Every other level of a melee weapon pushes harder
@@ -2660,6 +2995,12 @@ export function getWeapon(id: string): WeaponDef {
     return weapon;
 }
 
+// The item a weapon's shots fly as at this level, when they're drawn as one: its
+// projectile item, or a knife's the one in hand. Both the sim and what's baked use it.
+export function getProjectileObjId(weapon: WeaponDef, level: WeaponLevel): number | undefined {
+    return level.projectileObjId ?? (weapon.kind === "knives" ? level.objId : undefined);
+}
+
 // The style a weapon's hits count as (see WeaponDef.damageStyle)
 export function getWeaponStyle(weapon: WeaponDef): CombatStyle {
     const style = weapon.damageStyle ?? weapon.style;
@@ -2679,4 +3020,26 @@ export function getWeaponStyle(weapon: WeaponDef): CombatStyle {
         case "orbit":
             return "magic";
     }
+}
+
+export function weaponName(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.name`, weapon.name);
+}
+
+export function weaponDescription(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.desc`, weapon.description);
+}
+
+export function weaponLevelName(weapon: WeaponDef, levelIndex: number): string | undefined {
+    const name = weapon.levels[levelIndex]?.name;
+    return name === undefined
+        ? undefined
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.name`, name);
+}
+
+export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): string {
+    const description = weapon.levels[levelIndex]?.description ?? "";
+    return description === ""
+        ? description
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
 }

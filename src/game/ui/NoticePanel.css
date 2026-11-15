@@ -44,9 +44,14 @@
     color: var(--ui-white);
 }
 
-/* Saving's stopped: over a run's HUD too (the quest tracker has a z-index on a
-   phone), but under the notice to turn a phone sideways */
+/* Saving's stopped: over a run's HUD too (co-op's choice countdown has a
+   z-index), but under the notice to turn a phone sideways */
 .ui-save-block {
+    z-index: 10;
+}
+
+/* The language notice: over the pause menu or Settings it was picked in */
+.ui-language-notice {
     z-index: 10;
 }
 

@@ -22,8 +22,9 @@ import {
 } from "./settings";
 
 // Temporary and dev-only: a screen to try the generator's settings. To remove it,
-// delete this file, its CSS and generatedMap.ts, and the MapGeneratorButton line
-// in GameUi.tsx. See CLAUDE.md.
+// delete this file, its CSS and generatedMap.ts, and the ui-title-dev corner around
+// MapGeneratorButton in GameUi.tsx, with its rules in GameUi.css and Mobile.css.
+// See CLAUDE.md.
 
 const MAX_SEED = 999999;
 

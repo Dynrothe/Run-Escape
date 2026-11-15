@@ -17,7 +17,24 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   with nothing done (`LOBBY_IDLE_MS` in `CoopLobby.ts`).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
-  inputs go through a relay close to the host rather than one fixed place.
+  inputs go through a relay close to the host rather than one fixed place. Close, but not always
+  the closest data centre, or in the host's country: see Cloudflare's
+  [placement rules](https://developers.cloudflare.com/durable-objects/reference/data-location/).
+- **Rooms hibernate too.** Their connections use Cloudflare's hibernation API, so a room is billed
+  only while it's handling a message, not for every second it's open. A pending `setTimeout` or
+  `setInterval` would keep it billed throughout, so everything a room waits for (the 10 seconds to
+  make or join it, a dropped player's 15, the save and update throttles, the heartbeat) goes
+  through its one alarm, with `later()`. After 10 seconds with nothing to do (a room sitting on
+  its menu, never mid-run), Cloudflare can take it out of memory and keep its connections open.
+  The next message or alarm makes it again, from its storage and what each socket carries
+  (`remember()`): who it's for, the room's code, when the next heartbeat's due, and when the room
+  last heard from them (as of the last heartbeat), so being made again neither puts the heartbeat
+  off nor sends an extra one, nor starts a quiet player's time over. A dropped player's time away is
+  saved, so it doesn't start again each time the room's made. The heartbeat saves when the room
+  was last used, which a run's messages don't, or a room made again after a restart would look
+  idle since its run started. A connection the room closes is forgotten first, since Cloudflare
+  lists it until the other end answers. Pings are answered without waking it, so they're outside
+  a connection's rate limit.
 - To make or join a room, the lobby checks the relay's limits and answers with a `goto`: the room's
   code and a one-time ticket, good for 30 seconds. The game opens the room's own connection with
   it and sends its `create` or `join` there. Everything said in a room (`me`, `start`, `up`, `down`
@@ -26,8 +43,28 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - The Worker (`src/index.mjs`) only routes: `/coop` to the lobby, `/coop/room/<code>` to that room,
   and a plain GET of `/coop` answers whether co-op's there, as the game asks. It sets each player's
   address from Cloudflare's `CF-Connecting-IP`, for the limits, and their country from
-  `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
-  don't host an open room).
+  `request.cf.country`, for their flag in the party (unless they've hidden it and don't host an
+  open room). A player who resumes keeps the country they joined from. The request's `cf.colo` is
+  the edge that took it, not where the room runs.
+- **A room's flag in the list** is where the room runs, measured inside it: `location.mjs` fetches
+  `https://www.cloudflare.com/cdn-cgi/trace` and looks its `colo` up in `colo-countries.json`
+  (never trace's `loc`, which is where the request came from). It's the method
+  [Where Durable Objects Live](https://github.com/helloimalastair/where-durableobjects-live/blob/main/apps/worker/src/DO.ts)
+  uses: a good guide, not a guarantee. Listings say `countrySource: "server"`, and a room that
+  couldn't measure it has no flag, never its host's (the lobby drops a host's country stored by an
+  older relay). A room measures once it's open and on its menu, in the background with a short
+  deadline, and saves the first country it gets with the room, so waking, a restart or a new host
+  don't measure again. That relies on Cloudflare not moving an object once it's placed: revisit it
+  if they start to. A failed measurement is tried again with the next listing update or heartbeat
+  after `LOCATION_RETRY_MS`. Closing the room deletes its country with the rest of its storage, so
+  a new room that reuses the code measures afresh.
+- `colo-countries.json` is made from Cloudflare's status page by
+  `node scripts/update-colo-countries.mjs`, run in this directory: review its diff and commit it.
+  A data centre it hasn't got has no flag until then. The status page names a few without a
+  country, which `places` in `scripts/colo-countries.mjs` lists, and it stops at any new one.
+  It takes only current country codes: `Intl.DisplayNames` names old ones too, such as `UK` and
+  `FX`, which would replace `GB` and `FR`. The lobby lists a room that saved an old code by its
+  current one (`currentCountry` in `src/shared.mjs`).
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
@@ -42,20 +79,21 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   away from one.
 - A plain GET of `/coop` is answered by the Worker, without the lobby: it's a billed request to the
   lobby for every game that loads otherwise. So it says co-op's there even if the lobby's broken
-  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `npm run
+  (a bad binding, an error in its constructor), and the game shows Multiplayer anyway. `bun run
 check` tests the lobby itself.
 
 ## Setting it up
 
-You need a Cloudflare account (free is fine to start: see Cost below) and Node 22 or newer, which
-Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
+You need a Cloudflare account (free is fine to start: see Cost below), Bun to install Wrangler, and
+Node 22 or newer, which Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev`
+address.
 
 1. **Install and log in.** From the repository:
 
     ```sh
     cd server/cloudflare
-    npm install
-    npx wrangler login
+    bun install --frozen-lockfile
+    bun run wrangler login
     ```
 
     `login` opens the browser to let Wrangler use your Cloudflare account.
@@ -63,13 +101,13 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 2. **Try it locally (optional).**
 
     ```sh
-    npx wrangler dev --port 8787
+    bun run wrangler dev --port 8787
     ```
 
     and in another terminal, from the repository's root:
 
     ```sh
-    VITE_COOP_URL=ws://127.0.0.1:8787/coop npm start
+    VITE_COOP_URL=ws://127.0.0.1:8787/coop bun run start
     ```
 
     Open the game in two windows (one private), make a room in one and join it from the other.
@@ -78,8 +116,12 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 3. **Deploy.**
 
     ```sh
-    npx wrangler deploy
+    bun run wrangler deploy
     ```
+
+    Its `RUN_CHECKS` binding names the run analytics collector, so deploy that first
+    ([its README](../analytics/README.md)), or delete the `[[services]]` block from
+    `wrangler.toml` if you aren't running one.
 
     The first time, Cloudflare may ask you to pick a `workers.dev` subdomain (the deploy prints a
     link to the dashboard page for it). It prints the relay's address when it's done:
@@ -89,7 +131,7 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
     ```sh
     curl https://run-escape-coop.<your-subdomain>.workers.dev/coop
     # {"coop":true}
-    npm run check -- wss://run-escape-coop.<your-subdomain>.workers.dev/coop
+    bun run check wss://run-escape-coop.<your-subdomain>.workers.dev/coop
     ```
 
     `check` plays a host and a guest through it (an invite-only room, so nobody sees it): making
@@ -99,18 +141,18 @@ Wrangler needs. Nothing else, and no domain: it runs at a `workers.dev` address.
 4. **Point the game at it.** Build with the relay's address, `wss://` and `/coop` on the end:
 
     ```sh
-    VITE_COOP_URL=wss://run-escape-coop.<your-subdomain>.workers.dev/coop npm run build
+    VITE_COOP_URL=wss://run-escape-coop.<your-subdomain>.workers.dev/coop bun run build
     ```
 
     and deploy the build as usual. Whatever serves the game no longer needs a relay of its own
-    (`npm run serve:singleplayer`, or drop the `/coop` proxy).
+    (`bun run serve:singleplayer`, or drop the `/coop` proxy).
 
 5. **The desktop app.** Set the `COOP_URL` repository variable (Settings, Secrets and variables,
    Actions) to the same `wss://…/coop` address, and the release workflow builds it into the game and
    the launcher (see Desktop in `docs/DEVELOPMENT.md`). As with any change to `COOP_URL`, players
    only get it in a new launcher download.
 
-**Updating it** after changing anything in `server/cloudflare/` is `npx wrangler deploy` again.
+**Updating it** after changing anything in `server/cloudflare/` is `bun run wrangler deploy` again.
 Rooms carry on through a deploy, as through Cloudflare's own restarts (see below).
 
 **Restarts.** Cloudflare restarts Workers and Durable Objects now and then, on any plan: runtime
@@ -118,8 +160,9 @@ updates, and moving objects between machines. Each one drops every connection to
 what it had in memory, often more than once an hour. So:
 
 - A room keeps itself in storage, and gives each player a token when they make or join it.
-  Someone joining or leaving, and a run starting or ending, are saved before anyone hears of
-  them, so a restart straight after doesn't bring back the room as it was.
+  Someone joining or leaving, a run starting or ending, and a player's change of pick or ready
+  that the room confirms (`meSeq`), are saved before anyone hears of them, so a restart straight
+  after doesn't bring back the room as it was.
 - A player whose connection drops keeps their place for 15 seconds. Their game reconnects to
   `coop/room/<code>?resume=<token>` for up to 10 seconds, and the run carries on. Someone who
   doesn't come back is let go, as if they'd left.
@@ -128,8 +171,24 @@ what it had in memory, often more than once an hour. So:
   kept for 20 seconds in `CoopRun`, and answered once a second at most). An item a guest used
   just before the drop is sent again, and the host takes it once.
 - The lobby's connection dropping doesn't touch a room: the game makes it again after.
+- A connection can die without closing (a laptop asleep, a network that went away), and a
+  Durable Object can't ping to find out, as the Node relay does. So the game checks: mid-run, a
+  room that's been quiet for `RUN_QUIET_MS` is pinged (`keepAlive` in `CoopLobby.ts`), and one
+  that hasn't answered within `PONG_WAIT_MS` is taken as dropped and come back to as above, in
+  time for the host's resendable frames (`RESEND_FRAMES`). It's mostly a host whose guests are
+  standing still that sends these, as a guest hears the host's frames all the time; a guest
+  standing still pings every `PING_INTERVAL_MS` so the room hears from it. Outside a run the
+  regular ping does the same, more slowly. And the room lets go of a player it's heard nothing
+  from, not even a ping, for `SILENT_MS` (checked on the heartbeat, with Cloudflare's time for
+  the last ping it answered), as if their connection had closed, so a host who's gone ends the run
+  rather than holding everyone until the room's idle. Under `wrangler dev`, a room on its menu,
+  made again every minute, kept players who only pinged (once a minute, too) past `SILENT_MS` and
+  let a silent one go. When it last heard from each player's messages is kept on their socket by
+  each heartbeat, for the room made again after being out of memory. Without Cloudflare's ping
+  times it lets go of nobody this way. A player let go after being away who comes back is told
+  so; one let go for something else (flooding the room) isn't.
 
-`npm run check` tests coming back, against a running relay. `room.test.ts` runs a room under
+`bun run check` tests coming back, against a running relay. `room.test.ts` runs a room under
 Node, with `test/durable-object.mjs` in place of `cloudflare:workers` (see `vite.config.ts`). To see a restart for yourself under `wrangler dev`, save any
 file in `src/` during a run: wrangler reloads, which drops everything as Cloudflare does.
 
@@ -141,10 +200,38 @@ and drops the connection, so it ends abnormally instead of cleanly. A connection
 phone locking, a lost signal) has no close to answer, and still ends abnormally.
 
 **Settings** are in `wrangler.toml`: `MULTIPLAYER_ANY_MAP = "on"` lets players into rooms on maps
-they haven't unlocked, as on the Node relay. The other limits are at the top of `src/shared.mjs`,
-the same numbers as `coop-relay.mjs`.
+they haven't unlocked, as on the Node relay. `MULTIPLAYER_RUN_CHECKS = "end"` ends a run whose host
+the run checks (`../coop-checks.mjs`) catch; with `"log"` they're only logged. With the
+`RUN_CHECKS_TOKEN` secret set, the `RUN_CHECKS` binding sends the run analytics collector a row
+for each run they find anything in ([Run checks](../analytics/README.md#run-checks)). The other
+limits are at the top of `src/shared.mjs`, the same numbers as `coop-relay.mjs`.
 
-**Taking it down**: `npx wrangler delete run-escape-coop`.
+**The run checks' log**: an object for each entry, with `event: "coop_run_check"` and its `kind`,
+which `bun run wrangler tail` shows as it happens. To keep them (for 7 days, searchable by field in
+the dashboard), turn on Workers Logs without its log of every invocation:
+
+```toml
+[observability.logs]
+enabled = true
+invocation_logs = false
+```
+
+Cloudflare's docs don't say whether that also leaves out each WebSocket message to a room, which
+would be a log event apiece and far past what the plan includes. After turning it on, watch the
+Worker's log events in the dashboard for a while before leaving it on.
+
+**The room's log**: one line when a room closes after `IDLE_MS` with nothing happening, and
+nothing else, for telling afterwards why it closed. It's an object with `event: "coop_room"` and
+`kind: "idle"`: the room's code, whether its run had started, its map, endless and hard, how long
+the run and the quiet had lasted, and how many messages came from connections the room was done
+with (`strays`). For each player (by their id, which is random, never a name or address): whether
+they were connected, how long since the room last heard from them and since Cloudflare last
+answered their ping, and how many of their messages it threw away, by reason (`discarded`). The
+counts are saved with the room (within `SAVE_MS`), so they cover its whole life, through being out
+of memory and restarts. Search it in the dashboard by `event`, or watch with
+`bun run wrangler tail`.
+
+**Taking it down**: `bun run wrangler delete run-escape-coop`.
 
 ## Cost
 
@@ -155,8 +242,8 @@ Cloudflare bills Durable Objects by requests and by how long they're awake, not 
 Incoming WebSocket messages count as one request for every 20, and outgoing ones are free. Each
 call from a room to the lobby (`redeem`, `roomUpdate`, `roomGone`) and each connection is a whole
 request. The dashboard's Metrics count every message as one, so they show far more than is billed.
-A room is billed for every second it's open (at 128 MB), whether or not anything's happening, and
-the lobby only for the moments it's handling something.
+Rooms and the lobby are billed (at 128 MB) only for the moments they're handling something:
+a message, a connection or an alarm. Mid-run, that's a sliver of each second.
 
 What the lobby gets: each connected player's pings (`PING_INTERVAL_MS` in `CoopLobby.ts`, answered
 without waking it), each room's heartbeat (`ROOM_HEARTBEAT_MS` in `room.mjs`) and its calls when
@@ -165,29 +252,37 @@ message for each page of rooms someone looks at. A game from before the lists we
 its page every few seconds until it's closed.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
-frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
-four is around 37 a second. That works out to, for each hour a room is open:
+frames, about 25, and the guest's inputs). A host whose guests stand still also pings once each
+`RUN_QUIET_MS`, a small fraction of that. Each guest more adds only their own inputs, so a room of
+four is around 37 a second. That's about 5,300 requests for each hour a two-player room is open,
+and 6,700 for four. Before rooms hibernated, they were also billed 450 GB-s an hour (every second
+at 128 MB), which was most of the bill. By Cloudflare's pricing, an idle object that can hibernate
+isn't billed for duration, so a room's should now be only the time it spends handling messages,
+leaving requests as most of the bill. That's still to be measured on a deployed relay: check the
+dashboard (Durable Objects, Duration) after deploying, and after a change to how a room handles
+messages. The estimates below assume it holds.
 
-| Party    | Requests | Duration  |
-| -------- | -------- | --------- |
-| 2 people | ~5,300   | ~450 GB-s |
-| 4 people | ~6,700   | ~450 GB-s |
-
-- **Free plan**: 100,000 requests and 13,000 GB-s a day, about 15 to 19 hours of rooms a day. Past
-  a limit, co-op fails until the next day, so it's for testing rather than for players.
+- **Free plan**: 100,000 requests and 13,000 GB-s a day, about 15 to 19 hours of rooms a day by
+  requests. Past a limit, co-op fails until the next day, so it's for testing rather than for
+  players.
 - **Workers Paid ($5 a month)**: 1 million requests and 400,000 GB-s a month included, then
-  $0.15 a million requests and $12.50 a million GB-s. That's under a cent for each hour a room of
-  four is open, so about $6.50 a month for 1,000 room-hours, and about $70 for 10,000.
+  $0.15 a million requests and $12.50 a million GB-s. That's about $1 a month more for every 1,000
+  room-hours past the first 150 or so, so 100 players in rooms around the clock (about 20,000
+  room-hours a month) would come to roughly $25.
 
 Check [Cloudflare's pricing](https://developers.cloudflare.com/durable-objects/platform/pricing)
 for the current numbers. Usage is under Workers & Pages, `run-escape-coop`, Metrics, in the
 dashboard.
 
 **Against abuse.** Workers Paid has no spending cap, so the relay keeps what one connection can cost
-bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (an open
-socket keeps a room billed), a room's saved to storage at most once a second however often its
-host changes settings (joins, leaves and a run starting or ending are saved at once), and rooms are capped per address and in all, as on the Node relay. Before
-pointing a paid account at players, also:
+bounded: a room connection that hasn't made or joined its room within 10 seconds is closed (nothing
+else would close it: the lobby forgets a room that never got made), a room's saved to storage at
+most once a second however often its host changes settings (joins, leaves and a run starting or
+ending are saved at once, and the heartbeat once a minute during a run), and rooms are capped per
+address and in all, as on the Node relay. Pings are the exception: answered without waking the
+lobby or a room, they never reach a connection's rate limit, and Cloudflare doesn't say whether
+it counts them as requests (20 to one, like other messages), so a connection flooding pings may
+be billed for as long as it's open. Before pointing a paid account at players, also:
 
 - set a billing notification (Manage account, Notifications), and
 - add a rate limiting rule (Security, WAF) on `/coop/room/` for each IP, about 60 requests a

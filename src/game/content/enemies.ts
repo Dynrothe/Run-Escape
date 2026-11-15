@@ -1,9 +1,26 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { tr } from "../i18n";
+import { CURSED_SANDS_ENEMIES } from "./cursedSands";
+import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
+import { GHORROCK_ENEMIES } from "./ghorrock";
+import { getInvaders } from "./invaders";
+import { KRIL_ENEMIES } from "./kril";
+import { LASSAR_ENEMIES } from "./lassar";
+import { LEVIATHAN_ENEMIES } from "./leviathan";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { SCAR_ENEMIES } from "./scar";
+import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
+import { THANKSGIVING_ENEMIES } from "./thanksgivingenemies";
 import { getTheatreBosses } from "./theatre";
+import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { VARDORVIS_ENEMIES } from "./vardorvis";
+import { VARROCK_ENEMIES } from "./varrockHordes";
+import { WHISPERER_ENEMIES } from "./whisperer";
+import { XARTH_ENEMIES } from "./xarth";
+import { YAMA_ENEMIES } from "./yama";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -225,6 +242,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "chicken",
         name: "Chicken",
+        tags: ["bird"],
         npcId: 1173,
         idleSeq: 5386,
         walkSeq: 5385,
@@ -597,6 +615,34 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 879, hit: 884, death: 882 },
     },
 
+    // Thanksgiving's fox uses the same sound stand-ins as the pyre fox.
+    {
+        id: "farmer",
+        name: "Farmer",
+        npcId: 3114,
+        ...HUMAN,
+        hp: 10,
+        damage: 2,
+        speed: 1.9,
+        radius: 0.35,
+        xp: 8,
+        sounds: HUMAN_SOUNDS,
+    },
+    {
+        id: "fox",
+        name: "Fox",
+        npcId: 3901,
+        idleSeq: 6561,
+        walkSeq: 6560,
+        attackSeq: 6559,
+        deathSeq: 6558,
+        hp: 9,
+        damage: 2,
+        speed: 2.6,
+        radius: 0.3,
+        xp: 8,
+        sounds: { attack: 710, hit: 713, death: 711 },
+    },
     // The Wilderness: revenants from the caves beneath it, bandits, dark
     // warriors, chaos druids, hill giants, poison spiders and the Ankou (and
     // the Graveyard of Shadows's zombies and skeletons, the ones above)
@@ -1714,7 +1760,9 @@ export const ENEMIES: EnemyDef[] = [
     },
     {
         id: "scarab_swarm",
-        name: "Scarab swarm",
+        name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 1782,
         idleSeq: 1947,
         walkSeq: 1945,
@@ -1742,6 +1790,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_worker",
         name: "Kalphite worker",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 955,
         idleSeq: 6218,
         walkSeq: 6220,
@@ -1775,6 +1825,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_soldier",
         name: "Kalphite soldier",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 138,
         idleSeq: 6218,
         walkSeq: 6220,
@@ -1827,6 +1879,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_guardian",
         name: "Kalphite guardian",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 959,
         idleSeq: 6219,
         walkSeq: 6222,
@@ -2123,6 +2177,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_queen",
         name: "Kalphite Queen",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 963,
         idleSeq: 6239,
         walkSeq: 6238,
@@ -2225,6 +2281,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_queen_risen",
         name: "Kalphite Queen",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 965,
         idleSeq: 6236,
         walkSeq: 6236,
@@ -8355,11 +8413,41 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    // Yama, in burnt Varrock's palace (yama.ts), his generals (xarth.ts, kril.ts) and the city's
+    // hordes (varrockHordes.ts)
+    ...YAMA_ENEMIES,
+    ...XARTH_ENEMIES,
+    ...KRIL_ENEMIES,
+    ...VARROCK_ENEMIES,
+    ...STRANGLEWOOD_ENEMIES,
+    ...LASSAR_ENEMIES,
+    ...GHORROCK_ENEMIES,
+    ...SCAR_ENEMIES,
+    ...VARDORVIS_ENEMIES,
+    ...WHISPERER_ENEMIES,
+    ...DUKE_ENEMIES,
+    ...LEVIATHAN_ENEMIES,
+    ...THANKSGIVING_ENEMIES,
 ];
+
+// The Tombs of Amascut's (in development)
+ENEMIES.push(...TOMBS_ENEMIES);
+ENEMIES.push(...CURSED_SANDS_ENEMIES);
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above
 ENEMIES.push(
     ...getTheatreBosses((id) => {
+        const def = ENEMIES.find((e) => e.id === id);
+        if (!def) {
+            throw new Error("Unknown enemy " + id);
+        }
+        return def;
+    }),
+);
+
+// Awakened invasions' bosses (content/invaders.ts), made from the Act II maps' own
+ENEMIES.push(
+    ...getInvaders((id) => {
         const def = ENEMIES.find((e) => e.id === id);
         if (!def) {
             throw new Error("Unknown enemy " + id);
@@ -8376,4 +8464,9 @@ export function getEnemy(id: string): EnemyDef {
         throw new Error("Unknown enemy " + id);
     }
     return enemy;
+}
+
+// The name to show for an enemy, in the language chosen (enemy.<id>.name)
+export function enemyName(def: Pick<EnemyDef, "id" | "name">): string {
+    return tr(`enemy.${def.id}.name`, def.name);
 }

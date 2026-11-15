@@ -1,14 +1,15 @@
 // Interface sprite tools. Sprites have no names in the cache, so finding one
 // means drawing a range of ids and looking at them.
 //
-//   npx tsx scripts/cache/sprites.ts png out 1420 940-950   write sprites to out/<id>.png, 4x size
-//   npx tsx scripts/cache/sprites.ts check                  every passive's iconSpriteId is in the cache
+//   bun run tsx scripts/cache/sprites.ts png out 1420 940-950   write sprites to out/<id>.png, 4x size
+//   bun run tsx scripts/cache/sprites.ts check                  every sprite the game shows is in the cache
 import fs from "fs";
 import path from "path";
 
 import {
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
+    getGameSpriteIds,
 } from "../../src/game/client/GameAssets";
 import { PASSIVES } from "../../src/game/content/passives";
 import { SpriteImage, decodeSpriteImage } from "../../src/mapviewer/worker/SpriteDataLoader";
@@ -85,14 +86,18 @@ switch (command) {
         break;
     }
     case "check": {
-        let missing = 0;
+        // The passives' by name, the rest by id
+        const names = new Map<number, string>();
         for (const passive of PASSIVES) {
-            if (passive.iconSpriteId === undefined) {
-                continue;
+            if (passive.iconSpriteId !== undefined) {
+                names.set(passive.iconSpriteId, passive.id);
             }
-            const sprite = loadSprite(passive.iconSpriteId);
+        }
+        let missing = 0;
+        for (const id of getGameSpriteIds()) {
+            const sprite = loadSprite(id);
             const drawn = sprite.pixels.some((argb) => argb >>> 24 !== 0);
-            console.log(`${passive.id}: ${describe(sprite)}`);
+            console.log(names.has(id) ? `${names.get(id)}: ${describe(sprite)}` : describe(sprite));
             if (!drawn) {
                 missing++;
             }
@@ -107,10 +112,10 @@ switch (command) {
             }
         }
         if (missing > 0) {
-            console.log(`${missing} sprites are missing or blank`);
+            console.log(`${missing} of the game's sprites are missing or blank`);
             process.exitCode = 1;
         } else {
-            console.log("Every passive's sprite and overhead prayer is in the cache");
+            console.log("Every sprite the game shows is in the cache, overhead prayers too");
         }
         break;
     }

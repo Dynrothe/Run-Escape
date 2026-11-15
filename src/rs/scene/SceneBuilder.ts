@@ -57,6 +57,17 @@ export class SceneBuilder {
         rotation: number,
     ) => void;
 
+    // Told about every loc as a scene is built: its level, its south-west tile, how many tiles it
+    // covers, and its id (the game's glowing scenery, MapDef.lighting)
+    onLoc?: (
+        level: number,
+        tileX: number,
+        tileY: number,
+        sizeX: number,
+        sizeY: number,
+        id: number,
+    ) => void;
+
     constructor(
         readonly cacheInfo: CacheInfo,
         readonly mapFileLoader: MapFileLoader,
@@ -452,6 +463,7 @@ export class SceneBuilder {
             sizeX = locType.sizeY;
             sizeY = locType.sizeX;
         }
+        this.onLoc?.(level, tileX, tileY, sizeX, sizeY, id);
         let startX: number;
         let endX: number;
         if (tileX + sizeX <= scene.sizeX) {

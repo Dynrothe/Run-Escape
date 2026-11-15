@@ -1,4 +1,11 @@
-import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./types";
+import {
+    BossAttackDef,
+    BossDef,
+    BulletPatternDef,
+    CombatStyle,
+    EnemyDef,
+    EnemyShotDef,
+} from "./types";
 
 // The Theatre of Blood raid's bosses (raids.ts), fought in their own rooms, each as a bullet hell
 // built round what its real fight is known for: the Maiden's blood closing in, the Bloat's flies,
@@ -34,6 +41,26 @@ const ARMOR_CAP = 0.5;
 // Splats (the blood 1579, the acid 1654) reach well past their middle: drawn at this size, all of
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
+
+// Seconds a ring closing in round you (the Maiden's blood, the Bloat's flies, Verzik's blasts and
+// green balls) stands where it formed first: finding the way out as it came in was too quick
+const RING_HOLD = 1;
+// Seconds after a ring's closed in before the next forms, its own next volley or the boss's next
+// ring (Sim.startPattern): back to back, enraged, the next had formed as the last came in
+export const RING_REST = 0.5;
+
+// A ring closing in round you: it holds, closes its distance at its speed, and the next comes once
+// it's in and RING_REST has gone. Its channel is how long the boss stands for it, as it did when
+// the rings came quicker, its other attacks coming between them after that.
+function closingRing(
+    ring: Omit<BulletPatternDef, "shape" | "hold" | "interval"> & {
+        distance: number;
+        channel: number;
+    },
+): BulletPatternDef {
+    const closes = RING_HOLD + ring.distance / ring.speed;
+    return { ...ring, shape: "closing", hold: RING_HOLD, interval: closes + RING_REST };
+}
 
 // Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
 // close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
@@ -129,18 +156,17 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         range: 30,
         weight: 3,
         message: "The Maiden's blood closes in! Find the way out!",
-        pattern: {
-            shape: "closing",
+        pattern: closingRing({
             count: 20,
             volleys: 1,
-            interval: 1,
+            channel: 1,
             speed: 3.5,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Blood flood",
@@ -153,18 +179,17 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         range: 30,
         weight: 4,
         enraged: true,
-        pattern: {
-            shape: "closing",
+        pattern: closingRing({
             count: 22,
             volleys: 3,
-            interval: 1.1,
+            channel: 3.3,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
 ];
 
@@ -234,18 +259,17 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         cooldown: 6,
         range: 40,
         weight: 4,
-        pattern: {
-            shape: "closing",
+        pattern: closingRing({
             count: 18,
             volleys: 3,
-            interval: 0.9,
+            channel: 2.7,
             speed: 4.5,
             range: 20,
             radius: 0.4,
             gap: 3,
             distance: 6,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Rain of flesh",
@@ -472,7 +496,9 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
             radius: 0.9,
             locId: 32743,
             lingers: { seconds: 6, interval: 60, damage: 0 },
-            smother: { seconds: 1, heal: 0.04, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
+            // A step on one smothers it (a full second of standing let three in four through,
+            // as they come up in threes several tiles apart), and one missed heals him a little
+            smother: { seconds: 0.4, heal: 0.02, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
         },
     },
     // Acid all round his pool
@@ -559,18 +585,17 @@ const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
         cooldown: 6,
         range: 40,
         weight: 3,
-        pattern: {
-            shape: "closing",
+        pattern: closingRing({
             count: 16,
             volleys: 2,
-            interval: 1.2,
+            channel: 2.4,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Power blast ring",
@@ -713,18 +738,17 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         cooldown: 5,
         range: 40,
         weight: 4,
-        pattern: {
-            shape: "closing",
+        pattern: closingRing({
             count: 14,
             volleys: 1,
-            interval: 1,
+            channel: 1,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Power ring",
@@ -785,7 +809,7 @@ function vasilias(): EnemyDef {
             colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.25, ownStyle: 0.35 },
             enrage: { message: "Nylocas Vasilias shrieks!" },
             summonsAt: [
-                { hp: 0.75, enemyId: "nylocas_ischyros", count: 6 },
+                { hp: 0.75, enemyId: "tob_nylocas_ischyros", count: 6 },
                 { hp: 0.5, enemyId: "tob_nylocas_toxobolos", count: 6 },
                 { hp: 0.25, enemyId: "tob_nylocas_hagios", count: 6 },
             ],
@@ -829,7 +853,8 @@ function raidVersion(
         boss: {
             ...base.boss!,
             ...extra,
-            // What it calls in is the raid's: its green and blue Nylocas shoot (RAID_NYLOCAS)
+            // What it calls in is the raid's: its Nylocas, slower, the green and blue ones shooting
+            // (RAID_NYLOCAS)
             attacks: oftener(all, tunedAt, interval).map((attack) =>
                 attack.summon
                     ? {
@@ -889,7 +914,14 @@ const HAGIOS_SHOT: EnemyShotDef = {
     sound: 3605,
     expertKeep: EXPERT_HAGIOS_KEEP,
 };
-const RAID_NYLOCAS: [string, EnemyShotDef][] = [
+export const RAID_NYLOCAS_SPEED = 0.85;
+
+// The raid's own Nylocas (the campaign's are as they were): its shooters' shots, and all of them
+// slower (RAID_NYLOCAS_SPEED). In its narrow halls they come from every side, and players found
+// themselves caught by them at Morytania's speed.
+const RAID_NYLOCAS: [string, EnemyShotDef | undefined][] = [
+    ["nylocas_ischyros", undefined],
+    ["big_nylocas_ischyros", undefined],
     ["nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1559, sound: 3605 }],
     ["big_nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1561, sound: 3605 }],
     ["nylocas_hagios", HAGIOS_SHOT],
@@ -904,7 +936,13 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             const base = byId(id);
             // A big one splits into the raid's small ones
             const splits = base.splits && { ...base.splits, into: "tob_" + base.splits.into };
-            return { ...base, id: "tob_" + id, shot, ...(splits && { splits }) };
+            return {
+                ...base,
+                id: "tob_" + id,
+                speed: base.speed * RAID_NYLOCAS_SPEED,
+                ...(shot && { shot }),
+                ...(splits && { splits }),
+            };
         }),
         {
             id: "maiden_of_sugadinti",
@@ -1066,7 +1104,8 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                     // nothing
                     at: [0.8, 0.4],
                     count: 8,
-                    // Not forever, for whoever doesn't know to: he rises the better for each left
+                    // Not forever, for whoever doesn't know to: he rises the better for each left,
+                    // twice what one missed heals (smother.heal), as leaving them costs the most
                     seconds: 30,
                     leftHeal: 0.04,
                     attacks: ["Exhumeds", "Exhumeds", "Acid"],

@@ -17,6 +17,10 @@ export type MovementRules = {
     arena?: MovementBounds;
     // Turned to face this spot whatever's pressed (a boss rising, watched: Sim.introFacing)
     faces?: { x: number; y: number };
+    // On a floor's tile that does something (FloorEffect): faster or slower by pace; and on ice,
+    // glide is how far they went last tick, which they keep, getting grip of the way from it to
+    // where they're steering each tick (it's left as how far they went)
+    floor?: { pace: number; glide?: { x: number; y: number; grip: number } };
 };
 type MovementBody = Pick<Player, "x" | "y" | "yaw"> & Partial<Pick<Player, "facingX" | "facingY">>;
 
@@ -38,8 +42,21 @@ export function movePlayer(
     }
     const input = moveX !== 0 || moveY !== 0;
     const moving = !rules.frozen && input;
-    if (moving && ticks > 0) {
-        const speed = walkSpeed(rules);
+    const glide = rules.floor?.glide;
+    if (glide && ticks > 0) {
+        // Sliding: what they had, turned only a little towards where they're steering
+        const speed = walkSpeed(rules) * rules.floor!.pace;
+        const wantX = moving ? moveX * speed : 0;
+        const wantY = moving ? moveY * speed : 0;
+        const vx = glide.x + (wantX - glide.x) * glide.grip;
+        const vy = glide.y + (wantY - glide.y) * glide.grip;
+        const fromX = body.x;
+        const fromY = body.y;
+        moveCircle(grid, body, vx * ticks, vy * ticks, rules.radius);
+        glide.x = (body.x - fromX) / ticks;
+        glide.y = (body.y - fromY) / ticks;
+    } else if (moving && ticks > 0) {
+        const speed = walkSpeed(rules) * (rules.floor?.pace ?? 1);
         moveCircle(grid, body, moveX * speed * ticks, moveY * speed * ticks, rules.radius);
     }
     const faces = rules.faces;

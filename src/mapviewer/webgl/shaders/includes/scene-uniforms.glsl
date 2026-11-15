@@ -15,4 +15,9 @@ uniform SceneUniforms {
     vec4 u_playArea;
     // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
     vec4 u_wash;
+    // Lights (MapDef.lighting, includes/lights.glsl), read only by a lit map's programs (their
+    // LIGHTS): the ambient's colour times how bright it is; and where u_lightMap is, world tiles
+    // x and z of its corner and one over its size in tiles
+    vec4 u_ambient;
+    vec4 u_lightMapArea;
 };

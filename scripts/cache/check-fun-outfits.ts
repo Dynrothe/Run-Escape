@@ -2,7 +2,7 @@
 // cache (by the key it has in fun/enemies.ts), and is worn in the slot it's
 // put in. Prints the ones that aren't.
 //
-//   npx tsx scripts/cache/check-fun-outfits.ts
+//   bun run tsx scripts/cache/check-fun-outfits.ts
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { ENEMIES } from "../../src/game/content/enemies";
 import { FUN_OUTFIT_ITEMS } from "../../src/game/content/fun/enemies";

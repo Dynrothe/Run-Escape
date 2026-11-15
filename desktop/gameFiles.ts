@@ -1,10 +1,67 @@
+import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 
-export type GameManifest = { version: string; sha256: string; minLauncher: string };
+// A chunk of the slim cache, in caches/chunks/ (src/rs/cache/ChunkedCache.ts): its name is the
+// first 32 hex digits of its sha256
+export type ManifestChunk = { file: string; size: number };
+
+// lite and chunks are the game zip split in two: the zip without caches/chunks/, and the chunks
+// as their own release assets, so an update downloads only the chunks that changed. Launchers
+// from before them ignore both and download the whole zip.
+export type GameManifest = {
+    version: string;
+    sha256: string;
+    minLauncher: string;
+    lite?: { sha256: string; size: number };
+    chunks?: ManifestChunk[];
+};
+
+export const CHUNK_FILE_PATTERN = /^[0-9a-f]{32}\.bin$/;
+
+// The name a chunk with these bytes has
+export const chunkName = (data: Uint8Array) =>
+    createHash("sha256").update(data).digest("hex").slice(0, 32) + ".bin";
+
+// Where a game folder keeps its chunks
+export const chunkPath = (folder: string, file: string) =>
+    path.join(folder, "caches", "chunks", file);
+
+export const isSize = (size: unknown): size is number =>
+    typeof size === "number" && Number.isSafeInteger(size) && size >= 0;
+export const isSha256 = (sha256: unknown): sha256 is string =>
+    typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256);
 
 // A set of game files: the ones bundled with the launcher, or an update in the user data folder.
-// The bundled ones have no minLauncher, as they came with this launcher.
-export type GameFolder = { version: string; path: string; minLauncher?: string };
+// The bundled ones have no minLauncher, as they came with this launcher. fromSite is the website's
+// build (siteUpdate.ts) rather than a release.
+export type GameFolder = {
+    version: string;
+    path: string;
+    minLauncher?: string;
+    fromSite?: boolean;
+};
+
+// Whether this launcher can run a folder's files. The bundled ones came with it.
+export const canRun = (folder: GameFolder, launcherVersion: string) =>
+    !folder.minLauncher || compareVersions(folder.minLauncher, launcherVersion) <= 0;
+
+// Whether a file in dist/ is part of the game. Source maps are for debugging a hosted build, and
+// they're as big as the game's code, and .htaccess is the web server's.
+export const isShipped = (file: string) =>
+    !file.endsWith(".map") && path.basename(file) !== ".htaccess";
+
+// Every file in a folder, by its path inside it with forward slashes, as a zip entry or a URL has
+// it (this runs on Windows)
+export function listFiles(root: string, dir = root): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const file = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            return listFiles(root, file);
+        }
+        return [path.relative(root, file).split(path.sep).join("/")];
+    });
+}
 
 export function isVersion(version: unknown): version is string {
     return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version);
@@ -22,19 +79,43 @@ export function compareVersions(a: string, b: string): number {
 }
 
 export function parseManifest(text: string): GameManifest {
-    const { version, sha256, minLauncher } = JSON.parse(text) ?? {};
+    const { version, sha256, minLauncher, lite, chunks } = JSON.parse(text) ?? {};
     if (!isVersion(version) || !isVersion(minLauncher)) {
         throw new Error("The manifest's versions aren't valid");
     }
-    if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+    if (!isSha256(sha256)) {
         throw new Error("The manifest's sha256 isn't valid");
     }
-    return { version, sha256, minLauncher };
+    const manifest: GameManifest = { version, sha256, minLauncher };
+    if (lite === undefined && chunks === undefined) {
+        return manifest;
+    }
+    if (!isSha256(lite?.sha256) || !isSize(lite?.size)) {
+        throw new Error("The manifest's lite zip isn't valid");
+    }
+    const files = new Set<string>();
+    const valid =
+        Array.isArray(chunks) &&
+        chunks.every(
+            (chunk) =>
+                typeof chunk?.file === "string" &&
+                CHUNK_FILE_PATTERN.test(chunk.file) &&
+                !files.has(chunk.file) &&
+                files.add(chunk.file) &&
+                isSize(chunk.size),
+        );
+    if (!valid) {
+        throw new Error("The manifest's chunks aren't valid");
+    }
+    manifest.lite = { sha256: lite.sha256, size: lite.size };
+    manifest.chunks = chunks.map(({ file, size }: ManifestChunk) => ({ file, size }));
+    return manifest;
 }
 
 // The newest game files this launcher can run. A folder needing a newer launcher is left out: a
 // player can unzip an older launcher over the same user data. Bundled files win a tie, and when
-// they're newer, which they are after unzipping a newer launcher.
+// they're newer, which they are after unzipping a newer launcher, except against the website's
+// build: on the same version, that's the one the website was last seen on.
 export function pickGameFolder(
     bundled: GameFolder,
     installed: GameFolder[],
@@ -42,9 +123,9 @@ export function pickGameFolder(
 ): GameFolder {
     let best = bundled;
     for (const folder of installed) {
-        const runnable =
-            !folder.minLauncher || compareVersions(folder.minLauncher, launcherVersion) <= 0;
-        if (runnable && compareVersions(folder.version, best.version) > 0) {
+        const order = compareVersions(folder.version, best.version);
+        const newer = order > 0 || (order === 0 && folder.fromSite && !best.fromSite);
+        if (canRun(folder, launcherVersion) && newer) {
             best = folder;
         }
     }

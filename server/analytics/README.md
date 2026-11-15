@@ -3,19 +3,21 @@
 A separate Worker stores one anonymous report when a solo or multiplayer run ends. The solo
 client or co-op host posts to the same HTTPS endpoint, whichever relay hosted the room. Guests
 don't submit. A build without a collector URL sends nothing, and players can turn reporting off
-with Share run stats in Settings. Gameplay and local saves never wait for reporting.
+with Share run stats in Settings. Gameplay and local saves never wait for reporting. A co-op
+relay can also send a row of its own for a run its checks flag, whatever that setting says
+([Run checks](#run-checks)).
 
 ## Set up the collector
 
-You need a Cloudflare account (free is fine) and Node 22 or newer. The scripts use the Wrangler
+You need a Cloudflare account (free is fine), Bun and Node 22 or newer. The scripts use the Wrangler
 installed for the co-op relay, but deploy a different Worker, `run-escape-analytics`.
 
 1. **Install and log in**, from the repository:
 
     ```sh
     cd server/cloudflare
-    npm install
-    npx wrangler login
+    bun install --frozen-lockfile
+    bun run wrangler login
     ```
 
 2. **Say where the game is.** In `server/analytics/wrangler.toml`, add the web game's origin to
@@ -26,7 +28,7 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
 3. **Create and deploy it**, the first time only:
 
     ```sh
-    npm run analytics:setup
+    bun run analytics:setup
     ```
 
     The first deploy creates the `run-escape-analytics` database, then the schema is applied. It
@@ -36,7 +38,7 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
    least 32 characters, kept somewhere safe, as you'll send it to read them.
 
     ```sh
-    npx wrangler secret put ANALYTICS_READ_TOKEN -c ../analytics/wrangler.toml
+    bun run wrangler secret put ANALYTICS_READ_TOKEN -c ../analytics/wrangler.toml
     ```
 
     Reads fail closed without it. Never put it in a game build or a `VITE_` variable.
@@ -47,12 +49,12 @@ installed for the co-op relay, but deploy a different Worker, `run-escape-analyt
    URL, and the release workflow builds it into the game and the launcher. An older launcher
    needs a new download before it lets the game reach the collector. `COOP_URL` is independent.
 
-**After a change** to the Worker or a new migration, run `npm run analytics:deploy`. It applies
+**After a change** to the Worker or a new migration, run `bun run analytics:deploy`. It applies
 new migrations before deploying, so new code never runs against an old schema. Migrations must
 add to the schema (new tables, columns with defaults) rather than change it, since the running
 Worker uses it until the deploy finishes.
 
-**Locally**, run `npm run analytics:dev`, which applies the schema to a local database and serves
+**Locally**, run `bun run analytics:dev`, which applies the schema to a local database and serves
 the Worker on port 8789. Put the dev game's origin (usually `http://localhost:5173`) and a test
 read token in `server/analytics/.dev.vars`:
 
@@ -61,7 +63,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 ANALYTICS_READ_TOKEN=a-local-token-of-at-least-32-characters
 ```
 
-and start the game with `VITE_RUN_ANALYTICS_URL=http://localhost:8789/v1/runs npm start`.
+and start the game with `VITE_RUN_ANALYTICS_URL=http://localhost:8789/v1/runs bun run start`.
 
 ## What it accepts
 
@@ -112,6 +114,38 @@ Party composition is in the raw rows only. `daily_stats` is keyed by every colum
 so a new dimension there means a new table; composition would multiply its rows. Query raw rows
 for composition, within their retention.
 
+## Run checks
+
+The co-op relays check a run's frames as they pass (`server/coop-checks.mjs`). For each run they
+find anything in, a relay can send the collector a row of its own in `run_checks`: the host's
+game can't leave it out, and it's sent whether or not the players share their run stats (the
+setting says so). It holds no names, room codes or addresses: the run's map, mode and endless (the
+room's, which the relay chose), its build, party size and adventurers (as the host's game gave
+them, `unknown` where that was nothing a game sends), how far it got, a count of each kind found,
+the kind its host was caught by, and whether the relay ended it. An honest run sends nothing.
+`MAX_CHECKS_PER_DAY` caps the rows a day, and they expire with raw runs.
+
+Nothing joins a row to the host's report in `runs`, but an honest host's two share their relay,
+build, map, mode, endless, party and adventurers, and a run the relay didn't end reaches the
+collector from both within moments, with about the same length. A run the relay ended goes on
+alone on the host's game, which reports it later, perhaps the next day. The viewer's SQL
+examples include the query.
+
+To turn it on, once the collector's deployed, choose a token (a random string of at least 32
+characters) and give it to the collector and the relay:
+
+```sh
+bun run wrangler secret put RUN_CHECKS_TOKEN -c ../analytics/wrangler.toml
+bun run wrangler secret put RUN_CHECKS_TOKEN      # the Cloudflare relay
+```
+
+The Cloudflare relay reaches the collector through the service binding in its `wrangler.toml`,
+which names `run-escape-analytics` (change it there if you renamed the collector). The token turns
+it on and off: `wrangler secret delete RUN_CHECKS_TOKEN` stops the rows. The Node relay posts to
+`RUN_CHECKS_URL=https://<the Worker's address>/v1/run-checks`, with `RUN_CHECKS_TOKEN` set in its
+environment. Without both, a relay sends nothing. A row that doesn't arrive is only missed: the
+relay's log has the run's summary too.
+
 ## Query by day
 
 `GET /v1/daily?from=2026-11-01&to=2026-11-04&play=multiplayer&endless=false` needs
@@ -122,7 +156,7 @@ row has a count, time and stat totals, the highest hit, the average duration and
 rows the answer says it was truncated; narrow the dates or filters.
 
 Anything else is a query in the dashboard, or with
-`npx wrangler d1 execute DB --remote -c ../analytics/wrangler.toml --command "..."`. Wins
+`bun run wrangler d1 execute DB --remote -c ../analytics/wrangler.toml --command "..."`. Wins
 against full-party deaths on both relays, for example:
 
 ```sql
@@ -146,10 +180,16 @@ GROUP BY characters, map_id, mode;
 
 ## Export and look through it
 
-`npx wrangler d1 export run-escape-analytics --remote --output runs-2026-11-05.sql -c ../analytics/wrangler.toml`
-writes the whole database, schema and rows, as SQL. `--table daily_stats` (repeatable) limits it
-to some tables and `--no-schema` leaves out the `CREATE` statements; without `runs`, the viewer
-below has no party composition, leaderboard or single runs to show. An export
+From `server/cloudflare`, the following command writes the whole database, schema and rows, as SQL.
+
+```sh
+bun run wrangler d1 export run-escape-analytics --remote \
+    --output runs-2026-11-05.sql -c ../analytics/wrangler.toml
+```
+
+Pass `--table daily_stats` to export a single table. Repeat `--table` for more tables or pass
+`--no-schema` to omit the `CREATE` statements. The viewer needs the `runs` table to show party
+composition, the leaderboard and individual runs. An export
 [holds up the database's other requests](https://developers.cloudflare.com/d1/best-practices/import-export-data/)
 while it runs. Raw runs expire after `RAW_RETENTION_DAYS`, so keep an export at least that often
 to look back further.
@@ -202,9 +242,9 @@ Check rows written per run in the D1 dashboard, and set `MAX_RUNS_PER_DAY` to wh
 writes allow; the default leaves room on Free. When the cap or a quota is reached, reports are
 lost and the game carries on.
 
-An hourly job deletes expired rows: raw runs in batches until none are left (`PRUNE_BATCH` and
-`PRUNE_BATCHES` in `worker.mjs` allow many times the daily cap an hour), and expired summaries a
-day at a time. `RAW_RETENTION_DAYS`
+An hourly job deletes expired rows: raw runs and run checks in batches until none are left
+(`PRUNE_BATCH` and `PRUNE_BATCHES` in `worker.mjs` allow many times the daily cap an hour), and
+expired summaries a day at a time. `RAW_RETENTION_DAYS`
 defaults to 30 and `DAILY_RETENTION_DAYS` to 365 (UTC days, 2 at least). Rankings cover the
 retained raw days; deleting a raw run doesn't take it out of its daily totals. Raise the
 retention, or export before rows expire, for longer history.

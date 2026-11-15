@@ -1,7 +1,9 @@
 import { COSINE, SINE } from "../../rs/MathConstants";
+import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { Rasterizer2D } from "../../rs/graphics/Rasterizer2D";
 import { Rasterizer3D } from "../../rs/graphics/Rasterizer3D";
 import { Model } from "../../rs/model/Model";
+import { ModelData } from "../../rs/model/ModelData";
 import { RenderDataLoader, RenderDataResult } from "./RenderDataLoader";
 import { WorkerState } from "./RenderDataWorker";
 
@@ -12,14 +14,26 @@ import { WorkerState } from "./RenderDataWorker";
 export const ICON_WIDTH = 36;
 export const ICON_HEIGHT = 32;
 
-export type ItemIconRequest = { objId: number; count: number };
+// A negative objId is a loc's model instead (-locId), seen from above: a floor symbol, for a
+// screen that shows what's on the ground (renderLocIcon). recolors: colours repainted on the
+// item, as pairs of from and to (the customisable max cape's, ObjModelLoader.getModel).
+// `scale` draws an item's model that many times the icon's size, for a picture shown large (a
+// card's), smooth rather than a small icon blown up; 1 unless set. A loc's is always 1.
+export type ItemIconRequest = {
+    objId: number;
+    count: number;
+    recolors?: number[];
+    scale?: number;
+};
 
 export type ItemIconInput = { requests: ItemIconRequest[] };
 
 export type ItemIcon = {
     objId: number;
     count: number;
-    // ARGB, ICON_WIDTH x ICON_HEIGHT; empty when the item has no model
+    recolors?: number[];
+    scale?: number;
+    // ARGB, ICON_WIDTH x ICON_HEIGHT times its scale; empty when the item has no model
     pixels: Int32Array;
 };
 
@@ -41,6 +55,7 @@ function projectModel(
     xOffset: number,
     yOffset: number,
     zOffset: number,
+    scale = 1,
 ): boolean {
     if (model.verticesCount > screenX.length) {
         return false;
@@ -80,8 +95,8 @@ function projectModel(
         if (z <= 0) {
             z = 1;
         }
-        screenX[i] = (centerX + (x << 9) / z) | 0;
-        screenY[i] = (centerY + (y << 9) / z) | 0;
+        screenX[i] = (centerX + ((x << 9) * scale) / z) | 0;
+        screenY[i] = (centerY + ((y << 9) * scale) / z) | 0;
     }
     return true;
 }
@@ -237,8 +252,10 @@ function outlineAndShadow(pixels: Int32Array, width: number, height: number): vo
     }
 }
 
+type ItemRenderState = Pick<WorkerState, "objTypeLoader" | "objModelLoader" | "textureLoader">;
+
 // Stacks like coins have their own item (model and view) per stack size
-function getStackObjId(state: WorkerState, objId: number, count: number): number {
+function getStackObjId(state: ItemRenderState, objId: number, count: number): number {
     const objType = state.objTypeLoader.load(objId);
     let stackId = objId;
     if (objType.countObj && count > 1) {
@@ -251,21 +268,100 @@ function getStackObjId(state: WorkerState, objId: number, count: number): number
     return stackId;
 }
 
-export function renderItemIcon(state: WorkerState, objId: number, count: number): Int32Array {
+// How far off a loc's icon is drawn: a tile's flat symbol filling the icon
+const LOC_ICON_ZOOM = 2000;
+
+// A loc's model as it lies, from straight above, filling the icon
+export function renderLocIcon(state: WorkerState, locId: number): Int32Array {
     const pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
+    const locType = state.locTypeLoader.load(locId);
+    const type = locType.types?.[0] ?? LocModelType.NORMAL;
+    let model = state.locModelLoader.getModel(locType, type, 0);
+    if (model instanceof ModelData) {
+        model = model.light(state.textureLoader, model.ambient, model.contrast, -50, -10, -50);
+    }
+    if (!model) {
+        return pixels;
+    }
+    Rasterizer2D.setRaster(pixels, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer2D.setClip(0, 0, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer3D.setClip();
+    Rasterizer3D.setViewport(ICON_WIDTH / 2, ICON_HEIGHT / 2);
+    Rasterizer3D.rasterGouraudLowRes = false;
+    Rasterizer3D.rasterAlpha = 0;
+    model.calculateBoundsCylinder();
+    // Looking straight down (a pitch of a quarter turn), north up
+    const pitch = 512;
+    const sin = (SINE[pitch] * LOC_ICON_ZOOM) >> 16;
+    const cos = (COSINE[pitch] * LOC_ICON_ZOOM) >> 16;
+    if (projectModel(model, 0, 0, pitch, 0, sin, cos)) {
+        drawModel(model, (id) => state.textureLoader.getAverageHsl(id));
+    }
+    for (let i = 0; i < pixels.length; i++) {
+        if (pixels[i] !== 0) {
+            pixels[i] |= 0xff000000;
+        }
+    }
+    return pixels;
+}
+
+// The largest scale an icon's drawn at (a card's picture on a sharp phone screen)
+export const MAX_ICON_SCALE = 6;
+
+export function renderItemIcon(
+    state: WorkerState,
+    objId: number,
+    count: number,
+    scale = 1,
+    recolors?: readonly number[],
+): Int32Array {
+    if (objId < 0) {
+        return renderLocIcon(state, -objId);
+    }
+    scale = Math.max(1, Math.min(MAX_ICON_SCALE, Math.round(scale)));
+    // The client centers item models at (16, 16) in a 36 × 32 sprite. Only an icon at its own
+    // size gets the client's outline and shadow; a large one keeps its smooth edges.
+    return renderItemModel(
+        state,
+        objId,
+        count,
+        ICON_WIDTH * scale,
+        ICON_HEIGHT * scale,
+        16 * scale,
+        16 * scale,
+        scale,
+        scale === 1,
+        recolors,
+    );
+}
+
+// Card art uses the same inventory pose and lighting on a larger, padded raster. The client's
+// outline and shadow are always asked for, never assumed: they're for an icon at its own size.
+export function renderItemModel(
+    state: ItemRenderState,
+    objId: number,
+    count: number,
+    width: number,
+    height: number,
+    centerX: number,
+    centerY: number,
+    scale: number,
+    outline: boolean,
+    // Colours repainted on the item, as pairs of from and to (ItemIconRequest)
+    recolors?: readonly number[],
+): Int32Array {
+    const pixels = new Int32Array(width * height);
     const stackId = getStackObjId(state, objId, count);
     const objType = state.objTypeLoader.load(stackId);
-    const model = state.objModelLoader.getModel(stackId, 1);
+    const model = state.objModelLoader.getModel(stackId, 1, recolors);
     if (!model) {
         return pixels;
     }
 
-    Rasterizer2D.setRaster(pixels, ICON_WIDTH, ICON_HEIGHT);
-    Rasterizer2D.setClip(0, 0, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer2D.setRaster(pixels, width, height);
+    Rasterizer2D.setClip(0, 0, width, height);
     Rasterizer3D.setClip();
-    // The client centres item models at (16, 16), not in the middle of the
-    // 36 pixel wide sprite
-    Rasterizer3D.setViewport(16, 16);
+    Rasterizer3D.setViewport(centerX, centerY);
     Rasterizer3D.rasterGouraudLowRes = false;
     Rasterizer3D.rasterAlpha = 0;
 
@@ -282,13 +378,17 @@ export function renderItemIcon(state: WorkerState, objId: number, count: number)
             objType.offsetX2d,
             ((model.height / 2) | 0) + sin + objType.offsetY2d,
             cos + objType.offsetY2d,
+            scale,
         )
     ) {
         drawModel(model, (id) => state.textureLoader.getAverageHsl(id));
     }
 
+    // The client's outline and shadow (not on the in-game cards' large pictures)
+    if (outline) {
+        outlineAndShadow(pixels, width, height);
+    }
     // The rasterizer writes plain RGB; mark everything drawn as opaque
-    outlineAndShadow(pixels, ICON_WIDTH, ICON_HEIGHT);
     for (let i = 0; i < pixels.length; i++) {
         if (pixels[i] !== 0) {
             pixels[i] |= 0xff000000;
@@ -303,15 +403,17 @@ export class ItemIconLoader implements RenderDataLoader<ItemIconInput, ItemIcon[
     init(): void {}
 
     async load(state: WorkerState, input: ItemIconInput): Promise<RenderDataResult<ItemIcon[]>> {
-        const icons = input.requests.map(({ objId, count }) => {
+        const icons = input.requests.map(({ objId, count, recolors, scale = 1 }) => {
+            // A loc's is only drawn at its own size
+            scale = objId < 0 ? 1 : Math.max(1, Math.min(MAX_ICON_SCALE, Math.round(scale)));
             let pixels: Int32Array;
             try {
-                pixels = renderItemIcon(state, objId, count);
+                pixels = renderItemIcon(state, objId, count, scale, recolors);
             } catch (e) {
                 console.error("Failed drawing item icon", objId, e);
-                pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
+                pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT * scale * scale);
             }
-            return { objId, count, pixels };
+            return { objId, count, recolors, scale, pixels };
         });
         return { data: icons, transferables: icons.map((icon) => icon.pixels.buffer) };
     }

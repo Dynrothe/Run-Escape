@@ -1299,6 +1299,8 @@ export function measureSightLines(p: Prepared) {
     const tall = new Uint8Array(n);
     for (const loc of grid.locs) {
         if (loc.level !== 0 || loc.type === 22) continue;
+        // Under a bridge's deck, it's below what's seen across
+        if (grid.levels[1].flags[loc.x + loc.y * sizeX] & TILE_BRIDGE) continue;
         if (locs(loc.id).clipType !== 0) tall[loc.x + loc.y * sizeX] = 1;
     }
     const views: number[] = [];

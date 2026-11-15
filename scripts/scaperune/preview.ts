@@ -2,8 +2,8 @@
 // marked in white and the spawn in red, and checks it with the game's real
 // collision: every open tile must reach the spawn.
 //
-//   npx tsx scripts/scaperune/preview.ts out.png seed=7 biome=desert boundary=forest rivers=1
-//   npx tsx scripts/scaperune/preview.ts out.png map=terrain_test
+//   bun run tsx scripts/scaperune/preview.ts out.png seed=7 biome=desert boundary=forest rivers=1
+//   bun run tsx scripts/scaperune/preview.ts out.png map=terrain_test
 //
 // Takes any GeneratorSettings as name=value. Heavy on memory: it loads the cache.
 import fs from "node:fs";

@@ -1,4 +1,4 @@
-# The Windows zip: Run Escape.exe, the Electron runtime and the game. npm run desktop:dist makes it.
+# The Windows zip: Run Escape.exe, the Electron runtime and the game. bun run desktop:dist makes it.
 # appId and productName don't decide where saves are: that's main.ts.
 appId: com.dynrothe.run-escape
 productName: Run Escape

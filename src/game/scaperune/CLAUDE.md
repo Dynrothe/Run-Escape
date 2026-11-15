@@ -246,8 +246,8 @@ includes the margin, and in `GeneratorSettings` it doesn't.
 Work on shapes with `relief.ts`, which takes seconds and no cache:
 
 ```sh
-npx tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
-npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
+bun run tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
+bun run tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
 ```
 
 | To get                   | Reach for                                                                                                |
@@ -512,20 +512,24 @@ gate, goes in `designed`, as rectangles of tiles, which is the only way out of a
 
 ## Checking a map
 
-**A round.** Each of these is cheap, so go round often. On a small machine run anything that loads the cache one at a
-time (the team's VM has a job wrapper for that outside the repository; plain `npx tsx` is fine anywhere else).
+**A round.** Run these checks often. On a small machine, run one cache task at a time. The team's
+VM has a job wrapper for this outside the repository. Elsewhere, use `bun run tsx` directly.
 
 ```sh
-npx tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis          # from above, and reachability
-ONLY='scaperune_oasis$' npx tsx scripts/scaperune/check-maps.ts           # every rule, on one map
-npx tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
-npx tsx scripts/scaperune/world-index.ts world.json                       # once, for the next line
-npx tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
-npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2   # scenery from above, which preview can't show
-npx tsx scripts/scaperune/view-weight.ts scaperune_oasis                       # triangles per camera view (PHONE=1 for a phone's)
-npx tsx scripts/scaperune/check-coplanar.ts scaperune_oasis                    # faces in one plane, which z-fight
-npx tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off   # will a cut hold waves?
-DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
+bun run tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis  # from above, and reachability
+ONLY='scaperune_oasis$' bun run tsx scripts/scaperune/check-maps.ts  # every rule, on one map
+bun run tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
+bun run tsx scripts/scaperune/world-index.ts world.json  # once, for the next line
+bun run tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
+# scenery from above, which preview can't show
+bun run tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2
+# triangles per camera view (PHONE=1 for a phone's)
+bun run tsx scripts/scaperune/view-weight.ts scaperune_oasis
+# faces in one plane, which z-fight
+bun run tsx scripts/scaperune/check-coplanar.ts scaperune_oasis
+# will a cut hold waves?
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off
+DEV_MAPS=1 MAP=scaperune_oasis bun run tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
 ```
 
 **Will a cut hold together?** `find-prefabs.ts rect=x,y,w,h collision=1` draws the game's collision (`.` open, `#` blocked,
@@ -535,8 +539,10 @@ out in 190 pieces, the biggest 1,356 tiles; with doors and props off it's 4,116.
 a town that falls into pieces has nowhere for waves to come at you. In a recipe,
 `findPieces(getCollisionFlags(grid, locs), sizeX, sizeY, rect)` (`collision.ts`) gives the same list, biggest first, to throw on if the biggest is too small.
 
-Before you finish: `npx vitest run src/game/scaperune`, which runs `check-maps.ts` over every dev map, about 60 settings at
-their extremes, the presets and 12 random rolls. That takes a few minutes.
+Before you finish, run `bun run test:maps` (`MAP_CHECKS=1 vitest run src/game/scaperune`; a plain
+`bun run test` leaves the map checks out). It runs `check-maps.ts` over every
+dev map, about 60 settings at their extremes, the presets and 12 random rolls. That takes a few
+minutes.
 
 ### The look line
 
@@ -707,7 +713,7 @@ Tests don't cover how things look, and this is where most maps fall down. From a
 a preview is the arena and the red dot is the spawn, and the minimap renderer doesn't draw trees or rocks.
 
 ```sh
-npm start        # the dev server, then in another shell, the screenshot helper (see below):
+bun run start        # the dev server, then in another shell, the screenshot helper (see below):
 PROFILE=<profile dir> PORT=5173 MAP=scaperune_town node rs-height.mjs out square:6152:11674:18 side:6152:11674:18:-250
 ```
 
@@ -723,11 +729,16 @@ Vite reloads the page and kills the job.
 ### Trying a new loc
 
 ```sh
-npx tsx scripts/scaperune/research/model-bounds.ts 3709 60440    # contour, triangles, how far it really reaches
-npx tsx scripts/scaperune/research/where.ts 44,56 3709           # how the world uses it: the ground, and what's round it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22      # draw it, about as the play camera sees it
-TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646   # every loc at the same scale, on its footprint
-npx tsx scripts/scaperune/research/kit-scan.ts kits.json          # suggests kit pieces from the whole cache
+# contour, triangles, how far it really reaches
+bun run tsx scripts/scaperune/research/model-bounds.ts 3709 60440
+# how the world uses it: the ground, and what's round it
+bun run tsx scripts/scaperune/research/where.ts 44,56 3709
+# draw it, about as the play camera sees it
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# every loc at the same scale, on its footprint
+TRUE_SCALE=1 bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646
+# suggests kit pieces from the whole cache
+bun run tsx scripts/scaperune/research/kit-scan.ts kits.json
 ```
 
 Read `model-bounds.ts` like this: `contour` 0 or more follows the ground, and -1 stands level, so it wants flat ground.
@@ -764,6 +775,314 @@ nobody would place alone (sails, redwoods), so it's a list to go through, not a 
 wrong (posts, trunks, the egg sac): only the game shows those.
 
 `LocInfo` doesn't carry contouring or a model's reach, so nothing in the generator can check them. Only these scripts know.
+
+## Floors that fight back
+
+A map can have a floor the game draws and moves itself, tile by tile (`MapDef.floor`, a `FloorDef` in
+`content/types.ts`): slabs rise under the player in waves and tiles fall away into a pit, as in the Wardens' third
+phase. `core/ArenaFloor.ts` runs it, `core/floorLayout.ts` lays it out and `client/FloorView.ts` draws it. The
+dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itself and eight demos
+(`content/floorDemos.ts`).
+
+**The room.** The floor's box is a bridge (`TILE_BRIDGE` on level 1) of the hidden overlay over a dug-out pit, so
+nothing of the map is drawn there and a fallen tile opens onto the dark. `maps/wardensFloor.ts` does this for the
+Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own. A floor laid a
+whisker over a map's own ground instead, with no pit (the Battle for Varrock's palace), sets `onGround`: no light
+under it, no cut edges, and its tiles drawn as their tops unless they're coming up, which is what keeps a moving
+floor of paving in a phone's budget. Nothing on it should fall.
+
+**A minimal floor** is the Wardens' numbers with a script of your own. Everything else has a default: the whole
+box is floor, of the Wardens' slab, all normal tiles:
+
+```ts
+floor: {
+    ...createWardensFloor(rect),
+    script: [beat(3, side("east", 0.15)), beat(9, sweep(0.12, 3)), beat(15, holes(3))],
+    loopSeconds: 20,
+},
+```
+
+Floor tiles are counted from the box's south-west corner, x east and y north. North is the front: waves travel
+away from it, and rows fall from the south.
+
+**Its shape** (`shape`, `FloorShapeDef`): `rect`, `ellipse` (a circle when `rx` and `ry` match), `ring` (round,
+or `square`), `diamond`, `cross`, and `union` and `minus` of them. A middle (`cx`, `cy`) can be in half tiles,
+and is the box's middle when it isn't given. What isn't floor is the pit from the start: blocked, and never there.
+It's a clean pit: the structure under the floor only ever shows through holes in the floor, and a shaped floor has
+no deep glow.
+
+```ts
+shape: { kind: "minus", from: { kind: "ellipse", rx: 11, ry: 11 }, cut: { kind: "ellipse", rx: 3, ry: 3 } },
+```
+
+**By hand** (`ascii`): a row a string, the north row first. `.` and space are no floor, and every other
+character is floor. Characters also name tiles for the rules below (`{ kind: "chars", chars: "f" }`). With a
+`shape` too, the floor is where both say.
+
+```ts
+ascii: [
+    "..#####..",
+    ".##*#*##.",
+    "###fff###",
+],
+```
+
+**Skins** (`skins`, `FloorSkinDef`): what tiles look like. Each skin is one of these:
+
+- a spot animation's model (`spotAnim`), which rises with its own animation (`rise: "anim"`);
+- a loc's model (`loc`);
+- a model id (`model`).
+
+Every skin can also have:
+
+- `recolor` and `retexture`, as `[from, to]` pairs after the cache's own swaps;
+- `scale`, `height`, `tint`;
+- `light`, a steady glow in its seams at rest (for glyphs).
+
+Anything without its own rise animation rises in code (`rise: "code"`): lifted, its leading edge tipped up the
+way the wave goes, then settled back. A tile falls the same way in code (`fall: "code"`). Only the Wardens' 1 by
+1 slab tumbles (`fall: "tumble"`, `drop.spotAnim`).
+
+A skin should be one tile across and centred, like a floor decoration (the cues' edge light assumes it). A model made
+bigger says so with `size` (tiles across): a 2 by 2 pillar is `size: 2` on a 2 by 2 slab.
+
+A skin the floor's light doesn't suit can have its own cue light (`cue: { color, strength, width, tremor }`). Give
+bright tiles a stronger, hotter one, and a recoloured slab a quieter one.
+
+**Ready-made skins** (`FLOOR_SKINS`, `content/floorSkins.ts`), all opaque and checked in the game:
+
+| Group                             | Skins                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| The Wardens' slab, and recoloured | `wardensSlab`, `sepulchreSlab`, `greySlab`, `sandstoneSlab`, `claySlab`   |
+| Paving                            | `flagstones`, `brickPaving` (grooved paving, recoloured), `octagonPaving` |
+| Stone tiles                       | `marble`, `creamStone`, `darkTile`, `starTile`, `stoneTile`, `roundTile`  |
+| The Tombs' gold glyph plates      | `pressurePlate`, `glyphPlate`                                             |
+| A decal                           | `rune`                                                                    |
+| Pillars                           | `stonePillar`, `tombsPillar` (2 by 2)                                     |
+| Tiles that do something (effects) | `lava`, `ice`, `mud`, `sand`, `healGlyph` (a decal), `speedPlate`         |
+
+Most of the cache's 1 by 1 floor models are see-through overlays or invisible hitboxes:
+
+- the Tombs' "Tile" (45356) is about 70% see-through;
+- "Frozen platform" (54539) is invisible.
+
+So check a new one in the game before it goes in the list. A decal needs a skin under it (`under`).
+
+The paving (`flagstones`, `brickPaving`, `octagonPaving`) is about 110 triangles a tile, twice a slab's 52. A
+floor of it costs a phone about 10k more triangles than slabs do, so use it for bands and borders.
+
+```ts
+skins: [
+    { spotAnim: 2220, recolor: [[43904, 37278], [38156, 37300]] },
+    { loc: 56393, light: 0x9fdcff },
+],
+```
+
+**Tile rules** (`tiles`, `FloorTileRuleDef`): every rule that covers a tile applies in order, so a later rule
+wins. A rule has:
+
+- `where`: one of the shapes above, or `all`, `checker` (`size`, `odd`), `border` (`width`, from the floor's
+  edge or any hole in it), `stripes` (`axis`, `every`, `width`, `offset`), or `chars`;
+- `share`: only that fraction of the tiles, picked by the floor's `seed`, so the same seed always gives the same
+  floor;
+- what it sets: `skin` (an index, or weighted `[{ skin, weight }]`), `type`, `turn` (0 to 3, or `"random"`) and
+  `slab`.
+
+```ts
+tiles: [
+    { skin: 0, turn: "random" },
+    { where: { kind: "checker" }, skin: [{ skin: 1, weight: 3 }, { skin: 2, weight: 1 }] },
+    { where: { kind: "border" }, skin: 3, type: "reinforced" },
+],
+```
+
+**Tile types** (`FloorTileType`):
+
+| Type         | Rises | Falls | Note                                                                                                                       |
+| ------------ | ----- | ----- | -------------------------------------------------------------------------------------------------------------------------- |
+| `normal`     | yes   | yes   |                                                                                                                            |
+| `reinforced` | yes   | no    |                                                                                                                            |
+| `fragile`    | yes   | yes   | Its fall is warned for half as long (`drop.fragile.warn`), and it falls by itself after rising twice (`drop.fragile.hits`) |
+| `solid`      | no    | no    |                                                                                                                            |
+| `safe`       | no    | no    | The same as `solid`, for the spots a floor promises are safe (give them a glyph skin)                                      |
+| `pillar`     | no    | no    | Nobody walks through it: it blocks the grid as an object does. Give it a pillar skin                                       |
+
+**Pillars** are the pillar type with a pillar skin. A pillar is narrower than its tiles, so give its skin the
+floor's skin to stand on (`under`). A 2 by 2 one is a slab:
+
+```ts
+{ where: { kind: "rect", x0: 10, y0: 11, x1: 11, y1: 12 }, skin: 4, type: "pillar", slab: [2, 2] },
+```
+
+- **Movement:** it blocks it, and the floor counts it as no way through, so holes never cut the floor round it.
+- **Shots and sight:** it stops shots, and blocks targeting (see Pillars stop shots, below).
+- **Camera:** whoever's behind it shows as a silhouette, as behind a wall.
+
+**Slabs** (`slab: [x, y]` on a rule): tiles that rise and fall as one piece.
+
+- They're laid from the south-west wherever a whole one fits in what the rule covers and isn't in a slab already.
+- A slab rises when its first tile would, hurts on every tile while it's up, and falls whole.
+- It's one model stretched over its tiles, so it costs a phone what one tile does.
+- A slab that isn't square only turns end over end.
+
+```ts
+tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
+```
+
+**The patterns on any shape.**
+
+- `side`, `sweep` and `ripple` go by the floor's own extent and middle.
+- `lanes` raises lanes `width` tiles wide, every `spacing` tiles, one through the player (or the middle), down the
+  floor, across it or both. Between two is safe, and where they cross, the lane down wins.
+- `plus` raises the tile under the player (or the middle) and `arm` tiles out each way along its row and
+  column, a step at a time; the floor's edge cuts an arm short.
+- A sweep's gap is always on floor: the nearest place it fits in that row. A row with no room for it stays down.
+- `dropRows` falls from the floor's own back row, and `keepRows` counts from there.
+- `holes` are only ever inside the edge.
+- Solid, safe and reinforced tiles are left out of whatever they don't do.
+- **Islands:** holes, falling rows and fragile tiles never cut the floor in two, so nobody's stranded. Set
+  `drop.islands` to allow it.
+
+**Cues** (`cue` on a pattern or the floor): `subtle` (the default) or `bold`. Both show every tile a pattern will
+hit from the moment it starts.
+
+**Tiles that do something** (`effect` on a tiles rule, or a skin's own `effect`; `"none"` takes a skin's away):
+
+| Effect  | On a player                                        | On an enemy          | Ready-made skin       |
+| ------- | -------------------------------------------------- | -------------------- | --------------------- |
+| `burn`  | 4% of their hitpoints every 0.5 s, with no grace   | 3 damage every 0.5 s | `lava`                |
+| `heal`  | 3% of their hitpoints every 0.5 s                  | nothing              | `healGlyph` (a decal) |
+| `haste` | 40% faster                                         | 40% faster           | `speedPlate`          |
+| `slow`  | 45% slower                                         | 45% slower           | `mud`, `sand`         |
+| `ice`   | they keep their momentum, steering 6% of it a tick | nothing              | `ice`                 |
+
+Tune them with `tileEffects` (`burn: { damage, every, enemyDamage }`, `heal: { amount, every }`, `haste`, `slow`,
+`ice: { grip }`). Flying enemies don't burn.
+
+The ready-made `lava`, `ice`, `mud` and `sand` are the cache's flat tile of lava rock (loc 747, 18 triangles) with its
+texture swapped (`retexture`): lava's black crust with molten cracks (texture 59, which creeps on its own), ice's glassy
+streaks (53), earth (32) and dunes (38). A textured tile beats a recoloured slab: a slab's top is one colour. Lava also
+has a skin's `glow` (0 to 1, all over it in its `tint`'s colour) with a slow `pulse` on top, each tile on its own beat,
+a seam `light`, and an `idle` effect, embers (2246) drifting up off one tile in four every 2.4 s:
+
+```ts
+lava: { loc: 747, retexture: [[15, 59]], height: -0.13, tint: 0xd8885a, glow: 0.02, pulse: 0.14, light: 0xff7a1a,
+        idle: { spotAnim: 2246, every: 2.4, share: 4 }, effect: "burn" },
+```
+
+```ts
+skins: [FLOOR_SKINS.greySlab, FLOOR_SKINS.lava, FLOOR_SKINS.ice, { ...FLOOR_SKINS.healGlyph, under: 0 }],
+tiles: [
+    { where: { kind: "rect", x0: 16, y0: 2, x1: 22, y1: 22 }, skin: 1 },
+    { where: { kind: "rect", x0: 0, y0: 0, x1: 5, y1: 24 }, skin: 2 },
+    { where: { kind: "rect", x0: 11, y0: 22, x1: 11, y1: 22 }, skin: 3, type: "safe" },
+],
+```
+
+Ice and plates change the movement rule the sim and a co-op guest's prediction share (`core/PlayerMovement.ts`), but
+the guest's prediction doesn't know about them, so it corrects itself there.
+
+**A floor that rebuilds itself** (`rebuild: { after, warn, rise }`): a fallen tile comes back `after` seconds after it
+falls. For its last `warn` seconds (1) it comes up out of the dark, lit from under and turning back over the way it
+fell, then rises into place over `rise` seconds (0.8). It waits for floor beside it, so it never comes back cut off,
+and the flow field is worked out again. A rule's `rebuild` is seconds for its tiles, or 0 for never.
+
+```ts
+rebuild: { after: 6 },
+tiles: [{ where: { kind: "border" }, rebuild: 0 }],
+```
+
+**Pressure plates** (`triggers`, and `trigger` on a tiles rule): a player stepping onto the tile sets it off, then it
+rests for `cooldown` seconds (5). `once` sets it off only once. `armed: false` starts it disarmed. It's lit while it's
+ready and sinks while it's stood on. What it does is a list of actions. Groups are named tiles (`group` on a
+rule), and `patterns` names patterns.
+
+```ts
+tiles: [
+    { where: { kind: "rect", x0: 11, y0: 5, x1: 11, y1: 5 }, skin: 2, type: "solid", trigger: "trap" },
+    { where: { kind: "rect", x0: 8, y0: 7, x1: 14, y1: 9 }, group: "jaws" },
+],
+triggers: { trap: { actions: [{ kind: "slam", group: "jaws" }], cooldown: 4, message: "Click!" } },
+```
+
+**Actions** (`FloorActionDef`), each with an optional `delay` in seconds:
+
+| Action      | What it does                                                        |
+| ----------- | ------------------------------------------------------------------- |
+| `pattern`   | starts a pattern, or one of `patterns` by name                      |
+| `drop`      | a group falls, warned as a fall is (never cutting the floor in two) |
+| `raise`     | a group's fallen tiles come back                                    |
+| `slam`      | a group rises, a warning from now: a trap                           |
+| `dropUnder` | the tile under whoever it's aimed at falls                          |
+| `arm`       | arms a trigger, or disarms it (`armed: false`)                      |
+| `phase`     | goes to one of the floor's `phases`                                 |
+
+A beat in the script can be an action instead of a pattern: `{ at: 30, action: { kind: "phase", phase: "molten" } }`.
+
+**Phases** (`phases`): another script with its own loop, from the moment it starts, and skins swapped on every tile
+(`skins: [[from, to]]`, by index), their effects going with them. To swap only part of the floor, give that part a
+copy of its skin.
+
+**Bosses act on the floor** through `Sim.floorAct(action, at?)` (aimed at the floor's target when `at` is left out),
+or `floor` on a `BossAttackDef`, done as the attack starts, aimed at the player it's after:
+
+```ts
+{ name: "Crack", kind: "blast", ..., floor: { kind: "dropUnder", delay: 0.5 } },
+```
+
+**Pillars stop shots.** A `pillar` tile stops the player's shots and enemies' where they meet it (orbiting ones go
+round), weapons don't pick a target behind one, and an enemy with a shot doesn't fire through one. Only a floor's
+pillars do this, and only on its map: a floor with none costs nothing. (Boss bullet patterns have their own
+`pillars`, the map's `features.pillars`, worked out as they're fired.)
+
+**What's behind a pillar** shows as a silhouette, as behind the world's walls: pillars and raised tiles are drawn
+before the silhouettes (`ActorDrawOptions.early`).
+
+**Materials** (a skin's `material`, `FLOOR_MATERIALS` in `content/floorSkins.ts`): a spot animation and a sound as it
+rises, as it falls and as a fragile one cracks (rises nearer giving way). They take the place of the floor's own
+dust and sounds on that skin, on the same share of the tiles. `stone`, `brick`, `ice` and `lava`; which sound suits
+which is a guess (none of them is a floor's in OSRS but the Wardens').
+
+```ts
+skins: [{ ...FLOOR_SKINS.brickPaving, material: FLOOR_MATERIALS.brick }],
+```
+
+**Damage you can see.** A fragile tile that's risen is darker, sunk a little and askew, more each time, until it gives
+way. A skin's `stages` are skins to draw instead after one rise, two and so on.
+
+**Height** (`height` on a rule, in tiles; below 0 is sunken) and **ramps** (`ramp: "north"` and so on, the way up):
+a ramp goes from the tile behind it to the one ahead, and its sides are ledges. Wherever heights differ there's a ledge,
+a wall on the grid (`ArenaGrid.addLedge`), so nobody walks up or down it but by a ramp. What's faked: it's all one
+plane. Players and enemies are drawn at the height they're on (`ArenaFloor.liftAt`), but shots, hits and reach
+don't know about height, and a flying enemy crosses ledges. A raised tile's sides are the tile again under itself.
+
+```ts
+tiles: [
+    { where: { kind: "rect", x0: 7, y0: 13, x1: 15, y1: 20 }, height: 0.5 },
+    { where: { kind: "rect", x0: 11, y0: 12, x1: 11, y1: 12 }, ramp: "north" },
+],
+```
+
+**Tiles at rest are cheap.** A 1 by 1 tile at rest with floor at rest on all four sides at its height is drawn as its
+top alone (a bake of the skin with only its upward faces near the top, `ModelBakeRequest.topOnly`), as nothing round
+it can show its sides. They're still instanced, one draw a skin. Glyphs, plates, decals, ramps and cracked tiles are
+always drawn whole.
+
+**The floor preview** (dev server only): `http://localhost:5173/?floorpreview`. Pick a floor, or paste one as JSON
+(the Wardens' numbers fill what's left out, and skins can be `FLOOR_SKINS` names) or an ascii map. It draws the tiles
+from above and plays the script with the player at the start on a timeline you can scrub, and lists what
+`core/floorLint.ts` finds: pieces cut off, tiles behind ledges, see-through skins, level ramps, triggers on no tile,
+and a rough phone triangle count against 69k.
+
+**Checks.** `core/floorLayout.test.ts` lays out and plays each demo for a loop and a half, and
+`core/floorFeatures.test.ts` lints each one. Their checks:
+
+- the start is on the floor;
+- the floor is never cut in two;
+- the ascii rows are the box's width;
+- everything can be reached from the start, and the rough phone count is in budget.
+
+A new floor's map should get the same.
 
 ## What the engine can't do yet
 
@@ -910,8 +1229,9 @@ layouts stay put.
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random, Reset,
 Randomize, copying and pasting the settings as JSON, Generate with a preview from above, and Play. Randomize rolls what shapes
 the map, and leaves the size, heightmap, start, waves, `dressing`, `flatness`, `sites` and `sideStreets` as they are. It's temporary, so it's
-built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton` line in
-`ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`.
+built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `ui-title-dev` corner around
+`MapGeneratorButton` in `ui/GameUi.tsx`, that corner's rules in `ui/GameUi.css` and `ui/Mobile.css`, and `setGeneratedMap`
+in `content/maps.ts`.
 
 Every Generate replaces one map, `scaperune_generated`, at map squares from x 70, y 134. `installGeneratedMap` replaces
 whatever kept the old one. A load still on its way for the old squares is dropped (`MapViewer.customMapVersion`). If you add
@@ -956,20 +1276,32 @@ cuts off is only looked at, and a river would cut the land in two for good, so `
 **Finding what a place is made of**, all without a browser:
 
 ```sh
-npx tsx scripts/scaperune/world-index.ts world.json         # every square's locs and floors, once
-npx tsx scripts/scaperune/find-place.ts world.json colour=red surface=0                  # places whose ground is mostly red
-npx tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1    # by locs, upstairs
-npx tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1      # a cut, upstairs, as the game walks it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22 # draws locs, about as the play camera sees them
-npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle of the world from above
-npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
-npx tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12  # a real cliff as text: heights, floors, what's on it
-npx tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2  # a real place from above
-npx tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map    # a place's walls: ranked by level, as a text map
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795 # one id's longest run, and what's across it
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # every loc and floor, tile by tile, on each level
-npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90          # a place's streets, blocks and gaps, as numbers
-npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1    # the same inside a made wall
+bun run tsx scripts/scaperune/world-index.ts world.json  # every square's locs and floors, once
+# places whose ground is mostly red
+bun run tsx scripts/scaperune/find-place.ts world.json colour=red surface=0
+# by locs, upstairs
+bun run tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1
+# a cut, upstairs, as the game walks it
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1
+# draws locs, about as the play camera sees them
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# draws a rectangle of the world from above
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5
+bun run tsx scripts/scaperune/find-buildings.ts 50 50 51 50  # whole buildings in a block of squares
+# a real cliff as text: heights, floors, what's on it
+bun run tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12
+# a real place from above
+bun run tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2
+# a place's walls: ranked by level, as a text map
+bun run tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map
+# one id's longest run, and what's across it
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795
+# every loc and floor, tile by tile, on each level
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump
+# a place's streets, blocks and gaps, as numbers
+bun run tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90
+# the same inside a made wall
+bun run tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1
 ```
 
 `find-place.ts` searches the index: floor colour by name (`red`, `brown`, `yellow`, `green`, `blue`, `purple`, `grey`,
@@ -1005,6 +1337,89 @@ planks, `174` flagstones, `196` ice, `84` sandstone. Overlay `42` isn't drawn at
   are water.
 
 On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a big loc on a slope shows its underside.
+
+### Ruins: a real place burnt
+
+`ruins.ts` (`ruinGrid`) burns a cut of the real world (`cutPrefab`) to ruins before it's stamped, so any town can be put
+through it; `maps/battleForVarrock.ts` is Varrock's, and its `RULES` are the settings to start from. What it does, tile
+by tile and loc by loc:
+
+- **Walls** (types 0 to 3 and 9) are charred, and by a noise over the walls (`wallScale` tiles a feature, so runs
+  fall together) some fall (`fallen`) or are broken down (`broken`): the cache's own broken walls in their place
+  (`crumbled`, by loc type and turned as the wall was), broken off near the top (`high`) or down to a stub (`low`)
+  as the noise nears `fallen`. Varrock's are the Wilderness's ruins' (14622 to 14627, 14632: the ruin west of the Dark
+  Warriors' Fortress), dark stone that sits with Varrock's grey burnt. The straight one broken off near its top (14623)
+  is whole at one end and steps down to the other, so it comes with its mirror (14625, `mirrors`), and each run of them
+  along a wall is turned as Jagex lays that ruin (`pairBroken`): the end ones whole against the wall standing beside
+  the run, the rest in pairs, whole end to whole end, and one left over a stub between pairs (the ruin's own `h s H`).
+  One with neither is a stub. So no whole end stands in the open or against a low end: all one way, they read as a
+  sawtooth. A wall resting on another (`tops`) that comes down with it doesn't count as standing. A broken corner needs
+  nothing: a loc can have a model of its own for a corner (`types`), and 14623's (14788) is its straight one mirrored,
+  so both its whole ends meet at the corner. `ruins.test.ts` holds them to all that. A fallen straight wall can leave
+  its stones on the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the
+  fallen straight ones can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is
+  what makes the place read as itself. What rested on or hung from the walls (`tops`: a gateway's deck, a lintel, a shelf) goes where a
+  wall beside it fell or broke, as it would float.
+- **Nothing floats** (`unfloat`): a shown upper tile (a walkway's deck) stays only over a wall standing whole on the
+  level under it, a city wall's solid middle (level 0 blocked) or another shown tile, and anything upstairs only on a
+  tile that's still shown; a bridge's deck holds itself up. A deck over a gate's passage goes with that rule, though
+  the walls either side stand.
+- **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
+  tiles are down and open there, both faces, walkway and rails gone. Its ends are broken the way Falador's west wall
+  is at its Crumbling wall shortcut (`breachEnds`, `BROKEN_CITY_WALL` and `BREACH_BRICKS`: its jagged ends and fallen
+  bricks, its pale stone burnt with `charLight` to the dark of a burnt grey wall). A jagged end is a slab a quarter of a
+  tile thick, whole at one end and stepping down to the other, and comes in a mirrored pair (24220 and 24221, the same
+  model, each with its own bricks, 24219 and 24218), as Falador places them. Along each face that came down, each end
+  of the run is jagged, whole against the straight wall still standing beside it, or where none does (a corner came
+  down with it) two back to back, whole ends together, so a slab's flat end never stands in the open; its bricks (which
+  block nothing) lie in front. A run that wouldn't leave 2 tiles through between them loses its pairs first, then the
+  rest, to bricks alone. `ruins.test.ts` holds them to that. `wallTopsKept` is the
+  share of the walkway and its rails still up, and a walkway's paving is `walkways` (pale paving up there read as a
+  white path). A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
+  phone view from 74k to under 60k. Anything with a shown level 1 counts as one, a square's fountain too (its water's
+  plane): Varrock's crater clears its own.
+- **Roofs, wall decorations, floor decoration and upstairs** go, but for a city wall's walkway and a bridge's deck
+  (level 1 with `TILE_BRIDGE`), whose walls stay burnt and whose blocking objects go, so it's still a way across, and
+  `steps` (floor decorations the ground climbs under: a palace's front steps), which stay burnt.
+- **Objects** by name: trees become burnt trees of their size (`burntTrees`, `treesKept` of them), plants and what went
+  with the fire (doors, curtains, banners, torches: `plant`, `gone`; nameless plants by id, `plants`) go, `landmark`
+  names stay (a square's fountain, a church's altar), and of the rest `furnitureKept` stay, charred. What was cloth
+  is the map's to burn before the rules see it (a tent's walls are walls, and would break into stone): Varrock's
+  `takeFabric` and `burnFabric` make Gypsy Aris's tent a blaze (the cache's big fire, 25155), its stalls bare
+  burnt counters with a fire, its tents fires and its covered wagon burning timber. A loc that
+  changes with a var (a farming patch, a STASH's bush, a seasonal one) goes by the name of what it shows
+  (`LocInfo.shows`, as the game draws it with its vars at 0): most are null-named, and kept as furniture they were
+  bushes with scorched leaves.
+- **The ground**: `underlays` turns grass and earth to mottled ash, and `overlays` paving and wooden floors to soot.
+
+**Charred locs** are the real ones with their colours burnt (`rs/config/loctype/LocOverrides.ts`): `CHARRED_LOCS + id`
+(`getCharredLoc`) is loc `id` with every face's lightness under half and its saturation a quarter, and its opaque textures
+swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured; see-through green
+leaves turn scorched brown (33), and other see-through ones (bars, shingles) keep theirs, as a swap would fill their
+holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
+the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
+`LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
+the model caches key a loc by its id << 10. `WALKABLE_LOCS + id` (`getWalkableLoc`) is a cache loc that blocks nothing,
+and `WALKABLE_CHARRED_LOCS + id` a charred one: Varrock's fires and its dead, which you walk over and through (the
+fires burn as you do: `MapDef.burns`). Varrock's fires are the cache's own flames, never a campfire (4265, 4266 in their
+rings of stones, 5249 on crossed logs, 5499 the campfire's flame: a campfire is a camp, not a city burning): `FLAMES`
+(25156, the big fire's flames alone) and `TALL_FLAMES` (32297), the big fire (`BLAZE`), burning timber and bones and
+the wall of fire, all of them in `FIRES`. A map's lights go by the placed id (`LightingDef.locs`), so a derived loc
+needs its own entry there to glow.
+
+**A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
+his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground
+under it (it blocks nothing itself). As a loc he showed in his bind pose, arms out over the seat.
+
+**The floor system's tiles are flat**, each at the ground's height at its middle, so a floor (`MapDef.floor`) over
+steps or a slope comes out as strips at different heights with the ground showing between them. Varrock's palace floor
+starts at the top of its front steps; the court and the steps are the ground's.
+
+**What it can't do**: a broken wall is one of the Wilderness's few pieces, dark stone whatever the wall was; a charred
+texture is one of two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the
+wall a door was in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks
+(the bridge's east of the palace) are its `squares`. The Grand Exchange's pad is a deck too, cleared to its floor for
+Xarth by `clearExchange`, which throws if the pad's rows stop matching the cache's deck.
 
 ### City walls
 
@@ -1135,6 +1550,26 @@ view, so at the default zoom it sees about 27 by 16 tiles. So:
   the bottom of the screen to 48° at the top, so a tall ridge can hide a tile or two near the top until you get closer.
 - **It doesn't clip** over any slope within that limit. It'd lurch at creases on tall ground, so on dev maps it eases after
   the ground (`CAMERA_GROUND_EASE`).
+- **It rides with the player**, so whatever level they're on looks the same, and other levels are nearer or further. Ground
+  h tiles higher to the north shows 0.36h further up the screen (0.9h near its top), so it pushes what's on it off the top:
+  past a rise of 65 a phone sees about 4 tiles onto it, and past 125 under one. A level 65 down is drawn at 0.8 of the size,
+  125 down at 0.7. Depth doesn't fog or darken.
+- **How much it takes**, from `scaperune_depth` (`maps/depthTest.ts`: slopes, cliffs, platforms and pits of 30, 60, 65, 125
+  and 128, desktop and phone): up to 65 (a Sepulchre level, 4 tiles) reads well up or down. Past that, keep it for what's
+  only looked at, as the Owl's Court's lower walkway is. A bare face of terrain is one tile stretched over its height: a
+  plain overlay reads as a flat band, and a textured one streaks, so hang walls on a tall one, as the court does.
+- **Scenery round the arena** (`scaperune_backdrop`, `maps/backdropTest.ts`). Only faces that look south are seen, so:
+    - **A drop reads by what faces the camera.** A drop to the south shows its face. A drop to the east or west shows
+      nothing, and a flat floor seen down a drop to the north looks like a floor at your own level, however deep. Give a
+      chasm to the north a far rim back up (its face is what looks deep), ledges stepping down the near side, or black
+      void with a lit ledge below it. Past 16 tiles it looks no deeper. Deeper than the byte is a bridge deck on level 1
+      (another 255) or a `LocOverride` height.
+    - **What rises to the north is cut off by the top of the screen**: about 10 tiles of it are ever seen on a desktop and 8
+      on a phone, with the player at its foot. Anything taller is triangles nobody sees. A cut-off column still reads as
+      tall.
+    - **What rises east or west leans out over the screen**, more the taller it is. Keep it under about 6 tiles, or it
+      looms. To the south, behind the camera, keep it under about 2 tiles, or let the ground fall away.
+    - **Terraces read best of all**: steps of 32 every 4 tiles, with trees on them getting smaller as they go down.
 
 **Walkable.** A tile steeper than `walkSlope` is blocked with the same floor flag as water, going by the rounded heights in the
 grid, so `getCollisionFlags` and the game's scene agree. To the flow field a cliff's a wall, and enemies only turn up where they
@@ -1267,16 +1702,16 @@ There's no building entity in the cache. A building is its locs and floor tiles,
 rectangle of the real world.
 
 1. **Find one.** `find-buildings.ts` finds whole buildings in a block of squares, and `loc-sheet.ts` draws what it finds.
-   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world coordinates down the
-   side; `rect=x,y,w,h` draws any rectangle instead, across squares, and `plane=N` another level. Pick a rectangle
-   that holds the whole building and nothing else.
+   `bun run tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world
+   coordinates down the side. Use `rect=x,y,w,h` for a rectangle across squares and `plane=N` for
+   another level. Pick a rectangle that holds the whole building and nothing else.
 2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles, and give it a kind in
    `BUILDING_KINDS`. The rectangle must take in every wall of the building, with nothing else in it. A rectangle a row short
    loses that wall, and the floor behind it with it. The start of its name is its family, so a new prefab for an existing
    family goes in that family's towns.
-3. **Check it**: `npx tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every prefab in every
-   rotation and fails if a wall's cut off, floor is lost indoors, or there's no way out. Then look at it:
-   `scaperune_prefabs` is a dev map with all of them in all 4 rotations.
+3. **Check it** with `bun run tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every
+   prefab in every rotation and fails if a wall is cut off, floor is lost indoors, or there's no way
+   out. The dev map `scaperune_prefabs` shows them all in all four rotations.
 4. **Stamp it**: `kit.stamp(ground, name, turns, x, y)` on a `PrefabKit` stands it on flat ground with its doors off,
    and `kit.stampRuin` leaves most of it gone. `new PrefabKit(context, MY_PREFABS)` lets a map bring its own, which
    the generator won't pick and `check-prefabs.ts` won't check. For anything else,
@@ -1395,6 +1830,8 @@ generator's). The Theatre's halls and boss rooms are.
 Three maps are whole worked examples, each going further than this one:
 
 - `maps/vardhelm.ts`: land carved by hand from a massif, a road up a cliff in hairpins, and prefabs of its own.
+  Its `mapDef` has an opening cinematic too (`maps/vardhelmOpening.ts`), with knights at the keep's door as props:
+  see Props and opening cinematics in `docs/DEVELOPMENT.md`.
 - `maps/kaluasWake.ts`: coasts drawn as splines, a `Build` of its own with the generator's parts run in its order, sea
   bridges and a raised village. `paintThinRock` puts back the colour on cliffs too thin for `paintRock`.
 - `maps/shatteredRealm.ts`: land over a void, its own waves, events and bosses, and terrain as architecture.
@@ -1483,6 +1920,15 @@ would be in the floor's plane otherwise) and it hangs from the edge. A second wa
 each is flat at its height and the lips stand level. The camera's always over the court, so west faces west of it and east
 faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
 1 and east at 3.
+
+**A floor the game draws itself** (`wardensFloor.ts`, a dev map trying out `MapDef.floor`): the Wardens' room in the Tombs
+of Amascut, cut whole with `plane: 1`, with its own floor swapped for the hidden overlay and its floor decoration and middle pit
+left out. `client/FloorView.ts` draws every tile of it as a slab (the rising slab's model at rest), so each can rise or fall
+on its own. Nothing at the slabs' height is drawn, so there's nothing for them to z-fight: the floor's tiles are a bridge
+(`TILE_BRIDGE` on level 1, the hidden overlay, heights from level 0's) nine tiles over a pit with no floor and nothing
+on it; what's seen under the floor is drawn by the client on a regular grid, so a hole looks the same at every size. A level-0 loc under a bridge
+doesn't block what's walked or what's seen across it, so `check-maps.ts`'s sight lines leave it out, and its hidden-tile
+check stands a bridge's tiles at the deck.
 
 #### A boss fight's arena
 
@@ -1598,8 +2044,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
   y 200. Each recipe needs its own, and nothing checks that: see `devMaps.ts` and each map's `mapX`, `mapY`. The
-  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74 and the Owl's Court at
-  x 82-84, y 76-78. The
+  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74, the Owl's Court at
+  x 82-84, y 76-78 and the Tombs of Amascut (and Beneath Cursed Sands, the same squares) at x 86-93, y 66-69. The
   map generator's screen, and scripts given settings, have x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.
@@ -1640,6 +2086,35 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   difficulty order and unique enemies tests.
 - A recipe only writes a loc's id, type and rotation. To scale a model, or lift one off the ground so it floats, give a loc nothing else uses a new model
   and size, or a `height`, in `src/rs/config/loctype/LocOverrides.ts`. Check the world index first.
+- A map drawn as two worlds (the Lassar Undercity and its Shadow Realm, `maps/lassarUndercity.ts`) gives its recipe a
+  `twin`: a second recipe on squares of its own, installed with it and pinned in `grid-hash.ts` with it, which the game
+  draws in the map's place while the party's in the other world (`MapDef.twin`, `MapManager.twin`). Only the map's own
+  collision is used, so build the twin from the same cut, its locs off where the map's twins are.
+- A boss fight on a shipped map's own ground (Awakened Vardorvis in the Stranglewood, the Awakened Whisperer in the
+  Lassar Undercity) is a `MapDef` of its own with the map's `arena`; name it in that recipe's `fights`, or the game
+  (`getRecipe`, `installRecipe`) and the slim cache won't find the recipe for the fight's id and draw nothing there.
+- A map whose rule reads places off it (Ghorrock's braziers, vents, ice pools and the statues that hide you from the
+  Duke's gaze, `maps/ghorrock.ts`) exports them in grid tiles, and the content turns them into world tiles for the rule
+  (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
+  puts out) is blocked in the grid and handed on as `standIns`, so `view-weight.ts` counts it. Its ice is painted with
+  an overlay here and given to the sim as an effect mask from the same shapes (`core/world/EffectMask.ts`).
+- A boss room cut from the cache and widened (the Awakened Duke's, `maps/dukesRoom.ts`) moves the cut's locs as it
+  lays them (its side walls and what's along them out, its south rocks down), paints the cache's border floor where
+  the room's grown, and clears `TILE_BLOCKED` on what was under the old walls. A cut from a square with levels above
+  its ground floor can mark some of its tiles as bridges there (level 1's flags): clear the upper levels' flags, or
+  the room's collision has holes no one can see. A boss that never moves and sits on blocked ground (his alcove)
+  needs its own tiles open, or `findFreeSpot` moves it into the room; he's solid himself.
+- A cut whose real ground is mostly blocked (the Scar's sea of sludge, `maps/scar.ts`) can be drained: take its
+  overlay off what's to be walked, clear `TILE_BLOCKED`, then paint it back where it's wanted with `paintField`. Mind
+  what lay on it: the sludge's ripples are floor decoration that only reads on sludge. An island's raised rim may be a
+  level of its own (a bridge's deck in the map's terms): take off all of it that's joined, not a circle of it, or
+  stubs of rim stand about; check-maps holds the cache's bridges to being roads, so cover any left with
+  `closedRoads`. Paint the sludge back over the islands' bare floor too, or each island stands on squares of its own
+  floor. Masses built of thousands of one-tile pieces (the Scar's brain) are hollowed by depth from their own edge,
+  wherever it faces, never from what's walked: a hollow that follows the walked ground leaves walls with nothing
+  behind them. What's past the depth shows the cache's floor under it (the brain's is hidden, so black, as its
+  filler is). Thinning a wall's pieces at random leaves holes and stubs; draw them lighter instead
+  (`MODEL_SIMPLIFY` in `LocOverrides.ts`, which `view-weight.ts` counts too).
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay
@@ -1647,9 +2122,10 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 - Shipped maps aren't held to the look rules, and get the catalogue (ban list minus `allowLocs`, kit pieces, blood and
   foam) as warnings, not failures. They must stay byte for byte: Hallowed Night imports `Ground`, `collision`, `format`,
   `mapBuild`, `noise`, `prefabs` and `recipe`. Each shipped map's hash is pinned in `scripts/scaperune/grid-hash.ts`
-  (`SHIPPED_HASHES`), and `CHECK=1 npx tsx scripts/scaperune/grid-hash.ts` builds every shipped map and fails if one moved;
-  `generator.test.ts` runs it when the cache is there. A change meant to change a shipped map updates its hash on purpose,
-  and says why in the pull request. A new shipped map adds its hash: the check fails on a shipped map with none.
+  (`SHIPPED_HASHES`). Run `CHECK=1 bun run tsx scripts/scaperune/grid-hash.ts` to build every
+  shipped map and compare its hash. `bun run test:maps` runs this check (a plain `bun run test` doesn't).
+  If you change a shipped map, update its hash and explain why in the pull request. Add a hash for
+  each new shipped map too. A missing hash fails the check.
 - A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
   Sanctuary's and the Owl's Court's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds those
   tables to the cache, and a cache-gated test in each map's test runs it, so a cache update that changes a size or a clip
@@ -1663,7 +2139,7 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 ### The slim cache
 
 The hosted game's cache only holds what the game reads, found by loading every map in `ALL_MAPS`
-(`scripts/cache/slim-cache.ts`). Don't run `npm run slim-cache` as part of a change: it's done when
+(`scripts/cache/slim-cache.ts`). Don't run `bun run slim-cache` as part of a change: it's done when
 deploying. To ship a map:
 
 - **A fixed map or a fixed seed:** make it a real entry in `ALL_MAPS`, and say so in the pull request.
@@ -1671,8 +2147,9 @@ deploying. To ship a map:
 - **A different seed each run:** seeds read different things, so a sample map isn't enough. Put
   `PALETTE_RECIPE` in `ALL_MAPS` too, as it holds all the generator can use, and hide it from the map list.
   Run-time seeds also need a way to pass the seed in (recipes are a fixed list today).
-- **If you add to `BIOMES` or `PREFABS`,** run `npx tsx scripts/scaperune/check-palette.ts`. It fails if a
-  generated map reads something the palette doesn't. `palette.ts` picks new entries up by itself.
+- **If you add to `BIOMES` or `PREFABS`,** run `bun run tsx scripts/scaperune/check-palette.ts`.
+  It fails if a generated map reads something the palette doesn't. `palette.ts` picks up new
+  entries by itself.
 
 Terrain and locs live in our code, so they add nothing to the slim cache. Only what they point at does.
 

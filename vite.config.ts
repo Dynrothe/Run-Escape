@@ -1,21 +1,38 @@
 import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { pipeline } from "node:stream";
+import { normalizePath } from "vite";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+import { parseRange } from "./desktop/gameServer";
+import { SITE_FILES_NAME, makeSiteFiles } from "./desktop/siteFiles";
+import { LAUNCHER_VERSION, MIN_ANDROID_APP } from "./desktop/version";
+import { isTrailerFile, trailerServerPlugin } from "./scripts/dev/trailer-server";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
+
+// Claude Code keeps its worktrees in .claude/worktrees, whole checkouts inside
+// this one. Watching them all held up the first load after every start. Taken
+// from this checkout's root, so a server started in a worktree still watches it.
+const CLAUDE_DIR = normalizePath(resolve(process.cwd(), ".claude"));
+
+function isInClaudeDir(file: string): boolean {
+    const path = normalizePath(file);
+    return path === CLAUDE_DIR || path.startsWith(`${CLAUDE_DIR}/`);
+}
 
 // Shown on the title screen, beside CHANGELOG.md
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
 
 // Which build this is, for co-op: copies of a run from different builds fall
-// out of step, so a room only takes players on the host's. The commit, or
-// when the server started without one.
+// out of step, so a room only takes players on the host's. The slim cache is
+// made for one too (build.json). The commit, or when the server started
+// without one.
 function buildId(): string {
     try {
         const commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
@@ -26,6 +43,54 @@ function buildId(): string {
     } catch {
         return `${version}-${Date.now().toString(36)}`;
     }
+}
+
+// Worked out once, so build.json and the game can't disagree
+const BUILD_ID = buildId();
+
+// Writes build.json beside index.html, for scripts/cache/slim-cache.ts: a slim
+// cache is made for one build, and the game checks that it's the one it's on
+function buildIdFilePlugin(): Plugin {
+    return {
+        name: "build-id-file",
+        apply: "build",
+        generateBundle() {
+            this.emitFile({
+                type: "asset",
+                fileName: "build.json",
+                source: JSON.stringify({ build: BUILD_ID }),
+            });
+        },
+    };
+}
+
+// Writes game-files.json beside index.html: every file the build made, with its sha256, for the
+// Windows and Android apps that follow the website (desktop/siteFiles.ts, SiteFiles.java). After
+// everything's written, public/ included. The slim cache's chunks list themselves, in caches.json.
+function siteFilesPlugin(): Plugin {
+    let outDir = "";
+    let env: Record<string, string> = {};
+    return {
+        name: "site-files",
+        apply: "build",
+        configResolved(config) {
+            outDir = resolve(config.root, config.build.outDir);
+            env = config.env;
+        },
+        closeBundle() {
+            // Also called after a failed build
+            if (!existsSync(join(outDir, "index.html"))) {
+                return;
+            }
+            const minimums = { minLauncher: LAUNCHER_VERSION, minAndroid: MIN_ANDROID_APP };
+            const files = makeSiteFiles(outDir, BUILD_ID, minimums, {
+                coopUrl: env.VITE_COOP_URL ?? "",
+                runAnalyticsUrl: env.VITE_RUN_ANALYTICS_URL ?? "",
+                cloudSaveUrl: env.VITE_CLOUD_SAVE_URL ?? "",
+            });
+            writeFileSync(join(outDir, SITE_FILES_NAME), JSON.stringify(files, null, 1) + "\n");
+        },
+    };
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -74,12 +139,20 @@ function glslIncludesPlugin(): Plugin {
 
 // Serves the gitignored `caches/` directory at `/caches` during dev and
 // `vite preview`, matching the previous craco devServer express.static middleware.
-// `vite preview` serves the build's slim cache instead once `npm run slim-cache`
+// `vite preview` serves the build's slim cache instead once `bun run slim-cache`
 // has written one to dist/caches.
 function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, ""));
+            // The game asks for caches.json?build=<its build>
+            let reqUrl: string;
+            try {
+                reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            } catch {
+                res.statusCode = 400;
+                res.end();
+                return;
+            }
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -97,9 +170,41 @@ function serveCachesPlugin(): Plugin {
                     notFound();
                     return;
                 }
+                const lastModified = stat.mtime.toUTCString();
                 res.setHeader("Content-Type", mimeFor(filePath));
                 res.setHeader("Cache-Control", "no-cache");
-                createReadStream(filePath).on("error", notFound).pipe(res);
+                res.setHeader("Accept-Ranges", "bytes");
+                res.setHeader("Last-Modified", lastModified);
+                // A download that was cut off (a phone on a tunnel) resumes from where it got to:
+                // CacheFiles asks for bytes=<offset>-<MAX_SAFE_INTEGER>, and without this got the
+                // whole file again, back to 0% each time. Parsed as the desktop app's server does
+                // (parseRange). CacheFiles sends the Last-Modified its parts came with as If-Range,
+                // so a file that's changed since is sent whole.
+                const ifRange = req.headers["if-range"];
+                const range =
+                    ifRange === undefined || ifRange === lastModified
+                        ? parseRange(req.headers.range ?? null, stat.size)
+                        : undefined;
+                if (range === "unsatisfiable") {
+                    res.statusCode = 416;
+                    res.setHeader("Content-Range", `bytes */${stat.size}`);
+                    res.end();
+                    return;
+                }
+                const { start, end } = range ?? { start: 0, end: stat.size - 1 };
+                if (range) {
+                    res.statusCode = 206;
+                    res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+                }
+                res.setHeader("Content-Length", Math.max(0, end - start + 1));
+                if (req.method === "HEAD" || end < start) {
+                    res.end();
+                    return;
+                }
+                // pipeline, not pipe: the file's closed with the reply (a phone that drops it),
+                // and a read that fails cuts the reply off rather than leaving it short. It's
+                // already destroyed by then, so there's nothing left to answer with.
+                pipeline(createReadStream(filePath, { start, end }), res, () => {});
             } catch {
                 notFound();
             }
@@ -121,7 +226,7 @@ function serveCachesPlugin(): Plugin {
 }
 
 // Runs the co-op relay (server/coop-relay.mjs) at /coop on the dev server and
-// `vite preview`, unless multiplayer's turned off (npm run start:singleplayer,
+// `vite preview`, unless multiplayer's turned off (bun run start:singleplayer,
 // or MULTIPLAYER=off). Off, the game hides co-op.
 function coopRelayPlugin(): Plugin {
     const start = (httpServer: HttpServer | null, middlewares: Connect.Server) => {
@@ -220,10 +325,13 @@ export default defineConfig({
         wasmAssetUrlPlugin(),
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
+        buildIdFilePlugin(),
+        trailerServerPlugin(),
+        siteFilesPlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),
-        __BUILD_ID__: JSON.stringify(buildId()),
+        __BUILD_ID__: JSON.stringify(BUILD_ID),
     },
     resolve: {
         // ".web.*" takes precedence so browser-specific variants (e.g. Gzip.web.ts)
@@ -241,6 +349,9 @@ export default defineConfig({
         ],
     },
     optimizeDeps: {
+        // Only the render worker imports these, and the startup scan doesn't
+        // follow workers. Found mid-load instead, they made Vite reload the page.
+        include: ["threads/worker", "jszip"],
         // wasm-gzip finds its .wasm via `new URL(..., import.meta.url)`, which
         // breaks once the dep optimizer moves it into node_modules/.vite.
         exclude: ["wasm-gzip"],
@@ -251,6 +362,7 @@ export default defineConfig({
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
+        watch: { ignored: [isInClaudeDir, isTrailerFile] },
     },
     worker: {
         // The render data worker is spawned with `{ type: "module" }` and its

@@ -46,6 +46,11 @@ describe("SpatialHash", () => {
                 const found: number[] = [];
                 hash.query(x, y, radius, (thing) => found.push(thing.id));
                 expect(found).toEqual(expected(things, 2, x, y, radius));
+                // visits says which of them the query came to
+                const visited = things.filter((t) => hash.visits(x, y, radius, t.x, t.y));
+                expect(visited.map((t) => t.id).sort((a, b) => a - b)).toEqual(
+                    [...found].sort((a, b) => a - b),
+                );
             }
         }
     });

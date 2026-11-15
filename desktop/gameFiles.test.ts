@@ -49,6 +49,25 @@ describe("parseManifest", () => {
     ])("refuses %s", (_name, text) => {
         expect(() => parseManifest(text)).toThrow();
     });
+
+    const chunk = { file: "0".repeat(32) + ".bin", size: 10 };
+    const split = { ...manifest, lite: { sha256: SHA, size: 100 }, chunks: [chunk] };
+
+    test("reads the split zip and its chunks", () => {
+        expect(parseManifest(JSON.stringify(split))).toEqual(split);
+    });
+
+    test.each([
+        ["a lite zip with no chunks", { ...manifest, lite: split.lite }],
+        ["chunks with no lite zip", { ...manifest, chunks: [chunk] }],
+        ["a chunk that climbs", { ...split, chunks: [{ file: "../evil.bin", size: 1 }] }],
+        ["an uppercase chunk", { ...split, chunks: [{ ...chunk, file: "A".repeat(32) + ".bin" }] }],
+        ["the same chunk twice", { ...split, chunks: [chunk, chunk] }],
+        ["a chunk with no size", { ...split, chunks: [{ file: chunk.file }] }],
+        ["a lite zip with a bad sha256", { ...split, lite: { sha256: "abc", size: 1 } }],
+    ])("refuses %s", (_name, value) => {
+        expect(() => parseManifest(JSON.stringify(value))).toThrow();
+    });
 });
 
 describe("pickGameFolder", () => {
@@ -77,6 +96,14 @@ describe("pickGameFolder", () => {
     test("prefers the bundled files over an older or equal update", () => {
         expect(pickGameFolder(bundled, [folder("0.19.0")], "1.0.0")).toBe(bundled);
         expect(pickGameFolder(bundled, [folder("0.20.0")], "1.0.0")).toBe(bundled);
+    });
+
+    test("takes the website's build over a release of the same version, but not an older one", () => {
+        const site: GameFolder = { ...folder("0.21.0"), path: "site", fromSite: true };
+        const release = folder("0.21.0");
+        expect(pickGameFolder(bundled, [release, site], "1.0.0")).toBe(site);
+        expect(pickGameFolder({ ...bundled, version: "0.21.0" }, [site], "1.0.0")).toBe(site);
+        expect(pickGameFolder(bundled, [site, folder("0.22.0")], "1.0.0").version).toBe("0.22.0");
     });
 
     test("leaves out an update that needs a newer launcher", () => {

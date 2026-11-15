@@ -261,8 +261,10 @@ export class Minimap {
         eliteDots.clear();
         const eliteDot = Math.round(dot * 1.6);
         const reach = eliteDot / 2 + outline;
+        // Under the rule (LightingDef.litTargetsOnly) only what's lit shows: the dark's part of the map
+        const dark = sim.litTargetsOnly;
         for (const enemy of sim.enemies) {
-            if (enemy.dead) {
+            if (enemy.dead || (dark && !sim.isEnemyLit(enemy))) {
                 continue;
             }
             if (enemy.boss) {

@@ -1,6 +1,6 @@
 // Adds the ground's height to a list of spots, for rs-look.mjs.
 //
-//   npx tsx scripts/scaperune/research/stops.ts out.json name:x:y[:dist[:pitch[:yaw]]] ...
+//   bun run tsx scripts/scaperune/research/stops.ts out.json name:x:y[:dist[:pitch[:yaw]]] ...
 import fs from "node:fs";
 
 import { openWorld } from "./lib";

@@ -3,7 +3,7 @@
 // used, by square, the ground floor's and (in upper) each level's over it. find-place.ts
 // searches it.
 //
-//   npx tsx scripts/scaperune/world-index.ts out.json
+//   bun run tsx scripts/scaperune/world-index.ts out.json
 import fs from "node:fs";
 
 import {

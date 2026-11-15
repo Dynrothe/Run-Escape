@@ -18,6 +18,17 @@ window.wallpaperPropertyListener = {
     },
 };
 
+// The game has no use for the browser's right click menu, but a text box's is for pasting (a room
+// code, a cloud save's sync code), on a phone's long press too
+const TEXT_BOXES = 'textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])';
+document.addEventListener("contextmenu", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || target.closest(TEXT_BOXES))) {
+        return;
+    }
+    event.preventDefault();
+});
+
 // Dev only: drive frames with timers instead of requestAnimationFrame, so the
 // game keeps running in a browser pane that isn't being painted (automated
 // testing).
@@ -31,11 +42,20 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("bgti
 // loaded when asked for: importing it starts its own render workers.
 const showViewer = new URLSearchParams(window.location.search).has("viewer");
 const MapViewerApp = lazy(() => import("./mapviewer/MapViewerApp"));
+// Dev only: ?floorpreview, the floor preview (a floor's tiles and script, and its checks)
+const showFloorPreview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).has("floorpreview");
+// (a build leaves it out: DEV is false there, so the import's never made)
+const FloorPreview = import.meta.env.DEV ? lazy(() => import("./game/ui/FloorPreview")) : undefined;
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(
     // <React.StrictMode>
-    showViewer ? (
+    showFloorPreview && FloorPreview ? (
+        <Suspense>
+            <FloorPreview />
+        </Suspense>
+    ) : showViewer ? (
         <Suspense>
             <MapViewerApp />
         </Suspense>

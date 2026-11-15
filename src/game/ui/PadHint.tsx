@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { PadButton, PadKind, padHints, padLabel } from "../client/GamePad";
+import { t } from "../i18n";
 
 // The controller in use, while the player's on it (and its buttons work)
 export function usePadKind(): PadKind | undefined {
@@ -74,21 +75,48 @@ export function PadIcon({
 
 // What each button does, for the pause menu and settings while a controller's
 // in use. Keep it in step with RUN_KEYS and MENU_KEYS in GamePad.ts.
-const PAD_CONTROLS: { icons: (PadButton | "move")[]; text: string }[] = [
-    { icons: ["move"], text: "Move (the d-pad too)" },
+const PAD_CONTROLS: { icons: (PadButton | "move")[]; key: string }[] = [
+    { icons: ["move"], key: "canvas.controls.move" },
     {
         icons: ["leftBumper", "rightBumper", "leftTrigger", "rightTrigger"],
-        text: "Use items 1 to 4 (a boss fight has none)",
+        key: "canvas.controls.items",
     },
-    { icons: ["start"], text: "Pause and resume; on the map screen, enter the map" },
-    { icons: ["back"], text: "Show or hide the damage panel" },
-    { icons: ["leftStick"], text: "Show or hide the quest tracker" },
-    { icons: ["up", "down", "left", "right"], text: "Move the highlight, on menus and level ups" },
-    { icons: ["south"], text: "Press what's highlighted; in a fight with its own button, use it" },
-    { icons: ["east"], text: "Back, or close" },
-    { icons: ["west"], text: "Reroll" },
-    { icons: ["north"], text: "Skip" },
+    { icons: ["start"], key: "canvas.controls.pause" },
+    { icons: ["back"], key: "canvas.controls.damage" },
+    { icons: ["leftStick"], key: "canvas.controls.quests" },
+    { icons: ["up", "down", "left", "right"], key: "canvas.controls.highlight" },
+    { icons: ["south"], key: "canvas.controls.press" },
+    { icons: ["east"], key: "canvas.controls.back" },
+    { icons: ["west"], key: "canvas.reroll_label" },
+    { icons: ["north"], key: "canvas.skip_label" },
 ];
+
+// What each key does: for the pause menu and settings, while no controller's in use. Keep it in
+// step with GameClient.onKeyPress.
+const KEYBOARD_CONTROLS: { keys: () => string; key: string }[] = [
+    { keys: () => t("controls.key.move"), key: "controls.keyboard.move" },
+    { keys: () => "1 - 4", key: "controls.keyboard.items" },
+    { keys: () => "Esc / P", key: "controls.keyboard.pause" },
+    { keys: () => t("controls.key.space"), key: "controls.keyboard.ability" },
+    { keys: () => "Tab", key: "canvas.controls.damage" },
+    { keys: () => "Q", key: "canvas.controls.quests" },
+    { keys: () => "M", key: "controls.keyboard.sound" },
+    { keys: () => "R", key: "canvas.reroll_label" },
+    { keys: () => "X", key: "canvas.skip_label" },
+];
+
+export function KeyboardControls(): JSX.Element {
+    return (
+        <div className="ui-pad-controls">
+            {KEYBOARD_CONTROLS.map((row) => (
+                <div key={row.key} className="ui-pad-control">
+                    <span className="ui-pad-control-keys">{row.keys()}</span>
+                    <span className="ui-pad-control-text">{t(row.key)}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export function PadControls(): JSX.Element | null {
     const kind = usePadKind();
@@ -98,18 +126,20 @@ export function PadControls(): JSX.Element | null {
     return (
         <div className="ui-pad-controls">
             {PAD_CONTROLS.map((row) => (
-                <div key={row.text} className="ui-pad-control">
+                <div key={row.key} className="ui-pad-control">
                     <span className="ui-pad-control-icons">
                         {row.icons.map((icon) => (
                             <PadIcon
                                 key={icon}
                                 kind={kind}
                                 icon={icon}
-                                label={icon === "move" ? "Left stick" : padLabel(kind, icon)}
+                                label={
+                                    icon === "move" ? t("canvas.left_stick") : padLabel(kind, icon)
+                                }
                             />
                         ))}
                     </span>
-                    <span className="ui-pad-control-text">{row.text}</span>
+                    <span className="ui-pad-control-text">{t(row.key)}</span>
                 </div>
             ))}
         </div>

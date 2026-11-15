@@ -5,7 +5,7 @@
 // by getCollisionFlags' own rules that every SOLID_LOCS size is the cache's, and that each one
 // blocks as it's placed and each WALK_THROUGH one doesn't. Fails if any is out.
 //
-//   npx tsx scripts/scaperune/check-solid-locs.ts
+//   bun run tsx scripts/scaperune/check-solid-locs.ts
 import { getLocBlocking } from "../../src/game/scaperune/collision";
 import { LOC_NORMAL } from "../../src/game/scaperune/mapBuild";
 import * as owlsCourt from "../../src/game/scaperune/maps/owlsCourt";

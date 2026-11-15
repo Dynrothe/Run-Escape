@@ -17,6 +17,7 @@ export type SdMapData = {
     smoothTerrain: boolean;
     cullCellSize: number;
     keepArea?: number[];
+    hiddenLocs?: number[];
 
     borderSize: number;
 

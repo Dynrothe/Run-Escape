@@ -768,6 +768,40 @@ export class Model extends Entity {
         }
     }
 
+    // An action's frame with a movement's frame under it, as the client plays
+    // an action while its actor walks: the movement moves the groups set in
+    // `movementGroups` (the legs), the action everything else
+    animateInterleaved(
+        frame: SeqFrame,
+        movementFrame: SeqFrame,
+        movementGroups: boolean[],
+        op14: boolean,
+    ): void {
+        if (this.vertexLabels) {
+            Model.resetAnimateOrigin();
+            this.transformInterpolated(
+                frame.base,
+                frame,
+                undefined,
+                movementGroups,
+                false,
+                op14,
+                0xffff,
+            );
+            Model.resetAnimateOrigin();
+            this.transformInterpolated(
+                movementFrame.base,
+                movementFrame,
+                undefined,
+                movementGroups,
+                true,
+                op14,
+                0xffff,
+            );
+            this.postAnimate();
+        }
+    }
+
     transformInterpolated(
         base: SeqBase,
         frame: SeqFrame,

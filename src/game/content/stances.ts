@@ -30,6 +30,8 @@ const STANCES: (PlayerStance & { objIds: number[] })[] = [
     { idle: 808, run: 1661, objIds: [4151] },
     // Osmumten's fang
     { idle: 809, run: 824, objIds: [26219] },
+    // Keris partisans, held as a spear (HUMAN_ZAMORAKSPEAR_*)
+    { idle: 1713, run: 1707, objIds: [25979, 25981, 27287, 27291, 30891] },
     // Thunder khopesh, by name (LEAGUE_5_KHOPESH_*)
     { idle: 11935, run: 11937, objIds: [30388] },
     // Blue moon spear, by name (HUMAN_SPELLSPEAR_*)

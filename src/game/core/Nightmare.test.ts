@@ -1064,6 +1064,24 @@ describe("the bullet pool", () => {
         expect(pool.vx[slot]).toBeCloseTo(0);
         expect(pool.vy[slot]).toBeCloseTo(1);
     });
+
+    test("a waiting bullet stays put, and lives as long once it moves, but still hits", () => {
+        const pool = new BulletPool();
+        const slot = pool.add(0, 0, 1, 0, 0, 0.25, 1, 2, 0, 0, 3);
+        for (let i = 0; i < 3; i++) {
+            pool.step([at(1000, 1000)]);
+            expect(pool.x[slot]).toBe(0);
+        }
+        pool.step([at(1000, 1000)]);
+        expect(pool.x[slot]).toBe(1);
+        pool.step([at(1000, 1000)]);
+        expect(pool.count).toBe(0);
+        const waiting = pool.add(0, 0, 1, 0, 0, 0.25, 1, 2, 0, 0, 3);
+        pool.step([at(0, 0)]);
+        expect(pool.hits).toEqual([waiting]);
+        // Spent by the hit, as a moving one is
+        expect(pool.count).toBe(0);
+    });
 });
 
 describe("bullet sources", () => {

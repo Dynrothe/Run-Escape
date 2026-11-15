@@ -3,7 +3,7 @@
 // sent by the server, so they aren't in the NPC's definition; they're usually
 // numbered close to its idle and walk animations, which are listed first.
 //
-//   npx tsx scripts/cache/find-npc-seqs.ts 655 1173 [--all]
+//   bun run tsx scripts/cache/find-npc-seqs.ts 655 1173 [--all]
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

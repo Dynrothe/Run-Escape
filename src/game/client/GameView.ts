@@ -5,13 +5,37 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getCharacter } from "../content/characters";
 import { REVIVE_SECONDS, REVIVE_SEQ } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
-import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
+import {
+    LANTERN_ID,
+    POWER_UP_BLINK,
+    POWER_UP_COLOR,
+    POWER_UP_LIFETIME,
+    getPolymorphEffect,
+    getPolymorphLook,
+    getPowerUp,
+} from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { EnemyDef } from "../content/types";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
+import { solveScabarasAddition, solveScabarasLights } from "../content/scabarasHelper";
+import {
+    AKKHA,
+    CRONDIS,
+    HET,
+    JUNGLE_JAPES,
+    KEPHRI,
+    SARCOPHAGI,
+    SCABARAS,
+    TOMBS_SPIRIT,
+    WARDENS,
+    ZEBAK,
+} from "../content/tombs";
+import { EnemyDef, HeroNpcLookDef, MapPropDef, PolymorphKind } from "../content/types";
+import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
     Hero,
@@ -19,39 +43,89 @@ import {
     RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
+    ZEBAK_SHELTER_SIDE,
+    ZebakFight,
     yawFromVector,
+    zebakShelters,
 } from "../core/Sim";
 import {
     Enemy,
+    EnemyPolymorph,
     EnemyProjectile,
     FairyRing,
     FallingRock,
     Glyph,
     GroundFire,
     GroundPool,
+    Lair,
     Pickup,
     Rampage,
     SimEvent,
     Thrall,
     Visitor,
 } from "../core/entities";
+import type { RealmHole } from "../core/rules/RealmRule";
+import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
-import { BossFightView } from "./BossFightView";
+import { BossFightView, locYaw } from "./BossFightView";
+import { CinematicPlayer } from "./Cinematic";
+import { CinematicLight, CinematicView } from "./CinematicView";
+import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
     getEnemyModelKey,
+    getLairSealKey,
     getPickupModelKey,
     getPileLook,
+    getPolymorphEscapeeKey,
+    getPolymorphKey,
+    getPoolKey,
+    getPropKey,
+    getRealmLocKey,
     getShieldedModelKey,
+    hasBloodLooks,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
+import { RootsView } from "./RootsView";
 
 const FROZEN_TINT = 0xa8d8ff;
+// How high an iron brazier's bowl is (ColdRuleDef.look), in tiles at its own size
+const BRAZIER_BOWL = 0.55;
+// A vent's puff, spread over its cloud (ColdRuleDef.vents): its middle and four round it
+// A remix's fires and ice are drawn this far round the camera's player (tiles): the play camera's
+// view, as the roots' (RootsView)
+const REMIX_VIEW = 24;
+const ICE_VIEW_X = 18;
+const ICE_VIEW_SOUTH = 12;
+const ICE_VIEW_NORTH = 16;
+// Each tile's ice drawn this much bigger, turned a quarter at a time by the tile, so neighbours
+// overlap into a sheet rather than a grid of shards
+const ICE_SCALE = 1.45;
+// The Soulreaper axe's souls: soul runes circling this far round the head, this high (tiles), and
+// how many make it glow
+const SOUL_OBJ = 566;
+const SOULS_RADIUS = 0.7;
+const SOULS_HEIGHT = 1.6;
+const SOULS_MAX = 5;
+// Drawn this big (a rune's model is about a tile across)
+const SOULS_SCALE = 0.5;
+const VENT_PUFFS = [
+    [0, 0],
+    [-0.9, -0.9],
+    [0.9, -0.9],
+    [-0.9, 0.9],
+    [0.9, 0.9],
+];
+// Cold, halfway to frozen (ColdRuleDef)
+const CHILLED_TINT = 0xd4ecff;
+// Tiles past a sheltered swing's shelter its storm's edge starts, closing in as it winds up
+// (BossAttackDef.outside)
+const STORM_EDGE = 9;
 // Co-op teammates' names and arrows, like a friend's name in the client, and
 // the name of one who's down (out of the run)
 export const TEAMMATE_COLOR = "#00ff80";
@@ -79,6 +153,48 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+
+// Where scenery's own animation is (a flame's flicker), in ticks: on the clock rather than the
+// run's, as the map's own fires are, so it never stops while the run does (a cinematic, a pause)
+function sceneryTick(): number {
+    return (performance.now() / 1000) * TICKS_PER_SECOND;
+}
+// A lair's seal (MapDef.lairs): each flame comes up over this many ticks, this many ticks a tile
+// further from the boss than the last (so the fire runs along the walls), and each dies down over
+// SEAL_LIFT_TICKS once it's beaten, from the middle out again, more slowly (more slowly still in a
+// lair's unsealing, LairUnsealingDef, to be watched), up to SEAL_LIFT_REACH tiles out. Its smoke
+// (LairDef.seal.smoke) puffs up once it's SEAL_SMOKE_AT of the way down, a little bigger than it.
+const SEAL_RISE_TICKS = 12;
+const SEAL_RUN_TICKS = 1.2;
+const SEAL_LIFT_TICKS = 60;
+const SEAL_LIFT_RUN_TICKS = 3;
+const SEAL_UNSEAL_RUN_TICKS = 6;
+const SEAL_LIFT_REACH = 40;
+const SEAL_SMOKE_AT = 0.5;
+const SEAL_SMOKE_SCALE = 1.5;
+
+// The sealed tiles a flame's drawn on (LairDef.seal.spacing): the first, then each one no nearer
+// than spacing to any drawn before it, as indexes into sealed's pairs. Every one without spacing.
+const sealFlames = new WeakMap<number[], number[]>();
+function getSealFlames(sealed: number[], spacing: number | undefined): number[] {
+    let flames = sealFlames.get(sealed);
+    if (flames) {
+        return flames;
+    }
+    flames = [];
+    const reach = (spacing ?? 0) ** 2;
+    for (let k = 0; k < sealed.length; k += 2) {
+        const [x, y] = [sealed[k], sealed[k + 1]];
+        const near = flames.some(
+            (i) => (sealed[i * 2] - x) ** 2 + (sealed[i * 2 + 1] - y) ** 2 < reach,
+        );
+        if (!near) {
+            flames.push(k / 2);
+        }
+    }
+    sealFlames.set(sealed, flames);
+    return flames;
+}
 
 // What's running from a boss's entrance fades out this many ticks before it goes
 const LEAVING_FADE_TICKS = 20;
@@ -116,6 +232,8 @@ const DISGUISE_COLOR = "#ff3020";
 const POOL_GROW_TICKS = 12;
 const POOL_DRY_TICKS = 50;
 const POOL_SCALE = 2.2;
+// Tiles apart a tether's spot animations are laid along it (BossAttackDef.tether)
+const TETHER_GAP = 1;
 // Swooshes are white, apart from these weapons' (r, g, b)
 const SLASH_COLORS: Record<string, string> = {
     abyssal_whip: "180, 60, 60",
@@ -137,20 +255,76 @@ const SHOUT_MS = 3000;
 // A casket thrown out of an elite: up and down, then a little bounce
 const CASKET_HOP_TICKS = 28;
 const CASKET_HOP_HEIGHT = 1.6;
+// Arrows for what's coming out of the dark under litTargetsOnly (drawDarkArrows): from how far off (tiles),
+// how many ways round, how far past the light's edge, and how strong at most
+const DARK_ARROW_RANGE = 16;
+const DARK_ARROW_SECTORS = 16;
+const DARK_ARROW_GAP = 0.8;
+const DARK_ARROW_ALPHA = 0.55;
+const DARK_ARROW_COLOR = "#e8dcc8";
+
 // Loot beams on caskets lying on the ground (like RuneLite's), in tiles
 const LOOT_BEAM_HEIGHT = 4;
 // Power-ups are drawn bigger than other ground items and bob up and down
 const POWER_UP_SCALE = 1.3;
 const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
+// The countdown pie over a power-up, in pixels at scale 1, and its gap over the item
+const TIMER_RADIUS = 11;
+const TIMER_GAP = 4;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
 // Of a full flash, a boss's impact's (ImpactDef.flash)
 const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
+// A felled tree (CharacterTraitDef timber): ticks it takes to fall, to lie there and to fade
+const TREE_FALL_TICKS = 20;
+const TREE_LIE_TICKS = 25;
+const TREE_FADE_TICKS = 20;
+const TREE_TICKS = TREE_FALL_TICKS + TREE_LIE_TICKS + TREE_FADE_TICKS;
+// A map of two worlds' Anima Portal, drawn this much bigger than it is (RealmRuleDef.look)
+const PORTAL_SCALE = 1.5;
 const ROCK_FALL_HEIGHT = 14;
+// The Wardens' charged shots, drawn this much bigger than their spot animations
+// The Wardens' marks that strike (WardensFight marks)
+const MARK_STRIKE_LOOK = { scale: 1.6 };
+const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// Lil'viathan's bubble (PetDef.power bubble): the Leviathan's magic orb, this many tiles round
+// the player, its middle this many tiles off the ground
+const PET_BUBBLE_SPOTANIM = 2488;
+const PET_BUBBLE_RADIUS = 1;
+const PET_BUBBLE_HEIGHT = 0.5;
+// Glowing the pale blue of water, not the orb's own murk
+const PET_BUBBLE_TINT = 0xa8f0ff;
+// The Forgotten Four's blood-touched pets (hasBloodLooks)
+const BLOOD_LOOK_TINT = 0xff4040;
+// An orb's awakened final boss (Sim AWAKENED, design 8.6): its own model drawn darker with a
+// violet cast (its colours times the tint, a little of the tint over them, so its shading stays),
+// in a soft violet glow (ActorDrawOptions.glow: two see-through shells round it) breathing slowly;
+// enraged, a redder violet, the glow brighter, wider and quicker. Sim's own awakened tints stay
+// as they were (synced state); they're only told apart here.
+const AWAKENED_LOOK = {
+    body: 0x9484b8,
+    cast: -0.08,
+    glow: 0x9a5cff,
+    alpha: 0.5,
+    shells: [1.05, 1.11],
+    // Radians a tick (TICKS_PER_SECOND 50): about 2.5 s a breath
+    pulse: 0.05,
+};
+const AWAKENED_ENRAGED_LOOK = {
+    body: 0xa47498,
+    cast: -0.1,
+    glow: 0xc055ff,
+    alpha: 0.62,
+    shells: [1.06, 1.14],
+    pulse: 0.1,
+};
+const awakenedGlow = [0, 0];
+// A boss's debris (BossAttackDef.debris) sinks away over this many ticks
+const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
 const REVIVE_TICKS = REVIVE_SECONDS * TICKS_PER_SECOND;
 // How long a fairy ring takes to open
@@ -163,6 +337,47 @@ const RAMPAGE_FLASH = 0.25;
 // second
 const THRALL_SCALE = 1.5;
 const THRALL_FADE_TICKS = TICKS_PER_SECOND;
+// The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
+const TOMBS_GATE_YAW = 512;
+// Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
+// The Crondis room's poison: the Spitting Scarab's green splash, that much bigger to fill a
+// corridor, pale for the warning and dark for the real thing
+const CRONDIS_CLOUD_SCALE = 1.6;
+const CRONDIS_PALE_TINT = 0xffffff;
+const CRONDIS_DARK_TINT = 0x608040;
+// Kephri's swarm shield, round her while it's up
+const KEPHRI_SHIELD_SPOTANIM = 2141;
+// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
+// (they're a tile across)
+const AKKHA_SYMBOL_OUT = 1.5;
+const AKKHA_SYMBOL_SCALE = 3.2;
+// and how far towards its element's glow colour (a negative flash: lit whatever the light)
+const AKKHA_SYMBOL_GLOW = -0.9;
+// and lifted off the floor that much (tiles, up being less, as heights are): flat on it, the
+// floor's own symbol hides it
+const AKKHA_SYMBOL_LIFT = -0.1;
+// How strongly the quadrant he's showing glows, against a blast's full strength
+const AKKHA_GLOW_ALPHA = 0.45;
+// The glowing circles behind Zebak's boulders, where his roar can't reach, a tile across
+const ZEBAK_SHELTER_SCALE = 0.9;
+// His roar's shockwave: its dust that far towards white, to read on his sandy island, a puff
+// every so many tiles
+const ZEBAK_SHOCKWAVE_FLASH = 0.45;
+const ZEBAK_SHOCKWAVE_STEP = 1.5;
+// The funnel of light round a lit symbol, in its colour: darkness's own swirl (already baked
+// with his elements), for every element
+const AKKHA_FUNNEL_SPOTANIM = 2257;
+const AKKHA_FUNNEL_SCALE = 2;
+const AKKHA_FUNNEL_GLOW = -0.7;
+// A blast's spray: so many of its element's orbs out of each quadrant it takes, flying up and
+// out over its first so many seconds, so far (tiles) and so high at most, glowing in its colour
+const AKKHA_SPRAY_ORBS = 14;
+const AKKHA_SPRAY_TICKS = Math.round(1.1 * TICKS_PER_SECOND);
+const AKKHA_SPRAY_REACH = 3.5;
+const AKKHA_SPRAY_HEIGHT = 2.5;
+const AKKHA_SPRAY_SCALE = 1.2;
+const AKKHA_SPRAY_GLOW = -0.7;
+const PEEL_SCALE = 2;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
 
@@ -193,11 +408,30 @@ type SlashFx = {
 };
 type AuraFx = { x: number; y: number; radius: number; start: number; hero: number };
 type BlastFx = { x: number; y: number; radius: number; start: number };
-type SwingFx = { x: number; y: number; radius: number; start: number };
+type SwingFx = {
+    x: number;
+    y: number;
+    radius: number;
+    start: number;
+    dirX?: number;
+    dirY?: number;
+    cone?: number;
+};
 // enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1), or
 // VISITOR_SHOUT for a random event's visitor
 type Shout = { enemyUid: number; text: string; start: number };
 const VISITOR_SHOUT = -1000;
+// One of a polymorphed penguin's escapees running off from (x, y) along dirX, dirY since startTick
+type EscapeeFx = {
+    powerUpId: string;
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    startTick: number;
+};
+// Radians apart the escapees run, fanned out round straight away from the player
+const ESCAPEE_SPREAD = 0.9;
 // Random events' visitors stand out from the crowd
 const VISITOR_SCALE = 1.5;
 // strength: of the full flash (a power-up's), a boss's impact's being fainter
@@ -215,32 +449,100 @@ function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
 
+// How far a windup that started at tick from and lands at to has come, alpha into this tick: 0 to 1
+function windupProgress(sim: Sim, alpha: number, from: number, to: number): number {
+    return Math.min(1, Math.max(0, (sim.tick + alpha - from) / Math.max(1, to - from)));
+}
+
+// How long the upper body holds a weapon's run pose after a shot on the move
+export const RUN_POSE_TICKS = 20;
+
+// A run pose's frame `attackTicks` after the shot, `moveTicks` into the run:
+// the run's own frame, so the legs go on as they were. -1 once the moment's
+// past, or if it wasn't baked over this run.
+export function getRunPoseFrame(
+    runPose: ActorAnim,
+    run: ActorAnim,
+    attackTicks: number,
+    moveTicks: number,
+): number {
+    if (attackTicks < 0 || attackTicks >= RUN_POSE_TICKS || runPose.frameCount !== run.frameCount) {
+        return -1;
+    }
+    return runPose.getFrame(moveTicks);
+}
+
+// Matching's nine symbols as the puzzle helper names them (GameView.drawScabarasHelper): each its
+// own colour, all light enough to read with their dark edge on the room's floor
+const MATCHING_COLORS = [
+    "#ffffff",
+    "#ff5c5c",
+    "#ffd84a",
+    "#5aa9ff",
+    "#4fe0d0",
+    "#ff8fd6",
+    "#a98bff",
+    "#7dff8a",
+    "#ffa94d",
+];
+
 // Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
 // and weapon swooshes on the 2D overlay.
 export class GameView {
     localPlayerPose?: PlayerPose;
     private hitsplats: Hitsplat[] = [];
     private slashes: SlashFx[] = [];
+    // Trees felled (CharacterTraitDef timber), falling along their strip
+    private trees: {
+        x: number;
+        y: number;
+        dirX: number;
+        dirY: number;
+        length: number;
+        locId: number;
+        start: number;
+    }[] = [];
     auras: AuraFx[] = [];
     private blasts: BlastFx[] = [];
     private swings: SwingFx[] = [];
     private shouts: Shout[] = [];
+    private escapees: EscapeeFx[] = [];
     private flash?: FlashFx;
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
     private enemiesByUid = new Map<number, Enemy>();
     private readonly hitsplatImages = new HitsplatImages();
     private readonly glowImages = new Map<string, HTMLCanvasElement>();
+    // The Tombs' Helpful Spirit, drawn as a visitor that never goes
+    private tombsSpirit?: Visitor;
     // The hero the camera's on: the focus, or in co-op while they're down, a
     // teammate (GameClient sets it)
     viewHero = 0;
+    // Countdown pies over power-ups on the ground (DisplaySettings.pickupTimers,
+    // which GameClient sets)
+    pickupTimers = true;
+    // The Scabaras room's puzzle helper (DisplaySettings.puzzleHelper, which GameClient sets)
+    puzzleHelper = true;
 
     private readonly fight: BossFightView;
+    private readonly floor: FloorView;
+    private readonly roots: RootsView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
+    // The map's opening cinematic while it plays (MapDef.cinematic; GameClient sets it)
+    cinematic?: CinematicPlayer;
+    private readonly cinematicView: CinematicView;
+
+    // The playing cinematic's lights, for a map with lighting (SceneLights)
+    getCinematicLights(): CinematicLight[] | undefined {
+        return this.cinematic && this.cinematicView.getLights(this.cinematic);
+    }
 
     constructor(readonly assets: GameAssets) {
+        this.cinematicView = new CinematicView(assets);
         this.fight = new BossFightView(assets);
+        this.floor = new FloorView(assets);
+        this.roots = new RootsView(assets);
     }
 
     reset(): void {
@@ -252,6 +554,7 @@ export class GameView {
         this.blasts = [];
         this.swings = [];
         this.shouts = [];
+        this.escapees = [];
         this.flash = undefined;
     }
 
@@ -272,6 +575,9 @@ export class GameView {
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
+                case "petLeap":
+                    this.pets.leap(event.owner, event.x, event.y, sim.tick);
+                    break;
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
                     const model =
@@ -293,7 +599,12 @@ export class GameView {
                     const hero = event.hero ?? sim.focus;
                     const player = sim.heroes[hero].player;
                     this.addHitsplat({
-                        kind: event.type === "playerHit" ? "damage" : "poison",
+                        kind:
+                            event.type === "playerHit"
+                                ? event.missed
+                                    ? "block"
+                                    : "damage"
+                                : "poison",
                         x: player.x,
                         y: player.y,
                         amount: event.amount,
@@ -315,9 +626,13 @@ export class GameView {
                         y: event.y,
                         radius: event.radius,
                         start: now,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        cone: event.cone,
                     });
                     break;
                 case "bossShout":
+                case "enemyShout":
                     // A new line replaces what it was saying
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
                     this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
@@ -328,9 +643,39 @@ export class GameView {
                     this.shouts.push({ enemyUid: key, text: event.text, start: now });
                     break;
                 }
+                case "polymorphEscape": {
+                    // Away from whoever the camera's on, so they're off the screen
+                    const player = sim.heroes[this.viewHero]?.player ?? sim.player;
+                    const away = Math.atan2(event.y - player.y, event.x - player.x);
+                    const count = getPolymorphEffect(event.powerUpId).penguin.escapees.count;
+                    for (let i = 0; i < count; i++) {
+                        const angle =
+                            away + (count > 1 ? (i / (count - 1) - 0.5) * ESCAPEE_SPREAD : 0);
+                        this.escapees.push({
+                            powerUpId: event.powerUpId,
+                            x: event.x,
+                            y: event.y,
+                            dirX: Math.cos(angle),
+                            dirY: Math.sin(angle),
+                            startTick: sim.tick,
+                        });
+                    }
+                    break;
+                }
                 case "visitorShout":
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== VISITOR_SHOUT);
                     this.shouts.push({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
+                    break;
+                case "treeFall":
+                    pushCapped(this.trees, {
+                        x: event.x,
+                        y: event.y,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        length: event.length,
+                        locId: event.locId,
+                        start: sim.tick,
+                    });
                     break;
                 case "slash":
                     pushCapped(this.slashes, {
@@ -385,8 +730,10 @@ export class GameView {
         return Math.random() * 60;
     }
 
+    // On a floor's raised tiles and ramps (FloorTileRuleDef.height), on them
     private ground(sim: Sim, x: number, y: number): number {
-        return sim.grid.getHeight(x, y) / 128;
+        const lift = sim.floor ? sim.floor.liftAt(x, y) : 0;
+        return sim.grid.getHeight(x, y) / 128 - lift;
     }
 
     // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
@@ -434,6 +781,7 @@ export class GameView {
         if (sim.visitor) {
             this.drawVisitor(actors, sim, sim.visitor);
         }
+        this.drawTombsSpirit(actors, sim);
 
         for (const turret of sim.turrets) {
             const model = this.assets.get(CANNON_MODEL_KEY);
@@ -461,7 +809,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             if (!model || !hasGeometry(model)) {
                 // Drawn as a glow on the overlay instead
                 continue;
@@ -474,13 +825,15 @@ export class GameView {
             // Bigger than in OSRS: most are a few pixels across from up here
             // Small ones drawn bigger, up to a tile across, and all outlined
             // the same thickness
-            const scale = Math.min(
-                ENEMY_PROJECTILE_SCALE,
-                Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
-            );
+            const scale =
+                Math.min(
+                    ENEMY_PROJECTILE_SCALE,
+                    Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
+                ) * (projectile.attack.projectileScale ?? 1);
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
+                unlit: 1,
             });
         }
 
@@ -499,8 +852,12 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
-                scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+            const look = PROJECTILE_ITEM_LOOKS[projectile.objId];
+            const yaw = (projectile.yaw + (look?.yawOffset ?? 0)) & 2047;
+            // Seen into the dark, where they carry on to what they hit
+            actors.draw(model, anim, frame, x, height, y, yaw, {
+                scale: look?.scale ?? (projectile.kind === "rune" ? RUNE_SCALE : 1),
+                unlit: 1,
             });
         }
 
@@ -518,12 +875,19 @@ export class GameView {
             // piles of bones and coins show a little bigger
             const pile = getPileLook(pickup);
             let scale = 0.85;
+            // On a lit map caskets and power-ups show however dark it is; bones and coins don't
+            let unlit = 0;
             if (pile) {
                 scale = pile.scale;
             } else if (pickup.kind === "food") {
                 scale = 1.1;
+            } else if (pickup.kind === "casket" && sim.digState(pickup) === "buried") {
+                // Buried (the Treasure hunter's dig site): its lid just showing
+                scale = 1.3;
+                height += 0.3;
             } else if (pickup.kind === "casket") {
                 scale = 1.3;
+                unlit = 1;
                 const t = (tick - pickup.spawnTick) / CASKET_HOP_TICKS;
                 height -= casketHop(t);
                 // Tumbling while it's in the air
@@ -543,18 +907,38 @@ export class GameView {
                 if (age > POWER_UP_LIFETIME - POWER_UP_BLINK && Math.floor(tick / 6) % 2 === 0) {
                     continue;
                 }
-                scale = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
-                height -= POWER_UP_BOB * (1 + Math.sin((tick + pickup.uid * 13) / 8));
+                scale = getPowerUpScale(model, pickup.powerUp);
+                height -= getPowerUpBob(pickup, tick);
+                unlit = 1;
             }
-            actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
+            actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale, unlit });
         }
 
         for (const rock of sim.rocks) {
             this.drawRock(actors, sim, rock);
         }
 
+        for (const debris of sim.debris) {
+            this.drawDebris(actors, sim, debris);
+        }
+
+        this.drawEscapees(actors, sim, alpha);
+
         for (const rampage of sim.rampages) {
             this.drawRampage(actors, sim, rampage, alpha);
+        }
+
+        const cinematic = this.cinematic;
+        sim.map.props?.forEach((prop, i) => {
+            if (!cinematic || !this.cinematicView.hidesProp(cinematic, i)) {
+                this.drawProp(actors, sim, prop, alpha);
+            }
+        });
+        if (cinematic) {
+            this.cinematicView.submitActors(actors, cinematic, (x, y) => this.ground(sim, x, y));
+        }
+        for (const lair of sim.lairs) {
+            this.drawLairSeal(actors, sim, lair, alpha);
         }
 
         for (const ring of sim.rings) {
@@ -569,16 +953,44 @@ export class GameView {
             this.drawPool(actors, sim, pool);
         }
 
+        for (const tether of sim.tethers) {
+            this.drawTether(actors, sim, tether, alpha);
+        }
+
         const teleporter = sim.raidTeleporter;
         if (teleporter) {
             this.drawTeleporter(actors, sim, teleporter);
         }
+        this.drawTombsGate(actors, sim);
+        this.drawTombsPeels(actors, sim);
+        this.drawSarcophagi(actors, sim);
+        this.drawHet(actors, sim);
+        this.drawAkkha(actors, sim);
+        this.drawScabaras(actors, sim);
+        this.drawKephri(actors, sim, alpha);
+        this.drawCrondis(actors, sim);
+        this.drawZebak(actors, sim);
+        this.drawWardens(actors, sim);
 
         for (const glyph of sim.glyphs) {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
 
+        // A boss fight's own: its warnings, its shots and its statues coming to life, all seen in
+        // the dark
+        actors.unlitAtLeast = 1;
         this.fight.submitActors(actors, sim, alpha);
+        actors.unlitAtLeast = 0;
+        this.floor.submitActors(actors, sim, alpha);
+        const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
+        this.roots.submitActors(actors, sim, focus.x, focus.y);
+        this.drawRealmHoles(actors, sim);
+        this.drawCold(actors, sim);
+        this.drawRemix(actors, sim, focus.x, focus.y);
+        this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
+        for (const tree of this.trees) {
+            this.drawTree(actors, sim, tree);
+        }
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -601,9 +1013,262 @@ export class GameView {
                 height,
                 effect.y,
                 effect.yaw ?? 0,
-                fit !== undefined ? { scale: (fit * 128) / Math.max(1, model.radius) } : undefined,
+                // Spells' impacts and bosses' warnings, seen in the dark
+                fit !== undefined
+                    ? { scale: (fit * 128) / Math.max(1, model.radius), unlit: 1 }
+                    : UNLIT,
             );
         }
+    }
+
+    // What a remix puts on an older map (core/rules/remix.ts), round the camera: the Dark remix's
+    // fires, and the Frozen remix's ice over the map's own ground, a tile at a time (its open tiles);
+    // an invading Duke's pocket's ice the same way
+    private drawRemix(actors: ActorRenderer, sim: Sim, focusX: number, focusY: number): void {
+        const run = sim.remixRun;
+        const pocketIce = sim.pocket?.kind === "cold" && !sim.pocket.over;
+        if (!run && !pocketIce) {
+            return;
+        }
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
+        const fire = this.assets.get(getRealmLocKey(REMIX_FIRE_LOC));
+        if (run && fire && sim.realm?.layer !== 1) {
+            const anim = fire.anims[0];
+            for (const spot of run.fires) {
+                if (
+                    Math.abs(spot.x - focusX) > REMIX_VIEW ||
+                    Math.abs(spot.y - focusY) > REMIX_VIEW
+                ) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + Math.floor(spot.x * 7), true) : 0;
+                const ground = this.ground(sim, spot.x, spot.y);
+                actors.draw(fire, anim, frame, spot.x, ground, spot.y, 0, { unlit: 1 });
+            }
+        }
+        const cold = sim.cold;
+        const ice = this.assets.get(getRealmLocKey(REMIX_ICE_LOC));
+        if (!cold || !ice || !(pocketIce || run?.remixes.includes("frozen"))) {
+            return;
+        }
+        const grid = sim.grid;
+        const anim = ice.anims[0];
+        const x0 = Math.floor(focusX) - ICE_VIEW_X;
+        const y0 = Math.floor(focusY) - ICE_VIEW_SOUTH;
+        for (let y = y0; y <= Math.floor(focusY) + ICE_VIEW_NORTH; y++) {
+            for (let x = x0; x <= Math.floor(focusX) + ICE_VIEW_X; x++) {
+                if (cold.mask.at(x, y) === 0 || grid.isSolid(x, y)) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + x * 13 + y * 7, true) : 0;
+                const cx = x + 0.5;
+                const cy = y + 0.5;
+                actors.draw(
+                    ice,
+                    anim,
+                    frame,
+                    cx,
+                    this.ground(sim, cx, cy),
+                    cy,
+                    ((x * 5 + y * 3) & 3) * 512,
+                    {
+                        scale: ICE_SCALE,
+                    },
+                );
+            }
+        }
+    }
+
+    // The cold's (ColdRuleDef.look): braziers burning (shrinking as they gutter) or out, the gas
+    // out of a vent (a wisp as it frosts over, then its cloud), a fire elite's embers, and the ice
+    // block round whoever's frozen solid
+    private drawCold(actors: ActorRenderer, sim: Sim): void {
+        const cold = sim.cold;
+        if (!cold) {
+            return;
+        }
+        const look = cold.def.look;
+        const tick = sim.tick;
+        const bowl = this.assets.get(getRealmLocKey(look.brazierLocId));
+        const fire = this.assets.get(getRealmLocKey(look.fireLocId));
+        const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
+        const clientTicks = Math.floor((tick / TICKS_PER_SECOND) * 50);
+        // The realm has none (the Frozen and Shadow remixes together)
+        const braziers = sim.realm?.layer === 1 ? [] : cold.braziers;
+        for (const brazier of braziers) {
+            const { midX, midY } = brazier;
+            const ground = this.ground(sim, midX, midY);
+            if (bowl) {
+                actors.draw(bowl, bowl.anims[0], 0, midX, ground, midY, 0, {
+                    scale: look.brazierScale ?? 1,
+                });
+            }
+            if (!fire || !cold.isLit(brazier, tick)) {
+                continue;
+            }
+            const anim = fire.anims[0];
+            const frame = anim ? anim.getFrame(clientTicks, true) : 0;
+            // It dies down over its last seconds, and flares as it's lit
+            const left = brazier.litUntil - tick;
+            const flare = Math.max(0, 1 - (tick - brazier.litAt) / (TICKS_PER_SECOND * 0.6));
+            const dim = Math.min(1, 0.4 + (0.6 * left) / gutter) + flare * 0.3;
+            // Up in its bowl
+            const bowlTop = ground - BRAZIER_BOWL * (look.brazierScale ?? 1);
+            actors.draw(fire, anim, frame, midX, bowlTop, midY, 0, {
+                scale: (look.fireScale ?? 1) * dim,
+                unlit: 1,
+            });
+        }
+        // A vent frosts over (its gas, a wisp) and then puffs (the Duke's gas, filling the cloud)
+        const gas = this.assets.get(getRealmLocKey(look.gasLocId));
+        const puff = this.assets.get("spot:" + look.puffSpotAnim);
+        const cloud = cold.def.vents.size;
+        for (const vent of cold.vents) {
+            const state = cold.ventState(vent, tick);
+            const model = state === "puff" ? puff : state === "warn" ? gas : undefined;
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            // A puff plays its cloud once, from its start, stretched over the time it hurts: looped
+            // from the clock's frame it shrank back partway and was cut off growing
+            const progress = state === "puff" ? cold.puffProgress(vent, tick) : undefined;
+            const frame = !anim
+                ? 0
+                : progress !== undefined
+                  ? anim.getFrame(Math.floor(progress * anim.totalTicks), false)
+                  : anim.getFrame(clientTicks + vent.offset, true);
+            const ground = this.ground(sim, vent.x, vent.y);
+            if (state === "warn") {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, { tint: FROZEN_TINT });
+                continue;
+            }
+            if (look.puffOne !== undefined) {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, {
+                    alpha: 0.9,
+                    scale: look.puffOne,
+                });
+                continue;
+            }
+            for (const [dx, dy] of VENT_PUFFS) {
+                const x = vent.x + (dx * cloud) / 3;
+                const y = vent.y + (dy * cloud) / 3;
+                actors.draw(model, anim, frame, x, ground, y, 0, { alpha: 0.9 });
+            }
+        }
+        // Embers: small fires over the patch, each a little out of step
+        const embers = this.assets.get(getRealmLocKey(look.embersLocId));
+        if (embers) {
+            const anim = embers.anims[0];
+            const half = cold.def.embers.size / 2 - 0.5;
+            for (const ember of cold.embers) {
+                const fade = Math.min(1, (ember.until - tick) / TICKS_PER_SECOND);
+                for (const [dx, dy] of VENT_PUFFS) {
+                    const x = ember.x + dx * half;
+                    const y = ember.y + dy * half;
+                    const frame = anim
+                        ? anim.getFrame(clientTicks + Math.floor(x * 7 + y * 3), true)
+                        : 0;
+                    actors.draw(embers, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8 * fade,
+                        unlit: 1,
+                    });
+                }
+            }
+        }
+        const block = this.assets.get(getRealmLocKey(look.iceBlockLocId));
+        if (block) {
+            for (const hero of sim.heroes) {
+                if (tick < hero.frozenSolid && sim.isUp(hero)) {
+                    const { x, y } = hero.player;
+                    actors.draw(block, block.anims[0], 0, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8,
+                        alpha: 0.75,
+                    });
+                }
+            }
+        }
+    }
+
+    // A map of two worlds' puddle into the realm, and its portal back (RealmRuleDef.look), playing
+    // their own animations; the puddle blinks its last seconds
+    private drawRealmHoles(actors: ActorRenderer, sim: Sim): void {
+        const realm = sim.realm;
+        if (!realm) {
+            return;
+        }
+        const look = realm.def.look;
+        const tick = sim.tick;
+        const holes: [RealmHole | undefined, number][] = [
+            [realm.puddle, look.puddleLocId],
+            [realm.portal, look.portalLocId],
+        ];
+        for (const [hole, locId] of holes) {
+            if (!hole) {
+                continue;
+            }
+            const model = this.assets.get(getRealmLocKey(locId));
+            if (!model) {
+                continue;
+            }
+            const left = (hole.closeTick - tick) / TICKS_PER_SECOND;
+            const pulled = locId === look.puddleLocId && realm.pullTick >= 0;
+            if (!pulled && left < realm.def.puddles.blink && Math.floor(tick / 5) % 2 === 0) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const clientTicks = Math.floor(((tick - hole.openTick) / TICKS_PER_SECOND) * 50);
+            const frame = anim ? anim.getFrame(clientTicks) : 0;
+            // Opening out of nothing over its first half second
+            const grow = Math.min(1, (tick - hole.openTick) / (TICKS_PER_SECOND * 0.5));
+            // The portal's a small flame of a thing: shown bigger, so it's seen in the crowd
+            const size = locId === look.portalLocId ? PORTAL_SCALE : pulled ? 1.2 : 1;
+            actors.draw(model, anim, frame, hole.x, this.ground(sim, hole.x, hole.y), hole.y, 0, {
+                scale: grow * size,
+                unlit: 1,
+            });
+        }
+    }
+
+    // Timber! A tree stood at the strip's near end, tipping over along it faster and faster, then
+    // lying a moment and fading
+    private drawTree(
+        actors: ActorRenderer,
+        sim: Sim,
+        tree: {
+            x: number;
+            y: number;
+            dirX: number;
+            dirY: number;
+            length: number;
+            locId: number;
+            start: number;
+        },
+    ): void {
+        const model = this.assets.get("loc:" + tree.locId);
+        if (!model) {
+            return;
+        }
+        const ticks = sim.tick - tree.start;
+        const t = Math.min(1, ticks / TREE_FALL_TICKS);
+        const fade = Math.max(
+            0,
+            1 - Math.max(0, ticks - TREE_FALL_TICKS - TREE_LIE_TICKS) / TREE_FADE_TICKS,
+        );
+        // Its foot a little behind the player, so it lies along the strip; tall enough to reach
+        const x = tree.x - tree.dirX * 0.5;
+        const y = tree.y - tree.dirY * 0.5;
+        const scale = (tree.length * 128) / Math.max(1, model.height);
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            x,
+            this.ground(sim, x, y),
+            y,
+            yawFromVector(tree.dirX, tree.dirY),
+            { scale, pitch: Math.round(t * t * 512), alpha: fade },
+        );
     }
 
     // Falling faster and faster, then fading away where it landed
@@ -618,7 +1283,131 @@ export class GameView {
         actors.draw(model, model.anims[0], 0, rock.x, height, rock.y, (rock.uid * 331) & 2047, {
             scale: ROCK_SCALE,
             alpha: Math.max(0, fade),
+            unlit: 1,
         });
+    }
+
+    // A boss's debris where it fell (BossAttackDef.debris): settling as it lands, sinking into
+    // the floor over its last second
+    private drawDebris(actors: ActorRenderer, sim: Sim, debris: Sim["debris"][number]): void {
+        const model = this.assets.get("loc:" + debris.locId);
+        if (!model || sim.tick >= debris.until) {
+            return;
+        }
+        const left = debris.until - sim.tick;
+        const sink = left < DEBRIS_SINK_TICKS ? (1 - left / DEBRIS_SINK_TICKS) * 96 : 0;
+        // The wreck turned as it's set (ArenaFeatures.wreckage); fallen debris any way
+        const yaw =
+            debris.rotation !== undefined
+                ? locYaw(debris.rotation)
+                : (Math.round(debris.x * 7 + debris.y * 13) * 331) & 2047;
+        // The wreck plays its own (a fire's flames, drawn as bright as they are); fallen debris
+        // stands still
+        const anim = model.anims[0];
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
+        actors.draw(
+            model,
+            anim,
+            debris.wreck && anim ? anim.getFrame(clientTicks, true) : 0,
+            debris.x,
+            this.ground(sim, debris.x, debris.y) + sink,
+            debris.y,
+            yaw,
+            debris.glows ? { scale: 1, unlit: 1 } : { scale: 1 },
+        );
+    }
+
+    // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
+    private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
+        // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake), or
+        // nothing
+        const lair = prop.lair === undefined ? undefined : sim.lairById(prop.lair);
+        const woken = lair !== undefined && lair.state !== "asleep";
+        if (woken && !prop.awake) {
+            return;
+        }
+        const look = woken ? prop.awake! : prop;
+        const model = this.assets.get(getPropKey(look.npcId));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(look.seq);
+        const { x, y } = prop;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick + alpha),
+            x,
+            this.ground(sim, x, y),
+            y,
+            prop.yaw ?? 0,
+            {
+                scale: prop.scale ?? 1,
+            },
+        );
+    }
+
+    // A lair's seal (MapDef.lairs): fire on every way out of it, running out from the boss as
+    // it's sealed, each flame a little out of step with the next, and dying down as it's lifted,
+    // in a puff of its smoke (seal.smoke). Unsealed with a cinematic (LairUnsealingDef), it dies
+    // down from where that says, more slowly, to be watched.
+    private drawLairSeal(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
+        const def = lair.def;
+        const model = this.assets.get(getLairSealKey(def.seal.locId));
+        if (!model || lair.sealed.length === 0) {
+            return;
+        }
+        const smoke =
+            def.seal.smoke === undefined ? undefined : this.assets.get("spot:" + def.seal.smoke);
+        const smokeAnim = smoke?.anims[0];
+        const smokeTicks = smokeAnim?.totalTicks ?? 0;
+        const now = sim.tick + alpha;
+        const since = lair.liftTick >= 0 ? now - lair.liftTick : -1;
+        const unsealing = lair.unsealTick >= 0 ? def.requires?.unsealing : undefined;
+        const from = unsealing?.from ?? def.at;
+        const run = unsealing ? SEAL_UNSEAL_RUN_TICKS : SEAL_LIFT_RUN_TICKS;
+        if (since > SEAL_LIFT_TICKS + run * SEAL_LIFT_REACH + smokeTicks) {
+            return;
+        }
+        const anim = model.anims[0];
+        const clock = sceneryTick();
+        const { sealed } = lair;
+        for (const i of getSealFlames(sealed, def.seal.spacing)) {
+            const x = sealed[i * 2] + 0.5;
+            const y = sealed[i * 2 + 1] + 0.5;
+            const away = Math.hypot(x - def.at.x, y - def.at.y);
+            const up = Math.min(1, (now - lair.sealTick - away * SEAL_RUN_TICKS) / SEAL_RISE_TICKS);
+            const out = since < 0 ? -1 : since - Math.hypot(x - from.x, y - from.y) * run;
+            const lifted = Math.max(0, out / SEAL_LIFT_TICKS);
+            // Its smoke as it goes, from halfway down, played out once
+            const puff = out - SEAL_LIFT_TICKS * SEAL_SMOKE_AT;
+            if (smoke && smokeAnim && puff >= 0 && puff < smokeTicks) {
+                actors.draw(
+                    smoke,
+                    smokeAnim,
+                    smokeAnim.getFrame(puff),
+                    x,
+                    this.ground(sim, x, y),
+                    y,
+                    (i * FLAME_TURN) & 2047,
+                    { scale: def.seal.scale * SEAL_SMOKE_SCALE },
+                );
+            }
+            const size = Math.min(up, 1 - lifted);
+            if (size <= 0) {
+                continue;
+            }
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(clock + i * FLAME_STEP_TICKS),
+                x,
+                this.ground(sim, x, y),
+                y,
+                (i * FLAME_TURN) & 2047,
+                { scale: def.seal.scale * size, unlit: 1 },
+            );
+        }
     }
 
     // Black cats are lost on the darker maps, so always with the silhouette and
@@ -647,6 +1436,7 @@ export class GameView {
                 alpha: Math.max(0, 1 - faded),
                 silhouette: true,
                 flash: RAMPAGE_FLASH,
+                unlit: 1,
             },
         );
     }
@@ -662,6 +1452,7 @@ export class GameView {
         const height = this.ground(sim, ring.x, ring.y);
         actors.draw(model, model.anims[0], 0, ring.x, height, ring.y, 0, {
             scale: ring.scale * Math.min(1, 0.4 + open / RING_OPEN_TICKS),
+            unlit: 1,
         });
     }
 
@@ -674,12 +1465,793 @@ export class GameView {
             return;
         }
         const anim = model.anims[0];
+        const clock = sceneryTick();
         fire.flames.forEach(({ x, y }, i) => {
-            const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
+            const frame = anim.getFrame(clock + i * FLAME_STEP_TICKS);
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
+                unlit: 1,
             });
         });
+    }
+
+    // A Tombs room's barrier, which isn't in the map (the sim holds its line): on its tiles until
+    // the room's done, as the loc stands there turned a quarter
+    private drawTombsGate(actors: ActorRenderer, sim: Sim): void {
+        const gate = sim.tombsGate;
+        if (!gate || !sim.tombsRoom || sim.tombsRoom.doneTick !== undefined || sim.tombsRoom.boss) {
+            return;
+        }
+        const model = this.assets.get("loc:" + gate.locId);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        for (const tile of gate.tiles) {
+            const height = this.ground(sim, tile.x, tile.y);
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                tile.x,
+                height,
+                tile.y,
+                // Across a way in from the south it stands as the loc does; from the east, turned
+                gate.x !== undefined ? TOMBS_GATE_YAW : 0,
+            );
+        }
+    }
+
+    // The Het room: its mirrors (dirty ones as they look), the beam's last pulse for a moment,
+    // tile by tile along its way, and the Orbs of Darkness rolling
+    private drawHet(actors: ActorRenderer, sim: Sim): void {
+        const het = sim.tombsRoom?.het;
+        if (!het) {
+            return;
+        }
+        const clean = this.assets.get("loc:" + HET.mirrorLoc);
+        const dirty = this.assets.get("loc:" + HET.dirtyLoc);
+        const fixed = this.assets.get("loc:" + HET.fixedLoc);
+        const spot = this.assets.get("loc:" + HET.spotLoc);
+        const put = (model: typeof clean, x: number, y: number, yaw = 0, lift = 0, scale = 1) => {
+            if (model) {
+                actors.draw(model, model.anims[0], 0, x, this.ground(sim, x, y) + lift, y, yaw, {
+                    scale,
+                });
+            }
+        };
+        const glowAt = (x: number, y: number, scale: number, lift = 0) =>
+            this.drawGlowCircle(actors, sim, x, y, scale, lift);
+        for (const p of het.spots) {
+            put(spot, p.x, p.y);
+        }
+        // Each hero's carried mirrors, stacked over their head
+        const stacked = new Map<number, number>();
+        for (const mirror of het.mirrors) {
+            const model = mirror.dirty ? (dirty ?? clean) : mirror.fixed ? (fixed ?? clean) : clean;
+            if (mirror.carrier !== undefined) {
+                const n = stacked.get(mirror.carrier) ?? 0;
+                stacked.set(mirror.carrier, n + 1);
+                put(model, mirror.x, mirror.y, 0, 1.6 + n * 0.35, 0.6);
+            } else {
+                // A loose one glows: it can be picked up
+                if (!mirror.fixed && mirror.spot === undefined) {
+                    glowAt(mirror.x, mirror.y, 2);
+                }
+                put(model, mirror.x, mirror.y, mirror.turn * 512);
+            }
+        }
+        const barrier = this.assets.get("loc:" + HET.barrierLoc);
+        const worn = this.assets.get("loc:" + HET.wornLoc);
+        for (const b of het.barriers) {
+            put(b.worn ? (worn ?? barrier) : barrier, b.x, b.y);
+            // Its circle, to stand in to break it
+            if (b.stand) {
+                glowAt(b.stand.x, b.stand.y, 0.9);
+            }
+        }
+        // The seal's ring, to stand in to mine it, while it's open
+        if (het.openUntil !== -1) {
+            for (const tile of het.ring) {
+                glowAt(tile.x, tile.y, 0.9);
+            }
+        }
+        // The caster charging: a glow at its face, growing over the last of the wait
+        const room = sim.tombsPathRoom?.het;
+        const charge = sim.hetInfo?.charge ?? 0;
+        if (room && charge > 0.6) {
+            glowAt(room.beam.x, room.beam.y, 0.6 + (charge - 0.6) * 2.5, 0.5);
+        }
+        const beam = het.beam;
+        if (beam && sim.tick - beam.tick < Math.round(HET.beamShow * TICKS_PER_SECOND)) {
+            const along = this.assets.get("spot:" + HET.beamSpotAnims.along);
+            const across = this.assets.get("spot:" + HET.beamSpotAnims.across);
+            const age = sim.tick - beam.tick;
+            for (let i = 1; i < beam.points.length; i++) {
+                const a = beam.points[i - 1];
+                const b = beam.points[i];
+                const vertical = a.x === b.x;
+                const model = vertical ? along : across;
+                if (!model) {
+                    continue;
+                }
+                const steps = Math.round(Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)));
+                for (let t = 0; t <= steps; t++) {
+                    const x = a.x + ((b.x - a.x) * t) / Math.max(1, steps);
+                    const y = a.y + ((b.y - a.y) * t) / Math.max(1, steps);
+                    const anim = model.anims[0];
+                    actors.draw(model, anim, anim.getFrame(age), x, this.ground(sim, x, y), y, 0);
+                }
+            }
+            const impact = this.assets.get("spot:" + HET.beamSpotAnims.impact);
+            const end = beam.points[beam.points.length - 1];
+            if (impact && !beam.hit) {
+                const anim = impact.anims[0];
+                actors.draw(
+                    impact,
+                    anim,
+                    anim.getFrame(age),
+                    end.x,
+                    this.ground(sim, end.x, end.y),
+                    end.y,
+                    0,
+                );
+            }
+        }
+        const orbDef = getEnemy("het_orb");
+        const orb = this.assets.get(getEnemyModelKey(orbDef, 0));
+        if (orb) {
+            const anim = orb.getAnim(orbDef.walkSeq);
+            for (const one of het.orbs) {
+                const yaw = yawFromVector(one.vx, one.vy);
+                actors.draw(
+                    orb,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    one.x,
+                    this.ground(sim, one.x, one.y),
+                    one.y,
+                    yaw,
+                );
+            }
+        }
+    }
+
+    // Zebak's island: his acid, a puddle of it on each tile a pool covers, and his tidal waves,
+    // a crest on each tile across but the gap
+    private drawZebak(actors: ActorRenderer, sim: Sim): void {
+        const fight = sim.tombsZebak;
+        if (!fight) {
+            return;
+        }
+        const acid = this.assets.get("loc:" + ZEBAK.acid.loc);
+        if (acid) {
+            const anim = acid.anims[0];
+            for (const pool of fight.acid) {
+                for (let dy = -pool.half; dy <= pool.half; dy++) {
+                    for (let dx = -pool.half; dx <= pool.half; dx++) {
+                        const x = pool.x + dx;
+                        const y = pool.y + dy;
+                        actors.draw(acid, anim, 0, x, this.ground(sim, x, y), y, 0);
+                    }
+                }
+            }
+        }
+        this.drawZebakRoar(actors, sim, fight);
+        const island = sim.tombsPathRoom?.boss?.island;
+        const look = getEnemy(ZEBAK.waves.look);
+        const crest = this.assets.get(getEnemyModelKey(look, 0));
+        if (island && crest) {
+            const anim = crest.getAnim(look.walkSeq);
+            for (const wave of fight.waves) {
+                if (sim.tick < wave.startTick) {
+                    continue;
+                }
+                for (let x = island.x0 + 0.5; x <= island.x1 + 0.5; x++) {
+                    if (x >= wave.gapX0 && x <= wave.gapX1) {
+                        continue;
+                    }
+                    actors.draw(
+                        crest,
+                        anim,
+                        anim.getFrame(sim.tick, true),
+                        x,
+                        this.ground(sim, x, wave.y),
+                        wave.y,
+                        wave.dir > 0 ? 0 : 1024,
+                    );
+                }
+            }
+        }
+    }
+
+    // Zebak's roar: while it's coming and as it goes off, the ground each boulder shelters
+    // glowing behind it (as zebakShelters has it); as it goes off, its shockwave, blown dust
+    // rolling out from him over the whole island but where the boulders shelter, as OSRS's does
+    private drawZebakRoar(actors: ActorRenderer, sim: Sim, fight: ZebakFight): void {
+        const roar = ZEBAK.roar;
+        const wave = roar.shockwave;
+        const ticks = wave.seconds * TICKS_PER_SECOND;
+        const roared = fight.roared;
+        const since = roared ? sim.tick - roared.tick : -1;
+        const going = roared !== undefined && since >= 0 && since < ticks;
+        const boss = sim.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        // Where it's from and what shelters: as it's coming, his boulders now; as it goes, those
+        // it went off over
+        const from = going ? roared : fight.roar && boss;
+        if (!from) {
+            return;
+        }
+        const rocks = going
+            ? roared.rocks
+            : sim.tombsCover.filter((rock) => rock.look === roar.look);
+        // Straight behind each, down the island from him, as wide as it shelters: a circle a tile
+        // across on its middle, and one each side with its edge where the shelter's is
+        for (const rock of rocks) {
+            const away = rock.y >= from.y ? 1 : -1;
+            const side = rock.radius + ZEBAK_SHELTER_SIDE - 0.5;
+            for (let out = rock.radius + 0.4; out <= roar.shelter + rock.radius; out += 1) {
+                for (const across of [-side, 0, side]) {
+                    const y = rock.y + away * out;
+                    this.drawGlowCircle(actors, sim, rock.x + across, y, ZEBAK_SHELTER_SCALE);
+                }
+            }
+        }
+        const island = sim.tombsPathRoom?.boss?.island;
+        const dust = this.assets.get("spot:" + wave.spotAnim);
+        if (!going || !island || !dust) {
+            return;
+        }
+        const anim = dust.anims[0];
+        const t = since / ticks;
+        // Its front, out from him, and fading once it's across
+        const front = wave.reach * Math.min(1, t * 1.6);
+        const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+        const frame = anim.getFrame(since, true);
+        for (let y = island.y0 + 0.5; y <= island.y1 + 0.5; y += ZEBAK_SHOCKWAVE_STEP) {
+            for (let x = island.x0 + 0.5; x <= island.x1 + 0.5; x += ZEBAK_SHOCKWAVE_STEP) {
+                if (Math.hypot(x - from.x, y - from.y) > front) {
+                    continue;
+                }
+                if (zebakShelters(from.x, from.y, x, y, rocks, roar.shelter)) {
+                    continue;
+                }
+                actors.draw(dust, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                    scale: wave.scale,
+                    flash: ZEBAK_SHOCKWAVE_FLASH,
+                    alpha,
+                });
+            }
+        }
+    }
+
+    // The Wardens' room: each Warden's charging platform, as full as it is; the obelisk's orbs down
+    // the troughs; the pyramids, while they're up; and the shots, on their way to whoever they're
+    // for, arcing over
+    private drawWardens(actors: ActorRenderer, sim: Sim): void {
+        const places = sim.map.tombs?.wardens;
+        if (!places) {
+            return;
+        }
+        const fight = sim.tombsWardens;
+        const platforms = WARDENS.charge.platforms;
+        for (const side of ["elidinis", "tumeken"] as const) {
+            const charge = fight?.phase === 1 ? fight.charge[side] : 0;
+            const filled = Math.floor((charge / WARDENS.charge.full) * (platforms.length - 1));
+            const model = this.assets.get(
+                "loc:" + platforms[Math.min(platforms.length - 1, Math.max(0, filled))],
+            );
+            if (model) {
+                const at = places[side];
+                // Turned with the room: Elidinis' faces west, Tumeken's east
+                const rotation = side === "elidinis" ? 1 : 3;
+                actors.draw(
+                    model,
+                    model.anims[0],
+                    0,
+                    at.x,
+                    this.ground(sim, at.x, at.y),
+                    at.y,
+                    rotation * 512,
+                );
+            }
+        }
+        if (!fight) {
+            return;
+        }
+        const look = getEnemy(WARDENS.orbs.lookId);
+        const orb = this.assets.get(getEnemyModelKey(look, 0));
+        if (orb) {
+            const anim = orb.getAnim(look.idleSeq);
+            const step = WARDENS.orbs.stepSeconds * TICKS_PER_SECOND;
+            for (const one of fight.orbs) {
+                const t = Math.min(1, (sim.tick - one.stepTick) / step);
+                const x = one.fromX + (one.x - one.fromX) * t;
+                const y = one.fromY + (one.y - one.fromY) * t;
+                actors.draw(
+                    orb,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y) - 0.3,
+                    y,
+                    0,
+                );
+            }
+        }
+        const { cell, leave } = WARDENS.pyramids;
+        for (const pyramid of fight.pyramids) {
+            const since = sim.tick - pyramid.startTick;
+            if (since < 0 || since >= leave * TICKS_PER_SECOND) {
+                continue;
+            }
+            const model = this.assets.get("loc:" + WARDENS.wardens[pyramid.side].pyramid);
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const x = pyramid.x + cell / 2;
+            const y = pyramid.y + cell / 2;
+            actors.draw(model, anim, anim.getFrame(since, true), x, this.ground(sim, x, y), y, 0);
+        }
+        for (const shot of fight.shots) {
+            const hero = sim.heroes[shot.hero];
+            const model = this.assets.get("spot:" + WARDENS.wardens[shot.side].shotSpotAnim);
+            if (!hero || !model) {
+                continue;
+            }
+            const from = places[shot.side];
+            const t = Math.min(1, (sim.tick - shot.startTick) / (shot.landTick - shot.startTick));
+            const x = from.x + (hero.player.x - from.x) * t;
+            const y = from.y + (hero.player.y - from.y) * t;
+            const arc = 1 + Math.sin(Math.PI * t) * 3;
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                x,
+                this.ground(sim, x, y) - arc,
+                y,
+                0,
+                // Big enough to see coming across the room
+                SHOT_LOOK,
+            );
+        }
+        // The second and last phases' marks on the floor: glows and shadows, then what strikes
+        for (const mark of fight.marks) {
+            if (sim.tick < mark.from || sim.tick >= mark.to) {
+                continue;
+            }
+            const model = this.assets.get("spot:" + mark.spotAnim);
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick - mark.from, true),
+                mark.x,
+                this.ground(sim, mark.x, mark.y),
+                mark.y,
+                0,
+                // What strikes, bigger than the warnings, to be seen
+                mark.hurts > 0 ? MARK_STRIKE_LOOK : undefined,
+            );
+        }
+        // The obelisk's skulls, thrown in an arc to where they'll land
+        const skull = this.assets.get("spot:" + WARDENS.two.skulls.projectile);
+        if (skull) {
+            const anim = skull.anims[0];
+            for (const one of fight.two?.skulls ?? []) {
+                if (sim.tick < one.startTick) {
+                    continue;
+                }
+                const t = Math.min(1, (sim.tick - one.startTick) / (one.landTick - one.startTick));
+                const x = one.fromX + (one.x - one.fromX) * t;
+                const y = one.fromY + (one.y - one.fromY) * t;
+                const arc = 1 + Math.sin(Math.PI * t) * 4;
+                actors.draw(
+                    skull,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y) - arc,
+                    y,
+                    0,
+                    SHOT_LOOK,
+                );
+            }
+        }
+    }
+
+    // The Crondis room: its waterfalls, running or dry; its spears, glinting out of their
+    // statues as their tell and then right out across their rows; its poison coming down the
+    // corridors, the pale clouds ahead of the dark
+    private drawCrondis(actors: ActorRenderer, sim: Sim): void {
+        const crondis = sim.tombsRoom?.crondis;
+        const def = sim.tombsPathRoom?.crondis;
+        if (!crondis || !def) {
+            return;
+        }
+        const locs = CRONDIS.locs;
+        def.falls.forEach((fall, i) => {
+            const dry = sim.tick < crondis.dryUntil[i];
+            const model =
+                this.assets.get("loc:" + (dry ? locs.dry : locs.waterfall)) ??
+                this.assets.get("loc:" + locs.waterfall);
+            if (model) {
+                const anim = model.anims[0];
+                const { x, y } = fall.at;
+                actors.draw(
+                    model,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    x,
+                    this.ground(sim, x, y),
+                    y,
+                    fall.rotation * 512,
+                );
+            }
+        });
+        const spear = this.assets.get("loc:" + locs.spear);
+        const tell = Math.round(CRONDIS.spearTell * TICKS_PER_SECOND);
+        if (spear) {
+            const anim = spear.anims[0];
+            for (const thrust of crondis.thrusts) {
+                const area = sim.crondisSpearArea(def, thrust);
+                const telling = sim.tick - thrust.startTick < tell;
+                // Out from its statue's side: a tile out while it's telling, its three once it's out
+                const out = telling ? 1 : 3;
+                const low = thrust.side === "low";
+                const x = low ? area.x0 + out / 2 : area.x1 - out / 2;
+                // One spear from its statue, between the two rows it covers
+                const y = area.y0 + 1;
+                actors.draw(spear, anim, 0, x, this.ground(sim, x, y), y, low ? 0 : 1024, {
+                    flash: telling ? 0.6 : 0,
+                });
+            }
+        }
+        // Each puff a little out of step with the next, so the cloud churns
+        const play = (spotAnim: number, x: number, y: number, tint: number, alpha = 1) => {
+            const model = this.assets.get("spot:" + spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const frame = anim.getFrame(sim.tick + Math.floor(x * 7 + y * 3), true);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                alpha,
+                tint,
+                scale: CRONDIS_CLOUD_SCALE,
+            });
+        };
+        for (const cloud of crondis.clouds) {
+            const lane = def.lanes[cloud.lane];
+            const { pale, dark } = sim.crondisCloud(def, cloud);
+            const length = lane.y1 - lane.y0 + 1;
+            const at = (along: number) => (lane.fromLow ? lane.y0 + along : lane.y1 + 1 - along);
+            for (let along = Math.floor(dark) + 0.5; along < pale && along < length; along++) {
+                for (let x = lane.x0 + 1; x <= lane.x1 + 0.5; x += 1.5) {
+                    play(
+                        CRONDIS.spotAnims.pale,
+                        x,
+                        at(along),
+                        CRONDIS_PALE_TINT,
+                        CRONDIS.paleAlpha,
+                    );
+                }
+            }
+            for (
+                let along = Math.max(0.5, Math.floor(dark - CRONDIS.cloudLength) + 0.5);
+                along < dark && along < length;
+                along++
+            ) {
+                for (let x = lane.x0 + 0.5; x <= lane.x1 + 0.5; x += 1) {
+                    play(CRONDIS.spotAnims.dark, x, at(along), CRONDIS_DARK_TINT);
+                }
+            }
+        }
+    }
+
+    // Kephri: her swarm's shield round her while it's up (2141), and her flies round whoever's
+    // about to be thrown back (2146)
+    private drawKephri(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        const fight = sim.tombsKephri;
+        if (!fight) {
+            return;
+        }
+        const boss = sim.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        const play = (spotAnim: number, x: number, y: number, scale = 1) => {
+            const model = this.assets.get("spot:" + spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick, true),
+                x,
+                this.ground(sim, x, y),
+                y,
+                0,
+                {
+                    scale,
+                },
+            );
+        };
+        if (boss && !fight.final && !fight.intermission && fight.shield > 0) {
+            play(KEPHRI_SHIELD_SPOTANIM, boss.x, boss.y, 1.6);
+        }
+        for (const index of sim.kephriDungHeroes) {
+            // Where the player's shown (a guest's own predicted), as their model is
+            if (sim.heroes[index]) {
+                const pose = getPlayerPose(sim, index, alpha, this.localPlayerPose);
+                play(KEPHRI.dung.spotAnim, pose.x, pose.y);
+            }
+        }
+    }
+
+    // The Scabaras room's boards: Sequence's plates (the one it's showing lit, and those done),
+    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (each with its
+    // symbol, lit while stepped on, shining once matched), and the roof's shards flying
+    private drawScabaras(actors: ActorRenderer, sim: Sim): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        const def = sim.tombsPathRoom?.scabaras;
+        if (!scabaras || !def) {
+            return;
+        }
+        const locs = SCABARAS.locs;
+        const put = (id: number, x: number, y: number, animated = false, flash = 0) => {
+            const model = this.assets.get("loc:" + id);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const frame = animated ? anim.getFrame(sim.tick, true) : 0;
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, 0, { flash });
+        };
+        const solved = (puzzle: string) => scabaras.solved.some((p) => p === puzzle);
+        const lit = sim.scabarasLitPlate;
+        const sequence = scabaras.sequence;
+        def.sequence.forEach((p, i) => {
+            put(locs.plate, p.x, p.y);
+            const at = sequence.order.indexOf(i);
+            if (i === lit) {
+                put(locs.plateLit, p.x, p.y, true, 0.7);
+            } else if (solved("sequence") || (at !== -1 && at < sequence.step)) {
+                put(locs.platePressed, p.x, p.y, true);
+            }
+        });
+        def.lights.forEach((p, i) => {
+            put(locs.lightsPlate, p.x, p.y);
+            if (scabaras.lights[i]) {
+                put(locs.lightsOn, p.x, p.y, true, 0.4);
+            }
+        });
+        const addition = scabaras.addition;
+        def.addition.forEach((p, i) => {
+            put(locs.symbols[addition.values[i] - 1], p.x, p.y);
+            if (addition.stepped[i] || solved("addition")) {
+                put(locs.stepped, p.x, p.y, true);
+            }
+        });
+        // The slates by the way in (what the symbols are worth), Addition's Ancient tablet and
+        // Sequence's Ancient button: their screens are the HUD's, by one
+        for (const p of def.slates) {
+            put(locs.tablet, p.x, p.y);
+        }
+        put(locs.tablet, def.tablet.x, def.tablet.y);
+        put(locs.button, def.button.x, def.button.y);
+        // Matching: every tile's symbol on it from the start, as OSRS's: the puzzle's finding its
+        // partner on the other board. The one stepped on is lit; a matched pair shines.
+        const matching = scabaras.matching;
+        for (const side of ["north", "south"] as const) {
+            def.matching[side].forEach((p, i) => {
+                const symbol = matching[side][i];
+                const matched = matching.matched[symbol];
+                put(locs.shown[symbol], p.x, p.y, false, matching.up[side] === i ? 0.5 : 0);
+                if (matched) {
+                    put(locs.matched, p.x, p.y, true);
+                }
+            });
+        }
+        const look = getEnemy(SCABARAS.shardLook);
+        const shard = this.assets.get(getEnemyModelKey(look, 0));
+        if (shard) {
+            const anim = shard.getAnim(look.walkSeq);
+            for (const one of scabaras.shards) {
+                actors.draw(
+                    shard,
+                    anim,
+                    anim.getFrame(sim.tick, true),
+                    one.x,
+                    this.ground(sim, one.x, one.y),
+                    one.y,
+                    yawFromVector(one.vx, one.vy),
+                    { scale: SCABARAS.shardScale },
+                );
+            }
+        }
+    }
+
+    // Akkha's floor: the symbol he's showing lit up (Memory Blast), what's
+    // just gone up over the quadrants it took, and his trailing orbs
+    private drawAkkha(actors: ActorRenderer, sim: Sim): void {
+        const fight = sim.tombsAkkha;
+        const area = sim.tombsPathRoom?.boss?.quadrants;
+        if (!fight || !area) {
+            return;
+        }
+        const lit = sim.akkhaLit;
+        // The floor has its symbols: the one he's showing is drawn over its own, lit up
+        if (lit !== undefined) {
+            const element = AKKHA.elements[lit];
+            const at = sim.akkhaCorner(lit, AKKHA_SYMBOL_OUT);
+            const height = this.ground(sim, at.x, at.y);
+            const model = this.assets.get("loc:" + element.symbolLoc);
+            const lifted = height + AKKHA_SYMBOL_LIFT;
+            if (model) {
+                const anim = model.anims[0];
+                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, lifted, at.y, 0, {
+                    scale: AKKHA_SYMBOL_SCALE,
+                    // Glowing in its element's colour: darkness's own model is near black
+                    flash: AKKHA_SYMBOL_GLOW,
+                    tint: element.glow,
+                });
+            }
+            const funnel = this.assets.get("spot:" + AKKHA_FUNNEL_SPOTANIM);
+            if (funnel) {
+                // Twice, half its loop apart: its animation has gaps with nothing in them
+                const anim = funnel.anims[0];
+                const half = Math.max(1, Math.floor(anim.totalTicks / 2));
+                for (const offset of [0, half]) {
+                    const frame = anim.getFrame(sim.tick + offset, true);
+                    actors.draw(funnel, anim, frame, at.x, height, at.y, 0, {
+                        scale: AKKHA_FUNNEL_SCALE,
+                        flash: AKKHA_FUNNEL_GLOW,
+                        tint: element.glow,
+                    });
+                }
+            }
+        }
+        // A blast or a flood: its element all over each quadrant it took. The one he's showing
+        // glows with it, fainter, as the room's sections do.
+        const fill = (quadrant: number, age: number, alpha: number) => {
+            const model = this.assets.get("spot:" + AKKHA.elements[quadrant].spotAnim);
+            if (!model) {
+                return;
+            }
+            const anim = model.anims[0];
+            const east = quadrant === 1 || quadrant === 2;
+            const north = quadrant === 0 || quadrant === 1;
+            for (let i = 1; i < area.half; i += 2) {
+                for (let j = 1; j < area.half; j += 2) {
+                    // The floor's round
+                    if (Math.hypot(i, j) > area.half - 0.5) {
+                        continue;
+                    }
+                    const x = area.middle.x + (east ? i : -i);
+                    const y = area.middle.y + (north ? j : -j);
+                    const height = this.ground(sim, x, y);
+                    actors.draw(model, anim, anim.getFrame(age, true), x, height, y, 0, { alpha });
+                }
+            }
+        };
+        for (const burst of fight.bursts) {
+            for (const quadrant of burst.quadrants) {
+                fill(quadrant, sim.tick - burst.tick, 1);
+                this.drawAkkhaSpray(actors, sim, area, quadrant, burst.tick);
+            }
+        }
+        if (lit !== undefined) {
+            fill(lit, sim.tick, AKKHA_GLOW_ALPHA);
+        }
+        for (const orb of fight.orbs) {
+            const def = getEnemy(AKKHA.elements[orb.quadrant].orb);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.idleSeq);
+            const height = this.ground(sim, orb.x, orb.y);
+            actors.draw(model, anim, anim.getFrame(sim.tick, true), orb.x, height, orb.y, 0, {
+                alpha: sim.tick < orb.armTick ? 0.5 : 1,
+            });
+        }
+    }
+
+    // A blast's spray of bright orbs out of a quadrant (AKKHA_SPRAY_*): each from somewhere in
+    // it, up and out in an arc, fading as it falls. Where each goes is from the burst's tick, so
+    // it's the same every frame; drawn only.
+    private drawAkkhaSpray(
+        actors: ActorRenderer,
+        sim: Sim,
+        area: { middle: { x: number; y: number }; half: number },
+        quadrant: number,
+        startTick: number,
+    ): void {
+        const t = (sim.tick - startTick) / AKKHA_SPRAY_TICKS;
+        if (t < 0 || t >= 1) {
+            return;
+        }
+        const element = AKKHA.elements[quadrant];
+        const def = getEnemy(element.orb);
+        const model = this.assets.get(getEnemyModelKey(def, 0));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(def.idleSeq);
+        const frame = anim.getFrame(sim.tick, true);
+        const east = quadrant === 1 || quadrant === 2;
+        const north = quadrant === 0 || quadrant === 1;
+        // A number from 0 to 1 for each orb's each pick, from the burst
+        const pick = (n: number) => {
+            const v = Math.sin((startTick * 31 + quadrant * 977 + n) * 12.9898) * 43758.5453;
+            return v - Math.floor(v);
+        };
+        for (let i = 0; i < AKKHA_SPRAY_ORBS; i++) {
+            const n = i * 5;
+            // From somewhere in the quadrant, on the floor's round (the one fill keeps to) and a
+            // tile in from its edge: a square's far corner is off it
+            let outX = 1 + pick(n) * (area.half - 2);
+            let outY = 1 + pick(n + 1) * (area.half - 2);
+            const out = Math.hypot(outX, outY);
+            const most = area.half - 1.5;
+            if (out > most) {
+                outX *= most / out;
+                outY *= most / out;
+            }
+            const fromX = area.middle.x + (east ? outX : -outX);
+            const fromY = area.middle.y + (north ? outY : -outY);
+            const angle = pick(n + 2) * Math.PI * 2;
+            const reach = AKKHA_SPRAY_REACH * (0.4 + 0.6 * pick(n + 3)) * t;
+            const x = fromX + Math.cos(angle) * reach;
+            const y = fromY + Math.sin(angle) * reach;
+            // Up and back down (up being less)
+            const rise = AKKHA_SPRAY_HEIGHT * (0.5 + 0.5 * pick(n + 4)) * 4 * t * (1 - t);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y) - rise, y, 0, {
+                scale: AKKHA_SPRAY_SCALE,
+                flash: AKKHA_SPRAY_GLOW,
+                tint: element.glow,
+                alpha: 1 - t * t,
+            });
+        }
+    }
+
+    // Ba-Ba's open sarcophagi, over the closed ones in the map
+    private drawSarcophagi(actors: ActorRenderer, sim: Sim): void {
+        const model = sim.tombsSarcophagi.length > 0 && this.assets.get("loc:" + SARCOPHAGI.loc);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const frame = anim.getFrame(0);
+        for (const at of sim.tombsSarcophagi) {
+            if (sim.tick < at.openUntil) {
+                const height = this.ground(sim, at.x, at.y);
+                actors.draw(model, anim, frame, at.x, height, at.y, at.rotation * 512, {
+                    scale: 1.02,
+                });
+            }
+        }
+    }
+
+    // Jungle Japes's banana peels, lying where her baboons fell
+    private drawTombsPeels(actors: ActorRenderer, sim: Sim): void {
+        const model = sim.tombsPeels.length > 0 && this.assets.get("obj:" + JUNGLE_JAPES.objId);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const frame = anim.getFrame(0);
+        for (const peel of sim.tombsPeels) {
+            actors.draw(model, anim, frame, peel.x, this.ground(sim, peel.x, peel.y), peel.y, 0, {
+                scale: PEEL_SCALE,
+            });
+        }
     }
 
     // A raid hall's teleporter, once the raid's been beaten
@@ -690,23 +2262,65 @@ export class GameView {
         }
         const anim = model.anims[0];
         const height = this.ground(sim, at.x, at.y);
-        actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0);
+        actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, UNLIT);
     }
 
     // A boss's pool: the real thing on the ground, spreading as it lands and
-    // fading as it dries up, each one turned its own way
+    // fading as it dries up, each one turned its own way and on its own animation (a fire
+    // flickers), a little out of step with the next
     private drawPool(actors: ActorRenderer, sim: Sim, pool: GroundPool): void {
-        const model = this.assets.get("loc:" + pool.locId);
+        const model = this.assets.get(getPoolKey(pool.locId));
         // The clock runs on past its end when the run's over
         if (!model || sim.tick >= pool.endTick) {
             return;
         }
         const size = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
         const height = this.ground(sim, pool.x, pool.y);
-        actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
+        const anim = model.anims[0];
+        const frame = anim.getFrame(sceneryTick() + pool.uid * FLAME_STEP_TICKS);
+        actors.draw(model, anim, frame, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
+            unlit: 1,
         });
+    }
+
+    // A tether between two bosses (BossAttackDef.tether): its spot animation laid along the way
+    // from one to the other, as an impact's trail is, faint until it's armed
+    private drawTether(
+        actors: ActorRenderer,
+        sim: Sim,
+        tether: Sim["tethers"][number],
+        alpha: number,
+    ): void {
+        const spotAnim = tether.attack.spotAnim;
+        const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+        const ends = sim.tetherEnds(tether);
+        if (!model || !ends || sim.tick >= tether.endTick) {
+            return;
+        }
+        const ax = lerp(ends.boss.prevX, ends.boss.x, alpha);
+        const ay = lerp(ends.boss.prevY, ends.boss.y, alpha);
+        const bx = lerp(ends.partner.prevX, ends.partner.x, alpha);
+        const by = lerp(ends.partner.prevY, ends.partner.y, alpha);
+        const length = Math.hypot(bx - ax, by - ay);
+        if (length < 0.01) {
+            return;
+        }
+        const dirX = (bx - ax) / length;
+        const dirY = (by - ay) / length;
+        const yaw = yawFromVector(dirX, dirY);
+        const anim = model.anims[0];
+        const frame = anim ? anim.getFrame(sim.tick, true) : 0;
+        const armed = sim.tick >= tether.armTick;
+        for (let at = TETHER_GAP / 2; at < length; at += TETHER_GAP) {
+            const x = ax + dirX * at;
+            const y = ay + dirY * at;
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y) - PROJECTILE_HEIGHT, y, yaw, {
+                alpha: armed ? 1 : 0.35,
+                unlit: 1,
+            });
+        }
     }
 
     // A wave along the ground, or what's thrown drawn as an NPC (a knight's spinning
@@ -741,7 +2355,7 @@ export class GameView {
             this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
             y,
             (projectile.yaw + (attack.spotYaw ?? 0)) & 2047,
-            { scale },
+            { scale, unlit: 1 },
         );
     }
 
@@ -762,7 +2376,7 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             yawFromVector(-glyph.dirX, -glyph.dirY),
-            { scale: glyph.look.scale ?? 1, silhouette: true },
+            { scale: glyph.look.scale ?? 1, silhouette: true, unlit: 1 },
         );
     }
 
@@ -800,6 +2414,9 @@ export class GameView {
         const anim = model.getAnim(pet.moving ? def.walkSeq : def.idleSeq);
         const x = lerp(pet.prevX, pet.x, alpha);
         const y = lerp(pet.prevY, pet.y, alpha);
+        // The Forgotten Four's blood-touched look, on this player's fighting pet: the cache has no
+        // recolour of theirs, so a red glow, beating slowly
+        const blood = def.power !== undefined && pet.hero === sim.focus && hasBloodLooks();
         actors.draw(
             model,
             anim,
@@ -808,11 +2425,57 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             pet.yaw,
+            blood
+                ? { tint: BLOOD_LOOK_TINT, flash: -0.25 - 0.1 * Math.sin(sim.tick * 0.15) }
+                : undefined,
         );
     }
 
-    // Facing the player, and blinking when they're about to go
-    private drawVisitor(actors: ActorRenderer, sim: Sim, visitor: Visitor): void {
+    // The Tombs of Amascut's Helpful Spirit, in the Nexus: a visitor that never goes, standing in
+    // a glowing circle while it has a bundle for this player
+    private drawTombsSpirit(actors: ActorRenderer, sim: Sim): void {
+        const at = sim.map.tombs?.spirit;
+        if (!at || sim.tombsPath !== undefined || sim.tombsWardens) {
+            return;
+        }
+        if (this.tombsSpirit?.x !== at.x || this.tombsSpirit.y !== at.y) {
+            this.tombsSpirit = {
+                uid: -1,
+                def: TOMBS_SPIRIT,
+                x: at.x,
+                y: at.y,
+                startTick: 0,
+                endTick: Infinity,
+                nextShoutTick: 0,
+            };
+        }
+        // Facing the way in, to the south, as OSRS's does, not following anyone round
+        this.drawVisitor(actors, sim, this.tombsSpirit, yawFromVector(0, -1));
+        if (sim.tombsSpiritBundles(sim.focus ?? 0) > 0) {
+            this.drawGlowCircle(actors, sim, at.x, at.y, 2);
+        }
+    }
+
+    // The glowing circle (HET.circleSpotAnim, Verzik's) on the ground at a spot: Het's circles to
+    // stand in, the glow under a loose mirror, the Helpful Spirit with something for you
+    private drawGlowCircle(
+        actors: ActorRenderer,
+        sim: Sim,
+        x: number,
+        y: number,
+        scale: number,
+        lift = 0,
+    ): void {
+        const glow = this.assets.get("spot:" + HET.circleSpotAnim);
+        if (glow) {
+            const anim = glow.anims[0];
+            const ground = this.ground(sim, x, y) + lift;
+            actors.draw(glow, anim, anim.getFrame(sim.tick, true), x, ground, y, 0, { scale });
+        }
+    }
+
+    // Facing the player (or the way it's told), and blinking when they're about to go
+    private drawVisitor(actors: ActorRenderer, sim: Sim, visitor: Visitor, facing?: number): void {
         const { def, x, y } = visitor;
         const model = this.assets.get("visitor:" + def.id);
         const left = (visitor.endTick - sim.tick) / TICKS_PER_SECOND;
@@ -832,13 +2495,19 @@ export class GameView {
             x,
             this.ground(sim, x, y),
             y,
-            yawFromVector(player.x - x, player.y - y),
+            facing ?? yawFromVector(player.x - x, player.y - y),
             { scale: VISITOR_SCALE, silhouette: true },
         );
     }
 
     private drawPlayer(actors: ActorRenderer, sim: Sim, hero: number, alpha: number): void {
         const pose = getPlayerPose(sim, hero, alpha, this.localPlayerPose);
+        // A hero drawn as an NPC (CharacterDef.npcLook: Justiciar Zachariah)
+        const character = getCharacter(sim.heroes[hero].characterId);
+        if (character.npcLook) {
+            this.drawHeroNpc(actors, sim, hero, pose, character.id, character.npcLook);
+            return;
+        }
         // A power-up's look replaces the player's usual model and everything it does
         const powerUp = sim.as(hero, () => sim.wornPowerUp);
         const look = powerUp?.look;
@@ -852,6 +2521,14 @@ export class GameView {
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
+        const attackTicks = tick - player.attackStart;
+        const stance = this.assets.getPlayerStance(hero);
+        const run = model.getAnim(stance.run);
+        // On the move, the held weapon's aim for a moment after each shot
+        const runPose = pose.moving ? model.runPoses.get(player.attackSeq) : undefined;
+        const runPoseFrame = runPose
+            ? getRunPoseFrame(runPose, run, attackTicks, pose.moveTicks)
+            : -1;
         const reviving = sim.heroes.find((downed) => downed.revive?.hero === hero)?.revive?.ticks;
         if (look && lookModel) {
             anim = model.getAnim(pose.moving ? look.moveSeq : look.idleSeq);
@@ -865,17 +2542,19 @@ export class GameView {
             // long as they stand there
             anim = model.getAnim(REVIVE_SEQ);
             frame = anim.getFrame(reviving);
+        } else if (runPose && runPoseFrame !== -1) {
+            anim = runPose;
+            frame = runPoseFrame;
         } else if (
             attack &&
             attack.seqId === player.attackSeq &&
             !pose.moving &&
-            tick - player.attackStart < attack.totalTicks
+            attackTicks < attack.totalTicks
         ) {
             anim = attack;
-            frame = anim.getFrame(tick - player.attackStart, false);
+            frame = anim.getFrame(attackTicks, false);
         } else {
-            const stance = this.assets.getPlayerStance(hero);
-            anim = model.getAnim(pose.moving ? stance.run : stance.idle);
+            anim = pose.moving ? run : model.getAnim(stance.idle);
             frame = anim.getFrame(pose.moveTicks);
         }
         const { x, y } = pose;
@@ -884,31 +2563,291 @@ export class GameView {
         if (player.flash > 0) {
             tint = PLAYER_HIT_TINT;
         }
+        // Cold (ColdRuleDef): paler and bluer the colder they are, from halfway
+        const cold = sim.cold?.coldOf(hero) ?? 0;
+        if (cold >= 50) {
+            tint = cold >= 80 ? FROZEN_TINT : CHILLED_TINT;
+        }
         if (player.frozen > 0) {
             tint = FROZEN_TINT;
         }
         if (player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0) {
             flash = 0.5;
         }
+        // Marked by Akkha's Detonate: white, as OSRS's, brighter as it comes
+        const detonate = sim.tombsAkkha?.detonate;
+        if (detonate && sim.isUp(sim.heroes[hero])) {
+            flash = Math.max(flash, 0.35 + 0.25 * Math.sin(tick * 0.4));
+        }
+        // The Avian Assaulter (only Thanksgiving Harvest's) is drawn bigger than other heroes
+        const big = sim.heroes[hero].characterId === "avian_assaulter" ? AVIAN_SCALE : 1;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
             tint,
             flash,
+            ...(big !== 1 && { scale: big }),
         });
+        const overhead = getCharacter(sim.heroes[hero].characterId).overheadSpotAnim;
+        const effect = overhead === undefined ? undefined : this.assets.get("spot:" + overhead);
+        if (effect) {
+            const effectAnim = effect.anims[0];
+            actors.draw(
+                effect,
+                effectAnim,
+                effectAnim.getFrame(tick),
+                x,
+                this.ground(sim, x, y) - (model.height * big) / 128,
+                y,
+                pose.yaw,
+                UNLIT,
+            );
+        }
+        if (sim.lighting) {
+            this.drawLantern(actors, sim, hero, x, y, pose.yaw);
+        }
+        this.drawSouls(actors, sim, hero, x, y);
+        this.drawPetBubble(actors, sim, hero, x, y);
+    }
+
+    // Lil'viathan's bubble (PetDef.power bubble), while it's up: its orb round the player, faint and
+    // glowing pale blue, wobbling a little
+    private drawPetBubble(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        x: number,
+        y: number,
+    ): void {
+        if (!sim.heroes[hero]?.petBubble) {
+            return;
+        }
+        const model = this.assets.get("spot:" + PET_BUBBLE_SPOTANIM);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const wobble = 1 + 0.04 * Math.sin(sim.tick * 0.2);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick, true),
+            x,
+            this.ground(sim, x, y) - PET_BUBBLE_HEIGHT,
+            y,
+            0,
+            {
+                scale: ((PET_BUBBLE_RADIUS * 128) / Math.max(1, model.radius)) * wobble,
+                alpha: 0.45,
+                tint: PET_BUBBLE_TINT,
+                flash: -0.6,
+                unlit: 1,
+            },
+        );
+    }
+
+    // The Soulreaper axe's souls (WeaponDef.souls): one small soul rune a soul, circling the head,
+    // glowing at the full five
+    private drawSouls(actors: ActorRenderer, sim: Sim, hero: number, x: number, y: number): void {
+        const souls = sim.heroes[hero]?.souls ?? 0;
+        if (souls === 0) {
+            return;
+        }
+        const model = this.assets.get("obj:" + SOUL_OBJ);
+        if (!model) {
+            return;
+        }
+        const full = souls >= SOULS_MAX;
+        const head = this.ground(sim, x, y) - SOULS_HEIGHT;
+        for (let i = 0; i < souls; i++) {
+            const angle = sim.tick * 0.08 + (i / souls) * Math.PI * 2;
+            const sx = x + Math.cos(angle) * SOULS_RADIUS;
+            const sy = y + Math.sin(angle) * SOULS_RADIUS;
+            const bob = Math.sin(sim.tick * 0.15 + i) * 0.08;
+            actors.draw(model, model.anims[0], 0, sx, head + bob, sy, (sim.tick * 40) % 2048, {
+                scale: full ? SOULS_SCALE * 1.35 : SOULS_SCALE,
+                unlit: 1,
+                flash: full ? 0.35 + 0.2 * Math.sin(sim.tick * 0.3) : 0,
+            });
+        }
+    }
+
+    // A lantern, while its power-up lasts (on a map with lighting): carried at the player's left hand, swinging
+    // a little as they go. Drawn beside them rather than baked into their look, which would bake
+    // every player again on every map for it.
+    private drawLantern(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        x: number,
+        y: number,
+        yaw: number,
+    ): void {
+        if (!sim.powerUps.some((p) => p.hero === hero && p.id === LANTERN_ID)) {
+            return;
+        }
+        const model = this.assets.get("obj:" + getPowerUp(LANTERN_ID).objId);
+        if (!model) {
+            return;
+        }
+        const angle = (yaw / 2048) * Math.PI * 2;
+        // Facing (0 is south, 512 west), and the left hand's side of that
+        const faceX = -Math.sin(angle);
+        const faceY = -Math.cos(angle);
+        const swing = Math.sin(sim.tick * 0.25) * 0.04;
+        const lx = x + faceY * -LANTERN_SIDE + faceX * (LANTERN_AHEAD + swing);
+        const ly = y + faceX * LANTERN_SIDE + faceY * (LANTERN_AHEAD + swing);
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            lx,
+            this.ground(sim, x, y) - LANTERN_HEIGHT,
+            ly,
+            yaw,
+            LANTERN_OPTIONS,
+        );
+    }
+
+    // A hero drawn as an NPC: its idle and walk, its abilities' animations (held on their first
+    // frame until they're due, so the blow falls as it lands, then played out on the move too),
+    // and its own swing for a weapon's
+    private drawHeroNpc(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        pose: PlayerPose,
+        characterId: string,
+        look: HeroNpcLookDef,
+    ): void {
+        const model = this.assets.getHeroLook(characterId);
+        if (!model) {
+            return;
+        }
+        const player = sim.heroes[hero].player;
+        const tick = sim.tick;
+        const seq = player.attackSeq;
+        let anim = model.getAnim(pose.moving ? look.walkSeq : look.idleSeq);
+        let frame = anim.getFrame(pose.moveTicks);
+        if (seq !== -1) {
+            const own = model.getAnim(seq);
+            const attack = own.seqId === seq ? own : model.getAnim(look.swingSeq);
+            const ticks = tick - player.attackStart;
+            // A weapon's swing shows standing still; his own moves on the move too
+            if (ticks < attack.totalTicks && (own.seqId === seq || !pose.moving)) {
+                anim = attack;
+                frame = anim.getFrame(Math.max(0, ticks), false);
+            }
+        }
+        let tint = NO_TINT;
+        if (player.flash > 0) {
+            tint = PLAYER_HIT_TINT;
+        }
+        if (player.frozen > 0) {
+            tint = FROZEN_TINT;
+        }
+        const flash = player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0 ? 0.5 : 0;
+        const { x, y } = pose;
+        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
+            silhouette: true,
+            tint,
+            flash,
+            scale: look.scale ?? 1,
+        });
+    }
+
+    // A polymorphed penguin's escapees, running off fast till they're well off the screen (pruned
+    // in place, as keepWhile does)
+    private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        let kept = 0;
+        for (const escapee of this.escapees) {
+            const { speed, seconds, walkSeq, scale } = getPolymorphEffect(escapee.powerUpId).penguin
+                .escapees;
+            const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
+            if (t > seconds) {
+                continue;
+            }
+            this.escapees[kept++] = escapee;
+            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId));
+            if (!model) {
+                continue;
+            }
+            const x = escapee.x + escapee.dirX * speed * t;
+            const y = escapee.y + escapee.dirY * speed * t;
+            const anim = model.getAnim(walkSeq);
+            const options = enemyDrawOptions;
+            options.scale = scale;
+            options.tint = NO_TINT;
+            options.flash = 0;
+            options.silhouette = false;
+            options.alpha = 1;
+            actors.draw(
+                model,
+                anim,
+                // Their little legs going twice as fast
+                anim.getFrame((sim.tick - escapee.startTick) * 2),
+                x,
+                this.groundUnder(sim, x, y, (model.radius * scale) / 128),
+                y,
+                yawFromVector(escapee.dirX, escapee.dirY),
+                options,
+            );
+        }
+        this.escapees.length = kept;
+    }
+
+    // The model of the animal a polymorphed enemy's been turned into; undefined until it's in
+    private getPolymorphModel(polymorph: EnemyPolymorph): ActorModel | undefined {
+        const { powerUpId, look, variant } = polymorph;
+        return this.assets.get(getCachedPolymorphKey(powerUpId, look, variant));
+    }
+
+    // How tall an enemy's drawn, as the animal it's been turned into if it has been, or at
+    // fallback times its scale while its model's still to come
+    private getEnemyHeight(sim: Sim, enemy: Enemy, fallback: number): number {
+        const polymorph = sim.polymorphOf(enemy);
+        const animal = polymorph && this.getPolymorphModel(polymorph);
+        if (polymorph && animal) {
+            return animal.height * getPolymorphScale(enemy, polymorph);
+        }
+        const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
+        return (model?.height ?? fallback) * enemy.scale;
     }
 
     private drawEnemy(actors: ActorRenderer, sim: Sim, enemy: Enemy, alpha: number): void {
         const def = enemy.def;
         const tick = sim.tick;
+        // As a sheep (or whatever else it's been turned into) while it's polymorphed, dying as one
+        // if it's killed as one, and as itself until the animal's model is in
+        const polymorph = enemy.polymorph && sim.polymorphOf(enemy);
+        const animal = polymorph && this.getPolymorphModel(polymorph);
+        const look =
+            polymorph && animal
+                ? getPolymorphLook(
+                      getPolymorphEffect(polymorph.powerUpId),
+                      polymorph.look,
+                      polymorph.variant,
+                  )
+                : undefined;
         // Drawn as its shielded version while it's shielded, if it has one
-        const shielded = !enemy.dead && enemy.shieldEnd > tick ? def.shield?.look : undefined;
-        const model = this.assets.get(
-            shielded ? getShieldedModelKey(def) : getCachedEnemyModelKey(def, enemy.variant),
-        );
+        const shielded =
+            !look && !enemy.dead && enemy.shieldEnd > tick ? def.shield?.look : undefined;
+        const model =
+            (look && animal) ||
+            this.assets.get(
+                shielded ? getShieldedModelKey(def) : getCachedEnemyModelKey(def, enemy.variant),
+            );
         if (!model) {
-            this.assets.requestEnemy(def);
+            // Not one that's dying: it may be a Tombs room's, freed as the party left
+            if (!enemy.dead) {
+                this.assets.requestEnemy(def);
+            }
             return;
         }
+        const scale = polymorph && look ? getPolymorphScale(enemy, polymorph) : enemy.scale;
+        const idleSeq = look?.idleSeq ?? def.idleSeq;
+        const deathSeq = look?.deathSeq ?? def.deathSeq;
+        // (a golden sheep fighting on: a headbutt for every attack)
+        const attackSeq = look ? (look.attackSeq ?? -1) : enemy.attackSeq;
         const x = lerp(enemy.prevX, enemy.x, alpha);
         const y = lerp(enemy.prevY, enemy.y, alpha);
         let anim: ActorAnim;
@@ -916,8 +2855,8 @@ export class GameView {
         let sink = 0;
         if (enemy.dead) {
             const t = tick - enemy.deathTick;
-            if (def.deathSeq !== -1) {
-                anim = model.getAnim(def.deathSeq);
+            if (deathSeq !== -1) {
+                anim = model.getAnim(deathSeq);
                 // A final boss whose fall the run waits for plays all of its
                 // death (BossDef.fallSeconds); the rest are cut short
                 const fall = def.boss?.fallSeconds;
@@ -930,29 +2869,30 @@ export class GameView {
                     sink = (t - length) / DEATH_SINK_TICKS;
                 }
             } else {
-                anim = model.getAnim(def.idleSeq);
+                anim = model.getAnim(idleSeq);
                 frame = 0;
                 sink = t / DEATH_SINK_TICKS;
             }
         } else if (shielded) {
             anim = model.getAnim(shielded.idleSeq);
             frame = anim.getFrame(tick + enemy.uid * 7);
-        } else if (enemy.anim === "jump" && def.jumpSeq !== undefined) {
+        } else if (enemy.anim === "jump" && !look && def.jumpSeq !== undefined) {
             anim = model.getAnim(def.jumpSeq);
             frame = anim.getFrame(tick - enemy.animStart, false);
-        } else if (enemy.anim === "attack" && enemy.attackSeq !== -1) {
-            anim = model.getAnim(enemy.attackSeq);
+        } else if (enemy.anim === "attack" && attackSeq !== -1) {
+            anim = model.getAnim(attackSeq);
             frame = anim.getFrame(tick - enemy.animStart, false);
         } else {
             const moving =
                 Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
-            anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
+            const walkSeq = look?.walkSeq ?? def.walkSeq;
+            anim = model.getAnim(moving && enemy.frozen === 0 ? walkSeq : idleSeq);
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }
         let height =
-            this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
-            (sink * model.height * enemy.scale) / 128;
+            this.groundUnder(sim, x, y, (model.radius * scale) / 128) +
+            (sink * model.height * scale) / 128;
         // Thrown out by a boss: up and over in an arc (negative is up)
         const flung = enemy.flung;
         if (flung) {
@@ -987,7 +2927,23 @@ export class GameView {
             );
         }
         const options = enemyDrawOptions;
-        options.scale = enemy.scale;
+        options.glow = undefined;
+        // An orb's awakened final boss: darker, in a breathing violet glow (AWAKENED_LOOK)
+        if (enemy.awakened && !enemy.dead && tint === enemy.tint) {
+            const look = enemy.bossState?.enraged ? AWAKENED_ENRAGED_LOOK : AWAKENED_LOOK;
+            const breath = Math.sin((tick + alpha) * look.pulse);
+            tint = look.body;
+            // A hit still flashes
+            if (flash <= 0) {
+                flash = look.cast;
+            }
+            awakenedGlow[0] = look.shells[0] + 0.01 * breath;
+            awakenedGlow[1] = look.shells[1] + 0.02 * breath;
+            options.glow = awakenedGlow;
+            options.glowColor = look.glow;
+            options.glowAlpha = look.alpha * (0.8 + 0.2 * breath);
+        }
+        options.scale = scale;
         options.tint = tint;
         options.flash = flash;
         options.silhouette = enemy.boss;
@@ -1007,6 +2963,7 @@ export class GameView {
 
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
+        this.drawCrondisSpearTells(overlay, sim);
         this.fight.drawGround(overlay, sim, alpha, now, scale);
         this.drawAuras(overlay, sim, alpha, now);
         this.drawBlasts(overlay, sim, now, scale);
@@ -1015,6 +2972,11 @@ export class GameView {
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
+        this.drawPickupTimers(overlay, sim, alpha, scale);
+        this.drawScabarasHelper(overlay, sim, now, scale);
+        if (sim.litTargetsOnly) {
+            this.drawDarkArrows(overlay, sim, alpha, scale);
+        }
 
         // Health bars over hurt elites, and over whatever asks for one from the
         // start (Phosani's eggs, against their time); with hundreds of enemies
@@ -1027,12 +2989,11 @@ export class GameView {
             if (!enemy.def.healthBar && (enemy.hp >= enemy.maxHp || !enemy.elite)) {
                 continue;
             }
-            const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
             const x = lerp(enemy.prevX, enemy.x, alpha);
             const y = lerp(enemy.prevY, enemy.y, alpha);
             const top =
                 this.ground(sim, x, y) -
-                ((model?.height ?? 128) * enemy.scale) / 128 -
+                this.getEnemyHeight(sim, enemy, 128) / 128 -
                 HEALTH_BAR_GAP;
             const p = overlay.project(x, top, y, this.screen);
             if (p.visible) {
@@ -1051,8 +3012,78 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
-        this.fight.drawScreen(overlay, sim, alpha, now, scale);
+        // Where the hero the camera's on is drawn, for the Apmeken room's floor arrow from them
+        const viewPose = sim.tombsIssue
+            ? getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose)
+            : undefined;
+        this.fight.drawScreen(overlay, sim, alpha, now, scale, viewPose);
         this.drawFlash(overlay, now);
+        if (this.cinematic) {
+            this.cinematicView.drawScreen(overlay, this.cinematic, (x, y) =>
+                this.ground(sim, x, y),
+            );
+        }
+    }
+
+    // A RuneLite-style pie over each power-up on the ground, draining clockwise as
+    // its time runs out. Attracted ones no longer expire (ordinary loot never
+    // does), and once the run's over nothing on the ground does.
+    private drawPickupTimers(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        if (!this.pickupTimers || sim.runOver) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const radius = TIMER_RADIUS * scale;
+        const lifetime = POWER_UP_LIFETIME * TICKS_PER_SECOND;
+        const tick = sim.tick - 1 + alpha;
+        for (const pickup of sim.pickups) {
+            if (pickup.kind !== "powerUp" || pickup.attracted) {
+                continue;
+            }
+            const remaining = Math.min(1, Math.max(0, 1 - (tick - pickup.spawnTick) / lifetime));
+            // (one whose model isn't drawn yet has nothing to time)
+            const model = this.assets.get(getPickupModelKey(pickup));
+            if (remaining === 0 || !model) {
+                continue;
+            }
+            const modelScale = getPowerUpScale(model, pickup.powerUp);
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            const top =
+                this.ground(sim, x, y) -
+                getPowerUpBob(pickup, sim.tick) -
+                (model.height * modelScale) / 128;
+            const p = overlay.project(x, top, y, this.screen);
+            if (!p.visible) {
+                continue;
+            }
+            // From the play camera, high over the ground, a flat item reaches further
+            // up the screen than its height does: the pie goes over the furthest it
+            // reaches as it turns
+            const edge = overlay.project(
+                x + (model.radius * modelScale) / 128,
+                top,
+                y,
+                this.screen2,
+            );
+            const reach = edge.behind ? 0 : Math.hypot(edge.x - p.x, edge.y - p.y);
+            const cx = Math.round(p.x);
+            const cy = Math.round(p.y - reach - radius - TIMER_GAP * scale);
+            const color = remaining <= 0.25 ? "#ff0000" : remaining <= 0.5 ? "#ffc800" : "#00ff00";
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = scale;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, -Math.PI / 2 + (1 - remaining) * Math.PI * 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
     }
 
     // A power-up's flash: the whole screen, fading out
@@ -1110,10 +3141,10 @@ export class GameView {
                 if (!enemy || enemy.dead) {
                     continue;
                 }
-                const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
                 x = lerp(enemy.prevX, enemy.x, alpha);
                 y = lerp(enemy.prevY, enemy.y, alpha);
-                height = (model?.height ?? 200) * enemy.scale;
+                // (over the animal it's been turned into, if it has been)
+                height = this.getEnemyHeight(sim, enemy, 200);
             }
             const top = this.ground(sim, x, y) - height / 128;
             const p = overlay.project(x, top, y, this.screen);
@@ -1121,9 +3152,9 @@ export class GameView {
                 continue;
             }
             ctx.fillStyle = "#000000";
-            ctx.fillText(shout.text, p.x + pixel, p.y - 4 * pixel + pixel);
+            ctx.fillText(tl(shout.text), p.x + pixel, p.y - 4 * pixel + pixel);
             ctx.fillStyle = "#ffff00";
-            ctx.fillText(shout.text, p.x, p.y - 4 * pixel);
+            ctx.fillText(tl(shout.text), p.x, p.y - 4 * pixel);
         }
     }
 
@@ -1188,19 +3219,48 @@ export class GameView {
     // blast will hit, or a ring closing in at its feet before anything else
     private drawBossWindups(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
+        // Shadows on the floor where something's coming down (GroundPatternDef.shadow), and the
+        // edge of a mark whose own look doesn't reach as far as it hits (GroundPatternDef.edge)
+        for (const hazard of sim.hazards) {
+            const ground = hazard.attack.ground;
+            if ((!ground?.shadow && !ground?.edge) || sim.tick >= hazard.landTick) {
+                continue;
+            }
+            const t = windupProgress(sim, alpha, hazard.startTick, hazard.landTick);
+            if (ground.shadow) {
+                this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            } else {
+                this.drawFillingCircle(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            }
+        }
         for (const enemy of sim.enemies) {
-            const windup = enemy.bossState?.windup;
+            // Its stomp coming, on whoever's right up against it (BossDef.stomp): a ring filling
+            // at its feet, as a swing's does
+            const stomp = enemy.def.boss?.stomp;
+            const state = enemy.bossState;
+            if (
+                stomp &&
+                !enemy.dead &&
+                state?.nextStomp !== undefined &&
+                state.stompFrom !== undefined &&
+                // Not while nobody's under it
+                state.stompLeft === undefined
+            ) {
+                this.drawFillingCircle(
+                    overlay,
+                    sim,
+                    lerp(enemy.prevX, enemy.x, alpha),
+                    lerp(enemy.prevY, enemy.y, alpha),
+                    stomp.radius,
+                    windupProgress(sim, alpha, state.stompFrom, state.nextStomp),
+                );
+            }
+            // A boss's, or what's copying its lunge (EnemyDef.echoes), drawn the same
+            const windup = enemy.bossState?.windup ?? enemy.echo;
             if (!windup || enemy.dead) {
                 continue;
             }
-            const t = Math.min(
-                1,
-                Math.max(
-                    0,
-                    (sim.tick + alpha - windup.startTick) /
-                        Math.max(1, windup.landTick - windup.startTick),
-                ),
-            );
+            const t = windupProgress(sim, alpha, windup.startTick, windup.landTick);
             const kind = windup.attack.kind;
             // Those that mark the ground themselves (BossFightView)
             if (
@@ -1212,12 +3272,54 @@ export class GameView {
                 // It hits everywhere it can see: the shadows are what's shown
                 windup.attack.cover ||
                 // Thrown by the arena's statues, not the boss: their lines are shown
-                windup.attack.from !== undefined
+                windup.attack.from !== undefined ||
+                // It's falling out of the sky, and its shadow's shown (BossFightView)
+                windup.attack.meteor !== undefined ||
+                // It's all the floor's, whose own cue is the warning
+                (windup.attack.floor !== undefined && windup.attack.damage === 0)
             ) {
+                continue;
+            }
+            // Ba-Ba's avalanche: where it doesn't land, beside her boulders' rocks
+            const cover = windup.attack.takeCover;
+            if (cover) {
+                for (const rock of sim.tombsCover) {
+                    this.traceGroundCircle(overlay, sim, rock.x, rock.y, rock.radius + cover.reach);
+                    ctx.fillStyle = `rgba(40, 200, 60, ${0.12 + 0.15 * t})`;
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = `rgba(80, 255, 100, ${0.5 + 0.4 * t})`;
+                    ctx.stroke();
+                }
+                continue;
+            }
+            // Coming down under its shadow, not a red circle (BossAttackDef.shadow)
+            if (kind === "blast" && windup.attack.shadow) {
+                for (const { x, y } of windup.targets) {
+                    this.drawShadow(overlay, sim, x, y, windup.attack.radius ?? 2, t);
+                }
                 continue;
             }
             if (windup.attack.blockable && this.drawShelter(overlay, sim, enemy, t)) {
                 // Where to hide instead of where it hits (it hits everywhere else)
+                continue;
+            }
+            const outside = kind === "swing" ? windup.attack.outside : undefined;
+            if (outside !== undefined) {
+                // Everywhere but at its feet (BossAttackDef.outside): the shelter in green, and
+                // the storm's edge in red closing in on it as it comes
+                const x = lerp(enemy.prevX, enemy.x, alpha);
+                const y = lerp(enemy.prevY, enemy.y, alpha);
+                this.traceGroundCircle(overlay, sim, x, y, outside);
+                ctx.fillStyle = `rgba(80, 255, 100, ${0.12 + 0.18 * t})`;
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = `rgba(80, 255, 100, ${0.6 + 0.4 * t})`;
+                ctx.stroke();
+                this.traceGroundCircle(overlay, sim, x, y, outside + STORM_EDGE * (1 - t));
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.5 * t})`;
+                ctx.stroke();
                 continue;
             }
             const line = kind === "swing" ? windup.attack.line : undefined;
@@ -1233,15 +3335,9 @@ export class GameView {
                           squareCorners(spot.x, spot.y, (square! / 2) * t),
                       );
                 for (let i = 0; i < shapes.length; i++) {
-                    this.fight.traceGround(overlay, sim, shapes[i]);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.fight.traceGround(overlay, sim, filled[i]);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFilling(overlay, t, (whole) =>
+                        this.fight.traceGround(overlay, sim, whole ? shapes[i] : filled[i]),
+                    );
                 }
             } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
@@ -1256,15 +3352,7 @@ export class GameView {
                           ];
                 const radius = windup.attack.radius ?? 2;
                 for (const { x, y } of spots) {
-                    this.traceGroundCircle(overlay, sim, x, y, radius);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.traceGroundCircle(overlay, sim, x, y, radius * t);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFillingCircle(overlay, sim, x, y, radius, t);
                 }
             } else {
                 const x = lerp(enemy.prevX, enemy.x, alpha);
@@ -1275,6 +3363,55 @@ export class GameView {
                 ctx.stroke();
             }
         }
+    }
+
+    // A swing's mark: all it'll hit outlined in red, filling in as it comes (t, 0 to 1). trace
+    // traces the whole shape, or with whole false, the part filled so far.
+    private drawFilling(overlay: Overlay, t: number, trace: (whole: boolean) => void): void {
+        const ctx = overlay.ctx;
+        trace(true);
+        ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+        ctx.stroke();
+        trace(false);
+        ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+        ctx.fill();
+    }
+
+    // A swing's circle, filling from the middle
+    private drawFillingCircle(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        radius: number,
+        t: number,
+    ): void {
+        this.drawFilling(overlay, t, (whole) =>
+            this.traceGroundCircle(overlay, sim, x, y, whole ? radius : radius * t),
+        );
+    }
+
+    // A shadow on the floor under something coming down: growing and darkening as it nears
+    private drawShadow(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        radius: number,
+        t: number,
+    ): void {
+        const ctx = overlay.ctx;
+        this.traceGroundCircle(overlay, sim, x, y, radius * (0.55 + 0.45 * t));
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.2 + 0.45 * t})`;
+        ctx.fill();
+        // A pale rim where it'll reach, from the start: black alone is lost on a dark floor
+        this.traceGroundCircle(overlay, sim, x, y, radius);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 228, 170, ${0.45 + 0.45 * t})`;
+        ctx.stroke();
     }
 
     // The ground the boss's glyph shelters from a blockable attack: from the
@@ -1337,7 +3474,21 @@ export class GameView {
         keepWhile(this.swings, now, SWING_MS);
         for (const swing of this.swings) {
             const t = (now - swing.start) / SWING_MS;
-            this.traceGroundCircle(overlay, sim, swing.x, swing.y, swing.radius * (0.7 + 0.3 * t));
+            const radius = swing.radius * (0.7 + 0.3 * t);
+            if (swing.cone !== undefined && swing.dirX !== undefined && swing.dirY !== undefined) {
+                this.traceGroundWedge(
+                    overlay,
+                    sim,
+                    swing.x,
+                    swing.y,
+                    radius,
+                    swing.dirX,
+                    swing.dirY,
+                    swing.cone,
+                );
+            } else {
+                this.traceGroundCircle(overlay, sim, swing.x, swing.y, radius);
+            }
             ctx.fillStyle = `rgba(255, 40, 20, ${0.35 * (1 - t)})`;
             ctx.fill();
             ctx.lineWidth = 6 * scale * (1 - t) + 1;
@@ -1373,7 +3524,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             const drawn = model !== undefined && hasGeometry(model);
             const radius = (drawn ? PROJECTILE_GLOW : 9) * scale;
             const glow = this.getGlowImage(drawn, radius);
@@ -1456,6 +3610,194 @@ export class GameView {
         }
     }
 
+    // A rectangle on the ground, in world tiles, as the current canvas path
+    private traceGroundRect(
+        overlay: Overlay,
+        sim: Sim,
+        x0: number,
+        y0: number,
+        x1: number,
+        y1: number,
+    ): void {
+        const ctx = overlay.ctx;
+        ctx.beginPath();
+        [
+            [x0, y0],
+            [x1, y0],
+            [x1, y1],
+            [x0, y1],
+        ].forEach(([wx, wy], i) => {
+            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
+            if (i === 0) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        });
+        ctx.closePath();
+    }
+
+    // A tile's square on the ground, a little inside its edges, as the current canvas path
+    private traceGroundTile(overlay: Overlay, sim: Sim, cx: number, cy: number): void {
+        const half = 0.45;
+        this.traceGroundRect(overlay, sim, cx - half, cy - half, cx + half, cy + half);
+    }
+
+    // Text on the ground at a tile's middle: white (or colour) with a dark edge, readable on any
+    // floor
+    private drawGroundText(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        text: string,
+        color: string,
+        size: number,
+    ): void {
+        const p = overlay.project(x, this.ground(sim, x, y) - 0.1, y, this.screen2);
+        if (!p.visible) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        ctx.font = `${Math.round(size)}px "OSRS Bold", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = Math.max(2, size / 5);
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+        ctx.strokeText(text, p.x, p.y);
+        ctx.fillStyle = color;
+        ctx.fillText(text, p.x, p.y);
+    }
+
+    // The Scabaras room's puzzle helper, as OSRS's ToA plugin: Sequence's plates numbered in the
+    // order they've lit (the next to step on brightest), the Lights out plates to step on, the
+    // Addition symbols that make the tablet's number from what's been stepped on, and Matching's
+    // tiles named and coloured by symbol. Only for a puzzle that's open and not yet solved.
+    private drawScabarasHelper(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        const def = sim.tombsPathRoom?.scabaras;
+        if (!this.puzzleHelper || !scabaras || !def || sim.runOver) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const solved = (puzzle: string) => scabaras.solved.some((p) => p === puzzle);
+        const pulse = 0.7 + 0.3 * Math.sin(now / 220);
+        const mark = (x: number, y: number, alpha: number) => {
+            this.traceGroundTile(overlay, sim, x, y);
+            ctx.fillStyle = `rgba(80, 230, 255, ${0.3 * alpha})`;
+            ctx.fill();
+            // A dark edge under the bright one, so it reads on a lit plate as on the floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 * alpha})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(150, 245, 255, ${alpha})`;
+            ctx.stroke();
+        };
+        // Sequence: each plate's place in the order once it's lit
+        const sequence = scabaras.sequence;
+        if (!solved("sequence")) {
+            const shown = sim.scabarasSequenceShown;
+            for (let k = sequence.step; k < shown; k++) {
+                const plate = def.sequence[sequence.order[k]];
+                if (k === sequence.step) {
+                    mark(plate.x, plate.y, pulse);
+                }
+                this.drawGroundText(
+                    overlay,
+                    sim,
+                    plate.x,
+                    plate.y,
+                    `${k + 1}`,
+                    k === sequence.step ? "#ffffff" : "#c8c8c8",
+                    22 * scale,
+                );
+            }
+        }
+        // Lights out: the fewest to step on to light the ring
+        if (!solved("lights")) {
+            for (const i of solveScabarasLights(scabaras.lights)) {
+                mark(def.lights[i].x, def.lights[i].y, pulse);
+            }
+        }
+        // Addition: once the tablet's readable, the way on from what's been stepped on, or from
+        // beside the plate the hero's on
+        const addition = scabaras.addition;
+        if (!solved("addition") && solved("sequence") && solved("lights")) {
+            const on = scabaras.standing[this.viewHero];
+            const way = solveScabarasAddition(
+                def.addition,
+                addition.values,
+                addition.target,
+                addition.stepped,
+                on?.[0] === "a" ? Number(on.slice(1)) : undefined,
+            );
+            for (const i of way ?? []) {
+                if (!addition.stepped[i]) {
+                    mark(def.addition[i].x, def.addition[i].y, pulse);
+                }
+            }
+        }
+        // Matching: each tile not matched yet named in its symbol's own colour, so a pair stands
+        // out across the room, as the plugin's tiles do
+        const matching = scabaras.matching;
+        if (!solved("matching") && scabaras.solved.length >= 3) {
+            for (const side of ["north", "south"] as const) {
+                def.matching[side].forEach((p, i) => {
+                    const symbol = matching[side][i];
+                    if (matching.matched[symbol]) {
+                        return;
+                    }
+                    this.traceGroundTile(overlay, sim, p.x, p.y);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = MATCHING_COLORS[symbol];
+                    ctx.stroke();
+                    this.drawGroundText(
+                        overlay,
+                        sim,
+                        p.x,
+                        p.y,
+                        SCABARAS.symbolNames[symbol],
+                        MATCHING_COLORS[symbol],
+                        15 * scale,
+                    );
+                });
+            }
+        }
+    }
+
+    // The Crondis room's spears about to thrust: the tiles each will reach, on the floor through
+    // its tell, filling in as it nears (the spear's own glint is small, and a step out of its
+    // statue): what to time a way past by, in time to read it
+    private drawCrondisSpearTells(overlay: Overlay, sim: Sim): void {
+        const crondis = sim.tombsRoom?.crondis;
+        const def = sim.tombsPathRoom?.crondis;
+        if (!crondis || !def) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const tell = Math.round(CRONDIS.spearTell * TICKS_PER_SECOND);
+        for (const thrust of crondis.thrusts) {
+            const age = sim.tick - thrust.startTick;
+            if (age >= tell) {
+                continue;
+            }
+            const t = Math.min(1, Math.max(0, age / tell));
+            const area = sim.crondisSpearArea(def, thrust);
+            this.traceGroundRect(overlay, sim, area.x0, area.y0, area.x1, area.y1);
+            // Yellow, not red: the room's floor is red already
+            ctx.fillStyle = `rgba(255, 220, 90, ${0.2 + 0.35 * t})`;
+            ctx.fill();
+            // A dark edge under the bright one, to read on any of its floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 + 0.3 * t})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255, 235, 140, ${0.8 + 0.2 * t})`;
+            ctx.stroke();
+        }
+    }
+
     // A circle on the ground, as the current canvas path
     private traceGroundCircle(
         overlay: Overlay,
@@ -1477,6 +3819,33 @@ export class GameView {
             } else {
                 ctx.lineTo(p.x, p.y);
             }
+        }
+        ctx.closePath();
+    }
+
+    private traceGroundWedge(
+        overlay: Overlay,
+        sim: Sim,
+        cx: number,
+        cy: number,
+        radius: number,
+        dirX: number,
+        dirY: number,
+        cone: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const steps = Math.max(8, Math.ceil(cone * 12));
+        const facing = Math.atan2(dirY, dirX);
+        const start = facing - cone / 2;
+        const center = overlay.project(cx, this.ground(sim, cx, cy) - 0.1, cy, this.screen2);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        for (let i = 0; i <= steps; i++) {
+            const angle = start + (cone * i) / steps;
+            const wx = cx + Math.cos(angle) * radius;
+            const wy = cy + Math.sin(angle) * radius;
+            const point = overlay.project(wx, this.ground(sim, wx, wy) - 0.1, wy, this.screen2);
+            ctx.lineTo(point.x, point.y);
         }
         ctx.closePath();
     }
@@ -1689,28 +4058,83 @@ export class GameView {
         const x = fromX + dirX * t;
         const y = fromY + dirY * t;
         const size = 16 * scale * (0.9 + 0.1 * pulse);
-        const angle = Math.atan2(dirY, dirX);
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(size, 0);
-        ctx.lineTo(-size * 0.7, size * 0.75);
-        ctx.lineTo(-size * 0.35, 0);
-        ctx.lineTo(-size * 0.7, -size * 0.75);
-        ctx.closePath();
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 14 * scale * pulse;
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#000000";
-        ctx.stroke();
-        ctx.restore();
+        drawArrow(ctx, x, y, Math.atan2(dirY, dirX), size, color, 14 * scale * pulse);
         this.arrowLabel = { x: x - dirX * size * 1.9, y: y - dirY * size * 1.9 };
         return distance;
     }
+
+    // Under the rule (LightingDef.litTargetsOnly), a faint arrow just past the edge of the player's light for
+    // what's coming at them out of the dark: one a way round (DARK_ARROW_SECTORS), for the nearest
+    // that way, fainter the further off it is. Kept on the screen.
+    private drawDarkArrows(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const own = sim.lights.find((light) => light.hero === this.viewHero);
+        if (!own) {
+            return;
+        }
+        const { x: px, y: py } = getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose);
+        const nearest = this.darkArrows;
+        nearest.fill(Infinity);
+        const angles = this.darkArrowAngles;
+        for (const enemy of sim.enemies) {
+            if (enemy.dead || sim.isEnemyLit(enemy)) {
+                continue;
+            }
+            const dx = enemy.x - px;
+            const dy = enemy.y - py;
+            const distance = Math.hypot(dx, dy);
+            // Coming closer
+            const before = Math.hypot(enemy.prevX - px, enemy.prevY - py);
+            if (distance > DARK_ARROW_RANGE || distance >= before) {
+                continue;
+            }
+            const angle = Math.atan2(dy, dx);
+            const sector =
+                Math.floor(((angle / (Math.PI * 2) + 1) % 1) * DARK_ARROW_SECTORS) %
+                DARK_ARROW_SECTORS;
+            if (distance < nearest[sector]) {
+                nearest[sector] = distance;
+                angles[sector] = angle;
+            }
+        }
+        const ctx = overlay.ctx;
+        const margin = 30 * scale;
+        for (let i = 0; i < DARK_ARROW_SECTORS; i++) {
+            const distance = nearest[i];
+            if (distance === Infinity) {
+                continue;
+            }
+            const dirX = Math.cos(angles[i]);
+            const dirY = Math.sin(angles[i]);
+            // Just past the light's edge, short of the enemy itself
+            const reach = Math.max(1, Math.min(own.radius + DARK_ARROW_GAP, distance - 1));
+            const ax = px + dirX * reach;
+            const ay = py + dirY * reach;
+            const at = overlay.project(ax, this.ground(sim, ax, ay), ay, this.screen);
+            const ahead = overlay.project(
+                ax + dirX,
+                this.ground(sim, ax + dirX, ay + dirY),
+                ay + dirY,
+                this.screen2,
+            );
+            if (!at.visible) {
+                continue;
+            }
+            const x = Math.min(Math.max(at.x, margin), overlay.width - margin);
+            const y = Math.min(Math.max(at.y, margin), overlay.height - margin);
+            // Never over a span under a tile: a light near DARK_ARROW_RANGE wide, drawn a step
+            // ahead of the sim's, can see one just inside its edge
+            const span = Math.max(1, DARK_ARROW_RANGE - own.radius);
+            const near = 1 - (distance - own.radius) / span;
+            ctx.globalAlpha = DARK_ARROW_ALPHA * (0.45 + 0.55 * Math.min(1, Math.max(0, near)));
+            const angle = Math.atan2(ahead.y - at.y, ahead.x - at.x);
+            drawArrow(ctx, x, y, angle, 11 * scale, DARK_ARROW_COLOR, 0);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Reused by drawDarkArrows: the nearest distance and its angle, a way round
+    private readonly darkArrows = new Float64Array(DARK_ARROW_SECTORS);
+    private readonly darkArrowAngles = new Float64Array(DARK_ARROW_SECTORS);
 
     // Where the last edge arrow wants its label, if it drew one
     private arrowLabel?: { x: number; y: number };
@@ -1768,7 +4192,7 @@ export class GameView {
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         const text = hero.down
-            ? `${hero.name} (${sim.canBeRevived(hero) ? "down, revive me!" : "down"})`
+            ? `${hero.name} (${sim.canBeRevived(hero) ? t("canvas.down_revive") : t("canvas.down")})`
             : hero.name;
         const y = p.y - 7 * pixel;
         ctx.fillStyle = "#000000";
@@ -2017,6 +4441,48 @@ function drawHitsplatBlob(
 // only reads it while it's drawing)
 const enemyDrawOptions: ActorDrawOptions = {};
 
+// An arrow pointing at angle (radians, on the screen), its tip size ahead of (x, y), with a glow
+// of its colour this wide
+function drawArrow(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    angle: number,
+    size: number,
+    color: string,
+    glow: number,
+): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.7, size * 0.75);
+    ctx.lineTo(-size * 0.35, 0);
+    ctx.lineTo(-size * 0.7, -size * 0.75);
+    ctx.closePath();
+    if (glow > 0) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = glow;
+    }
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#000000";
+    ctx.stroke();
+    ctx.restore();
+}
+// Drawn at full brightness on a lit map (ActorDrawOptions.unlit): warnings and effects
+const UNLIT: ActorDrawOptions = { unlit: 1 };
+// A lantern in hand (drawLantern): tiles out to the left, ahead, and up, and how big
+const LANTERN_SIDE = 0.38;
+// Avian Assaulter's size on Thanksgiving Harvest
+const AVIAN_SCALE = 1.35;
+const LANTERN_AHEAD = 0.12;
+const LANTERN_HEIGHT = 0.55;
+const LANTERN_OPTIONS: ActorDrawOptions = { scale: 1, unlit: 1 };
+
 // getEnemyModelKey, made once rather than for every enemy every frame
 const enemyModelKeys = new Map<EnemyDef, string[]>();
 
@@ -2027,6 +4493,27 @@ function getCachedEnemyModelKey(def: EnemyDef, variant: number): string {
         enemyModelKeys.set(def, keys);
     }
     return (keys[variant] ??= getEnemyModelKey(def, variant));
+}
+
+// getPolymorphKey, made once in the same way: a big flock's drawn every frame
+const polymorphModelKeys = new Map<string, Partial<Record<PolymorphKind, string[]>>>();
+
+function getCachedPolymorphKey(powerUpId: string, look: PolymorphKind, variant: number): string {
+    let looks = polymorphModelKeys.get(powerUpId);
+    if (!looks) {
+        looks = {};
+        polymorphModelKeys.set(powerUpId, looks);
+    }
+    const keys = (looks[look] ??= []);
+    return (keys[variant] ??= getPolymorphKey(powerUpId, look, variant));
+}
+
+// How big a polymorphed enemy's animal is drawn: a boss's golden sheep is bigger than the rest
+function getPolymorphScale(enemy: Enemy, polymorph: EnemyPolymorph): number {
+    const effect = getPolymorphEffect(polymorph.powerUpId);
+    return enemy.boss
+        ? effect.golden.bossScale
+        : getPolymorphLook(effect, polymorph.look, polymorph.variant).scale;
 }
 
 // Drops what's run its time, in place: the overlay's effects are pruned every
@@ -2056,6 +4543,19 @@ function casketHop(t: number): number {
         return CASKET_HOP_HEIGHT * Math.sin(Math.PI * t);
     }
     return CASKET_HOP_HEIGHT * 0.22 * Math.sin(Math.PI * (t - 1) * 2);
+}
+
+// How much bigger a power-up's drawn than the cache has it, for its model and
+// its timer alike: a loc (the cannon) is big there already, and one can ask for more
+// (PowerUpDef.scale)
+function getPowerUpScale(model: ActorModel, powerUpId: string | undefined): number {
+    const base = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+    return base * ((powerUpId && getPowerUp(powerUpId).scale) || 1);
+}
+
+// How far over the ground a power-up floats (tiles), bobbing up and down
+function getPowerUpBob(pickup: Pickup, tick: number): number {
+    return POWER_UP_BOB * (1 + Math.sin((tick + pickup.uid * 13) / 8));
 }
 
 // "#rrggbb" with an alpha, for canvas gradients

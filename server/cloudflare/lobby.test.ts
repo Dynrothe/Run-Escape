@@ -119,6 +119,29 @@ describe("Cloudflare co-op lobby", () => {
         expect(rooms(browser)).toHaveLength(sent);
     });
 
+    it("shows only measured server flags, suppressing legacy host countries and unknown locations", async () => {
+        const lobby = await makeLobby();
+        const browser = connect("browser");
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "FI" });
+        await say(lobby, browser, { t: "list" });
+        expect(rooms(browser).at(-1).rooms[0].country).toBeUndefined();
+        expect(rooms(browser).at(-1).rooms[0].countrySource).toBe("server");
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "FI", countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0]).toMatchObject({
+            country: "FI",
+            countrySource: "server",
+        });
+        // A room measured with the old colo table saved an old code
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "UK", countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0].country).toBe("GB");
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0].country).toBeUndefined();
+        expect(rooms(browser).at(-1).rooms[0].countrySource).toBe("server");
+    });
+
     it("stops sending the list to someone in a room, until they ask again", async () => {
         const lobby = await makeLobby();
         const player = connect("player");

@@ -31,10 +31,9 @@
 }
 
 @media (pointer: coarse) {
-    /* The browser's bars come and go, which 100vh doesn't follow */
+    /* The page's height is in index.css, which comes after this */
     html,
     body {
-        height: 100dvh;
         overscroll-behavior: none;
     }
 
@@ -50,26 +49,106 @@
         display: block;
     }
 
-    /* The stick and buttons do what the HUD's would */
+    /* The stick and buttons do what the HUD's would (the HUD's fight button with its tag, hint
+       and ring) */
     .ui-inventory,
-    .ui-hud-actions .ui-ability {
+    .ui-hud-actions .ui-ability-wrap {
         display: none;
     }
 
-    /* A fight's own button, big, above the items' corner (a fight has no items) */
-    .ui-touch-ability {
+    /* A fight's own button, big, in the items' corner (a one-fight map has no items). Its wrap's
+       placed, so the tag, the hint and the ring go by the button. The hint's above it, clear of the
+       stick (bottom left), the pause button (top) and the HP bar (bottom middle). */
+    .ui-ability-wrap-touch {
         position: absolute;
-        display: flex;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        padding: 0 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+    }
+
+    /* A run with items (the Tombs): above their two rows, in their column */
+    .ui-ability-wrap-touch.ui-ability-wrap-items {
+        right: calc(
+            var(--safe-right) + var(--touch-items-inset, 12px) +
+                (var(--touch-items-width, 122px) - 76px) / 2
+        );
+        bottom: calc(
+            var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
+        );
+    }
+
+    .ui-touch-ability {
+        display: flex;
         width: 76px;
         height: 76px;
         border-radius: 50%;
         touch-action: none;
     }
 
-    .ui-slot {
-        pointer-events: none;
+    /* A hero's own buttons (KitButtons): the first big in the items' corner, the others in
+       an arc round it, up and to its left */
+    .ui-hud-actions .ui-kit {
+        display: none;
+    }
+
+    .ui-touch-kit {
+        position: absolute;
+        display: block;
+        right: calc(var(--safe-right) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px);
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-ability {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        touch-action: none;
+    }
+
+    .ui-touch-kit .ui-touch-kit-0 {
+        right: 0;
+        bottom: 0;
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-1 {
+        right: 84px;
+        bottom: 0;
+    }
+
+    .ui-touch-kit .ui-touch-kit-2 {
+        right: 74px;
+        bottom: 58px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-3 {
+        right: 26px;
+        bottom: 88px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-4 {
+        right: 140px;
+        bottom: 0;
     }
 
     /* Keys don't mean anything here */
@@ -98,16 +177,52 @@
         touch-action: none;
     }
 
-    /* Still shown once the quest tracker's title is under the zone */
+    /* No z-index: the HUD comes after the zone, so it's above it already, and
+       a z-index would put these over the run's panels too. The damage panel
+       is placed by .ui-damage. */
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
-        z-index: 1;
+    }
+
+    /* and under a level up, a casket and the pause menu */
+    .ui-modal {
+        z-index: 2;
     }
 
     /* Big enough to tap */
     .ui-dps {
         padding: 6px 0 6px 10px;
+    }
+
+    /* The camera's zoom, in the right-hand column with its other toggles, the
+       slider under its own. A phone's layout puts it by the timer (below). */
+    .ui-mobile-zoom-control {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    /* The HUD lets touches through to the stick, so it takes them back */
+    .ui-mobile-zoom {
+        width: 120px;
+        accent-color: var(--ui-orange);
+        pointer-events: auto;
+    }
+
+    .ui-mobile-zoom[hidden] {
+        display: none;
+    }
+
+    /* The title's corner and hint clear of a tablet's home bar (a phone's
+       layout places them below) */
+    .ui-title {
+        padding-bottom: calc(var(--safe-bottom) + 4vh / var(--ui-scale));
+    }
+
+    .ui-title-utils {
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 8px);
     }
 
     /* Rests in the corner, faint, to say what's there; it jumps to the thumb */
@@ -181,6 +296,12 @@
         filter: drop-shadow(1px 1px 0 #000);
     }
 
+    /* The sound's orb under the pause button, which has its place by the minimap */
+    .ui-minimap .ui-sound-orb {
+        left: -62px;
+        top: 56px;
+    }
+
     .ui-touch-items {
         position: absolute;
         right: calc(var(--safe-right) + 12px);
@@ -221,7 +342,10 @@
     .ui-armoury,
     .ui-armoury-slots,
     .ui-armoury-details,
-    .ui-log-list,
+    .ui-log-entries,
+    .ui-log-grid,
+    .ui-cards-grid,
+    .ui-cards-shop,
     .ui-quest-list,
     .ui-settings-body,
     .ui-notice-body,
@@ -231,7 +355,8 @@
     .ui-result,
     .ui-result-columns,
     .ui-choice,
-    .ui-chest-card {
+    .ui-chest-card,
+    .ui-chest-card-body {
         overscroll-behavior: contain;
         touch-action: pan-y;
     }
@@ -259,14 +384,100 @@
         min-width: 44px;
     }
 
-    /* No taller than the icon beside it, so the details don't jump between
-       adventurers with the button and those without */
-    .ui-favourite {
-        min-height: 36px;
+    /* The details' star and card, square and big enough for a finger */
+    .ui-icon-button {
+        width: 44px;
+        height: 44px;
     }
 
     .ui-volume {
         height: 32px;
+    }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-slate .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-value {
+        font-size: 15px;
+    }
+
+    /* The Scabaras room's puzzles: only those to do now (two at most), as the line above counts
+       those done, so the column stays short beside the fight button */
+    .ui-scabaras-puzzle-solved,
+    .ui-scabaras-puzzle-waiting {
+        display: none;
+    }
+}
+
+/* The Collection log's tabs, entries, items and X, the Cards screen's tabs and what Cards only
+   needs, big enough for a finger (a pack preview's buttons too) */
+@media (pointer: coarse) {
+    .ui-card-needs-head .ui-button,
+    .ui-coop-cards-blocked .ui-button,
+    .ui-cards-tab,
+    .ui-log-tab,
+    .ui-log-entry,
+    .ui-log-entry-select {
+        min-height: 44px;
+    }
+
+    .ui-log-head {
+        min-height: 44px;
+    }
+
+    /* A pack preview's info icon */
+    .ui-info-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-log-counts {
+        padding-right: 52px;
+    }
+
+    .ui-log-close {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-log-close-sprite {
+        background-size: 34px 30px;
+    }
+
+    .ui-log-grid {
+        grid-template-columns: repeat(auto-fill, 44px);
+    }
+
+    .ui-log-item {
+        width: 44px;
+        height: 44px;
     }
 }
 
@@ -353,6 +564,7 @@
     .ui-quests,
     .ui-log,
     .ui-ca,
+    .ui-cards,
     .ui-settings,
     .ui-changelog,
     .ui-notice,
@@ -410,9 +622,15 @@
         gap: 6px;
     }
 
-    /* Five across, and "Achievements" the widest word in them: it fits down to 640 wide */
-    .ui-title-tiles {
-        gap: 4px;
+    /* As wide as the menu, and kept to two lines or so */
+    .ui-export-reminder {
+        width: min(420px, 54vw);
+        padding: 2px 6px;
+    }
+
+    .ui-export-reminder-text {
+        flex-basis: 150px;
+        line-height: 1.1;
     }
 
     .ui-button-big {
@@ -438,11 +656,18 @@
         bottom: calc(var(--safe-bottom) + 4px);
     }
 
+    .ui-title-dev {
+        left: auto;
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 4px);
+    }
+
     .ui-title-link {
         padding: 8px;
     }
 
-    .ui-title-settings {
+    .ui-title-settings,
+    .ui-title-language {
         width: 44px;
         height: 44px;
         padding: 0;
@@ -512,6 +737,12 @@
         flex-shrink: 0;
     }
 
+    /* The relics' row as the pet's: one line */
+    .ui-relic-row {
+        flex-shrink: 0;
+        padding: 0 2px;
+    }
+
     .ui-map-pages {
         flex: 1 1 0;
     }
@@ -527,6 +758,13 @@
         min-height: 34px;
         padding: 2px 4px;
         font-size: 15px;
+    }
+
+    /* The act's middle card is short: its button a line high, in the row of icons */
+    .ui-act-ending-again {
+        min-height: 28px;
+        padding: 0 6px;
+        font-size: 13px;
     }
 
     .ui-style-name {
@@ -549,27 +787,242 @@
         font-size: 18px;
     }
 
-    /* Skills: the subtitle goes, but not why the refund arrows are greyed */
-
-    .ui-shop > .ui-subtle:not(.ui-shop-notice) {
-        display: none;
+    /* A phone's run setup (PhoneSetup in GameUi.tsx): the map picked on the left, its switches
+       on the right, and the adventurer under the middle, where they stand in view. The whole of
+       each card opens its picker. */
+    .ui-phone-ready {
+        grid-template-columns: minmax(0, 36%) minmax(0, 1fr) minmax(0, 27%);
     }
 
-    .ui-shop-notice {
-        flex-shrink: 0;
+    .ui-phone-card {
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .ui-phone-map {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: start;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        max-height: 100%;
+        overflow: hidden;
+        padding: 6px 8px;
+    }
+
+    .ui-phone-card-label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        font-family: "OSRS Bold", sans-serif;
+        font-size: 17px;
+        color: var(--ui-orange);
+    }
+
+    .ui-phone-change {
+        font-family: "OSRS Small", sans-serif;
         font-size: 14px;
+        color: var(--ui-yellow);
+    }
+
+    .ui-phone-card-name {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .ui-phone-card-name .ui-card-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* As much of the description as fits a few lines */
+    .ui-phone-card-text {
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 14px;
+        line-height: 1.15;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+    }
+
+    /* Across the whole row, below the cards either side, so it's centred under the hero and a pet
+       and relics don't cut the name short */
+    .ui-phone-adventurer {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        align-self: end;
+        justify-self: center;
+        max-width: 100%;
+        gap: 8px;
+        padding: 4px 10px 4px 6px;
+    }
+
+    .ui-phone-extras {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .ui-phone-modes {
+        grid-column: 3;
+        grid-row: 1;
+        align-self: start;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .ui-phone-modes .ui-endless {
+        justify-content: space-between;
+        margin-left: 0;
+    }
+
+    .ui-phone-modes .ui-invocations-button {
+        width: 100%;
+    }
+
+    /* The switches aren't in the bar here, so there's room for the coins after all */
+    .ui-phone-ready .ui-select-bar .ui-coins {
+        display: inline-flex;
+    }
+
+    /* A phone's pickers: the list over the whole screen, with its details beside it and not
+       under it, as a phone held sideways has the width and not the height */
+    .ui-phone-picker {
+        display: flex;
+        padding: 6px calc(var(--safe-right) + 6px) calc(var(--safe-bottom) + 6px)
+            calc(var(--safe-left) + 6px);
+        box-sizing: border-box;
+    }
+
+    .ui-phone-picker > .ui-select-panel {
+        display: grid;
+        flex: 1 1 0;
+        min-width: 0;
+        gap: 4px 8px;
+    }
+
+    .ui-picker-head {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .ui-picker-head .ui-select-heading {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .ui-picker-done {
+        min-height: 40px;
+        padding: 2px 20px;
+        font-size: 17px;
+    }
+
+    .ui-phone-picker .ui-select-adventurers {
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    }
+
+    .ui-phone-picker .ui-select-fixed-note {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .ui-phone-picker .ui-select-adventurers .ui-select-scroll {
+        grid-column: 1;
+        grid-row: 3 / 6;
+    }
+
+    .ui-phone-picker .ui-select-adventurers > .ui-select-details {
+        grid-column: 2;
+        grid-row: 2 / 4;
+    }
+
+    .ui-phone-picker .ui-pet-row {
+        grid-column: 2;
+        grid-row: 4;
+    }
+
+    .ui-phone-picker .ui-relic-row {
+        grid-column: 2;
+        grid-row: 5;
+    }
+
+    /* The kinds of map down the side, the maps in the middle, and the one picked on the right */
+    .ui-phone-picker .ui-select-maps {
+        grid-template-columns: auto minmax(0, 1.15fr) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .ui-phone-picker .ui-map-tabs {
+        grid-column: 1;
+        grid-row: 2;
+        flex-direction: column;
+        align-self: start;
+    }
+
+    .ui-phone-picker .ui-map-tabs .ui-button {
+        flex: none;
+        min-height: 44px;
+        padding: 2px 10px;
+    }
+
+    .ui-phone-picker .ui-map-pages {
+        grid-column: 2;
+        grid-row: 2;
+        max-height: none;
+    }
+
+    .ui-phone-picker .ui-select-maps > .ui-select-details {
+        grid-column: 3;
+        grid-row: 2;
+    }
+
+    /* As many to a row as fit with their names in full: one on most phones */
+    .ui-phone-picker .ui-map-list {
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    }
+
+    .ui-phone-picker .ui-map-tile {
+        min-height: 44px;
+    }
+
+    /* An act's maps one under another, under its own card, for the same reason */
+    .ui-phone-picker .ui-act {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "m" "a" "b" "c" "d";
+    }
+
+    /* Skills: unlike other panels' subtitles, the help stays, as it says which
+       preset an adventurer uses. One line, about 15px of the cards' room. */
+
+    .ui-shop-help {
+        font-size: 14px;
+    }
+
+    /* The footer's label says as much, in less of the cards' room */
+    .ui-shop-help-coins,
+    .ui-shop-hint {
+        display: none;
     }
 
     .ui-shop-grid {
         flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
         grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     }
 
     /* Armoury: the slots and the piece picked scroll apart */
 
-    .ui-armoury > .ui-subtle {
+    .ui-armoury > .ui-subtle,
+    .ui-armoury-legend {
         display: none;
     }
 
@@ -592,15 +1045,14 @@
         height: 44px;
     }
 
-    /* Quests and the collection log */
-
-    .ui-quests > .ui-subtle,
-    .ui-log > .ui-subtle {
-        display: none;
+    .ui-armoury-step {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
     }
 
-    .ui-log-card,
-    .ui-log-tab {
+    .ui-armoury-tab {
         min-height: 44px;
     }
 
@@ -639,8 +1091,19 @@
         grid-column: auto;
     }
 
-    /* Run HUD: everything at the edges, the middle left to the fight. What's
-       only a look at the run (gear, quests) is in the pause menu. */
+    /* Quests and the collection log */
+
+    .ui-quests > .ui-subtle,
+    .ui-cards > .ui-subtle {
+        display: none;
+    }
+
+    .ui-log-entries {
+        flex-basis: 190px;
+    }
+
+    /* Run HUD: everything at the edges, the middle left to the fight. Gear has
+       its own panel on the right, behind a toggle; quests are in the pause menu. */
 
     .ui-xp {
         height: calc(var(--safe-top) + 12px);
@@ -663,6 +1126,19 @@
         zoom: 0.72;
     }
 
+    /* Taller to press than they're drawn, as there's no room to draw them bigger. Weapons
+       grow up and passives down, each only half the gap toward the other, so neither row
+       covers the other's slots. */
+    .ui-slot::before {
+        content: "";
+        position: absolute;
+        inset: -6px 0 -2px;
+    }
+
+    .ui-hud-left > .ui-slots + .ui-slots .ui-slot::before {
+        inset: -2px 0 -6px;
+    }
+
     .ui-gear-slots,
     .ui-quest-tracker {
         display: none;
@@ -674,6 +1150,56 @@
         top: 0;
         transform: translateX(-50%);
         font-size: 24px;
+    }
+
+    /* Placed by .ui-hud-top, as the column it's in isn't */
+    .ui-mobile-zoom-control {
+        position: absolute;
+        left: calc(50% + 25vw - 130px);
+        top: 1px;
+        width: clamp(76px, 16vw, 120px);
+        align-items: center;
+    }
+
+    .ui-mobile-zoom-toggle {
+        width: 100%;
+        padding: 0;
+        line-height: 18px;
+    }
+
+    .ui-mobile-zoom {
+        width: 100%;
+        height: 12px;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Co-op's countdown: one line where the clock was, so the boss bar, the
+       waiting note and the toasts keep their places under it */
+    .ui-choice-countdown {
+        top: calc(var(--safe-top) + 16px);
+        padding: 3px 8px;
+        font-size: 14px;
+        line-height: 18px;
+    }
+
+    .ui-choice-countdown-label {
+        display: none;
+    }
+
+    /* The panels under it, and clear of the home bar. Here they have their
+       padding and border inside their size. */
+    .ui-choice-countdown ~ .ui-modal {
+        padding-top: calc(var(--safe-top) + 46px);
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-panel {
+        max-height: calc(100% - 12px);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 58px);
     }
 
     .ui-hud-right {
@@ -697,6 +1223,21 @@
         margin-top: 0;
     }
 
+    /* The Tombs' fight button is in the item buttons' column, just where this column's lines
+       come down to, and a room's lines can take the DPS on to the items: it keeps left of that
+       column there. Its panel goes under it, not beside it: from there, beside it would reach
+       the middle of the screen, where the player is. */
+    .ui-damage-beside-ability {
+        margin-right: calc(
+            var(--touch-items-inset) + var(--touch-items-width) + 8px - var(--hud-inset)
+        );
+    }
+
+    .ui-damage-beside-ability .ui-damage-panel {
+        position: static;
+        margin-top: 4px;
+    }
+
     .ui-damage-head,
     .ui-damage-total,
     .ui-damage-other > :last-child {
@@ -705,6 +1246,19 @@
 
     .ui-minimap {
         zoom: 0.56;
+    }
+
+    /* The sound's orb near its own size beside the smaller minimap, under the pause button, which
+       has its place by the minimap (its zoom scales its own offsets too) */
+    .ui-minimap .ui-sound-orb {
+        zoom: 1.6;
+        left: -39px;
+        top: 67px;
+    }
+
+    .ui-title-sound {
+        top: calc(var(--safe-top) + 8px);
+        right: calc(var(--safe-right) + 8px);
     }
 
     .ui-touch-pause {
@@ -743,7 +1297,8 @@
         font-size: 14px;
     }
 
-    .ui-boss-warning {
+    .ui-boss-warning,
+    .ui-map-objective {
         top: calc(var(--safe-top) + 42px);
         font-size: 16px;
     }
@@ -846,6 +1401,12 @@
         height: 170px;
     }
 
+    /* The card's max-height keeps it clear of the edges here (co-op's countdown has its own) */
+    .ui-chest {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
     .ui-chest[data-phase="reveal"] {
         display: grid;
         grid-template-columns: 230px minmax(0, 520px);
@@ -874,11 +1435,27 @@
         align-self: center;
         width: 100%;
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
-        overflow-y: auto;
     }
 
     .ui-chest-actions {
         margin-top: 6px;
+    }
+
+    /* Gear against the worn piece: a tighter table, so the usual one fits
+       under co-op's countdown too */
+    .ui-chest-card-compare .ui-chest-compare {
+        margin-top: 4px;
+        padding-top: 4px;
+    }
+
+    .ui-chest-table {
+        margin-top: 2px;
+    }
+
+    .ui-chest-table th,
+    .ui-chest-table td {
+        padding-top: 0;
+        padding-bottom: 0;
     }
 
     /* Pause and results: their columns scroll under the buttons */
@@ -931,7 +1508,8 @@
     }
 
     .ui-setting {
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         padding: 2px 0;
     }
 }
@@ -1001,5 +1579,227 @@
     .ui-coop-bar .ui-endless {
         min-width: 0;
         gap: 4px;
+    }
+
+    /* The room laid out for a phone (CoopLobby): the party on the left, the map and your
+       adventurer on the right, each a tap from its list, and you standing in view between */
+    .ui-coop-phone {
+        grid-template-columns: minmax(0, 47%) minmax(0, 1fr) minmax(0, 30%);
+    }
+
+    /* A party of four scrolls, past its room code */
+    .ui-coop-phone .ui-coop-party {
+        grid-column: 1;
+        overflow-y: auto;
+    }
+
+    /* Its buttons a little lower, so more of the party's in view */
+    .ui-coop-phone .ui-coop-party .ui-button {
+        min-height: 34px;
+    }
+
+    /* A player's name across their row, as the party's narrower than beside the desktop's map
+       list: what they play and whether they're ready under it */
+    .ui-coop-phone .ui-coop-member:not(.ui-coop-member-empty) {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 0 6px;
+    }
+
+    .ui-coop-phone .ui-coop-member > :first-child {
+        grid-row: 1 / 3;
+    }
+
+    .ui-coop-phone .ui-coop-member-name {
+        display: contents;
+    }
+
+    .ui-coop-phone .ui-coop-member .ui-card-title {
+        grid-column: 2 / 4;
+        grid-row: 1;
+    }
+
+    .ui-coop-phone .ui-coop-member .ui-card-style {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .ui-coop-phone .ui-coop-status {
+        grid-column: 3;
+        grid-row: 2;
+        font-size: 14px;
+    }
+
+    .ui-coop-phone .ui-coop-member > .ui-button {
+        grid-column: 4;
+        grid-row: 1 / 3;
+        padding-inline: 6px;
+    }
+
+    .ui-coop-phone-side {
+        grid-column: 3;
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        overflow-y: auto;
+        pointer-events: auto;
+    }
+
+    .ui-coop-phone-side .ui-phone-card {
+        flex-shrink: 0;
+        align-self: stretch;
+        max-height: none;
+    }
+
+    /* A guest's: the host picks the map, so it's only to see */
+    .ui-phone-card-static {
+        cursor: default;
+    }
+
+    .ui-phone-card-static:hover {
+        background: var(--ui-card);
+    }
+
+    .ui-coop-phone .ui-coop-bar .ui-select-go {
+        font-size: 17px;
+    }
+
+    /* The host's map list over the whole screen, with what's picked and its switches beside */
+    .ui-phone-picker .ui-coop-map-picker {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .ui-coop-map-picker .ui-coop-maps {
+        grid-column: 1;
+        grid-row: 2;
+        max-height: none;
+    }
+
+    .ui-coop-map-picker .ui-map-list {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    }
+
+    .ui-coop-map-side {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .ui-coop-map-side > .ui-select-details {
+        flex: none;
+        padding: 4px 8px;
+    }
+
+    .ui-coop-map-side .ui-endless {
+        justify-content: space-between;
+        margin-left: 0;
+    }
+
+    .ui-coop-map-side .ui-invocations-button {
+        width: 100%;
+    }
+}
+
+/* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
+   scrolls, so Reset All and Done stay in view */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-relic-picker {
+        width: min(460px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-invocations {
+        width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+}
+
+/* The Wardrobe on a phone held sideways: its panel as tall as the screen, clear of the notch,
+   and its store scrolling as one (the filters go up out of the way), with the adventurer's
+   controls on one line under them. Under the screen's class, as WardrobeScreen.css loads later. */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-wardrobe-screen {
+        padding-left: calc(var(--safe-left) + 6px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe {
+        width: min(560px, 58vw);
+        height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe > h2,
+    .ui-wardrobe-screen .ui-wardrobe-list > .ui-subtle {
+        display: none;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store {
+        overflow-y: auto;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store-body {
+        flex: none;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-grid-wrap,
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        max-height: none;
+        overflow: visible;
+    }
+
+    /* The piece picked over the pieces, so its Buy is in view */
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        order: -1;
+    }
+
+    .ui-wardrobe-screen .ui-card.ui-wardrobe-tile {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-swatch {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* The max cape's sliders, as tall as the swatches, with a thumb a finger can find */
+    .ui-wardrobe-screen .ui-wardrobe-dye-slider {
+        height: 28px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-dye-slider::-webkit-slider-thumb {
+        width: 14px;
+        height: 32px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-dye-row > .ui-wardrobe-label {
+        min-width: 72px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview {
+        left: auto;
+        right: calc(var(--safe-right) + 6px);
+        bottom: calc(var(--safe-bottom) + 6px);
+        margin: 0;
+        flex-direction: row;
+        padding: 4px 6px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview .ui-wardrobe-stepper-value {
+        min-width: 0;
+        max-width: 90px;
+    }
+
+    /* The arrows say it */
+    .ui-wardrobe-screen .ui-wardrobe-turn-label {
+        display: none;
     }
 }

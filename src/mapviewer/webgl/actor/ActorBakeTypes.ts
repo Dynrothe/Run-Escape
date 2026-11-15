@@ -1,8 +1,10 @@
 // Requests and results for baking actor models (player, enemies, spot anims,
-// pickups) into one vertex buffer. Each animation frame is a fully posed copy
-// of the model, drawn by picking its draw range, the same way the map square
-// loader bakes NPCs. Unlike map square NPCs, baked actors aren't tied to a map
-// square, so any number of them can be drawn anywhere in the world.
+// pickups) into one vertex buffer. A frame is drawn by picking its draw range, the
+// same way the map square loader bakes NPCs: a fully posed copy of the model, or,
+// for most animations, a mesh of the model's faces that every frame shares, with
+// the frame's vertex positions read from a texture (ActorBakeFrames.ts). Unlike
+// map square NPCs, baked actors aren't tied to a map square, so any number of
+// them can be drawn anywhere in the world.
 //
 // Indices are 16-bit where they can be: the vertices are cut into segments of
 // up to 65,536, no frame crosses from one into the next, and each frame's
@@ -27,6 +29,11 @@ export type PlayerBakeRequest = {
     key: string;
     appearance: PlayerAppearance;
     seqIds: number[];
+    // Poses for while the player runs: each a frame of an attack on the upper
+    // body over every frame of runSeqId on the legs, split where maskSeqId's
+    // interleave order splits a body. Baked as anims with `runPose` set,
+    // under the attack's seqId and timed as the run, after the rest.
+    runPoses?: { poses: { seqId: number; frame: number }[]; runSeqId: number; maskSeqId: number };
 };
 
 // One animation: the spot anim's own sequence
@@ -56,7 +63,26 @@ export type LocBakeRequest = {
     seqs?: number[];
 };
 
+// A model made into a floor's tile (the game's FloorSkinDef): a spot animation's model (with its
+// animation unless still), a loc's or a model id's, with colours and textures swapped after the
+// cache's own swaps, and scaled
+export type ModelBakeRequest = {
+    kind: "model";
+    key: string;
+    spotAnimId?: number;
+    locId?: number;
+    modelId?: number;
+    recolor?: [from: number, to: number][];
+    retexture?: [from: number, to: number][];
+    scale?: number;
+    still?: boolean;
+    // Only its top: the faces looking up near its top, for a tile whose sides and underside can't
+    // be seen (the game's floor, at rest among others: client/FloorView.ts)
+    topOnly?: boolean;
+};
+
 export type BakeRequest =
+    | ModelBakeRequest
     | NpcBakeRequest
     | PlayerBakeRequest
     | SpotAnimBakeRequest
@@ -66,6 +92,8 @@ export type BakeRequest =
 export type ActorBakeInput = {
     requests: BakeRequest[];
     loadedTextureIds: Set<number>;
+    // Every frame a fully posed copy, none sharing a mesh, as before they could (?wholeFrames)
+    wholeFrames?: boolean;
 };
 
 export type BakedAnim = {
@@ -76,7 +104,13 @@ export type BakedAnim = {
     segments: Uint16Array;
     // Length of each frame in client ticks (20ms)
     frameLengths: Uint16Array;
+    // Per frame: the texel of the page's positions where its vertices' positions start, -1
+    // for a frame baked whole (ActorBakeFrames.ts)
+    positionStarts: Int32Array;
     looping: boolean;
+    // A frame of seqId over the run (PlayerBakeRequest.runPoses), not seqId
+    // itself
+    runPose?: boolean;
 };
 
 export type BakedSet = {
@@ -89,6 +123,8 @@ export type BakedSet = {
     // its animations, in model units: what its culling goes by
     reach: number;
     anims: BakedAnim[];
+    // Drawn in layers by face priority, as the client paints a player (actor.vert.glsl)
+    layered?: boolean;
 };
 
 export type ActorBakeResult = {
@@ -97,6 +133,9 @@ export type ActorBakeResult = {
     indices: Uint16Array | Uint32Array;
     // The first vertex of each segment ([0] with 32-bit indices)
     segmentStarts: Int32Array;
+    // The positions texture's texels, x, y and z each, POSITIONS_WIDTH to a row: every
+    // frame's that shares a mesh (BakedAnim.positionStarts). Empty if none does.
+    positions: Int16Array;
     sets: BakedSet[];
     loadedTextures: Map<number, Int32Array>;
 };

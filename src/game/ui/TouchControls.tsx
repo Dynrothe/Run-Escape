@@ -4,7 +4,8 @@ import { isCoarsePointer } from "../../util/DeviceUtil";
 import { GameClient } from "../client/GameClient";
 import { InventorySlotView, UiSnapshot } from "../client/GameStore";
 import { STICK_RADIUS, SharedTaps } from "../client/GameTouch";
-import { AbilityButton } from "./AbilityButton";
+import { t } from "../i18n";
+import { AbilityButton, KitButtons } from "./AbilityButton";
 import { InventoryItem } from "./InventoryItem";
 import "./Mobile.css";
 
@@ -177,13 +178,14 @@ export const TouchControls = memo(function TouchControls({
             <button
                 data-silent
                 className="ui-touch-pause"
-                aria-label="Pause"
+                aria-label={t("canvas.pause")}
                 onPointerDown={() => {
                     client.playClick();
                     client.pause();
                 }}
             />
             <AbilityButton client={client} touch />
+            <KitButtons client={client} touch />
             <div className="ui-touch-items">
                 {inventory.map((slot, i) => (
                     <div key={i} className="ui-touch-item-place">
@@ -209,7 +211,7 @@ export function RotateNotice(): JSX.Element {
     return (
         <div className="ui-rotate">
             <div className="ui-rotate-phone" />
-            <p>Turn your phone sideways to play</p>
+            <p>{t("canvas.rotate_phone")}</p>
         </div>
     );
 }

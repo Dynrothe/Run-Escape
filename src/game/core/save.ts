@@ -1,3 +1,4 @@
+import { ACTS, ACT_BY_ID, FALLEN_EMPIRE, isActEnded, isMapOut } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -16,9 +17,24 @@ import {
     isMultiRunGoal,
 } from "../content/combatTasks";
 import { ENEMY_BY_ID } from "../content/enemies";
+import {
+    FIRST_CLEAR_ORBS,
+    GAUNTLET_FIGHTS,
+    gauntletOrderKey,
+    isGauntletOrder,
+} from "../content/gauntlet";
+import { INVADER_BY_ID } from "../content/invaders";
+import {
+    InvocationPreset,
+    RUN_SET,
+    cleanInvocationPresets,
+    cleanInvocations,
+    isHardInvocation,
+} from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
+    CAMPAIGN_MAPS,
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
@@ -27,10 +43,13 @@ import {
     isFunMap,
     isRaidMap,
     isSeasonalMap,
+    takesRelics,
 } from "../content/maps";
-import { isPetFound } from "../content/pets";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
-import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getUpgradeCost } from "../content/shop";
+import { cleanRelics } from "../content/relics";
+import { cleanRemixes, parseRemixKey, remixKey } from "../content/remixes";
+import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import {
     CharacterDef,
@@ -42,7 +61,20 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
+import { VAULT_WEEKS_KEPT, VaultRecord, isBetterVault, parseWeekKey } from "../content/vault";
+import {
+    COSMETIC_BY_ID,
+    SavedOutfit,
+    WardrobeLook,
+    cleanLook,
+    cleanSavedOutfits,
+    getCosmeticPrice,
+    getPieceTrophy,
+    ownsCosmetic,
+} from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
+import { getStarterCards } from "./cardRuns";
+import { addPlatinum, giveStarterCards, migrateCards } from "./cards";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -62,11 +94,9 @@ export const SAVE_VERSION = 12;
 
 export type SkillPage = {
     upgrades: Record<string, number>;
+    // What was paid for the page's ranks, which Refund all gives back. It's
+    // getPageCost(upgrades) unless prices have changed since.
     upgradesSpent: number;
-    // The skill each rank was bought for, oldest first, which a single rank's
-    // refund reprices the later ones from. A page from before it was kept has
-    // none if it couldn't be worked out, and needs Refund all first.
-    upgradeOrder?: string[];
 };
 
 function createSkillPage(): SkillPage {
@@ -93,6 +123,9 @@ export type SaveData = {
     victories: number;
     // Map id -> times beaten; beating a map unlocks the next
     mapVictories: Record<string, number>;
+    // A fight in parts (MapDef.stages): how many of its parts have been beaten, kept between runs
+    // as OSRS keeps a quest's progress
+    fightStages?: Record<string, number>;
     // Map id -> the times of those that were on hard mode
     hardVictories: Record<string, number>;
     // A raid's expert mode wins, which also count as hard ones
@@ -119,8 +152,49 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The Tombs of Amascut's invocations, as last picked (content/invocations.ts)
+    invocations?: string[];
+    // Saved setups of the invocation board, to load in one go (content/invocations.ts)
+    invocationPresets?: InvocationPreset[];
+    // A run's invocations, as last picked on a map's card (content/invocations.ts, RUN_SET): not
+    // hard mode's, which the Hard switch is
+    runInvocations?: string[];
+    // Map id -> its win at the most invocation points (as many and quicker, of those), with the
+    // relics it was set with
+    invocationBest?: Record<string, InvocationRecord>;
+    // The relics picked, one a tier (content/relics.ts); only the open tiers' go on a run
+    relics?: string[];
+    // The Scabaras room's been beaten once: its puzzle helper's unlocked (DisplaySettings.puzzleHelper)
+    scabarasBeaten?: boolean;
     // The pet taken along on runs (pets.ts), one of the trophies found
     pet?: string;
+    // An act's map id -> its best win (content/acts.ts): the quickest at the highest step it's
+    // been won at, so an easier one's kept, with its step, until it's beaten at a harder one
+    actBest?: Record<string, ActRecord>;
+    // A set of remixes on a map (content/remixes.ts, remixKey: "lumbridge:dark+frozen") -> its
+    // records, relic-free (act-2-fallen-empire.md, 8.3)
+    remixVictories?: Record<string, RemixRecord>;
+    // The acts (content/acts.ts) whose ending has been told: it's told once, as the last of the
+    // act's Awakened fights falls, and again only from its card
+    actEndings?: string[];
+    // The act's Awakened fights in the order they were first beaten: the Forgotten Four's order to
+    // start with (content/gauntlet.ts), and the order last picked for it
+    awakenedOrder?: string[];
+    gauntletOrder?: string[];
+    // The Forgotten Four's clears and records, on normal and on hard
+    gauntlet?: { normal?: GauntletModeRecord; hard?: GauntletModeRecord };
+    // Awakener's orbs held (act-2-fallen-empire.md 8.6): each Awakened fight won gives one, and the
+    // gauntlet's first clears two; one's spent awakening a campaign map's final boss for a run
+    // (spent once it comes: a run left before it keeps the orb)
+    awakenerOrbs?: number;
+    // A campaign map's id -> the times its final boss was beaten awakened (its card's mark)
+    awakenedWins?: Record<string, number>;
+    // Awakened invasions (content/invasions.ts): invader id -> the times one's been killed, for
+    // the Collection log
+    invasions?: Record<string, number>;
+    // The weekly Vault (content/vault.ts): a week's key ("2026-W46") -> its best run, the latest
+    // VAULT_WEEKS_KEPT weeks
+    vault?: Record<string, VaultRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // Ids of the Combat Achievements done (combatTasks.ts), and where the ones that take more
@@ -131,10 +205,73 @@ export type SaveData = {
     // Combat Achievements pinned on their screen, still to do, in the order they were pinned: a
     // run shows the ones it follows on the HUD, and says when one's spoilt
     combatPinned?: string[];
+    // The Wardrobe (content/wardrobe.ts): the pieces bought in its store, by item id, and the body
+    // and outfit worn on every adventurer
+    cosmetics?: number[];
+    look?: WardrobeLook;
+    // Outfits kept under a name, to put on again in one go
+    outfits?: SavedOutfit[];
+    // When the player last exported it (Date.now()), so an exported file says
+    // when it was made, and the title screen can remind them to keep a copy
+    lastExported?: number;
+    // Cards (core/cards.ts): card id -> copies owned, the packs held unopened (STARTER_PACKS while
+    // unset) and how many have been opened
+    cards?: Record<string, number>;
+    // Of those copies, how many are foils (content/cards.ts CARD_FOIL_CHANCE), by the same keys:
+    // only for show, never more than the version's copies
+    cardFoils?: Record<string, number>;
+    cardPacks?: number;
+    cardPacksOpened?: number;
+    // Card collection only runs picked (core/cardRuns.ts): played whenever the collection can
+    cardsOnly?: boolean;
+    // The starting adventurer's starter cards have been given (core/cards.ts): in the free pack,
+    // or once to a save that opened it before the free pack held them
+    cardStarterGiven?: boolean;
+    // Trophies (pets too) first found in a Card collection only run: the Collection log marks
+    // them. Only finds made since it came in; a later find of one already found changes nothing.
+    cardsOnlyFinds?: string[];
+    // Maps won in a Card collection only run (only wins since it came in): the map list marks them
+    cardsOnlyWins?: string[];
+    // The pet a Card collection only run takes along: one whose card is owned (core/cardRuns.ts,
+    // getCardsOnlyPet), found or not. SaveData.pet stays the other runs' and needs the real find.
+    cardsOnlyPet?: string;
+    // Platinum tokens held (core/cards.ts): what packs are bought with, earned in runs apart from coins
+    platinum?: number;
 };
 
-// The round reached, and how long the run lasted
-export type EndlessRecord = { round: number; seconds: number };
+// What a record was set with: its run's invocation points and the relics on (content/relics.ts),
+// when there were any
+export type RecordSetup = { points?: number; relics?: string[] };
+
+// The round reached, and how long the run lasted (on an act's map, at which step)
+export type EndlessRecord = { round: number; seconds: number; step?: number } & RecordSetup;
+
+// A win on an act's map: how long it took, at which step
+export type ActRecord = { seconds: number; step: number } & RecordSetup;
+
+// A set of remixes' records on a map (SaveData.remixVictories): wins, the quickest, wins on hard (its
+// gold tick), and the furthest endless run
+export type RemixRecord = {
+    wins: number;
+    seconds?: number;
+    hard?: number;
+    endless?: { round: number; seconds: number };
+};
+
+// A clear of the Forgotten Four: the fights' time (the camps left out), whether no fight was
+// retried, its order and its retries
+export type GauntletRecord = { seconds: number; clean: boolean; order: string[]; retries: number };
+
+// The gauntlet's clears on a mode, and the best of each order it's been run in (13.2: times
+// compare within an order; a clean clear beats one with retries, then the quicker)
+export type GauntletModeRecord = {
+    clears: number;
+    cleanClears: number;
+    best: Record<string, GauntletRecord>;
+};
+
+// A win at invocation points (SaveData.invocationBest)
+export type InvocationRecord = { points: number; seconds: number; relics?: string[] };
 
 export function createSave(): SaveData {
     return {
@@ -171,6 +308,23 @@ export function createSave(): SaveData {
 }
 
 // Brings any older save up to the current version, filling in what's missing
+// A run's invocations as the card keeps them: the board's own, not hard mode's (the Hard switch's)
+export function cleanRunInvocations(ids: readonly unknown[]): string[] {
+    return cleanInvocations(ids, RUN_SET).filter((id) => !isHardInvocation(id));
+}
+
+// What a record was set with, from a save: points a whole number above 0, relics this game knows
+function cleanSetup(record: unknown): RecordSetup {
+    const { points, relics } = (record ?? {}) as { points?: unknown; relics?: unknown };
+    const kept = cleanRelics(relics);
+    return {
+        ...(typeof points === "number" && Number.isFinite(points) && points > 0
+            ? { points: Math.floor(points) }
+            : {}),
+        ...(kept.length > 0 && { relics: kept }),
+    };
+}
+
 export function migrateSave(raw: unknown): SaveData {
     const save = createSave();
     if (!raw || typeof raw !== "object") {
@@ -232,6 +386,16 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (data.fightStages && typeof data.fightStages === "object") {
+        save.fightStages = {};
+        for (const [id, parts] of Object.entries(data.fightStages)) {
+            const stages = MAP_BY_ID.get(id)?.stages;
+            const part = Math.floor(num(parts, 0));
+            if (winnable(id) && stages && part > 0 && part < stages.length) {
+                save.fightStages[id] = part;
+            }
+        }
+    }
     if (data.expertVictories && typeof data.expertVictories === "object") {
         for (const [id, wins] of Object.entries(data.expertVictories)) {
             if (isRaidMap(id) && num(wins, 0) > 0) {
@@ -250,7 +414,10 @@ export function migrateSave(raw: unknown): SaveData {
             for (const [id, record] of Object.entries(from)) {
                 const round = num(record?.round, 0);
                 if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
-                    to[id] = { round, seconds: num(record?.seconds, 0) };
+                    to[id] = { round, seconds: num(record?.seconds, 0), ...cleanSetup(record) };
+                    if (typeof record.step === "number" && record.step >= 0) {
+                        to[id].step = Math.floor(record.step);
+                    }
                 }
             }
         }
@@ -296,14 +463,143 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
-    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
-        save.pet = data.pet;
+    if (data.actBest && typeof data.actBest === "object") {
+        for (const [id, record] of Object.entries(data.actBest)) {
+            const seconds = num(record?.seconds, 0);
+            if (MAP_BY_ID.get(id)?.act && seconds > 0) {
+                save.actBest ??= {};
+                save.actBest[id] = {
+                    seconds,
+                    step: Math.max(0, Math.floor(num(record?.step, 0))),
+                    ...cleanSetup(record),
+                };
+            }
+        }
+    }
+    if (data.remixVictories && typeof data.remixVictories === "object") {
+        for (const [key, record] of Object.entries(data.remixVictories)) {
+            const parsed = parseRemixKey(key);
+            if (!parsed || !MAP_BY_ID.has(parsed.mapId) || !record || typeof record !== "object") {
+                continue;
+            }
+            const clean: RemixRecord = { wins: Math.max(0, Math.floor(num(record.wins, 0))) };
+            const seconds = num(record.seconds, 0);
+            if (seconds > 0) {
+                clean.seconds = seconds;
+            }
+            const hard = Math.floor(num(record.hard, 0));
+            if (hard > 0) {
+                clean.hard = hard;
+            }
+            const round = Math.floor(num(record.endless?.round, 0));
+            if (round > 0) {
+                clean.endless = { round, seconds: num(record.endless?.seconds, 0) };
+            }
+            save.remixVictories ??= {};
+            save.remixVictories[remixKey(parsed.mapId, parsed.remixes)] = clean;
+        }
+    }
+    if (data.invocationBest && typeof data.invocationBest === "object") {
+        for (const [id, record] of Object.entries(data.invocationBest)) {
+            const points = Math.floor(num(record?.points, 0));
+            const seconds = num(record?.seconds, 0);
+            if (MAP_BY_ID.has(id) && points > 0 && seconds > 0) {
+                save.invocationBest ??= {};
+                save.invocationBest[id] = { points, seconds, ...cleanSetup(record) };
+            }
+        }
+    }
+    if (Array.isArray(data.invocations)) {
+        save.invocations = cleanInvocations(data.invocations);
+    }
+    const presets = cleanInvocationPresets(data.invocationPresets);
+    if (presets.length > 0) {
+        save.invocationPresets = presets;
+    }
+    if (Array.isArray(data.runInvocations)) {
+        save.runInvocations = cleanRunInvocations(data.runInvocations);
+    }
+    const relics = cleanRelics(data.relics);
+    if (relics.length > 0) {
+        save.relics = relics;
+    }
+    if (data.scabarasBeaten === true) {
+        save.scabarasBeaten = true;
+    }
+    if (Array.isArray(data.actEndings)) {
+        for (const id of data.actEndings) {
+            if (typeof id === "string" && ACT_BY_ID.has(id) && !save.actEndings?.includes(id)) {
+                save.actEndings ??= [];
+                save.actEndings.push(id);
+            }
+        }
+    }
+    if (isGauntletOrder(data.gauntletOrder)) {
+        save.gauntletOrder = [...data.gauntletOrder];
+    }
+    if (Array.isArray(data.awakenedOrder)) {
+        const order = data.awakenedOrder.filter(
+            (id, i, all) => GAUNTLET_FIGHTS.includes(id) && all.indexOf(id) === i,
+        );
+        if (order.length > 0) {
+            save.awakenedOrder = order;
+        }
+    }
+    for (const mode of ["normal", "hard"] as const) {
+        const record = migrateGauntletMode(data.gauntlet?.[mode], num);
+        if (record) {
+            save.gauntlet = { ...save.gauntlet, [mode]: record };
+        }
+    }
+    const orbs = Math.floor(num(data.awakenerOrbs, 0));
+    if (orbs > 0) {
+        save.awakenerOrbs = orbs;
+    }
+    for (const [id, wins] of Object.entries(data.awakenedWins ?? {})) {
+        const count = Math.floor(num(wins, 0));
+        if (MAP_BY_ID.has(id) && count > 0) {
+            save.awakenedWins = { ...save.awakenedWins, [id]: count };
+        }
+    }
+    for (const [id, kills] of Object.entries(data.invasions ?? {})) {
+        const count = Math.floor(num(kills, 0));
+        if (INVADER_BY_ID.has(id) && count > 0) {
+            save.invasions = { ...save.invasions, [id]: count };
+        }
+    }
+    for (const [key, record] of Object.entries(data.vault ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (parseWeekKey(key) && seconds > 0) {
+            save.vault = {
+                ...save.vault,
+                [key]: {
+                    seconds,
+                    kills: Math.max(0, Math.floor(num(record.kills, 0))),
+                    victory: record.victory === true,
+                    runs: Math.max(1, Math.floor(num(record.runs, 1))),
+                },
+            };
+        }
     }
     if (
         typeof data.favouriteCharacter === "string" &&
         CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)
     ) {
         save.favouriteCharacter = data.favouriteCharacter;
+    }
+    if (Array.isArray(data.cosmetics)) {
+        // A found piece is the trophy's, never bought
+        const owned = new Set(
+            data.cosmetics.filter((id) => COSMETIC_BY_ID.has(id) && !getPieceTrophy(id)),
+        );
+        if (owned.size > 0) {
+            save.cosmetics = [...owned];
+        }
+    }
+    // A time a Date can hold, or the reminder couldn't tell its day
+    const exported = data.lastExported;
+    if (typeof exported === "number" && exported > 0 && !isNaN(new Date(exported).getTime())) {
+        save.lastExported = exported;
     }
     if (Array.isArray(data.questsDone)) {
         for (const id of data.questsDone) {
@@ -350,9 +646,69 @@ export function migrateSave(raw: unknown): SaveData {
         }
     }
     grantCombatRewards(save);
+    // A quest done before its trophy was one, and before the pet that trophy brings is checked
+    applyQuestTrophies(save);
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
+        save.pet = data.pet;
+    }
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
+    // After the adventurers, whose own pieces can be worn for nothing
+    const look = cleanLook(data.look, (objId) => canWearCosmetic(save, objId));
+    if (look) {
+        save.look = look;
+    }
+    const outfits = cleanSavedOutfits(data.outfits, (objId) => canWearCosmetic(save, objId));
+    if (outfits.length > 0) {
+        save.outfits = outfits;
+    }
+    Object.assign(save, migrateCards(data));
+    // Card collection only's pet: a pet (its card is checked as it's taken, getCardsOnlyPet)
+    if (typeof data.cardsOnlyPet === "string" && PET_BY_ID.has(data.cardsOnlyPet)) {
+        save.cardsOnlyPet = data.cardsOnlyPet;
+    }
+    // Card collection only's first finds: trophies the save has, each once
+    if (Array.isArray(data.cardsOnlyFinds)) {
+        const finds = [...new Set(data.cardsOnlyFinds.filter((id) => save.trophies.includes(id)))];
+        if (finds.length > 0) {
+            save.cardsOnlyFinds = finds;
+        }
+    }
+    // Card collection only's wins: maps there are, each once
+    if (Array.isArray(data.cardsOnlyWins)) {
+        const wins = [
+            ...new Set(
+                data.cardsOnlyWins.filter((id) => typeof id === "string" && MAP_BY_ID.has(id)),
+            ),
+        ];
+        if (wins.length > 0) {
+            save.cardsOnlyWins = wins;
+        }
+    }
+    giveStarterCards(save, getStarterCards(getStartingCharacter(save)));
     return save;
+}
+
+// The Wardrobe's pieces this save can wear: bought, an unlocked adventurer's, or found
+export function canWearCosmetic(save: SaveData, objId: number): boolean {
+    return ownsCosmetic(save, objId);
+}
+
+// Buys a piece in the Wardrobe's store. False when it can't be (owned already, not in the store,
+// only ever found, or too expensive).
+export function buyCosmetic(save: SaveData, objId: number): boolean {
+    const cosmetic = COSMETIC_BY_ID.get(objId);
+    if (
+        !cosmetic ||
+        getPieceTrophy(objId) ||
+        canWearCosmetic(save, objId) ||
+        save.coins < getCosmeticPrice(cosmetic)
+    ) {
+        return false;
+    }
+    save.coins -= getCosmeticPrice(cosmetic);
+    save.cosmetics = [...(save.cosmetics ?? []), objId];
+    return true;
 }
 
 // The adventurer the game starts on: the favourite, if it's open, or else the first that is
@@ -591,8 +947,7 @@ function migrateSkillPage(raw: unknown): SkillPage {
     if (!raw || typeof raw !== "object") {
         return page;
     }
-    // upgradeRefunds: the price paid for each rank, kept before the order was
-    const data = raw as Partial<SkillPage> & { upgradeRefunds?: unknown };
+    const data = raw as Partial<SkillPage>;
     if (data.upgrades && typeof data.upgrades === "object") {
         for (const [id, rank] of Object.entries(data.upgrades)) {
             const upgrade = SHOP_UPGRADE_BY_ID.get(id);
@@ -609,88 +964,8 @@ function migrateSkillPage(raw: unknown): SkillPage {
             ? 0
             : Number.isSafeInteger(data.upgradesSpent) && data.upgradesSpent! >= 0
               ? data.upgradesSpent!
-              : estimateSpent(page.upgrades);
-    const order =
-        readUpgradeOrder(data.upgradeOrder, page.upgrades) ??
-        recoverUpgradeOrder(data.upgradeRefunds, page);
-    if (order) {
-        page.upgradeOrder = order;
-    }
+              : getPageCost(page.upgrades);
     return page;
-}
-
-// A saved order, if it has every rank bought and nothing else. It isn't
-// checked against the spending: that stays what was paid, so a price change
-// since doesn't lose it.
-function readUpgradeOrder(raw: unknown, upgrades: Record<string, number>): string[] | undefined {
-    if (!Array.isArray(raw) || raw.length === 0) {
-        return undefined;
-    }
-    const counts: Record<string, number> = {};
-    for (const id of raw) {
-        if (typeof id !== "string") {
-            return undefined;
-        }
-        counts[id] = (counts[id] ?? 0) + 1;
-    }
-    const ids = Object.keys(upgrades);
-    const same =
-        ids.length === Object.keys(counts).length && ids.every((id) => counts[id] === upgrades[id]);
-    return same ? [...raw] : undefined;
-}
-
-// Pages from before the order was kept have the price paid for each rank,
-// and a price says how many ranks were bought before it. When those make one
-// unbroken run that replays to exactly the same prices, that's the order. A
-// page that refunded single ranks the old way leaves gaps, and has none.
-function recoverUpgradeOrder(raw: unknown, page: SkillPage): string[] | undefined {
-    const total = Object.values(page.upgrades).reduce((sum, rank) => sum + rank, 0);
-    if (!raw || typeof raw !== "object" || total === 0) {
-        return undefined;
-    }
-    const paid = raw as Record<string, unknown>;
-    const order: string[] = [];
-    for (const [id, rank] of Object.entries(page.upgrades)) {
-        const prices = paid[id];
-        if (!Array.isArray(prices) || prices.length !== rank) {
-            return undefined;
-        }
-        const upgrade = SHOP_UPGRADE_BY_ID.get(id)!;
-        for (let r = 0; r < rank; r++) {
-            let bought = 0;
-            while (bought < total && getUpgradeCost(upgrade, r, bought) !== prices[r]) {
-                bought++;
-            }
-            if (bought === total || order[bought] !== undefined) {
-                return undefined;
-            }
-            order[bought] = id;
-        }
-    }
-    const replay = priceUpgradeOrder(order);
-    const exact =
-        replay.spent === page.upgradesSpent &&
-        Object.entries(replay.prices).every(([id, prices]) =>
-            prices.every((price, r) => price === (paid[id] as unknown[])[r]),
-        );
-    return exact ? order : undefined;
-}
-
-// What buying these ranks in this order costs, in all and rank by rank
-function priceUpgradeOrder(order: string[]): { spent: number; prices: Record<string, number[]> } {
-    const prices: Record<string, number[]> = {};
-    let spent = 0;
-    order.forEach((id, bought) => {
-        const ranks = (prices[id] ??= []);
-        const cost = getUpgradeCost(SHOP_UPGRADE_BY_ID.get(id)!, ranks.length, bought);
-        ranks.push(cost);
-        spent += cost;
-    });
-    return { spent, prices };
-}
-
-export function canRefundSkillPage(page: SkillPage): boolean {
-    return page.upgradeOrder !== undefined || Object.keys(page.upgrades).length === 0;
 }
 
 export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stats {
@@ -700,10 +975,6 @@ export function getMetaStats(save: SaveData, style: CombatStyle = "melee"): Stat
         stats[upgrade.stat] += upgrade.perRank * rank;
     }
     return stats;
-}
-
-export function getTotalUpgradesBought(save: SaveData, style: CombatStyle = "melee"): number {
-    return Object.values(save.skillPages[style].upgrades).reduce((sum, rank) => sum + rank, 0);
 }
 
 function getMaxSkillSpending(save: SaveData): number {
@@ -727,7 +998,7 @@ export function getNextUpgradeCost(
     if (rank >= upgrade.maxRank) {
         return undefined;
     }
-    return getUpgradeCost(upgrade, rank, getTotalUpgradesBought(save, style));
+    return getUpgradeCost(upgradeId, save.skillPages[style].upgrades);
 }
 
 // Returns false when it can't be bought (maxed or too expensive)
@@ -742,20 +1013,18 @@ export function buyUpgrade(
     }
     const reserved = getMaxSkillSpending(save);
     const page = save.skillPages[style];
-    // A page keeps its order from its first rank on
-    if (Object.keys(page.upgrades).length === 0) {
-        page.upgradeOrder = [];
-    }
-    page.upgradeOrder?.push(upgradeId);
     page.upgradesSpent += cost;
     save.coins -= getMaxSkillSpending(save) - reserved;
     page.upgrades[upgradeId] = (page.upgrades[upgradeId] ?? 0) + 1;
     return true;
 }
 
-// Takes back the skill's last rank: its price and what it added to every rank
-// bought after it, at today's prices. Never more than the page has spent, and
-// its last rank gives back the rest, so a page returns exactly what it cost.
+// Takes back one rank of the skill for its share of what the page paid: what
+// it adds to the page's cost today, times what the page paid over that cost.
+// The two are the same unless prices have changed since, and then each rank
+// gives back its part of the difference rather than one rank all of it, or
+// nothing. The last rank gives back the rest, so a page returns exactly what
+// it cost.
 export function refundUpgrade(
     save: SaveData,
     upgradeId: string,
@@ -763,24 +1032,22 @@ export function refundUpgrade(
 ): boolean {
     const page = save.skillPages[style];
     const rank = page.upgrades[upgradeId] ?? 0;
-    const bought = page.upgradeOrder ?? [];
-    const index = bought.lastIndexOf(upgradeId);
-    if (rank <= 0 || index < 0) {
+    if (rank <= 0) {
         return false;
     }
     const reserved = getMaxSkillSpending(save);
-    const order = bought.filter((_, i) => i !== index);
-    if (order.length === 0) {
+    const upgrades = { ...page.upgrades, [upgradeId]: rank - 1 };
+    if (rank === 1) {
+        delete upgrades[upgradeId];
+    }
+    if (Object.keys(upgrades).length === 0) {
         save.skillPages[style] = createSkillPage();
     } else {
-        const saved = priceUpgradeOrder(bought).spent - priceUpgradeOrder(order).spent;
-        page.upgradesSpent -= Math.min(saved, page.upgradesSpent);
-        page.upgradeOrder = order;
-        if (rank === 1) {
-            delete page.upgrades[upgradeId];
-        } else {
-            page.upgrades[upgradeId] = rank - 1;
-        }
+        const cost = getPageCost(page.upgrades);
+        const saved = cost - getPageCost(upgrades);
+        const refund = cost > 0 ? Math.round((saved * page.upgradesSpent) / cost) : 0;
+        page.upgradesSpent -= Math.min(refund, page.upgradesSpent);
+        page.upgrades = upgrades;
     }
     save.coins += reserved - getMaxSkillSpending(save);
     return true;
@@ -789,34 +1056,28 @@ export function refundUpgrade(
 // Sells every upgrade back for what it cost (VS lets you refund)
 export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): void {
     const reserved = getMaxSkillSpending(save);
-    const page = save.skillPages[style];
-    page.upgradesSpent = 0;
+    save.skillPages[style] = createSkillPage();
     save.coins += reserved - getMaxSkillSpending(save);
-    page.upgrades = {};
-    delete page.upgradeOrder;
-}
-
-// For saves from before spending was tracked: what buying these ranks one
-// upgrade at a time would have cost
-function estimateSpent(upgrades: Record<string, number>): number {
-    const replay = createSave();
-    replay.coins = Infinity;
-    for (const [id, rank] of Object.entries(upgrades)) {
-        for (let r = 0; r < rank; r++) {
-            buyUpgrade(replay, id);
-        }
-    }
-    return replay.skillPages.melee.upgradesSpent;
 }
 
 export type RunSummary = {
     mapId: string;
+    // A fight in parts: which this run was (MapDef.stages)
+    stage?: number;
     // An endless run, and the round it got to
     endless?: boolean;
     round?: number;
     hard?: boolean;
     // A raid's expert mode (hard as well)
     expert?: boolean;
+    // An act's map: the step it was played at (content/acts.ts)
+    actStep?: number;
+    // A run's invocation points, and the player's relics (Sim's RunResult)
+    points?: number;
+    relics?: string[];
+    // Its remixes (content/remixes.ts): it sets their records (SaveData.remixVictories), not the
+    // map's own hard, act, invocation and endless ones
+    remixes?: string[];
     victory: boolean;
     seconds: number;
     level: number;
@@ -836,7 +1097,200 @@ export type RunSummary = {
     // with). Left out of co-op runs and of runs that don't count, which bank none.
     combatTasks?: string[];
     combatProgress?: string[];
+    // Of those, the ones opened in a map's Shadow Realm (RealmRuleDef)
+    realmCaskets?: number;
+    // The Scabaras room was beaten: its puzzle helper's unlocked
+    scabarasBeaten?: boolean;
+    // An Awakened invasion (Sim's RunResult): its invader and whether it fell
+    invasion?: { id: string; came: boolean; killed: boolean };
+    // The final boss awakened by an orb: whether it came, so the orb's spent
+    awakened?: { seen: boolean };
+    // The weekly Vault's run: its week's key (content/vault.ts)
+    vault?: string;
+    // Played Card collection only (core/cardRuns.ts): its first finds are marked in the log
+    cardsOnly?: boolean;
+    // Platinum tokens the run earned (Sim's RunResult.platinum)
+    platinum?: number;
 };
+
+function migrateGauntletMode(
+    data: unknown,
+    num: (value: unknown, fallback: number) => number,
+): GauntletModeRecord | undefined {
+    if (!data || typeof data !== "object") {
+        return undefined;
+    }
+    const raw = data as Partial<GauntletModeRecord>;
+    const clears = Math.max(0, Math.floor(num(raw.clears, 0)));
+    if (clears === 0) {
+        return undefined;
+    }
+    const best: Record<string, GauntletRecord> = {};
+    for (const record of Object.values(raw.best ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (isGauntletOrder(record?.order) && seconds > 0) {
+            best[gauntletOrderKey(record.order)] = {
+                seconds,
+                clean: record.clean === true,
+                order: [...record.order],
+                retries: Math.max(0, Math.floor(num(record.retries, 0))),
+            };
+        }
+    }
+    return {
+        clears,
+        cleanClears: Math.min(clears, Math.max(0, Math.floor(num(raw.cleanClears, 0)))),
+        best,
+    };
+}
+
+// The Forgotten Four opens once every Awakened fight of the act's is beaten (act-2-fallen-empire.md,
+// 7.3), its hard mode with its first clean clear on normal
+export function isGauntletOpen(save: SaveData): boolean {
+    return isActEnded(FALLEN_EMPIRE, save.mapVictories);
+}
+
+export function isGauntletHardOpen(save: SaveData): boolean {
+    return (save.gauntlet?.normal?.cleanClears ?? 0) > 0;
+}
+
+// The first clean clear's looks (on either mode): the blood-touched Soulreaper axe and fighting
+// pets, and the act's middle card's gold border
+export function hasGauntletLooks(save: SaveData): boolean {
+    return (
+        (save.gauntlet?.normal?.cleanClears ?? 0) > 0 || (save.gauntlet?.hard?.cleanClears ?? 0) > 0
+    );
+}
+
+// The order the gauntlet's screen starts on: the one last picked, or the fights in the order they
+// were first beaten (those beaten before that was kept, in the act's order after)
+export function getGauntletOrder(save: SaveData): string[] {
+    if (isGauntletOrder(save.gauntletOrder)) {
+        return [...save.gauntletOrder];
+    }
+    const first = (save.awakenedOrder ?? []).filter((id) => GAUNTLET_FIGHTS.includes(id));
+    return [...first, ...GAUNTLET_FIGHTS.filter((id) => !first.includes(id))];
+}
+
+// A gauntlet clear just done, and what it gave: its first clear (on that mode) gives Awakener's
+// orbs, its first clean clear on normal the looks and hard mode, and a record for its order
+export type GauntletClear = {
+    order: string[];
+    hard: boolean;
+    seconds: number;
+    retries: number;
+};
+
+export type GauntletRewards = {
+    firstClear: boolean;
+    firstCleanClear: boolean;
+    orbs: number;
+    // The looks, the gold border and hard mode, just now
+    looks: boolean;
+    hardOpened: boolean;
+    record: boolean;
+    // The order's best before this one
+    previous?: GauntletRecord;
+};
+
+function isBetterGauntlet(record: GauntletRecord, than: GauntletRecord | undefined): boolean {
+    if (!than) {
+        return true;
+    }
+    if (record.clean !== than.clean) {
+        return record.clean;
+    }
+    return record.seconds < than.seconds;
+}
+
+export function recordGauntlet(save: SaveData, clear: GauntletClear): GauntletRewards {
+    const mode = clear.hard ? "hard" : "normal";
+    const hadLooks = hasGauntletLooks(save);
+    const hadHard = isGauntletHardOpen(save);
+    const before = save.gauntlet?.[mode] ?? { clears: 0, cleanClears: 0, best: {} };
+    const clean = clear.retries === 0;
+    const record: GauntletRecord = {
+        seconds: clear.seconds,
+        clean,
+        order: [...clear.order],
+        retries: clear.retries,
+    };
+    const key = gauntletOrderKey(clear.order);
+    const previous = before.best[key];
+    const better = isBetterGauntlet(record, previous);
+    const after: GauntletModeRecord = {
+        clears: before.clears + 1,
+        cleanClears: before.cleanClears + (clean ? 1 : 0),
+        best: better ? { ...before.best, [key]: record } : before.best,
+    };
+    save.gauntlet = { ...save.gauntlet, [mode]: after };
+    const firstClear = before.clears === 0;
+    const orbs = firstClear ? FIRST_CLEAR_ORBS : 0;
+    if (orbs > 0) {
+        save.awakenerOrbs = (save.awakenerOrbs ?? 0) + orbs;
+    }
+    return {
+        firstClear,
+        firstCleanClear: clean && before.cleanClears === 0,
+        orbs,
+        looks: !hadLooks && hasGauntletLooks(save),
+        hardOpened: !hadHard && isGauntletHardOpen(save),
+        record: better,
+        ...(previous && { previous }),
+    };
+}
+
+// An act whose ending's due (every one of its Awakened fights beaten, its ending not told yet),
+// marked told: it's told once (SaveData.actEndings). Undefined if none is.
+export function takeActEnding(save: SaveData): string | undefined {
+    const act = ACTS.find(
+        (act) =>
+            act.ending &&
+            isActEnded(act, save.mapVictories) &&
+            !(save.actEndings ?? []).includes(act.id),
+    );
+    if (!act) {
+        return undefined;
+    }
+    save.actEndings = [...(save.actEndings ?? []), act.id];
+    return act.id;
+}
+
+// Awakener's orbs an Awakened fight's win gives (act-2-fallen-empire.md 7.2)
+export const AWAKENED_WIN_ORBS = 1;
+
+// Whether an orb can awaken this map's final boss: one held, on a campaign map's survival run
+export function canAwaken(save: SaveData, mapId: string): boolean {
+    const map = MAP_BY_ID.get(mapId);
+    return (
+        (save.awakenerOrbs ?? 0) > 0 &&
+        map !== undefined &&
+        CAMPAIGN_MAPS.includes(map) &&
+        takesRelics(map)
+    );
+}
+
+// A Vault run's week, its best kept if it's better, and only the latest weeks
+export function recordVault(
+    save: SaveData,
+    key: string,
+    run: { seconds: number; kills: number; victory: boolean },
+): boolean {
+    if (!parseWeekKey(key)) {
+        return false;
+    }
+    const best = save.vault?.[key];
+    const better = isBetterVault(run, best);
+    const runs = (best?.runs ?? 0) + 1;
+    const record: VaultRecord = better
+        ? { seconds: run.seconds, kills: run.kills, victory: run.victory, runs }
+        : { ...best!, runs };
+    const weeks = { ...save.vault, [key]: record };
+    // Keys sort as their weeks do ("2026-W46")
+    const kept = Object.keys(weeks).sort().slice(-VAULT_WEEKS_KEPT);
+    save.vault = Object.fromEntries(kept.map((week) => [week, weeks[week]]));
+    return better;
+}
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
@@ -845,25 +1299,93 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         return [];
     }
     const quests = getFinishedQuests(save, run);
+    // What was found before, so a Card collection only run's first finds can be told apart
+    const trophiesBefore = new Set(save.trophies);
     save.coins += run.coins;
     save.totalCoins += run.coins;
+    addPlatinum(save, run.platinum);
     save.runs++;
-    if (run.victory) {
+    // A fight in parts: a part beaten is kept, the next to play; past the last, from the first
+    // again (the map's beaten for good). Only the last beats the map.
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    if (run.victory && stages && (run.stage ?? 0) === getFightStage(save, run.mapId)) {
+        const next = (run.stage ?? 0) + 1;
+        save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
+    }
+    // An Awakener's orb on the final boss is spent once it's come, won or not
+    if (run.awakened?.seen) {
+        save.awakenerOrbs = Math.max(0, (save.awakenerOrbs ?? 0) - 1) || undefined;
+        if (run.victory) {
+            save.awakenedWins = {
+                ...save.awakenedWins,
+                [run.mapId]: (save.awakenedWins?.[run.mapId] ?? 0) + 1,
+            };
+        }
+    }
+    if (run.invasion?.killed && INVADER_BY_ID.has(run.invasion.id)) {
+        const id = run.invasion.id;
+        save.invasions = { ...save.invasions, [id]: (save.invasions?.[id] ?? 0) + 1 };
+    }
+    // The Vault's records are the same for everyone: relic-free
+    if (run.vault && isRelicFree(run)) {
+        recordVault(save, run.vault, run);
+    }
+    if (run.victory && beatsMap(run)) {
+        if (GAUNTLET_FIGHTS.includes(run.mapId) && !save.awakenedOrder?.includes(run.mapId)) {
+            save.awakenedOrder = [...(save.awakenedOrder ?? []), run.mapId];
+        }
+        // Each Awakened fight won gives an Awakener's orb (the gauntlet's fights don't come here)
+        if (GAUNTLET_FIGHTS.includes(run.mapId)) {
+            save.awakenerOrbs = (save.awakenerOrbs ?? 0) + AWAKENED_WIN_ORBS;
+        }
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
-        if (run.hard) {
+        // Won in a Card collection only run (each co-op player's own run summary says)
+        if (run.cardsOnly && !save.cardsOnlyWins?.includes(run.mapId)) {
+            save.cardsOnlyWins = [...(save.cardsOnlyWins ?? []), run.mapId];
+        }
+        // A win with relics on still counts, but sets only the map's ordinary records
+        // (act-2-fallen-empire.md, 13.2): not hard mode's. A remixed win sets its remixes' instead.
+        const remixed = isRemixed(run);
+        if (remixed) {
+            // An endless one's recorded as it ends, below
+            if (!run.endless) {
+                recordRemix(save, run);
+            }
+        } else if (isHardRecord(run)) {
             save.hardVictories[run.mapId] = (save.hardVictories[run.mapId] ?? 0) + 1;
         }
-        if (run.expert) {
+        if (run.expert && isRelicFree(run)) {
             save.expertVictories[run.mapId] = (save.expertVictories[run.mapId] ?? 0) + 1;
+        }
+        if (!remixed && !run.endless && isActRecord(save, run)) {
+            save.actBest ??= {};
+            save.actBest[run.mapId] = {
+                seconds: run.seconds,
+                step: run.actStep ?? 0,
+                ...runSetup(run),
+            };
+        }
+        if (!remixed && !run.endless && isInvocationRecord(save, run)) {
+            save.invocationBest ??= {};
+            save.invocationBest[run.mapId] = {
+                points: run.points!,
+                seconds: run.seconds,
+                ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+            };
         }
     }
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
     save.bestLevel = Math.max(save.bestLevel, run.level);
-    if (run.endless && isEndlessRecord(save, run)) {
-        const records = run.hard ? save.hardEndlessBest : save.endlessBest;
-        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
+    if (run.endless && isRemixed(run)) {
+        recordRemix(save, run);
+    } else if (run.endless && isEndlessRecord(save, run)) {
+        const records = isHardRecord(run) ? save.hardEndlessBest : save.endlessBest;
+        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds, ...runSetup(run) };
+        if (MAP_BY_ID.get(run.mapId)?.act) {
+            records[run.mapId].step = run.actStep ?? 0;
+        }
     }
     for (const id of run.gearFound ?? []) {
         if (isCasketGear(id) && !save.foundGear.includes(id)) {
@@ -880,6 +1402,10 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
             save.trophies.push(id);
         }
     }
+    // Won or not, the room was beaten
+    if (run.scabarasBeaten) {
+        save.scabarasBeaten = true;
+    }
     const tallies = getQuestTallies(run);
     for (const [id, kills] of Object.entries(tallies.enemyKills)) {
         save.enemyKills[id] = (save.enemyKills[id] ?? 0) + kills;
@@ -891,8 +1417,30 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         save.totalCoins += quest.coins;
     }
     bankCombatTasks(save, run);
+    applyQuestTrophies(save);
     applyUnlocks(save, run);
+    if (run.cardsOnly) {
+        // The run's own finds, not a quest's or an older save's caught up
+        const first = [...new Set(run.trophies ?? [])].filter(
+            (id) => !trophiesBefore.has(id) && save.trophies.includes(id),
+        );
+        if (first.length > 0) {
+            save.cardsOnlyFinds = [...(save.cardsOnlyFinds ?? []), ...first];
+        }
+    }
     return quests;
+}
+
+function applyQuestTrophies(save: SaveData): void {
+    for (const trophy of TROPHIES) {
+        if (
+            trophy.from.kind === "quest" &&
+            save.questsDone.includes(trophy.from.questId) &&
+            !save.trophies.includes(trophy.id)
+        ) {
+            save.trophies.push(trophy.id);
+        }
+    }
 }
 
 // What a run counts towards quests: its kills and caskets, except on the fun
@@ -931,9 +1479,10 @@ export function getQuestProgress(save: SaveData, quest: QuestDef, run?: RunSumma
             return { done: Math.min(done, objective.count), of: objective.count };
         }
         case "beatMap": {
+            // A fight in parts is beaten by its last part only (as recordRun counts it)
             const won =
                 (save.mapVictories[objective.mapId] ?? 0) > 0 ||
-                (run?.victory === true && run.mapId === objective.mapId);
+                (run?.victory === true && run.mapId === objective.mapId && beatsMap(run));
             return { done: won ? 1 : 0, of: 1 };
         }
     }
@@ -957,13 +1506,98 @@ export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     if (isDevMap(run.mapId)) {
         return false;
     }
-    const best = (run.hard ? save.hardEndlessBest : save.endlessBest)[run.mapId];
+    const best = (isHardRecord(run) ? save.hardEndlessBest : save.endlessBest)[run.mapId];
     const round = run.round ?? 1;
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
 }
 
+// A run with remixes on (content/remixes.ts)
+export function isRemixed(run: RunSummary): boolean {
+    return (run.remixes?.length ?? 0) > 0;
+}
+
+// A remixed run's records (SaveData.remixVictories): only a relic-free run's. A win counts once
+// (an endless run is recorded as it ends, won or not).
+function recordRemix(save: SaveData, run: RunSummary): void {
+    if (!isRelicFree(run) || isDevMap(run.mapId)) {
+        return;
+    }
+    const key = remixKey(run.mapId, cleanRemixes(run.remixes));
+    const record: RemixRecord = save.remixVictories?.[key] ?? { wins: 0 };
+    if (run.victory) {
+        record.wins++;
+        if (run.hard) {
+            record.hard = (record.hard ?? 0) + 1;
+        }
+        if (!run.endless && (record.seconds === undefined || run.seconds < record.seconds)) {
+            record.seconds = run.seconds;
+        }
+    }
+    if (run.endless) {
+        const round = run.round ?? 1;
+        const best = record.endless;
+        if (!best || round > best.round || (round === best.round && run.seconds > best.seconds)) {
+            record.endless = { round, seconds: run.seconds };
+        }
+    }
+    save.remixVictories ??= {};
+    save.remixVictories[key] = record;
+}
+
+// The most remixes a map's been beaten with at once (its card's badge), relic-free
+export function getRemixBest(save: SaveData, mapId: string): number {
+    let most = 0;
+    for (const [key, record] of Object.entries(save.remixVictories ?? {})) {
+        const parsed = parseRemixKey(key);
+        if (parsed?.mapId === mapId && record.wins > 0) {
+            most = Math.max(most, parsed.remixes.length);
+        }
+    }
+    return most;
+}
+
+// No relics on (content/relics.ts): hard mode's records are relic-free
+export function isRelicFree(run: RunSummary): boolean {
+    return !run.relics || run.relics.length === 0;
+}
+
+// A hard run that sets hard mode's records: one with no relics on
+export function isHardRecord(run: RunSummary): boolean {
+    return run.hard === true && isRelicFree(run);
+}
+
+// What a record keeps of the run that set it
+function runSetup(run: RunSummary): RecordSetup {
+    return {
+        ...(run.points !== undefined && run.points > 0 && { points: run.points }),
+        ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+    };
+}
+
+// Whether a win is its map's best at invocations (SaveData.invocationBest): at more points than the
+// one kept, or as many and quicker
+export function isInvocationRecord(save: SaveData, run: RunSummary): boolean {
+    const points = run.points ?? 0;
+    if (!run.victory || points <= 0 || isDevMap(run.mapId)) {
+        return false;
+    }
+    const best = save.invocationBest?.[run.mapId];
+    return !best || points > best.points || (points === best.points && run.seconds < best.seconds);
+}
+
+// Whether a win on an act's map is its best (SaveData.actBest): at a higher step than the one
+// kept, or as high and quicker
+export function isActRecord(save: SaveData, run: RunSummary): boolean {
+    if (!run.victory || !MAP_BY_ID.get(run.mapId)?.act || isDevMap(run.mapId)) {
+        return false;
+    }
+    const best = save.actBest?.[run.mapId];
+    const step = run.actStep ?? 0;
+    return !best || step > best.step || (step === best.step && run.seconds < best.seconds);
+}
+
 // Beating a map counts from any run so far; the rest need doing in one run
-function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
+export function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
     switch (task.kind) {
         case "beatMap":
             return ((task.hard ? save.hardVictories : save.mapVictories)[task.mapId] ?? 0) > 0;
@@ -975,6 +1609,12 @@ function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean
             return (
                 save.trophies.includes(task.trophyId) ||
                 (run?.trophies ?? []).includes(task.trophyId)
+            );
+        case "realmCaskets":
+            return run?.mapId === task.mapId && (run.realmCaskets ?? 0) >= task.count;
+        case "pieces":
+            return task.trophyIds.every(
+                (id) => save.trophies.includes(id) || (run?.trophies ?? []).includes(id),
             );
     }
 }
@@ -1006,12 +1646,51 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
     save.unlockedItems.push(...earned.items.map((i) => i.id));
 }
 
+// Whether a won run beats its map: any win, but in a fight in parts only the last part's
+function beatsMap(run: RunSummary): boolean {
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    return !stages || (run.stage ?? 0) + 1 >= stages.length;
+}
+
+// The part of a fight in parts a run plays next (MapDef.stages): the first not beaten (from the
+// first again once the last has been)
+export function getFightStage(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    const next = save.fightStages?.[mapId] ?? 0;
+    return stages && Number.isInteger(next) && next > 0 && next < stages.length ? next : 0;
+}
+
+// How many of a fight in parts' parts can be played (MapDef.stages): all of them once it's been
+// beaten, or each up to the next not beaten yet, to be fought again
+export function getReachedStages(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    if (!stages) {
+        return 0;
+    }
+    return (save.mapVictories[mapId] ?? 0) > 0 ? stages.length : getFightStage(save, mapId) + 1;
+}
+
 // The first map is always open; each after it opens once the one before it
 // has been beaten, or once it's been beaten itself (a co-op guest can win on
 // a map the host had open). The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
-    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId)) {
+    // Behind another map, whatever this one is (MapDef.requires)
+    const requires = MAP_BY_ID.get(mapId)?.requires;
+    if (requires) {
+        return (save.mapVictories[requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
+    }
+    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
+    }
+    // An act's maps open together once the map it requires has been beaten, in any order, and
+    // not at all while the act isn't out (isMapOut)
+    const map = MAP_BY_ID.get(mapId);
+    const act = map?.act;
+    if (map && act) {
+        return (
+            isMapOut(map) &&
+            ((save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0)
+        );
     }
     // A boss fight opens once the map it's the hard mode of has been beaten
     const fight = MAP_BY_ID.get(mapId)?.fight;
@@ -1029,8 +1708,10 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
 // A map can be played endless once it's been beaten; the fun maps are only
 // ever endless, and a boss fight never is (there's nothing after its boss)
 export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
-    // A raid ends with its last room: there's no round after it to come round again
-    if (MAP_BY_ID.get(mapId)?.fight || isRaidMap(mapId)) {
+    // A raid ends with its last room: there's no round after it to come round again. The Tombs of
+    // Amascut go by their invocations instead.
+    const map = MAP_BY_ID.get(mapId);
+    if (map?.fight || map?.tombs || isRaidMap(mapId)) {
         return false;
     }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
@@ -1039,6 +1720,10 @@ export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
 // Hard mode opens the same way: once the map's been beaten, and from the start
 // on the fun maps, which can't be
 export function isHardUnlocked(save: SaveData, mapId: string): boolean {
+    // The Tombs of Amascut's invocations take hard mode's place
+    if (MAP_BY_ID.get(mapId)?.tombs) {
+        return false;
+    }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
 }
 

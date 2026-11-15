@@ -2,7 +2,7 @@
 // loaded at a time. Settlements, the gaps between them, how far a road ever goes with nothing
 // to look at.
 //
-//   npx tsx scripts/scaperune/research/pacing-world.ts out.json
+//   bun run tsx scripts/scaperune/research/pacing-world.ts out.json
 import fs from "node:fs";
 
 import { TILE_INSIDE } from "../../../src/game/scaperune/format";

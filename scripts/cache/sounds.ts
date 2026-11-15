@@ -1,9 +1,9 @@
 // Sound effect tools.
 //
-//   npx tsx scripts/cache/sounds.ts validate          decode every sound effect, report failures
-//   npx tsx scripts/cache/sounds.ts seqs 390 711      sounds an animation plays, by frame
-//   npx tsx scripts/cache/sounds.ts info 2266 510     length and loudness of sounds
-//   npx tsx scripts/cache/sounds.ts wav out 2266 510  write sounds to out/<id>.wav to listen to
+//   bun run tsx scripts/cache/sounds.ts validate          decode every sound effect, report failures
+//   bun run tsx scripts/cache/sounds.ts seqs 390 711      sounds an animation plays, by frame
+//   bun run tsx scripts/cache/sounds.ts info 2266 510     length and loudness of sounds
+//   bun run tsx scripts/cache/sounds.ts wav out 2266 510  write sounds to out/<id>.wav to listen to
 import fs from "fs";
 import path from "path";
 
