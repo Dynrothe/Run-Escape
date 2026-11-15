@@ -1,7 +1,8 @@
 // The generated texts' English (locales/en/gen.json): what the content builds sentences from,
 // each message table living beside the code that uses it. Keys: stat.*, statline.*, unlock.*,
-// quest.*, evo.*, endless.*, log.*, weaponstat.*, lore.*
+// quest.*, evo.*, endless.*, log.*, weaponstat.*, lore.*, combat.*
 import { LOG_MESSAGES } from "../../../src/game/content/collectionLog";
+import { getCombatMessages } from "../../../src/game/content/combatTasks";
 import { ENDLESS_MESSAGES } from "../../../src/game/content/endless";
 import { EVOLUTIONS, EVO_MESSAGES } from "../../../src/game/content/evolutions";
 import { QUESTS, QUEST_MESSAGES, questWhatKey } from "../../../src/game/content/quests";
@@ -49,5 +50,6 @@ export default function extract(): Record<string, string> {
         ...LOG_MESSAGES,
         ...WEAPON_STAT_MESSAGES,
         ...LORE_MESSAGES,
+        ...getCombatMessages(),
     };
 }

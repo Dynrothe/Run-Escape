@@ -111,6 +111,7 @@ function trophyMap(trophy: TrophyDef): string | undefined {
     if (from.kind === "pumpkin") return "halloween";
     if (from.kind === "turkey") return "thanksgiving";
     if (from.kind === "tombs") return "tombs_of_amascut";
+    if (from.kind === "combatTier") return undefined;
     return from.mapId;
 }
 
@@ -259,12 +260,13 @@ function trophyCard(trophy: TrophyDef): CardDef {
 }
 
 // Every card there is, out or not: a save keeps the ones it has (migrateSave), so a card from a
-// map that isn't out yet isn't dropped from a tester's save
+// map that isn't out yet isn't dropped from a tester's save. Combat Achievements' tier rewards
+// aren't cards: they're earned with points, not found.
 export const ALL_CARDS: CardDef[] = [
     ...WEAPONS.flatMap(weaponCards),
     ...PASSIVES.map(passiveCard),
     ...CASKET_GEAR.map(gearCard),
-    ...TROPHIES.map(trophyCard),
+    ...TROPHIES.filter((trophy) => trophy.from.kind !== "combatTier").map(trophyCard),
 ];
 
 export const CARD_BY_ID: Map<string, CardDef> = new Map(ALL_CARDS.map((c) => [c.id, c]));

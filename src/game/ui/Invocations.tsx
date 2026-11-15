@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
-import { formatTime } from "../client/GameView";
+import { formatTime } from "../content/format";
 import {
     COIN_BONUS_CAP,
     HARD_PRESET,

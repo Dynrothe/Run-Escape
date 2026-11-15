@@ -86,6 +86,7 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
             newGear: ["Rune platebody"],
             newTrophies: [],
             quests: [],
+            combatTasks: [],
             ...(!solo && { coop: true }),
         },
     };

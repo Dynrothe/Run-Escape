@@ -13,6 +13,15 @@ the version in the corner).
   its size, each level up in the colour of the rarity it was taken at.
 - Restart, by Iakee: Give up in the pause menu can start the run again from the beginning. What
   you'd found is kept, as Give up keeps it.
+- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
+  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
+  Your kill counts, wins and endless rounds so far already count, without the coins.
+- Combat Achievements reach Act II's maps, the Awakened fights, Beneath Cursed Sands and the Tombs
+  of Amascut (raid levels, no deaths, a perfect run of each puzzle room), along with remixes,
+  invocations, invaders and an awakened final boss.
+- Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
+  says what spoilt one. The pause menu's Quests tab shows how every task the run is following is
+  going.
 
 ### Changed
 
@@ -22,6 +31,8 @@ the version in the corner).
   language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
 - The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
   be translated, by Iakee.
+- The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
+  Achievements earn them. Any you bought are refunded.
 
 ## 0.33.2 - 2026-11-15
 

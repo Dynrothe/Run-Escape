@@ -1923,6 +1923,20 @@
     color: var(--ui-green-text);
 }
 
+/* Pinned Combat Achievements, under the quests: plain until they've got somewhere, red once
+   they're spoilt */
+.ui-combat-on .ui-quest-track-name,
+.ui-combat-on .ui-quest-name {
+    color: var(--ui-white);
+}
+
+.ui-combat-failed .ui-quest-track-name,
+.ui-combat-failed .ui-quest-track-progress,
+.ui-combat-failed .ui-quest-name,
+.ui-combat-failed .ui-quest-progress {
+    color: var(--ui-red);
+}
+
 /* The damage meter, under the quest tracker, and each weapon's under it */
 /* Only the DPS takes clicks: the panel under it lets them through to the
    game, the mouse wheel's zoom included */

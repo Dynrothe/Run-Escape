@@ -93,6 +93,8 @@ go stale. Add anything that cost you time to work out.
 | NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Combat Achievements: tasks, tiers, coins, rewards      | `src/game/content/combatTasks.ts`                                      |
+| What follows a run's Combat Achievements               | `src/game/core/CombatTracker.ts`                                       |
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
 | The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
 | The Customisable max cape: its parts and presets       | `content/maxCape.ts`, `PlayerAppearance.recolors`, `recolorAtOnce`     |
@@ -164,6 +166,23 @@ go stale. Add anything that cost you time to work out.
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never
 changes the sim directly.
 
+Combat Achievements are for solo runs only. `CombatTracker` watches the `Sim` and each tick's events
+from outside it, and must never write to either: the run's hash has to come out the same with it
+(`CombatTracker.test.ts` checks). `GameClient.handleEvents` hands it every batch of events, empty
+ones too, so every `sim.takeEvents()` has to go straight into it. Actions between ticks emit
+events as well: a Smite can kill Zachariah, or move him on a phase, there and then. Every task has
+to be doable on every run, by playing well: see Combat task in `.claude/rules/adding-content.md`
+for what that rules out. `CombatTracker.statuses` says where each task has got (under way, done,
+or failed and why), for the HUD's rows of pinned tasks (`SaveData.combatPinned`) and the pause
+menu. A spoilt pinned task gets a toast (`takeFailed`). A failure is a `CombatReason`, words only
+once `describeCombatReason` puts it in the player's language, and names the attack that did it,
+from `playerHit`'s `attack`. A `missed` hit spoils nothing, and the Forgotten Four's fights aren't
+followed (`sim.gauntlet`): they bank no run of their own. An avoided attack is summed by name over
+every boss on the map (`damageByAttack`), so name one only that boss has there: Dart, Claw, Grasp
+and Shadow burst each belong to more than one. The Tombs' puzzle rooms emit `tombsMistake`, which
+only the tracker reads, and the Wardens arrive without `bossSpawned`, so no kill window opens for
+them yet.
+
 Co-op guests can predict movement, only for display (`client/coop/MovementPrediction.ts` and
 `PlayerPose.ts`). It's on by default, but a player can turn `movePrediction` off in
 `DisplaySettings`, so a guest's `CoopRun.prediction` can be undefined. Keep predicted positions
@@ -229,6 +248,8 @@ ENDLESS=1 bun run tsx scripts/game/simulate-run.ts wizard 3      # endless mode
 HARD=1 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts wizard 3
 WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger 3    # one weapon
 PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts "" 3    # co-op
+# Combat Achievements
+CA=1 MAP=lumbridge META=max ARMOURY=max bun run tsx scripts/game/simulate-run.ts wizard 3
 ```
 
 - **Use at least 3 seeds.** A single seed can move a whole group's results by a lot with no real

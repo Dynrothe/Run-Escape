@@ -60,6 +60,7 @@ function createNumbers(): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
     };
 }
 

@@ -72,6 +72,9 @@ export const CHECKBOX_SPRITES = {
 
 export const COLLECTION_LOG_OBJ = 22711;
 
+// Combat Achievements' tile: Ghommal's hilt 6, the top tier's reward
+export const COMBAT_ACHIEVEMENTS_OBJ = 25936;
+
 // Cards' tile and their packs (content/cards.ts): Mystic cards, a deck of cards
 export const CARDS_ICON_OBJ = 27645;
 

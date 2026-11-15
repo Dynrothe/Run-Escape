@@ -1,6 +1,6 @@
 import type { GameClient } from "../../client/GameClient";
 import type { UiSnapshot } from "../../client/GameStore";
-import { formatTime } from "../../client/GameView";
+import { formatTime } from "../../content/format";
 import { invaderName } from "../../content/invasions";
 import {
     INVOCATION_BY_ID,
@@ -342,6 +342,12 @@ export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
                 <p key={quest.name} className="ui-unlocked">
                     {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
                     <Coins amount={quest.coins} />
+                </p>
+            ))}
+            {result?.combatTasks.map((task) => (
+                <p key={task.name} className="ui-unlocked">
+                    {t("ui.result.combat_task_complete", { name: task.name, tier: task.tier })}{" "}
+                    <Coins amount={task.coins} />
                 </p>
             ))}
         </>

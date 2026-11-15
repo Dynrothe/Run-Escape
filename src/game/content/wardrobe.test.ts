@@ -5,7 +5,7 @@ import { getBareAppearance, getCharacterAppearance } from "../client/GameAssets"
 import { makeLoadout } from "../client/coop/CoopLobby";
 import { buyCosmetic, canWearCosmetic, createSave, migrateSave } from "../core/save";
 import { CHARACTERS, getCharacter } from "./characters";
-import { getTrophyMap } from "./collectionLog";
+import { COMBAT_ENTRY, getTrophyMap } from "./collectionLog";
 import { getMap } from "./maps";
 import { PUMPKIN_MAPS } from "./trickOrTreat";
 import { TROPHIES } from "./trophies";
@@ -110,12 +110,18 @@ describe("found pieces", () => {
         expect(getPieceTrophy(28620)?.id).toBe("turkey_hat");
     });
 
-    it("come from a map's Collection log, and are no adventurer's own", () => {
+    it("come from a map's Collection log, or Combat Achievements', and are no adventurer's own", () => {
         for (const piece of found) {
             const trophy = getPieceTrophy(piece.objId)!;
-            expect(getMap(getTrophyMap(trophy)).id).toBe(getTrophyMap(trophy));
+            if (trophy.from.kind === "combatTier") {
+                expect(getTrophyMap(trophy)).toBe(COMBAT_ENTRY);
+            } else {
+                expect(getMap(getTrophyMap(trophy)).id).toBe(getTrophyMap(trophy));
+            }
             expect(getPieceAdventurer(piece.objId)).toBeUndefined();
         }
+        // Ghommal's hilts, each its tier's reward
+        expect(getPieceTrophy(25936)?.id).toBe("ghommals_hilt_6");
     });
 
     it("are every trophy that's worn", () => {
@@ -155,6 +161,24 @@ describe("found pieces", () => {
         expect(migrateSave(JSON.parse(JSON.stringify(save))).look?.outfit).toEqual({
             [EquipSlot.HEAD]: red.objId,
         });
+    });
+
+    it("give back what Ghommal's hilts cost a save from before Combat Achievements, once", () => {
+        const [hilt1, hilt6] = [25926, 25936].map((id) => COSMETIC_BY_ID.get(id)!);
+        const [mask] = named(/^red halloween mask$/i);
+        const save = createSave();
+        save.coins = 100;
+        // Bought in 0.31 to 0.33, one hilt listed twice, and worn; the mask went unpaid in 0.32.0
+        save.cosmetics = [hilt1.objId, hilt6.objId, hilt1.objId, mask.objId, hat.objId];
+        save.look = { outfit: { [EquipSlot.SHIELD]: hilt1.objId } };
+        const old = { ...JSON.parse(JSON.stringify(save)), version: 11 };
+        const loaded = migrateSave(old);
+        expect(loaded.coins).toBe(100 + getCosmeticPrice(hilt1) + getCosmeticPrice(hilt6));
+        expect(loaded.cosmetics).toEqual([hat.objId]);
+        expect(loaded.look?.outfit).toBeUndefined();
+        // Loaded again, as 12, it isn't paid twice
+        expect(migrateSave(JSON.parse(JSON.stringify(loaded))).coins).toBe(loaded.coins);
+        expect(migrateSave({ ...old, version: 12 }).coins).toBe(100);
     });
 });
 

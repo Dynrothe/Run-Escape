@@ -315,17 +315,22 @@ unlocks something in the game.
 
 ### Combat Achievements
 
-Combat Achievements are PR 110 (`content/combatTasks.ts`, `core/CombatTracker.ts`), which already has
-the Theatre of Blood's tasks. Once it's merged and the raid's done, the Tombs get tasks matched to
-OSRS's own ToA ones, mostly on its goal kinds (`kill` with `within` or `without: ["hits"]`, `win`
-with rules, `beatMap`):
+Combat Achievements (`content/combatTasks.ts`, `core/CombatTracker.ts`) have the Tombs' tasks,
+matched to OSRS's own ToA ones where the game has what they ask for:
 
-- **Each path**: its boss with no deaths, within a time, and its mechanic done right (Ba-Ba with no
-  boulder hits; the Apmeken room with no pillar or vent left to go).
-- **Raid level**: beat at Entry, Normal (150), Expert (300) and up to 500, a raid level on
-  `beatMap`.
-- **Invocations**: a Hardcore Run, and Insanity once the Wardens are in.
-- **The whole raid**: no deaths, and a speed run.
+- **The raid**: a path cleared (Pathfinder), the raid beaten (Tomb Explorer), without dying
+  (Hardcore Tombs) and without the Helpful Spirit's supplies (Spiritless).
+- **Raid level**: beaten at 150 (Movin' on up), 300 (Confident Raider), 350 without dying
+  (Something of an expert myself) and 500 (Amascut's Remnant; deaths allowed, as from 450 a
+  boss's adds drop no food, and its unavoidable hits outrun a run's hitpoints), on `win`'s
+  `raidLevel`.
+- **Each puzzle room** without a mistake (Perfect Apmeken, Crondis, Het and Scabaras), on
+  `perfectRoom`. The rooms emit `tombsMistake` where each mistake happens.
+- **Each path boss** with one of its attacks dodged: Ba-Ba's rolling boulders, Akkha's unstable
+  orbs, Kephri's scarab stampede, Zebak's acid spray.
+
+Still to come: the Wardens (they arrive without `bossSpawned`, so a kill window needs opening
+another way), a speed run, and Insanity.
 
 ## 9. The order it's built in
 

@@ -31,6 +31,7 @@ export type Screen =
     // The Wardrobe: the body, the outfit, and its store of outfit pieces
     | "wardrobe"
     | "quests"
+    | "combatAchievements"
     | "collectionLog"
     // Cards: the album and its packs (content/cards.ts)
     | "cards"
@@ -350,6 +351,8 @@ export type HudNumbers = {
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
+    // The Combat Achievements a solo run follows, pinned ones first (none in co-op)
+    combatTasks: CombatTrackView[];
 };
 
 // next, keeping each of prev's fields that's the same (by value), so a memoized
@@ -522,6 +525,22 @@ export type QuestTrackView = {
     unlockObjId?: number;
 };
 
+// A Combat Achievement the run's following: on (still to do), done this run, or failed (reason:
+// what spoilt it, for the rest of the run or until its boss comes again); progress for one that
+// counts its way there (kills, Smites, maps beaten)
+export type CombatTrackView = {
+    id: string;
+    name: string;
+    description: string;
+    // Its tier's name, and the coins it pays
+    tier: string;
+    coins: number;
+    state: "on" | "done" | "failed";
+    reason?: string;
+    progress?: { done: number; of: number };
+    pinned: boolean;
+};
+
 export type ChoiceView = {
     title: string;
     text: string;
@@ -671,6 +690,8 @@ export type UiSnapshot = {
         // The names of the trophies it found for the first time
         newTrophies: string[];
         quests: { name: string; coins: number }[];
+        // The Combat Achievements it banked: name, tier and coins
+        combatTasks: { name: string; tier: string; coins: number }[];
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;

@@ -35,6 +35,7 @@ import { STAT_ICON_OBJ_IDS } from "../../src/game/content/statIcons";
 import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
+    COMBAT_ACHIEVEMENTS_OBJ,
     PLATINUM_TOKEN_OBJ,
 } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
@@ -176,6 +177,7 @@ function getWornObjs(): [EquipSlot, number][] {
 function getContentObjIds(): number[] {
     const ids = new Set<number>([
         COLLECTION_LOG_OBJ,
+        COMBAT_ACHIEVEMENTS_OBJ,
         CARDS_ICON_OBJ,
         PLATINUM_TOKEN_OBJ,
         ...Object.values(PICKUP_OBJS),

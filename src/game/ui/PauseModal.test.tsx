@@ -43,13 +43,18 @@ function numbers(): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
     };
 }
 
-function paused(combatView?: CombatView, methods: Partial<GameClient> = {}) {
+function paused(
+    combatView?: CombatView,
+    methods: Partial<GameClient> = {},
+    changes: Partial<HudNumbers> = {},
+) {
     const store = new GameStore(createSave());
     store.set({ screen: "run", overlay: "paused", hud: hud() });
-    store.setNumbers(numbers());
+    store.setNumbers({ ...numbers(), ...changes });
     const noop = () => {};
     const client = new Proxy(
         { store, input: { stick: {} }, getCombatView: () => combatView, ...methods },
@@ -184,4 +189,44 @@ test("the Combat page shows invocations that are active on this map", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Combat" }));
     expect(screen.getByRole("list", { name: "Invocations" })).toHaveTextContent("Glass Cannon");
     expect(screen.getByText("20 points", { selector: ".ui-loadout-count" })).toBeVisible();
+});
+
+test("the Quests tab shows the combat tasks the run follows, with what spoilt one", () => {
+    paused(
+        undefined,
+        {},
+        {
+            combatTasks: [
+                {
+                    id: "bite_proof",
+                    name: "Bite-Proof",
+                    description: "Kill Count Draynor without him hitting you.",
+                    tier: "Easy",
+                    coins: 100,
+                    state: "failed",
+                    reason: "hit by Count Draynor",
+                    pinned: true,
+                },
+                {
+                    id: "wise_guy",
+                    name: "Wise Guy",
+                    description: "Kill the Wise Old Man within 60 seconds of his arrival.",
+                    tier: "Easy",
+                    coins: 100,
+                    state: "on",
+                    pinned: false,
+                },
+            ],
+        },
+    );
+    // A map with no quests has the tab for its combat tasks
+    fireEvent.click(screen.getByRole("tab", { name: "Quests" }));
+    const cards = [...document.querySelectorAll(".ui-pq-card")];
+    expect(cards.map((card) => card.className)).toEqual([
+        "ui-pq-card ui-pq-new",
+        "ui-pq-card ui-pq-on",
+    ]);
+    expect(cards[0].textContent).toContain("Easy · Pinned");
+    expect(cards[0].textContent).toContain("Failed: hit by Count Draynor.");
+    expect(cards[1].textContent).toContain("Kill the Wise Old Man");
 });

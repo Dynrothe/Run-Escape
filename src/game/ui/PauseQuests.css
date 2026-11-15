@@ -156,3 +156,17 @@
 .ui-pq-stone .ui-pq-card {
     grid-template-columns: 48px minmax(0, 1fr) auto auto;
 }
+
+/* A Combat Achievement still to do, with nothing spoilt yet: plain, not a quest's red */
+.ui-pq-on {
+    --tone: var(--ui-white);
+    --edge-tone: rgba(107, 94, 74, 0.9);
+}
+
+/* A Combat Achievement's tier, and whether it's pinned, after its name */
+.ui-pq-meta {
+    margin-left: 8px;
+    color: #b8ab8a;
+    font-family: inherit;
+    font-size: 14px;
+}

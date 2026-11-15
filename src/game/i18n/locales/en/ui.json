@@ -543,6 +543,7 @@
     "ui.title.armoury": "Armoury",
     "ui.title.wardrobe": "Wardrobe",
     "ui.title.collection_log": "Collection log",
+    "ui.title.combat_achievements": "Combat Achievements",
     "ui.title.cards": "Cards",
     "ui.title.discord": "Join the Discord",
     "ui.title.github": "See the code on GitHub",
@@ -704,5 +705,12 @@
     "ui.tombs.board.in_time": "Inside the {minutes} minute time limit.",
     "ui.tombs.board.past_time": "Past the {minutes} minute time limit: the chest goes by raid level {level}.",
     "ui.tombs.board.wipes.one": "The party died {n} time.",
-    "ui.tombs.board.wipes.other": "The party died {n} times."
+    "ui.tombs.board.wipes.other": "The party died {n} times.",
+    "pause.heading.combat_tasks": "Combat tasks",
+    "ui.combat_tasks.heading": "Combat tasks",
+    "ui.combat_tasks.toggle_tooltip": "Show or hide the quests and pinned combat tasks (Q)",
+    "ui.combat_tasks.failed": "Failed",
+    "ui.combat_tasks.failed_because": "Failed: {reason}.",
+    "ui.combat_tasks.description_failed": "{description} Failed: {reason}.",
+    "ui.result.combat_task_complete": "Combat task complete: {name} ({tier})!"
 }

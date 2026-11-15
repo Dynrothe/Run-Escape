@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { formatTime } from "../../client/GameView";
+import { formatTime } from "../../content/format";
 import { getMap } from "../../content/maps";
 import { RELIC_BY_ID, relicName } from "../../content/relics";
 import { RESULT_TAB_SPRITES } from "../../content/titleIcons";

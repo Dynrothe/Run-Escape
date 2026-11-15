@@ -5736,7 +5736,8 @@ export class Sim {
 
     // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
     // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare. A
-    // map's MapDef.hits scales it and can put it through armour. Returns what it took.
+    // map's MapDef.hits scales it and can put it through armour. attack: the boss attack's name,
+    // for the event (Combat Achievements say what spoilt a task). Returns what it took.
     private damagePlayer(
         damage: number,
         enemyId: string,
@@ -5745,6 +5746,7 @@ export class Sim {
         ignoreArmor = false,
         // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
         grace = true,
+        attack?: string,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -5774,7 +5776,15 @@ export class Sim {
             if (grace) {
                 player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
             }
-            this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+            this.emit({
+                type: "playerHit",
+                amount: 0,
+                enemyId,
+                elite,
+                sound,
+                attack,
+                missed: true,
+            });
             return 0;
         }
         // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
@@ -5819,7 +5829,15 @@ export class Sim {
                 if (grace) {
                     player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
                 }
-                this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+                this.emit({
+                    type: "playerHit",
+                    amount: 0,
+                    enemyId,
+                    elite,
+                    sound,
+                    attack,
+                    missed: true,
+                });
                 return 0;
             }
         }
@@ -5842,7 +5860,7 @@ export class Sim {
         if (grace) {
             player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
         }
-        this.emit({ type: "playerHit", amount, enemyId, elite, sound });
+        this.emit({ type: "playerHit", amount, enemyId, elite, sound, attack });
         if (player.hp <= 0) {
             this.playerDied();
         }
@@ -6114,6 +6132,7 @@ export class Sim {
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
         }
+        this.emit({ type: "enemyHealed", enemyId: target.def.id, healerId: enemy.def.id });
         if (heals.once) {
             this.vanish(enemy);
             if (target.def.boss?.siphon?.enemyId === enemy.def.id) {
@@ -10330,6 +10349,13 @@ export class Sim {
         };
     }
 
+    // A mistake in the path's puzzle room, for Combat Achievements: only said, nothing changes
+    private tombsMistake(): void {
+        if (this.tombsPath !== undefined) {
+            this.emit({ type: "tombsMistake", path: this.tombsPath });
+        }
+    }
+
     // A trap's hit on the current hero: hurt, their water spilt, weakened
     private crondisTrapHit(damage: number, message: string): void {
         if (this.damagePlayer(damage, "crondis_trap", false) === 0) {
@@ -10343,6 +10369,9 @@ export class Sim {
     private crondisSpill(message?: string): void {
         const crondis = this.tombsRoom?.crondis;
         const index = this.hero.index;
+        if (crondis) {
+            this.tombsMistake();
+        }
         if (!crondis || crondis.water[index] <= 0) {
             return;
         }
@@ -10781,6 +10810,7 @@ export class Sim {
         const player = this.player;
         const scabaras = this.tombsRoom!.scabaras!;
         const { x, y } = player;
+        this.tombsMistake();
         this.emit({ type: "notice", message });
         this.addEffect(
             SCABARAS.rockSpotAnim,
@@ -11299,12 +11329,15 @@ export class Sim {
         const scale = this.tombsRoomScale();
         this.forEachHeroInReach(() => {
             const player = this.player;
-            if (near(player.x, player.y, 0.5)) {
+            if (
+                near(player.x, player.y, 0.5) &&
                 this.damagePlayer(
                     HET.beamDamage * scale.damage * this.hardScale.damage,
                     "hets_seal",
                     false,
-                );
+                ) > 0
+            ) {
+                this.tombsMistake();
             }
         });
         this.damageSource = "other";
@@ -11605,7 +11638,9 @@ export class Sim {
                     fm.hypot(player.x - orb.x, player.y - orb.y) <= HET.orbRadius + player.radius
                 ) {
                     hit = true;
-                    this.damagePlayer(damage, "het_orb", false);
+                    if (this.damagePlayer(damage, "het_orb", false) > 0) {
+                        this.tombsMistake();
+                    }
                 }
             });
             const inside =
@@ -11685,6 +11720,7 @@ export class Sim {
             this.hardScale.damage *
             this.tombsRoomScale().damage;
         room.missed++;
+        this.tombsMistake();
         this.addEffect(
             at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillarFalls : APMEKEN_SPOTANIMS.ventBursts,
             at.x,
@@ -19823,6 +19859,8 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
+            true,
+            attack.name,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;

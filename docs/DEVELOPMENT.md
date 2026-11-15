@@ -811,7 +811,8 @@ src/game/
   content/  enemies, weapons, passives, items (gear, utility, caskets), armoury (what each piece
             of gear upgrades into), power-ups and thralls, random events, characters, shop, maps
             (arena, spawn, difficulty) and their waves: plain data with cache ids; unlocks
-            (what each map's tasks bring in); quests (what each asks for and pays); hard (hard
+            (what each map's tasks bring in); quests (what each asks for and pays); combatTasks
+            (Combat Achievements: tasks, tiers, coins and rewards); hard (hard
             mode's numbers); raids (a raid's rooms, points, supply chest, teleporters) and theatre
             (the Theatre of Blood's bosses)
     fun/    the fun maps (endless, random bosses) and their players: outfits, chat, shots
@@ -835,6 +836,9 @@ src/game/
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices
     Loot.ts           what's in a casket, the inventory
+    CombatTracker.ts  follows a solo run's Combat Achievements from outside the sim: it reads the
+                      sim and each tick's events, and never writes to them; says where each task
+                      has got (under way, done, or failed and why) for the HUD and pause menu
     save.ts           versioned save with migrations, shop, unlocks (maps, and the adventurers
                       and items earned by tasks), the gear found and the Armoury's upgrades,
                       quests (and the kills and caskets they count), and LocalSaveStore (the
@@ -900,7 +904,8 @@ zooming never moves the picture, pitched or not. They were set by eye with the e
 sequence uses more of the cache, so deploy it with a new slim cache.
 
 The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
-(`PauseModal`), and its Collection log and settings are buttons at the bottom, beside Give up and
+(`PauseModal`; Quests has the Combat Achievements a solo run follows under its quests, in
+`PauseQuests`), and its Collection log and settings are buttons at the bottom, beside Give up and
 Resume, each one's page replacing the open tab (`PAUSE_BUTTON_PAGES`; the button goes back to the
 tab it came from, through the other's page too). Those four buttons are one
 kind (`.ui-pause-action`): as wide as each other, an icon beside each name (`PAUSE_TAB_SPRITES`,
@@ -2599,7 +2604,10 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
-                                                        how damage keeps up with the rounds)
+                                                        how damage keeps up with the rounds;
+                                                        CA=1 which Combat Achievements each run
+                                                        did, what spoilt the rest, and each
+                                                        boss's time from arrival to kill)
 scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
                                                         on one room, boss or the whole raid
                                                         (ROOM=apmeken, het, scabaras,
@@ -3411,6 +3419,20 @@ preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
 (`ui-shop-help-coins`) and the refund hint under the cards are left out there, as the
 balance's label says as much.
 
+Save format 12 adds Combat Achievements: `combatTasks` (the ids done and paid) and `combatProgress`
+(task id to kills so far, `task:map` to 1 for each map a beat-them-all task has had beaten, or
+`task:enemy` to 1 for each enemy a one-of-each kill count has had killed). A
+save from before it gets the kill counts, wins and endless rounds its records show, once, without
+coins; later saves never look at those records for them, since co-op runs add to them and co-op
+doesn't count. A solo run's tasks are banked in `recordRun` from `RunSummary.combatTasks`, which
+only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go in `trophies`.
+Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
+run earn: `task:style` for each combat style a beat-with-each task has been won with. The
+optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
+were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it. The Wardrobe sold Ghommal's
+hilts until 12 made them the tiers' rewards: a save from before it gets back what each one it
+bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and its outfits.
+
 ### Languages
 
 The game is in English and Português (BR). Only English is checked: the other languages are
@@ -3438,7 +3460,8 @@ in `i18n/store.ts`.
   patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
   language without that key keeps the whole sentence in English, and a new sentence of the kind
   needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
-  the accessors, for the level-up cards.
+  the accessors, for the level-up cards. `CombatTracker` keeps why a task failed as data, a
+  `CombatReason`, and `describeCombatReason` (`content/combatTasks.ts`) words it as it's shown.
 - `items.json`, `world.json` and `gen.json` are generated from the content by
   `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
   `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is

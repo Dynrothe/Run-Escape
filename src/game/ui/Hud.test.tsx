@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { GameClient } from "../client/GameClient";
 import {
     ChestView,
+    CombatTrackView,
     EventView,
     GameStore,
     HudNumbers,
@@ -82,6 +83,7 @@ function numbers(changes: Partial<HudNumbers> = {}): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
         ...changes,
     };
 }
@@ -464,6 +466,45 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")).toBeNull();
         act(() => store.setNumbers(numbers({ bossIn: 42 })));
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
+    });
+
+    test("the pinned combat tasks the run follows, and how each is going", () => {
+        const { store, view } = renderHud();
+        const task = (id: string, changes: Partial<CombatTrackView>): CombatTrackView => ({
+            id,
+            name: id,
+            description: "",
+            tier: "Easy",
+            coins: 100,
+            state: "on",
+            pinned: true,
+            ...changes,
+        });
+        const rows = () =>
+            [...view.container.querySelectorAll(".ui-combat-tracker .ui-quest-track")].map(
+                (row) => [row.className.split(" ")[1], row.textContent],
+            );
+        expect(view.container.querySelector(".ui-combat-tracker")).toBeNull();
+        act(() =>
+            store.setNumbers(
+                numbers({
+                    combatTasks: [
+                        task("Bite-Proof", { state: "failed", reason: "hit by Count Draynor" }),
+                        task("Recurring", { progress: { done: 2, of: 5 } }),
+                        task("Wise Guy", { state: "done" }),
+                        task("Purist", {}),
+                        // Not pinned: in the pause menu only
+                        task("Hidden", { pinned: false }),
+                    ],
+                }),
+            ),
+        );
+        expect(rows()).toEqual([
+            ["ui-combat-failed", "Bite-ProofFailed"],
+            ["ui-quest-started", "Recurring2 / 5"],
+            ["ui-quest-done", "Wise GuyDone"],
+            ["ui-combat-on", "Purist"],
+        ]);
     });
 
     test("a map's objective shows while no boss is out, with how many of it are done", () => {

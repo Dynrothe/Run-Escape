@@ -25,6 +25,7 @@ import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import {
     BuffView,
+    CombatTrackView,
     CombatView,
     GameStore,
     GearSlotView,
@@ -36,7 +37,6 @@ import {
     ToastLogEntry,
     UiSnapshot,
 } from "../client/GameStore";
-import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import {
     ACT_BY_ID,
@@ -55,6 +55,7 @@ import {
     isActOut,
 } from "../content/acts";
 import { characterDescription, characterName, getCharacter } from "../content/characters";
+import { formatTime } from "../content/format";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
@@ -99,6 +100,7 @@ import { StatText, formatStats } from "../content/stats";
 import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
+    COMBAT_ACHIEVEMENTS_OBJ,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
     SETTINGS_SECTION_SPRITES,
@@ -151,6 +153,7 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
+import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
 import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -268,6 +271,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
+            break;
+        case "combatAchievements":
+            screen = <CombatAchievementsScreen ui={ui} client={client} />;
             break;
         case "collectionLog":
             screen = <CollectionLogScreen save={ui.save} client={client} />;
@@ -1151,6 +1157,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             name={t("ui.title.quests")}
                             spriteId={TITLE_TAB_SPRITES.quests}
                             onClick={() => client.showScreen("quests")}
+                        />
+                        <TitleTile
+                            name={t("ui.title.combat_achievements")}
+                            objId={COMBAT_ACHIEVEMENTS_OBJ}
+                            onClick={() => client.showScreen("combatAchievements")}
                         />
                         <TitleTile
                             name={t("ui.title.collection_log")}
@@ -3855,6 +3866,11 @@ const Hud = memo(function Hud({
                     {!explore && (
                         <>
                             <HudQuests open={questTracker} client={client} disabled={disabled} />
+                            <HudCombatTasks
+                                open={questTracker}
+                                client={client}
+                                disabled={disabled}
+                            />
                             <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                             {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
                         </>
@@ -4228,6 +4244,87 @@ function HudQuests({
     return quests && quests.length > 0 ? (
         <QuestTracker quests={quests} open={open} client={client} disabled={disabled} />
     ) : null;
+}
+
+// The pinned Combat Achievements the run follows, under the quests, folding with them (Q)
+function HudCombatTasks({
+    open,
+    client,
+    disabled,
+}: {
+    open: boolean;
+    client: GameClient;
+    disabled: boolean;
+}): JSX.Element | null {
+    const tasks = useHudNumber(client, (n) => n.combatTasks);
+    const pinned = tasks?.filter((task) => task.pinned) ?? [];
+    if (pinned.length === 0) {
+        return null;
+    }
+    return (
+        <div className="ui-quest-tracker ui-combat-tracker">
+            <button
+                className="ui-quest-tracker-title"
+                onClick={() => client.toggleQuestTracker()}
+                title={t("ui.combat_tasks.toggle_tooltip")}
+            >
+                {t("ui.combat_tasks.heading")} {open ? "▾" : "▸"}
+            </button>
+            {open &&
+                pinned.map((task) => <CombatTrack key={task.id} task={task} disabled={disabled} />)}
+        </div>
+    );
+}
+
+// Kept from the last update while it's the same (shareUnchanged). As a quest's, what it asks for
+// (and what spoilt it) is the description a hover or hold brings up
+const CombatTrack = memo(function CombatTrack({
+    task,
+    disabled,
+}: {
+    task: CombatTrackView;
+    disabled: boolean;
+}): JSX.Element {
+    return (
+        <DescriptionButton
+            itemId={"combat:" + task.id}
+            disabled={disabled}
+            className={"ui-quest-track " + combatTrackClass(task)}
+            description={
+                task.reason
+                    ? t("ui.combat_tasks.description_failed", {
+                          description: task.description,
+                          reason: task.reason,
+                      })
+                    : task.description
+            }
+        >
+            <span className="ui-quest-track-name">{task.name}</span>
+            <span className="ui-quest-track-progress">{formatCombatTrack(task)}</span>
+        </DescriptionButton>
+    );
+});
+
+// As the quests: green once done, yellow while under way, and red once it's failed; the rest
+// plain, as nothing's spoilt them
+function combatTrackClass(task: CombatTrackView): string {
+    return task.state === "done"
+        ? "ui-quest-done"
+        : task.state === "failed"
+          ? "ui-combat-failed"
+          : task.progress && task.progress.done > 0
+            ? "ui-quest-started"
+            : "ui-combat-on";
+}
+
+function formatCombatTrack(task: CombatTrackView): string {
+    if (task.state === "done") {
+        return t("ui.quest.done");
+    }
+    if (task.state === "failed") {
+        return t("ui.combat_tasks.failed");
+    }
+    return task.progress ? `${fmtNum(task.progress.done)} / ${fmtNum(task.progress.of)}` : "";
 }
 
 function HudBuffs({ client }: { client: GameClient }): JSX.Element | null {
@@ -4820,6 +4917,7 @@ function PauseModal({
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
+    const combatTasks = useHudNumber(client, (n) => n.combatTasks) ?? [];
     const activeEffects = useHudNumber(client, (n) => n.buffs) ?? [];
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
@@ -4829,7 +4927,7 @@ function PauseModal({
     const tabs: TabDef<PauseTab>[] = [
         { id: "loadout", name: t("pause.tab.loadout"), spriteId: PAUSE_TAB_SPRITES.loadout },
         { id: "combat", name: t("pause.tab.combat"), spriteId: PAUSE_TAB_SPRITES.combat },
-        ...(quests.length > 0
+        ...(quests.length > 0 || combatTasks.length > 0
             ? [
                   {
                       id: "quests" as const,
@@ -4984,7 +5082,7 @@ function PauseModal({
                     {open === "combat" && (
                         <PauseCombat client={client} live={coop} log={ui.toastLog} />
                     )}
-                    {open === "quests" && <PauseQuests quests={quests} />}
+                    {open === "quests" && <PauseQuests quests={quests} combatTasks={combatTasks} />}
                     {open === "party" && <PauseParty kickable={kickable} client={client} />}
                     {open === "collection" && (
                         <CollectionLogScreen
