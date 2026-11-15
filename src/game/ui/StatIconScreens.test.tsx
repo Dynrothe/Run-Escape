@@ -249,7 +249,7 @@ describe("stat icons on the screens that show stats", () => {
         }
     });
 
-    test("ChestModal puts gear beside the worn piece, a row for each stat", () => {
+    test("ChestModal lists the found gear's stats and only the differences from the worn piece", () => {
         vi.useFakeTimers();
         try {
             const view = renderChest(
@@ -291,8 +291,10 @@ describe("stat icons on the screens that show stats", () => {
                 }),
             );
 
-            // Its stats are in the table, not listed as well
-            expect(view.container.querySelector(".ui-chest-lines")).toBeNull();
+            expect(view.container.querySelector(".ui-chest-lines")?.textContent).toBe(
+                "+10% damage+2 armour",
+            );
+            expect(view.container.querySelector("table")).toBeNull();
             const compare = view.container.querySelector(".ui-chest-compare")!;
             expect(compare.textContent).toContain("Crystal body");
             expect(compare.textContent).toContain("· Rare");
@@ -305,30 +307,21 @@ describe("stat icons on the screens that show stats", () => {
             ]);
             expect(sets[1]).toHaveClass("ui-chest-set-on");
 
-            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
-            expect(rows.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
-                ["Damage", "+5%", "+10%", "(+5%)"],
-                ["Armour", "+1", "+2", "(+1)"],
-                ["Max hitpoints", "+5%", "+5%", ""],
-                ["Projectile speed", "+15%", "—", "(-15%)"],
+            const changes = [...compare.querySelectorAll(".ui-chest-changes .ui-stat-line")];
+            expect(changes.map((line) => line.textContent)).toEqual([
+                "+5% Damage",
+                "+1 Armour",
+                "-15% Projectile speed",
             ]);
-            const tone = (row: Element) => [...row.children].slice(2).map((cell) => cell.className);
-            expect(tone(rows[0])).toEqual(["ui-good", "ui-good"]);
-            expect(tone(rows[2])).toEqual(["", ""]);
-            expect(tone(rows[3])).toEqual(["ui-bad", "ui-bad"]);
-            // The difference's column has a name for screen readers
-            const headings = [...view.container.querySelectorAll(".ui-chest-table thead th")];
-            expect(headings.map((th) => th.getAttribute("aria-label") ?? th.textContent)).toEqual([
-                "Wearing",
-                "New",
-                "Difference",
-            ]);
+            expect(changes[0]).toHaveClass("ui-good");
+            expect(changes[1]).toHaveClass("ui-good");
+            expect(changes[2]).toHaveClass("ui-bad");
         } finally {
             vi.useRealTimers();
         }
     });
 
-    test("the gear table gives each stat its icon in any language", () => {
+    test("gear differences give each stat its icon in any language", () => {
         vi.useFakeTimers();
         const iconSrc = iconsById();
         try {
@@ -345,14 +338,36 @@ describe("stat icons on the screens that show stats", () => {
                 "Velocidade de projétil",
             ]);
             const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, stats }));
-            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
-            expect(rows.map((row) => row.querySelector("th img")?.getAttribute("src"))).toEqual(
+            const changes = [...view.container.querySelectorAll(".ui-chest-changes .ui-stat-line")];
+            expect(changes.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
                 stats.map((pair) => iconSrc(statKeyIcon(pair.key))),
             );
         } finally {
             setLang("en");
             vi.useRealTimers();
             vi.restoreAllMocks();
+        }
+    });
+
+    test("identical gear shows no stat differences", () => {
+        vi.useFakeTimers();
+        try {
+            const view = renderChest(
+                gearChest({
+                    item: crystalBody,
+                    alchCoins: 10,
+                    stats: pairStats({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 }),
+                }),
+            );
+            expect(view.container.querySelector(".ui-chest-changes")).toBeEmptyDOMElement();
+            expect(view.container.querySelector(".ui-chest-replaces")?.textContent).toContain(
+                "Crystal body",
+            );
+            expect(view.container.querySelector(".ui-chest-lines")?.textContent).toBe(
+                "+10% damage+2 armour",
+            );
+        } finally {
+            vi.useRealTimers();
         }
     });
 
