@@ -2405,6 +2405,11 @@
     padding: 1px 3px;
 }
 
+/* The ring's cache sprite has extra transparent space on its right and bottom. */
+.ui-buff-revive-ring > .ui-icon {
+    transform: translate(1.5px, 0.75px);
+}
+
 .ui-inventory {
     display: flex;
     gap: 3px;
