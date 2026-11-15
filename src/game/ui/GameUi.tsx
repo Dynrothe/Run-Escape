@@ -4723,8 +4723,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
 }
 
 // The HUD's DPS, and under it each weapon's: click the DPS (or press Tab) to
-// open or shut it. Each weapon's damage a second just now, most first, its
-// share of all of it (a bar and a percentage), and its damage this run.
+// open or shut it, or click anywhere in the open panel to shut it.
+// Each weapon's damage a second just now, most first, its share of all of it
+// (a bar and a percentage), and its damage this run.
 // Numbers are short (9.5K, 1.2B), as endless runs reach billions; pointing
 // at one gives it in full.
 function DamagePanel({
@@ -4757,19 +4758,29 @@ function DamagePanel({
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
             {open && (
-                <div className="ui-damage-panel">
-                    <div className="ui-damage-head">
+                <button
+                    type="button"
+                    className="ui-damage-panel"
+                    aria-label={t("ui.damage.toggle_tooltip")}
+                    onClick={() => client.toggleDamagePanel()}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.stopPropagation();
+                        }
+                    }}
+                >
+                    <span className="ui-damage-head">
                         <span />
                         <span />
                         <span>{t("ui.damage.share")}</span>
                         <span>{t("ui.damage.dps")}</span>
                         <span>{t("ui.damage.total")}</span>
-                    </div>
+                    </span>
                     {rows.map((slot) => {
                         const dps = damageOf(slot)?.dps ?? 0;
                         const damage = damageOf(slot)?.damage ?? 0;
                         return (
-                            <div key={slot.id} className="ui-damage-row">
+                            <span key={slot.id} className="ui-damage-row">
                                 <ItemIcon
                                     objId={slot.iconObjId}
                                     spriteId={slot.iconSpriteId}
@@ -4797,11 +4808,11 @@ function DamagePanel({
                                 <span className="ui-damage-total" title={exact(damage)}>
                                     {formatCompact(damage)}
                                 </span>
-                            </div>
+                            </span>
                         );
                     })}
                     {otherDps >= 0.05 && (
-                        <div className="ui-damage-row ui-damage-other">
+                        <span className="ui-damage-row ui-damage-other">
                             <span />
                             <span className="ui-damage-weapon" title={t("ui.damage.other_tooltip")}>
                                 {t("ui.damage.other")}
@@ -4811,9 +4822,9 @@ function DamagePanel({
                                 {formatCompact(otherDps)}
                             </span>
                             <span />
-                        </div>
+                        </span>
                     )}
-                </div>
+                </button>
             )}
         </div>
     );

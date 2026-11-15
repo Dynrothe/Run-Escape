@@ -25,6 +25,7 @@ the version in the corner).
 
 ### Changed
 
+- Click or tap anywhere in the open DPS panel to close it, by Deivid Smarzaro.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
