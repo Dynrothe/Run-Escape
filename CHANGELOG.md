@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- A casket's gear table keeps the worn and new values beside each stat's name, rather than across
+  the card from it.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed

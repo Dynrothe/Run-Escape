@@ -662,8 +662,10 @@
     width: min(540px, calc(94vw / var(--ui-scale)));
 }
 
+/* As wide as what's in it, not the card, so each value sits near its stat's
+   name rather than across the card from it */
 .ui-chest-table {
-    width: 100%;
+    max-width: 100%;
     margin-top: 6px;
     border-collapse: collapse;
     color: var(--ui-white);
@@ -687,9 +689,8 @@
     vertical-align: middle;
 }
 
-/* The stat's name takes what's left, and wraps if it must */
+/* The stat's name wraps if it must (a narrow phone) */
 .ui-chest-table tbody th {
-    width: 100%;
     padding-left: 0;
     text-align: left;
     white-space: normal;
