@@ -1211,9 +1211,9 @@ describe("a co-op run that breaks", () => {
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
 
-    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+    it("walks on under co-op's menu, whichever of its pages is open", () => {
         const setMove = vi.fn();
-        const { client, store, update } = coopClient({ setMove });
+        const { client, update } = coopClient({ setMove });
         Object.assign(client, {
             input: {
                 getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
@@ -1222,13 +1222,9 @@ describe("a co-op run that breaks", () => {
         client.pause();
         update();
         expect(setMove).toHaveBeenLastCalledWith(1, 0);
-        client.openRunLog();
-        expect(store.getSnapshot().runLog).toBe(true);
-        update();
-        expect(setMove).toHaveBeenLastCalledWith(0, 0);
     });
 
-    it("uses items and the hero's button under co-op's menu, not under the Collection log over it", () => {
+    it("uses items and the hero's button under co-op's menu", () => {
         const { client } = coopClient({});
         const useItem = vi.fn();
         const useAbility = vi.fn();
@@ -1240,15 +1236,6 @@ describe("a co-op run that breaks", () => {
         press("Digit1");
         expect(useAbility).toHaveBeenCalledOnce();
         expect(useItem).toHaveBeenCalledWith(0);
-        client.openRunLog();
-        press("Space");
-        press("Digit2");
-        expect(useAbility).toHaveBeenCalledOnce();
-        expect(useItem).toHaveBeenCalledOnce();
-        // Back on the menu, in reach again
-        press("Escape");
-        press("Digit3");
-        expect(useItem).toHaveBeenLastCalledWith(2);
     });
 
     it("sends the host's frames even when something after a step throws", () => {
@@ -2721,53 +2708,34 @@ describe("boss attacks' instructions", () => {
     });
 });
 
-describe("the Collection log over the pause menu", () => {
-    test("opens only on the pause menu, and Escape or P goes back to the menu before resuming", () => {
-        const { client, store } = createClient(createSim(), false);
-        const press = (code: string) =>
-            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
-        const snapshot = () => store.getSnapshot();
-        client.openRunLog();
-        expect(snapshot().runLog).toBeFalsy();
-        press("Escape");
-        expect(snapshot().overlay).toBe("paused");
-        for (const code of ["Escape", "KeyP"]) {
-            client.openRunLog();
-            expect(snapshot().runLog).toBe(true);
-            press(code);
-            expect(snapshot().runLog).toBe(false);
-            expect(snapshot().overlay).toBe("paused");
-        }
-        press("Escape");
-        expect(snapshot().overlay).toBe("none");
-    });
-
-    test("shuts with the menu however the run leaves it, so the next pause opens on the menu", () => {
-        const { client, store } = createClient(createSim(), false);
-        Object.assign(client, { updateHud() {} });
-        client.pause();
-        client.openRunLog();
-        expect(store.getSnapshot().runLog).toBe(true);
-        // As starting a run and leaving one do (leavePauseMenu)
-        client.quitRun();
-        expect(store.getSnapshot().runLog).toBe(false);
-    });
-
-    test("leaves Escape and P to the panel saying nothing's being saved, over the menu or the log", () => {
+describe("the pause menu's Collection log", () => {
+    test("Escape dismisses a tooltip before it resumes the run", () => {
         const { client, store } = createClient(createSim(), false);
         const press = (code: string) =>
             (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
         client.pause();
-        client.openRunLog();
+        const tip = document.createElement("div");
+        tip.className = "ui-description-tip";
+        document.body.appendChild(tip);
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("paused");
+        tip.remove();
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("leaves Escape and P to the panel saying nothing's being saved, over the menu", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        client.pause();
         store.set({ saveBlock: { kind: "otherTab" } });
         for (const code of ["Escape", "KeyP"]) {
             press(code);
-            expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: true });
+            expect(store.getSnapshot().overlay).toBe("paused");
         }
-        // Played on without saving: the keys are the log's and the menu's again
+        // Played on without saving: the keys are the menu's again
         store.set({ saveBlockClosed: true });
-        press("Escape");
-        expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: false });
         press("Escape");
         expect(store.getSnapshot().overlay).toBe("none");
     });
@@ -2795,6 +2763,34 @@ describe("the Collection log over the pause menu", () => {
         sim.trophies.add(TROPHIES[0].id);
         Object.assign(sim, { coins: NaN });
         expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
+    });
+});
+
+describe("the pause menu's run actions", () => {
+    test("Restart starts the same solo match from the beginning, not at its lair", () => {
+        const { client } = createClient(createSim(), false);
+        const leaveRun = vi.fn();
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, {
+            sim: { map: { id: "zachariah" } },
+            leaveRun,
+            startRun,
+        });
+        client.restartRun();
+        expect(leaveRun).toHaveBeenCalledWith(false);
+        expect(startRun).toHaveBeenCalledWith("zachariah", false, undefined, undefined);
+    });
+
+    test("Abandon match finishes the run and leaves it immediately, skipping results", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const finishRun = vi.fn();
+        const leaveRun = vi.fn();
+        Object.assign(client, { finishRun, leaveRun });
+        client.pause();
+        client.abandonRun();
+        expect(finishRun).toHaveBeenCalledWith(expect.any(String), "abandoned");
+        expect(leaveRun).toHaveBeenCalledOnce();
     });
 });
 

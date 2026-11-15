@@ -1,10 +1,11 @@
 export type Lang = "en" | "pt-BR";
 
-// Each language, and who translated it (credited where it's picked). English is the only one
-// that's checked: the others are their translators'.
-export const LANGS: { id: Lang; label: string; translator?: string }[] = [
-    { id: "en", label: "English" },
-    { id: "pt-BR", label: "Português (BR)", translator: "Iakee" },
+// Each language, who translated it (credited where it's picked), and the country whose flag is
+// shown beside it (content/flags.ts's FLAG_FRAMES). English is the only one that's checked: the
+// others are their translators'.
+export const LANGS: { id: Lang; label: string; translator?: string; country: string }[] = [
+    { id: "en", label: "English", country: "GB" },
+    { id: "pt-BR", label: "Português (BR)", translator: "Iakee", country: "BR" },
 ];
 
 export type Params = Record<string, string | number>;

@@ -352,8 +352,10 @@
     .ui-changelog-list,
     .ui-pause,
     .ui-pause-columns,
+    .ui-pause-page,
     .ui-result,
     .ui-result-columns,
+    .ui-result-page,
     .ui-choice,
     .ui-chest-card,
     .ui-chest-card-body {
@@ -390,7 +392,8 @@
         height: 44px;
     }
 
-    .ui-volume {
+    .ui-volume,
+    .ui-slider {
         height: 32px;
     }
 
@@ -581,6 +584,11 @@
     .ui-notice,
     .ui-settings {
         width: min(560px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+    }
+
+    /* The title's Settings in two columns, as the pause menu's: the whole width */
+    .ui-settings.ui-settings-cards {
+        width: calc(100vw - var(--safe-left) - var(--safe-right) - 12px);
     }
 
     /* Title: the name on the left, the menu on the right */
@@ -1434,6 +1442,22 @@
         min-height: 0;
         overflow-y: auto;
         padding-right: 4px;
+    }
+
+    /* A page under its tabs scrolls as a whole, its columns with it */
+    .ui-pause-page,
+    .ui-result-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .ui-pause-page .ui-pause-columns,
+    .ui-result-page .ui-result-columns {
+        flex: none;
+        overflow: visible;
+        padding-right: 0;
     }
 
     .ui-pause-column + .ui-pause-column,

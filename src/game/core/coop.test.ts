@@ -1222,6 +1222,61 @@ describe("co-op boss encounters", () => {
     });
 });
 
+describe("co-op result counters", () => {
+    afterEach(() => usePortableMath(false));
+
+    it("counts a revive for who gave it, and a fall and the time down for who had it", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        down(sim, b);
+        const fell = b.outTick;
+        expect(b.timesDowned).toBe(1);
+        expect(a.timesDowned).toBe(0);
+        standOver(a, b);
+        for (let i = 0; i < REVIVE_SECONDS * TICKS_PER_SECOND; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(false);
+        expect(a.revivesGiven).toBe(1);
+        expect(b.revivesGiven).toBe(0);
+        expect(b.revived).toBe(1);
+        expect(b.downTicks).toBe(sim.tick - fell);
+        // Alive for the whole run bar the time down
+        expect(sim.aliveSeconds(a)).toBe(sim.tick / TICKS_PER_SECOND);
+        expect(sim.aliveSeconds(b)).toBe((sim.tick - b.downTicks) / TICKS_PER_SECOND);
+    });
+
+    it("stops a downed player's time at the fall, and a leaver's when they go", () => {
+        const sim = createParty(["warrior", "wizard", "ranger"]);
+        const [, b, c] = sim.heroes;
+        down(sim, b);
+        const fell = b.outTick;
+        for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+            sim.step();
+        }
+        sim.leave(2);
+        const left = c.outTick;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+            sim.step();
+        }
+        expect(sim.aliveSeconds(b)).toBe(fell / TICKS_PER_SECOND);
+        expect(sim.aliveSeconds(c)).toBe(left / TICKS_PER_SECOND);
+    });
+
+    it("credits damage to a boss to whoever dealt it", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        const boss = sim.spawnEnemy(getEnemy("kalphite_queen"), "boss")!;
+        expect(boss.boss).toBe(true);
+        sim.as(1, () => sim.damageEnemy(boss, 40, 0, boss.x, boss.y));
+        const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal")!;
+        sim.as(0, () => sim.damageEnemy(goblin, 40, 0, goblin.x, goblin.y));
+        expect(a.bossDamage).toBe(0);
+        expect(b.bossDamage).toBeGreaterThan(0);
+        expect(b.bossDamage).toBe(b.damageBySource[Object.keys(b.damageBySource)[0]]);
+    });
+});
+
 describe("portable math", () => {
     afterEach(() => usePortableMath(false));
 

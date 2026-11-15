@@ -7,7 +7,7 @@ import {
 } from "../content/TurkeyDay";
 import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
-import { WeaponDamageBalance } from "../content/balance";
+import { WEAPON_DAMAGE_BALANCE, WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
 import {
     PLATINUM_BOOST,
@@ -31,6 +31,7 @@ import {
     bossCopies,
     getPartyScale,
 } from "../content/coop";
+import { DamageKind } from "../content/damageKinds";
 import {
     LATER_ROUND_START,
     LATE_CASKET_CHANCE,
@@ -48,6 +49,7 @@ import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
     ANCIENT_FOCUS,
     BlessingId,
+    BLESSINGS as GAUNTLET_BLESSINGS,
     GauntletFightOptions,
     SARADOMIN_HP,
     SECOND_WIND_HP,
@@ -154,6 +156,7 @@ import {
     GLOBETROTTER,
     LAST_RECALL,
     PRODUCTION_PRODIGY,
+    RELIC_BY_ID,
     RELOADED,
     SPECIALIST,
     TRICKSTER,
@@ -264,7 +267,7 @@ import {
 import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
-import { getWeaponDamageMultiplier } from "../content/weaponBalance";
+import { getWeaponDamageMultiplier, weaponDamageProfileScale } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
@@ -355,6 +358,7 @@ import {
     ProjectileKind,
     Rampage,
     SimEvent,
+    StatSource,
     SurgeLane,
     Thrall,
     Turret,
@@ -407,7 +411,7 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 // OSRS run speed: 2 tiles per 600ms tick
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
-const PLAYER_BASE_HP = 25;
+export const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
 const PARTY_SPREAD = 1.5;
 // Rerolls every run has, before the shop's
@@ -716,7 +720,7 @@ export const NUKE_SPOTANIM = 157;
 // the player this much, with the Sanguinesti staff's glow on them. Only one hit
 // in so many ticks gets the roll, hit or miss, or weapons hitting thousands of
 // times a minute late in a run would heal all the time.
-const BLOOD_FURY_HEAL = 2;
+export const BLOOD_FURY_HEAL = 2;
 // What each upgrade adds to the Rubber chicken's heal, by its rarity
 const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
     common: { chance: 0.02, hp: 0.25 },
@@ -724,7 +728,7 @@ const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
     rare: { chance: 0.045, hp: 0.75 },
     veryRare: { chance: 0.07, hp: 1 },
 };
-const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
+export const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
 export const BLOOD_FURY_SPOTANIM = 1542;
 // The Twisted bow does half its most extra damage to a target with this many
 // hitpoints (a late goblin has a few hundred, a boss thousands)
@@ -1011,7 +1015,12 @@ export type RunResult = {
 // damage first (seconds: how long a weapon was had, for its damage a second)
 export type RunStats = {
     sources: { source: DamageSource; damage: number; kills: number; seconds?: number }[];
+    // The same damage by its kind, and kills by enemy id
+    damageByKind: Partial<Record<DamageKind, number>>;
+    killsByEnemy: Record<string, number>;
     damageTaken: number;
+    // What armour and a pet's bubble stopped, for the pause menu's Combat tab
+    damageBlocked: number;
     healed: number;
     highestHit: number;
     rerollsUsed: number;
@@ -1142,14 +1151,26 @@ export type Hero = {
     // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
     recentDamage: Float64Array;
     killsBySource: Record<string, number>;
+    // The damage again by its kind, and kills by enemy id (a boss's copies once, as enemyKills)
+    damageByKind: Partial<Record<DamageKind, number>>;
+    killsByEnemy: Record<string, number>;
     casketsOpened: number;
     damageTaken: number;
+    // Damage armour and a pet's bubble stopped: only written, never read by play
+    damageBlocked: number;
     // Of that, what each of a boss's attacks did, by name: for tuning a fight
     // (the balance bot prints it, and it's there in the console)
     damageByAttack: Record<string, number>;
     healed: number;
     highestHit: number;
     weaponSince: Record<string, number>;
+    // The rarity each level of each weapon and pick of each passive was taken at (the level up's
+    // offer), for the pause menu's tooltips. A weapon's is by level - 1; a level it came with
+    // (a starting weapon's) has none. Only written, never read by play: not in the hashes.
+    upgradeQualities: {
+        weapons: Record<string, (Rarity | undefined)[]>;
+        passives: Record<string, Rarity[]>;
+    };
     // Bumped whenever their look changes (new weapon tier, gear)
     appearanceVersion: number;
     // Enemies after this hero find their way to them with it
@@ -1220,6 +1241,13 @@ export type Hero = {
     down: boolean;
     left: boolean;
     outTick: number;
+    // For the results screens, never read by play: teammates this hero has revived, times they
+    // went down (a final fall included), damage dealt to bosses, and the ticks spent down before
+    // a revive (see aliveSeconds)
+    revivesGiven: number;
+    timesDowned: number;
+    bossDamage: number;
+    downTicks: number;
     // Co-op: how many times a teammate's brought them back this run, and the
     // revives found or bought on top of REVIVES_PER_PLAYER
     revived: number;
@@ -2259,6 +2287,9 @@ export class Sim {
     get weaponSince(): Record<string, number> {
         return this.hero.weaponSince;
     }
+    get upgradeQualities(): Hero["upgradeQualities"] {
+        return this.hero.upgradeQualities;
+    }
     get appearanceVersion(): number {
         return this.hero.appearanceVersion;
     }
@@ -2609,8 +2640,11 @@ export class Sim {
             damageBySource: {},
             recentDamage: new Float64Array(DPS_WINDOW_TICKS),
             killsBySource: {},
+            damageByKind: {},
+            killsByEnemy: {},
             casketsOpened: 0,
             damageTaken: 0,
+            damageBlocked: 0,
             damageByAttack: {},
             raidPoints: 0,
             raidDamageAtStart: 0,
@@ -2623,6 +2657,7 @@ export class Sim {
             healed: 0,
             highestHit: 0,
             weaponSince: {},
+            upgradeQualities: { weapons: {}, passives: {} },
             appearanceVersion: 0,
             flowField,
             flightField,
@@ -2651,6 +2686,10 @@ export class Sim {
             down: false,
             left: false,
             outTick: -1,
+            revivesGiven: 0,
+            timesDowned: 0,
+            bossDamage: 0,
+            downTicks: 0,
             revived: 0,
             extraRevives: 0,
             immuneEndTick: 0,
@@ -3018,6 +3057,14 @@ export class Sim {
         };
     }
 
+    // Seconds a hero was in the fight: until the run's end, or until they were last out (down
+    // for good, or gone), less the time they spent down before a teammate brought them back
+    aliveSeconds(hero: Hero): number {
+        const runEnd = this.endTick >= 0 ? this.endTick : this.tick;
+        const end = hero.outTick >= 0 ? Math.min(hero.outTick, runEnd) : runEnd;
+        return Math.max(0, end - hero.downTicks) / TICKS_PER_SECOND;
+    }
+
     // The player's damage a second just now, from every source
     get dps(): number {
         let damage = 0;
@@ -3053,7 +3100,10 @@ export class Sim {
                     };
                 })
                 .sort((a, b) => b.damage - a.damage || b.kills - a.kills),
+            damageByKind: { ...this.hero.damageByKind },
+            killsByEnemy: { ...this.hero.killsByEnemy },
             damageTaken: this.damageTaken,
+            damageBlocked: this.hero.damageBlocked,
             healed: this.healed,
             highestHit: this.highestHit,
             rerollsUsed: Math.max(0, this.hero.rerollsAtStart - this.rerollsLeft),
@@ -3137,6 +3187,125 @@ export class Sim {
             player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
             player.maxHp = maxHp;
         }
+    }
+
+    // Where each stat's size comes from, as updateStats adds it up, for the pause menu's tooltips.
+    // Only read for display: nothing in play uses it.
+    getStatSources(): Partial<Record<StatKey, StatSource[]>> {
+        const sources: Partial<Record<StatKey, StatSource[]>> = {};
+        const add = (stats: Partial<Stats>, source: Omit<StatSource, "value">): void => {
+            for (const [key, value] of Object.entries(stats) as [StatKey, number][]) {
+                if (value) {
+                    (sources[key] ??= []).push({ ...source, value });
+                }
+            }
+        };
+        const character = getCharacter(this.characterId);
+        add(character.bonus, { kind: "adventurer", name: character.name });
+        // The shop's upgrades have no icon of their own, so they wear the coins that pay for them
+        add(this.metaStats, { kind: "shop", name: "Shop upgrades", iconObjId: 995 });
+        add(this.map.fight?.stats ?? {}, { kind: "map", name: this.map.name });
+        for (const passive of this.passives) {
+            const def = getPassive(passive.id);
+            const picks = this.upgradeQualities.passives[passive.id] ?? [];
+            // A pick's size is known from the rarity it was taken at; what isn't recorded (picks
+            // the history missed) is one lump
+            const known = picks.length === passive.level ? picks : [];
+            const entries =
+                known.length > 0
+                    ? known.map((quality) => ({ quality, value: getPassiveGain(def, quality) }))
+                    : [{ quality: undefined, value: passive.value }];
+            for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
+                for (const entry of entries) {
+                    (sources[stat] ??= []).push({
+                        kind: "passive",
+                        name: def.name,
+                        value: entry.value,
+                        quality: entry.quality,
+                        iconObjId: def.iconObjId,
+                        iconSpriteId: def.iconSpriteId,
+                    });
+                }
+            }
+        }
+        for (const [slot, itemId] of Object.entries(this.gear)) {
+            const item = getGear(itemId);
+            add(getGearStats(item, this.gearUpgrades[slot as GearSlot] ?? 0), {
+                kind: "gear",
+                name: item.name,
+                rarity: item.rarity,
+                iconObjId: item.objId,
+            });
+        }
+        for (const set of getActiveSets(this.gear)) {
+            add(set.stats ?? {}, {
+                kind: "set",
+                name: set.name,
+                iconObjId: this.setPieceObjId(set.id),
+            });
+        }
+        for (const buff of this.buffs) {
+            const look = buff.look ?? getItem(buff.itemId);
+            add(buff.stats, { kind: "buff", name: look.name, iconObjId: look.objId });
+        }
+        for (const debuff of this.debuffs) {
+            add(debuff.stats, { kind: "debuff", name: debuff.name, iconObjId: debuff.iconObjId });
+        }
+        const addRelic = (id: string, stats: Partial<Stats>): void => {
+            const relic = RELIC_BY_ID.get(id);
+            if (relic && this.hasRelic(id)) {
+                add(stats, { kind: "relic", name: relic.name, iconObjId: relic.iconObjId });
+            }
+        };
+        addRelic("fairys_flight", { moveSpeed: FAIRYS_FLIGHT.moveSpeed });
+        addRelic("globetrotter", { powerUpRate: GLOBETROTTER.rate });
+        addRelic("specialist", { weaponSlots: -SPECIALIST.slots, might: SPECIALIST.might });
+        const blessings = this.map.blessings;
+        if (blessings) {
+            for (const { id, count } of this.blessings) {
+                const blessing = getBlessing(blessings, id);
+                const stats = Object.fromEntries(
+                    Object.entries(blessing.stats ?? {}).map(([key, value]) => [
+                        key,
+                        value * count,
+                    ]),
+                ) as Partial<Stats>;
+                add(stats, {
+                    kind: "blessing",
+                    name: blessing.name,
+                    iconObjId: blessing.iconObjId,
+                });
+            }
+        }
+        if (this.invoked("run_glass_cannon")) {
+            const invocation = RUN_SET.byId.get("run_glass_cannon")!;
+            (sources.maxHp ??= []).push({
+                kind: "invocation",
+                name: invocation.name,
+                value: GLASS_CANNON_HP - 1,
+                multiplier: true,
+                iconSpriteId: invocation.icon,
+            });
+        }
+        if (this.blessed("saradomin")) {
+            const blessing = GAUNTLET_BLESSINGS.find(({ id }) => id === "saradomin")!;
+            (sources.maxHp ??= []).push({
+                kind: "blessing",
+                name: blessing.name,
+                value: SARADOMIN_HP,
+                multiplier: true,
+                iconObjId: blessing.iconObjId,
+            });
+        }
+        const levelMight = this.stats.levelMight;
+        if (levelMight) {
+            (sources.might ??= []).push({
+                kind: "level",
+                name: "Level",
+                value: levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS),
+            });
+        }
+        return sources;
     }
 
     // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
@@ -3412,6 +3581,7 @@ export class Sim {
         switch (choice.kind) {
             case "newWeapon":
                 this.addWeapon(choice.weaponId, RARITIES[choice.quality].weaponBonus);
+                this.upgradeQualities.weapons[choice.weaponId] = [choice.quality];
                 break;
             case "weaponLevel": {
                 const weapon = this.weapons.find((w) => w.def.id === choice.weaponId);
@@ -3419,6 +3589,8 @@ export class Sim {
                     const last = weapon.def.levels.length;
                     // Endless runs level on past the last level, for damage
                     weapon.level = this.endless ? choice.level : Math.min(choice.level, last);
+                    const qualities = (this.upgradeQualities.weapons[choice.weaponId] ??= []);
+                    qualities[weapon.level - 1] = choice.quality;
                     if (choice.level > last) {
                         // Multiplies everything the weapon had
                         weapon.bonus = overlevelBonus(weapon.bonus, choice.quality);
@@ -3442,6 +3614,9 @@ export class Sim {
                 if (index !== -1) {
                     // Bonus damage from rare rolls carries over
                     this.weaponSince[choice.into] ??= this.tick;
+                    // It starts again at level 1, with no picks
+                    delete this.upgradeQualities.weapons[choice.weaponId];
+                    delete this.upgradeQualities.weapons[choice.into];
                     if (!this.evolutionsMade.includes(choice.into)) {
                         this.evolutionsMade.push(choice.into);
                     }
@@ -3483,6 +3658,7 @@ export class Sim {
                         level: 1,
                         value: getPassiveGain(def, choice.quality),
                     });
+                    this.upgradeQualities.passives[choice.passiveId] = [choice.quality];
                 }
                 this.updateStats();
                 this.appearanceVersion++;
@@ -3495,6 +3671,7 @@ export class Sim {
                     if (canLevelPassive(def, passive.level, this.endless)) {
                         passive.level++;
                         passive.value += getPassiveGain(def, choice.quality);
+                        (this.upgradeQualities.passives[passive.id] ??= []).push(choice.quality);
                     }
                 }
                 this.updateStats();
@@ -4119,7 +4296,8 @@ export class Sim {
         ) {
             const amount = player.poisonDamage;
             player.hp -= amount;
-            this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
+            const taken = Math.min(amount, Math.max(0, player.hp + amount));
+            this.damageTaken += taken;
             this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
@@ -5599,6 +5777,8 @@ export class Sim {
         ignoreArmor = false,
         // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
         grace = true,
+        // Which of a boss's attacks it was, for the hero's recent hits
+        attack?: string,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -5661,9 +5841,14 @@ export class Sim {
         if (this.stepBetween(amount)) {
             return 0;
         }
+        // What it would have done without armour, for what armour stopped
+        const unarmoured = Math.round(damage * opened);
+        this.hero.damageBlocked += Math.max(0, unarmoured - amount);
         // Lil'viathan's bubble takes an enemy's hit, up to its share of their hitpoints, and pops
         if (this.hero.petBubble && ENEMY_BY_ID.has(enemyId)) {
+            const hit = amount;
             amount = this.popBubble(amount);
+            this.hero.damageBlocked += Math.max(0, hit - Math.max(0, amount));
             if (amount <= 0) {
                 if (grace) {
                     player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
@@ -5677,7 +5862,8 @@ export class Sim {
         }
         player.hp -= amount;
         // What was there to take: a fall into Ba-Ba's gap asks for a hundred bars
-        this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
+        const taken = Math.min(amount, Math.max(0, player.hp + amount));
+        this.damageTaken += taken;
         // A blood cloud's touch heals Zebak
         if (enemyId === "zebak_blood_cloud") {
             this.zebakCloudHit(amount);
@@ -12008,6 +12194,32 @@ export class Sim {
     }
     private styledSource = "";
     private styleOfSource: CombatStyle | undefined;
+    // While a weapon's burning ground hurts what's in it (stepFires), for its damage's kind
+    private burning = false;
+
+    // The kind of the hit being dealt now, from its source (venom's poison: damageEnemy's)
+    private damageKind(poison: boolean): DamageKind {
+        if (poison) {
+            return "poison";
+        }
+        if (this.burning) {
+            return "burn";
+        }
+        const source = this.damageSource;
+        if (source.startsWith("weapon:")) {
+            return this.sourceStyle ?? "other";
+        }
+        if (source.startsWith("powerUp:")) {
+            return "powerUp";
+        }
+        if (source.startsWith("item:")) {
+            return "item";
+        }
+        if (source.startsWith("ability:") || source === "court") {
+            return "arena";
+        }
+        return source === "recoil" ? "recoil" : "other";
+    }
 
     // Normal mode: the share a colour takes from another style's weapon (BossDef.colours.offStyle)
     private offColour(enemy: Enemy): number {
@@ -19645,6 +19857,8 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
+            true,
+            attack.name,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;
@@ -19841,6 +20055,7 @@ export class Sim {
             this.hero.tombsDowns++;
             this.hero.tombsPoints *= 1 - TOMBS_POINTS.deathLoss;
         }
+        this.hero.timesDowned++;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
             if (this.tombsPath !== undefined && this.tombsDeaths < this.tombsDeathsAllowed) {
                 this.failTombsRoom();
@@ -19917,6 +20132,8 @@ export class Sim {
         const player = downed.player;
         const fraction = REVIVE_HP[Math.min(downed.revived, REVIVE_HP.length - 1)];
         downed.revived++;
+        by.revivesGiven++;
+        downed.downTicks += this.tick - downed.outTick;
         downed.revive = undefined;
         downed.down = false;
         downed.outTick = -1;
@@ -20168,6 +20385,11 @@ export class Sim {
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;
         this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += shown;
         this.highestHit = Math.max(this.highestHit, shown);
+        if (enemy.boss) {
+            this.hero.bossDamage += shown;
+        }
+        const kind = this.damageKind(poison);
+        this.hero.damageByKind[kind] = (this.hero.damageByKind[kind] ?? 0) + shown;
         this.emit({
             type: "damage",
             x: enemy.x,
@@ -20264,6 +20486,8 @@ export class Sim {
             this.countRelicKill();
             if (lastCopy) {
                 this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
+                const byHero = this.hero.killsByEnemy;
+                byHero[enemy.def.id] = (byHero[enemy.def.id] ?? 0) + 1;
             }
             const source = this.damageSource;
             this.killsBySource[source] = (this.killsBySource[source] ?? 0) + 1;
@@ -20806,6 +21030,7 @@ export class Sim {
             // screen, on the last of their hitpoints
             for (const hero of this.heroes) {
                 if (hero.down && hero.outTick === this.tick) {
+                    hero.timesDowned--;
                     hero.down = false;
                     hero.outTick = -1;
                     hero.player.deathTick = -1;
@@ -20860,6 +21085,54 @@ export class Sim {
             return level;
         }
         return { ...level, damage: level.damage * damage, area: level.area * area };
+    }
+
+    // A worn piece of a set, for its icon
+    private setPieceObjId(setId: string): number | undefined {
+        return Object.values(this.gear)
+            .map((itemId) => getGear(itemId))
+            .find((item) => item.set === setId)?.objId;
+    }
+
+    // What multiplies a weapon's level damage into what one of its hits does, for the pause menu's
+    // tooltip on its Damage: the run's balance beyond the global tuning the stat already shows, its
+    // damage bonus, its style's bonus, the worn sets', the hero's damage bonus, and what a boss
+    // takes on top. Read only, in no hash: the same factors getEffectiveLevel and damageEnemy use.
+    weaponDamageFactors(weapon: WeaponState): {
+        balance: number;
+        bonus: number;
+        style: CombatStyle;
+        styleMight: number;
+        sets: number;
+        // The worn sets that give it, with a piece's icon each
+        setSources: { name: string; iconObjId?: number }[];
+        might: number;
+        bossMight: number;
+        bossBonus: number;
+    } {
+        const def = weapon.def;
+        const style = getWeaponStyle(def);
+        const global = weaponDamageProfileScale(WEAPON_DAMAGE_BALANCE.global, def);
+        const total = this.weaponDamageMultipliers[`weapon:${def.id}`] ?? 1;
+        return {
+            balance: global > 0 ? total / global : 1,
+            bonus: weapon.bonus,
+            style,
+            styleMight: this.styleMight(style),
+            sets: this.setBoosts(def).damage,
+            setSources: this.activeSets
+                .map((setId) => getSet(setId))
+                .filter(
+                    (set) =>
+                        set.weapons?.damage &&
+                        (set.weapons.kinds?.includes(def.kind) ||
+                            set.weapons.ids?.includes(def.id)),
+                )
+                .map((set) => ({ name: set.name, iconObjId: this.setPieceObjId(set.id) })),
+            might: this.stats.might,
+            bossMight: this.stats.bossMight,
+            bossBonus: def.bossDamage ?? 0,
+        };
     }
 
     // A weapon's own speed bonus, on top of the player's cooldown bonus: the worn sets'
@@ -22704,11 +22977,13 @@ export class Sim {
             fire.nextTick += FIRE_INTERVAL;
             this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
+            this.burning = true;
             this.queryTouching(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
                 if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
             });
+            this.burning = false;
         }
     }
 

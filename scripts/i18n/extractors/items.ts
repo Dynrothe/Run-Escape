@@ -1,5 +1,6 @@
 import { PACKS } from "../../../src/game/content/cards";
 import { CHARACTERS } from "../../../src/game/content/characters";
+import { PASSIVE_EXAMINE, WEAPON_EXAMINE } from "../../../src/game/content/examine";
 import { CASKETS, CASKET_TIERS, GEAR, GEAR_SLOTS, UTILITY } from "../../../src/game/content/items";
 import { CAPE_PARTS } from "../../../src/game/content/maxCape";
 import { PASSIVES } from "../../../src/game/content/passives";
@@ -18,6 +19,7 @@ export default function extract(): Record<string, string> {
         const prefix = `weapon.${weapon.id}`;
         strings[`${prefix}.name`] = weapon.name;
         strings[`${prefix}.desc`] = weapon.description;
+        strings[`${prefix}.examine`] = WEAPON_EXAMINE[weapon.id];
         weapon.levels.forEach((level, index) => {
             if (level.name !== undefined) {
                 strings[`${prefix}.level.${index + 1}.name`] = level.name;
@@ -58,6 +60,7 @@ export default function extract(): Record<string, string> {
     for (const passive of PASSIVES) {
         strings[`passive.${passive.id}.name`] = passive.name;
         strings[`passive.${passive.id}.desc`] = passive.description;
+        strings[`passive.${passive.id}.examine`] = PASSIVE_EXAMINE[passive.id];
         strings[`passive.${passive.id}.effect`] = passive.effect;
     }
     for (const powerUp of POWER_UPS) {

@@ -1,0 +1,3976 @@
+{
+    "abyssal_antibody": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -4,
+        "offsetY": 12.5
+    },
+    "abyssal_leech": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 5,
+        "offsetY": 2.5
+    },
+    "abyssal_pathfinder": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -1.5
+    },
+    "abyssal_walker": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1,
+        "offsetY": 15.5
+    },
+    "afflicted": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "agile_scarab": {
+        "model": "body",
+        "seqId": 9592,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 4.5
+    },
+    "ahrim": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetY": 17.5
+    },
+    "akkha": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 1.5,
+        "offsetY": 17
+    },
+    "akkha_enraged": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 5.5,
+        "offsetY": 18
+    },
+    "akkha_magic": {
+        "model": "body",
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 9,
+        "offsetY": 22.5
+    },
+    "akkha_orb_burning": {
+        "model": "body",
+        "seqId": 9794,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetY": -6
+    },
+    "akkha_orb_darkness": {
+        "model": "body",
+        "seqId": 9794,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "akkha_orb_frozen": {
+        "model": 45308,
+        "seqId": 9794,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 2.5
+    },
+    "akkha_orb_lightning": {
+        "model": 45308,
+        "seqId": 9794,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 5.5
+    },
+    "akkha_ranged": {
+        "model": "body",
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 10.5,
+        "offsetY": 22
+    },
+    "akkha_shadow": {
+        "model": "body",
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 10.5,
+        "offsetY": 22
+    },
+    "akkha_unstable_orb": {
+        "model": "body",
+        "seqId": 9794,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1,
+        "offsetY": 5.5
+    },
+    "akkhas_phantom": {
+        "model": "body",
+        "seqId": 9760,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 10.5,
+        "offsetY": 22
+    },
+    "alchemical_hydra": {
+        "model": "body",
+        "seqId": 8233,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1,
+        "offsetY": 10.5
+    },
+    "amascuts_phantom": {
+        "model": "body",
+        "seqId": 9716,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 6.5,
+        "offsetY": 16.5
+    },
+    "amascuts_phantom_enraged": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 6.5,
+        "offsetY": 16.5
+    },
+    "ancient_guardian": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 7.5,
+        "offsetY": 12.5
+    },
+    "ankou": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "armadyl_spiritual_ranger": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": 5,
+        "offsetY": 54
+    },
+    "armadyl_spiritual_warrior": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": 12,
+        "offsetY": 55.5
+    },
+    "aviansie": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": 12,
+        "offsetY": 55.5
+    },
+    "aviansie_veteran": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": 12,
+        "offsetY": 55.5
+    },
+    "awakened_duke": {
+        "npcId": 12155,
+        "model": "body",
+        "seqId": 10175,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -6.5,
+        "offsetY": 4
+    },
+    "awakened_leviathan": {
+        "model": "body",
+        "seqId": 10276,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "awakened_vardorvis": {
+        "model": "body",
+        "seqId": 10337,
+        "yaw": 50,
+        "pitch": 120,
+        "zoom": 1.454,
+        "offsetX": -6,
+        "offsetY": 17
+    },
+    "awakened_vardorvis_head": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": -18.5,
+        "offsetY": 50
+    },
+    "awakened_whisperer": {
+        "model": "body",
+        "seqId": 10230,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 4.5,
+        "offsetY": 28
+    },
+    "ba_ba": {
+        "model": "body",
+        "seqId": 9741,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 17,
+        "offsetY": 15.5
+    },
+    "ba_ba_rubble_0": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 5.5,
+        "offsetY": 8
+    },
+    "ba_ba_rubble_1": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 5.5,
+        "offsetY": 8
+    },
+    "ba_ba_rubble_2": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 5.5,
+        "offsetY": 8
+    },
+    "ba_ba_rubble_3": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 5.5,
+        "offsetY": 8
+    },
+    "baba_brawler": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "babas_phantom": {
+        "model": "body",
+        "seqId": 9741,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 17,
+        "offsetY": 15.5
+    },
+    "baboon_brawler": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "baboon_mage": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "baboon_shaman": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "baboon_thrall": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "baboon_thrower": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "balfrug_kreeyath": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 30.5,
+        "offsetY": 7
+    },
+    "bandit": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "bandos_spiritual_warrior": {
+        "model": "body",
+        "seqId": 4318,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "basilisk": {
+        "model": "body",
+        "seqId": 1545,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 28,
+        "offsetY": -3
+    },
+    "big_frog": {
+        "model": "body",
+        "seqId": 1796,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 16,
+        "offsetY": 6.5
+    },
+    "big_nylocas_hagios": {
+        "model": "body",
+        "seqId": 7988,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1.5,
+        "offsetY": 5.5
+    },
+    "big_nylocas_ischyros": {
+        "model": "body",
+        "seqId": 8002,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -2,
+        "offsetY": -6.5
+    },
+    "big_nylocas_toxobolos": {
+        "model": "body",
+        "seqId": 7993,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "black_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": 29.5,
+        "offsetY": 6.5
+    },
+    "blood_jaguar": {
+        "model": "body",
+        "seqId": 9091,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": 34,
+        "offsetY": 2
+    },
+    "blood_spawn": {
+        "model": "body",
+        "seqId": 8102,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 10.5
+    },
+    "bloodveld": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19,
+        "offsetY": -13
+    },
+    "bloodworm": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 7.5,
+        "offsetY": -2
+    },
+    "blue_portal": {
+        "model": "body",
+        "seqId": 3936,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 0.5
+    },
+    "brawler": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2.5,
+        "offsetY": 5.5
+    },
+    "bree": {
+        "model": "body",
+        "seqId": 4311,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 4.5,
+        "offsetY": 0.5
+    },
+    "champion_of_scabaras": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1,
+        "offsetY": 18.5
+    },
+    "chaos_druid": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1,
+        "offsetY": 18.5
+    },
+    "chaos_fanatic": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1.5,
+        "offsetY": 16.5
+    },
+    "chicken": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 7,
+        "offsetY": 18.5
+    },
+    "chompy_bird": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 17.5,
+        "offsetY": 20.5
+    },
+    "cockatrice": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 14.5,
+        "offsetY": 17.5
+    },
+    "coenus": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -2.5,
+        "offsetY": 1
+    },
+    "commander_zilyana": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 6966,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -2.5,
+        "offsetY": 14.5
+    },
+    "corrupted_bear": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "corrupted_dark_beast": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 20,
+        "offsetY": -2.5
+    },
+    "corrupted_hunllef": {
+        "model": "body",
+        "seqId": 8417,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 8,
+        "offsetY": -1.5
+    },
+    "corrupted_scorpion": {
+        "model": "body",
+        "seqId": 6252,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "corrupted_wolf": {
+        "model": "body",
+        "seqId": 6580,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 22,
+        "offsetY": 18.5
+    },
+    "count_draynor": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 0.5,
+        "offsetY": 17
+    },
+    "cow": {
+        "model": "body",
+        "seqId": 5852,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 33,
+        "offsetY": 14.5
+    },
+    "cracked_boulder": {
+        "model": "body",
+        "seqId": 9518,
+        "zoom": 0.779
+    },
+    "crazy_archaeologist": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "crocodile": {
+        "model": "body",
+        "seqId": 2037,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 11,
+        "offsetY": -3
+    },
+    "crondis_crocodile": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "crondis_crocodile_hungry": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "crondis_palm_0": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "crondis_palm_1": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "crondis_palm_2": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "crondis_palm_3": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "crondis_palm_4": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "crondis_trap": {
+        "model": "body",
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 10.5,
+        "offsetY": 2.5
+    },
+    "cruor": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 1,
+        "offsetY": 17
+    },
+    "crypt_rat": {
+        "model": "body",
+        "seqId": 242,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 9,
+        "offsetY": -1.5
+    },
+    "crypt_spider": {
+        "model": "body",
+        "seqId": 6247,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": -1.5,
+        "offsetY": -31.5
+    },
+    "crystalline_bat": {
+        "model": "body",
+        "seqId": 4914,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 2,
+        "offsetY": 14.5
+    },
+    "crystalline_bear": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "crystalline_dark_beast": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "crystalline_hunllef": {
+        "model": "body",
+        "seqId": 8417,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 8,
+        "offsetY": -0.5
+    },
+    "crystalline_rat": {
+        "model": "body",
+        "seqId": 4932,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 13.5,
+        "offsetY": -5
+    },
+    "crystalline_scorpion": {
+        "model": "body",
+        "seqId": 6252,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "crystalline_spider": {
+        "model": "body",
+        "seqId": 8340,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "crystalline_wolf": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 22,
+        "offsetY": 18.5
+    },
+    "cursed_baboon": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "dagannoth": {
+        "model": "body",
+        "seqId": 1338,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 12.5,
+        "offsetY": 13
+    },
+    "dagannoth_prime": {
+        "model": "body",
+        "seqId": 2850,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 2.5,
+        "offsetY": 8.5
+    },
+    "dagannoth_rex": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 3.5,
+        "offsetY": 18.5
+    },
+    "dagannoth_supreme": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 6,
+        "offsetY": 9
+    },
+    "damis": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "damis_risen": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "dark_warrior": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "dark_wizard": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "deathly_mage": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetY": 12.5
+    },
+    "deathly_ranger": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "defiler": {
+        "model": "body",
+        "seqId": 3918,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 6,
+        "offsetY": 13
+    },
+    "desert_bandit": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "desert_lizard": {
+        "model": "body",
+        "seqId": 2774,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19.5,
+        "offsetY": -4
+    },
+    "dessous": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "dharok": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "duke_sucellus": {
+        "npcId": 12155,
+        "model": "body",
+        "seqId": 10175,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -6.5,
+        "offsetY": 4
+    },
+    "elf_guard": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1,
+        "offsetY": 4
+    },
+    "elidinis_warden_charging": {
+        "model": "body",
+        "seqId": 9683,
+        "zoom": 2.399,
+        "offsetX": -0.5,
+        "offsetY": 26
+    },
+    "elidinis_warden_core": {
+        "model": "body",
+        "seqId": 9704,
+        "zoom": 1.284,
+        "offsetY": 20
+    },
+    "elidinis_warden_dormant": {
+        "model": "body",
+        "seqId": 9665,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "elidinis_warden_exposed": {
+        "model": "body",
+        "seqId": 9671,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 0.5,
+        "offsetY": 15
+    },
+    "elidinis_warden_last": {
+        "model": "body",
+        "seqId": 9657,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": -2.5,
+        "offsetY": 2.5
+    },
+    "elidinis_warden_magic": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9653,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "elidinis_warden_ranged": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9653,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "elidinis_warden_wreck": {
+        "model": "body",
+        "seqId": 9654,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 9,
+        "offsetY": -18
+    },
+    "elvarg": {
+        "model": "body",
+        "seqId": 90,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 22.5,
+        "offsetY": -15.5
+    },
+    "embertailed_jerboa": {
+        "model": "body",
+        "seqId": 6089,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 23,
+        "offsetY": 1.5
+    },
+    "enraged_chicken": {
+        "model": "body",
+        "seqId": 2298,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 7,
+        "offsetY": 4
+    },
+    "evil_chicken": {
+        "model": "body",
+        "seqId": 2298,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 15.5,
+        "offsetY": 6
+    },
+    "false_lantern": {
+        "model": "body",
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 5,
+        "offsetY": -3.5
+    },
+    "fareed": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "farmer": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "feral_vampyre": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "fiyr_shade": {
+        "model": "body",
+        "seqId": 1282,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "flaming_pyrelord": {
+        "model": "body",
+        "seqId": 1578,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 2.5,
+        "offsetY": 14
+    },
+    "flight_kilisa": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": 5,
+        "offsetY": 36.5
+    },
+    "flockleader_geerin": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": 5,
+        "offsetY": 36.5
+    },
+    "forsaken_assassin": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -2.5,
+        "offsetY": 8.5
+    },
+    "fox": {
+        "model": "body",
+        "seqId": 6561,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 24,
+        "offsetY": 10
+    },
+    "freaky_forester": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.687,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "freaky_forester_final": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "fremennik_archer": {
+        "model": 50931,
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -5,
+        "offsetY": 9.5
+    },
+    "fremennik_berserker": {
+        "model": 50720,
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -3,
+        "offsetY": 14
+    },
+    "fremennik_seer": {
+        "model": 50725,
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -11.5,
+        "offsetY": 18
+    },
+    "frost_nagua": {
+        "model": "body",
+        "seqId": 10999,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetY": 45.5
+    },
+    "fumus": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 1.5,
+        "offsetY": 16
+    },
+    "general_graardor": {
+        "model": "body",
+        "seqId": 7017,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1,
+        "offsetY": 18
+    },
+    "ghast": {
+        "model": "body",
+        "seqId": 1086,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 0.5,
+        "offsetY": 19.5
+    },
+    "ghorrock_ice_giant": {
+        "model": "body",
+        "seqId": 4670,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "ghorrock_ice_spider": {
+        "model": "body",
+        "seqId": 5326,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "ghorrock_ice_warrior": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "ghorrock_ice_wolf": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 22,
+        "offsetY": 18.5
+    },
+    "ghorrock_icefiend": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3.5,
+        "offsetY": 3.5
+    },
+    "ghorrock_pyrefiend": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3.5,
+        "offsetY": 3.5
+    },
+    "ghost": {
+        "model": "body",
+        "seqId": 5538,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 17.5
+    },
+    "ghoul": {
+        "model": "body",
+        "seqId": 1275,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "giant_bat": {
+        "model": "body",
+        "seqId": 4914,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetY": 17
+    },
+    "giant_crypt_rat": {
+        "model": "body",
+        "seqId": 4932,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 10.5,
+        "offsetY": -13
+    },
+    "giant_crypt_spider": {
+        "model": "body",
+        "seqId": 5326,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "giant_rat": {
+        "model": "body",
+        "seqId": 4932,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 14,
+        "offsetY": -17
+    },
+    "giant_spider": {
+        "model": "body",
+        "seqId": 5326,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "glacies": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 17
+    },
+    "goblin": {
+        "model": "body",
+        "seqId": 6181,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 7.5,
+        "offsetY": 19.5
+    },
+    "gorak": {
+        "model": "body",
+        "seqId": 4299,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 15.5,
+        "offsetY": 13
+    },
+    "great_strangled_bear": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "greater_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 13.5,
+        "offsetY": 11.5
+    },
+    "growler": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 23.5,
+        "offsetY": 1
+    },
+    "gryphon": {
+        "model": "body",
+        "seqId": 12547,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 13.5,
+        "offsetY": 15.5
+    },
+    "guanic_bat": {
+        "model": "body",
+        "seqId": 35,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetY": 46
+    },
+    "guthan": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "gwd_bloodveld": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19,
+        "offsetY": -13
+    },
+    "gwd_cyclops": {
+        "model": "body",
+        "seqId": 4650,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -2,
+        "offsetY": 15
+    },
+    "gwd_goblin": {
+        "model": "body",
+        "seqId": 6181,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "gwd_hobgoblin": {
+        "model": "body",
+        "seqId": 166,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 0.5,
+        "offsetY": 16.5
+    },
+    "gwd_imp": {
+        "model": "body",
+        "seqId": 171,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 7.5,
+        "offsetY": 13.5
+    },
+    "gwd_jogre": {
+        "model": "body",
+        "seqId": 2931,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "gwd_ogre": {
+        "model": "body",
+        "seqId": 357,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "gwd_ork": {
+        "model": "body",
+        "seqId": 4318,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 8
+    },
+    "gwd_werewolf": {
+        "model": "body",
+        "seqId": 6539,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 2.5,
+        "offsetY": 18.5
+    },
+    "hellhound": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 16,
+        "offsetY": 16
+    },
+    "het_orb": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1,
+        "offsetY": 0.5
+    },
+    "hets_seal": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882
+    },
+    "highwayman": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "hill_giant": {
+        "model": "body",
+        "seqId": 4650,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "husk_magic": {
+        "model": "body",
+        "seqId": 8562,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 1.5,
+        "offsetY": 15
+    },
+    "husk_ranged": {
+        "model": "body",
+        "seqId": 8562,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 7
+    },
+    "hydra": {
+        "model": "body",
+        "seqId": 8260,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 3,
+        "offsetY": 18.5
+    },
+    "ice_troll": {
+        "model": "body",
+        "seqId": 286,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "icefiend": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3.5,
+        "offsetY": 3.5
+    },
+    "imp": {
+        "model": "body",
+        "seqId": 171,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -3,
+        "offsetY": 12
+    },
+    "inferno_yt_hurkot": {
+        "model": "body",
+        "seqId": 2636,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3,
+        "offsetY": 9.5
+    },
+    "invading_duke": {
+        "npcId": 12155,
+        "model": "body",
+        "seqId": 10175,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -6.5,
+        "offsetY": 4
+    },
+    "invading_leviathan": {
+        "model": "body",
+        "seqId": 10276,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "invading_vardorvis": {
+        "model": "body",
+        "seqId": 10337,
+        "tick": 53,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "invading_whisperer": {
+        "model": "body",
+        "seqId": 10230,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 2,
+        "offsetY": 11
+    },
+    "iorwerth_archer": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "iorwerth_warrior": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 6
+    },
+    "jackal": {
+        "model": "body",
+        "seqId": 6561,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19.5,
+        "offsetY": 11.5
+    },
+    "jaguar_warrior": {
+        "model": 50748,
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -2.5,
+        "offsetY": 11
+    },
+    "jal_ak": {
+        "model": "body",
+        "seqId": 7586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 3,
+        "offsetY": 7.5
+    },
+    "jal_akrek_ket": {
+        "model": "body",
+        "seqId": 7586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 3,
+        "offsetY": 7.5
+    },
+    "jal_imkot": {
+        "model": "body",
+        "seqId": 7595,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 1.5,
+        "offsetY": 4
+    },
+    "jal_mejrah": {
+        "model": "body",
+        "seqId": 7577,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2,
+        "offsetY": 16
+    },
+    "jal_nib": {
+        "model": "body",
+        "seqId": 7573,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1,
+        "offsetY": 6.5
+    },
+    "jal_xil": {
+        "model": "body",
+        "seqId": 7602,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetY": 11.5
+    },
+    "jal_zek": {
+        "model": "body",
+        "seqId": 7609,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -4.5,
+        "offsetY": 5
+    },
+    "jal_zek_champion": {
+        "model": "body",
+        "seqId": 7609,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -4.5,
+        "offsetY": 5
+    },
+    "jaltok_jad": {
+        "model": "body",
+        "seqId": 7589,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "jaltok_jad_finale": {
+        "model": "body",
+        "seqId": 7589,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "javelin_colossus": {
+        "model": "body",
+        "seqId": 10889,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "jelly": {
+        "model": "body",
+        "seqId": 1583,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.687,
+        "offsetY": 4
+    },
+    "jhallan": {
+        "model": "body",
+        "seqId": 9883,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "jhallan_shadow": {
+        "model": "body",
+        "seqId": 9883,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "jogre": {
+        "model": "body",
+        "seqId": 130,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "jungle_spider": {
+        "model": "body",
+        "seqId": 5326,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "justiciar_zachariah": {
+        "model": "body",
+        "seqId": 7851,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetY": 4
+    },
+    "kalphite_guardian": {
+        "model": "body",
+        "seqId": 6219,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 11
+    },
+    "kalphite_queen": {
+        "model": "body",
+        "seqId": 6239,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 6.5,
+        "offsetY": 0.5
+    },
+    "kalphite_queen_risen": {
+        "model": "body",
+        "seqId": 6236,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 4.5,
+        "offsetY": -4
+    },
+    "kalphite_soldier": {
+        "model": "body",
+        "seqId": 6218,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": -1.5
+    },
+    "kalphite_worker": {
+        "model": "body",
+        "seqId": 6218,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetY": 4
+    },
+    "karil": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -4,
+        "offsetY": 4.5
+    },
+    "kasonde": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 4
+    },
+    "kephri": {
+        "model": "body",
+        "seqId": 9572,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1.5,
+        "offsetY": 1.5
+    },
+    "kephri_arcane": {
+        "model": "body",
+        "seqId": 9594,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 5
+    },
+    "kephri_egg_explode": {
+        "model": "body",
+        "zoom": 0.882
+    },
+    "kephri_egg_hatch": {
+        "zoom": 0.882
+    },
+    "kephri_final": {
+        "model": "body",
+        "seqId": 9572,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1.5,
+        "offsetY": 1.5
+    },
+    "kephri_soldier": {
+        "model": "body",
+        "seqId": 9586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 0.5,
+        "offsetY": 11.5
+    },
+    "kephri_spitting": {
+        "model": "body",
+        "seqId": 9586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "kephri_swarm": {
+        "model": "body",
+        "seqId": 9606,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 0.5,
+        "offsetY": 8
+    },
+    "kephri_swarm_home": {
+        "model": 46405,
+        "seqId": 9606,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2,
+        "offsetY": 7
+    },
+    "kephris_phantom": {
+        "model": "body",
+        "seqId": 9572,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1.5,
+        "offsetY": 1.5
+    },
+    "ket_zek": {
+        "model": "body",
+        "seqId": 2642,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 6,
+        "offsetY": 1.5
+    },
+    "ketla": {
+        "model": "body",
+        "seqId": 7861,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -2,
+        "offsetY": 6
+    },
+    "king_black_dragon": {
+        "model": "body",
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 6,
+        "offsetY": -2
+    },
+    "knight_of_saradomin": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -3.5,
+        "offsetY": 12.5
+    },
+    "kreearra": {
+        "model": "body",
+        "seqId": 6976,
+        "tick": 23,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 4,
+        "offsetY": 10.5
+    },
+    "kril_general": {
+        "model": "body",
+        "seqId": 6935,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 14.5,
+        "offsetY": 0.5
+    },
+    "kril_tsutsaroth": {
+        "model": "body",
+        "seqId": 6935,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 21,
+        "offsetY": 3
+    },
+    "kurask": {
+        "model": "body",
+        "seqId": 1511,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 4.5,
+        "offsetY": 9
+    },
+    "lassar_ghost": {
+        "model": "body",
+        "seqId": 5530,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 6,
+        "offsetY": 18.5
+    },
+    "lassar_hand": {
+        "model": "body",
+        "seqId": 1588,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 2.5,
+        "offsetY": -1
+    },
+    "lassar_leech": {
+        "model": "body",
+        "seqId": 2180,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 6.5,
+        "offsetY": 2
+    },
+    "lassar_shadow": {
+        "model": 9739,
+        "seqId": 2740,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "lassar_tentacle": {
+        "model": "body",
+        "seqId": 10264,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -7,
+        "offsetY": 24.5
+    },
+    "lesser_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -0.5,
+        "offsetY": 2.5
+    },
+    "light_leech": {
+        "model": "body",
+        "seqId": 2180,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 6.5,
+        "offsetY": 5
+    },
+    "lizard": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9.5,
+        "offsetY": 1
+    },
+    "lizardman": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "lizardman_brute": {
+        "model": "body",
+        "seqId": 7191,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 11
+    },
+    "lizardman_shaman": {
+        "model": "body",
+        "seqId": 7191,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10.5
+    },
+    "locust_rider": {
+        "model": "body",
+        "seqId": 5447,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 1.5,
+        "offsetY": 15.5
+    },
+    "lost_soul": {
+        "model": "body",
+        "seqId": 5538,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "mage_scarab": {
+        "model": "body",
+        "seqId": 9606,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2,
+        "offsetY": 7
+    },
+    "maiden_of_sugadinti": {
+        "model": "body",
+        "seqId": 8090,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -0.5,
+        "offsetY": 14.5
+    },
+    "man": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "manticore": {
+        "model": "body",
+        "seqId": 10863,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 11.5,
+        "offsetY": -11
+    },
+    "menaphite_akh": {
+        "model": "body",
+        "seqId": 9426,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "menaphite_guard": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "menaphite_shadow": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "minotaur": {
+        "model": "body",
+        "seqId": 10840,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1,
+        "offsetY": 16
+    },
+    "monkey": {
+        "model": "body",
+        "seqId": 222,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 2.5
+    },
+    "moonlight_antelope": {
+        "model": "body",
+        "seqId": 6374,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 3,
+        "offsetY": 11.5
+    },
+    "moss_giant": {
+        "model": "body",
+        "seqId": 4656,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 17.5
+    },
+    "mountain_troll": {
+        "model": "body",
+        "seqId": 286,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 17
+    },
+    "mummy": {
+        "model": "body",
+        "seqId": 5548,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 18
+    },
+    "mutated_bloodveld": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19,
+        "offsetY": -13
+    },
+    "myre_zombie": {
+        "model": "body",
+        "seqId": 5576,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -1,
+        "offsetY": 22
+    },
+    "nail_beast": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "nex": {
+        "model": "body",
+        "seqId": 9177,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 16.5
+    },
+    "nex_blood": {
+        "model": "body",
+        "seqId": 9177,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 16.5
+    },
+    "nex_ice": {
+        "model": "body",
+        "seqId": 9177,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 16.5
+    },
+    "nex_shadow": {
+        "model": "body",
+        "seqId": 9177,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 16.5
+    },
+    "nezikchened": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2.5,
+        "offsetY": 6.5
+    },
+    "nightmare_parasite": {
+        "model": "body",
+        "seqId": 8553,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 1
+    },
+    "nightmare_parasite_weak": {
+        "model": "body",
+        "seqId": 8553,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 1
+    },
+    "nightmare_totem": {
+        "model": "body",
+        "mirror": true,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1,
+        "offsetY": 7.5
+    },
+    "nightmare_totem_charged": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 8589,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 11
+    },
+    "nightmare_totem_charging": {
+        "model": "body",
+        "mirror": true,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 11
+    },
+    "nylocas_hagios": {
+        "model": "body",
+        "seqId": 7988,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1.5,
+        "offsetY": 5.5
+    },
+    "nylocas_ischyros": {
+        "model": "body",
+        "seqId": 8002,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -2,
+        "offsetY": -6.5
+    },
+    "nylocas_matomenos": {
+        "model": "body",
+        "seqId": 8096,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -1,
+        "offsetY": -19
+    },
+    "nylocas_matomenos_healer": {
+        "model": "body",
+        "seqId": 8096,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -1,
+        "offsetY": -19
+    },
+    "nylocas_toxobolos": {
+        "model": "body",
+        "seqId": 7993,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "nylocas_vasilias": {
+        "model": "body",
+        "seqId": 8002,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "nylocas_vasilias_magic": {
+        "model": "body",
+        "seqId": 7988,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetY": 2
+    },
+    "nylocas_vasilias_ranged": {
+        "model": "body",
+        "seqId": 7993,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "persten": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "pestilent_bloat": {
+        "model": "body",
+        "seqId": 8080,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 4.5
+    },
+    "phosani_egg": {
+        "model": "body",
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 1
+    },
+    "phosani_husk_magic": {
+        "model": "body",
+        "seqId": 8562,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "phosani_husk_ranged": {
+        "model": "body",
+        "seqId": 8562,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "phosani_parasite": {
+        "model": "body",
+        "seqId": 8553,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 1
+    },
+    "phosani_parasite_weak": {
+        "model": "body",
+        "seqId": 8553,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 1
+    },
+    "phosani_sleepwalker": {
+        "model": "body",
+        "seqId": 8569,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "phosani_totem": {
+        "model": "body",
+        "mirror": true
+    },
+    "phosani_totem_charged": {
+        "model": "body",
+        "seqId": 8589,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "phosani_totem_charging": {
+        "model": "body",
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "phosanis_nightmare": {
+        "model": "body",
+        "seqId": 8592,
+        "tick": 43,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.834,
+        "offsetX": 9.5,
+        "offsetY": -2.5
+    },
+    "poison_spider": {
+        "model": "body",
+        "seqId": 5326,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 8
+    },
+    "professor_oddenstein": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "purple_portal": {
+        "model": "body",
+        "seqId": 3933,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 0.5
+    },
+    "pyre_fox": {
+        "model": "body",
+        "seqId": 7269,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 23.5,
+        "offsetY": 12.5
+    },
+    "pyrefiend": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3.5,
+        "offsetY": 3.5
+    },
+    "rat": {
+        "model": "body",
+        "seqId": 2704,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 13,
+        "offsetY": 3
+    },
+    "ravager": {
+        "model": "body",
+        "seqId": 3913,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 4.5,
+        "offsetY": 11
+    },
+    "reanimated_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 11.5,
+        "offsetY": 11
+    },
+    "red_portal": {
+        "model": "body",
+        "seqId": 3928,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": -3
+    },
+    "revenant_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 13.5,
+        "offsetY": 10.5
+    },
+    "revenant_goblin": {
+        "model": "body",
+        "seqId": 6181,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 2,
+        "offsetY": 22.5
+    },
+    "revenant_hobgoblin": {
+        "model": "body",
+        "seqId": 166,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "revenant_imp": {
+        "model": "body",
+        "seqId": 171,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "revenant_pyrefiend": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3.5,
+        "offsetY": 3.5
+    },
+    "rock_crab": {
+        "model": "body",
+        "seqId": 1310,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -2.5,
+        "offsetY": 3.5
+    },
+    "rock_lobster": {
+        "model": "body",
+        "seqId": 2858,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 10.5,
+        "offsetY": -3
+    },
+    "rolling_boulder": {
+        "model": "body",
+        "seqId": 9518,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetY": -1
+    },
+    "root_heart": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1.5,
+        "offsetY": 10.5
+    },
+    "sarachnis": {
+        "model": "body",
+        "seqId": 8320,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetY": 8
+    },
+    "saradomin_priest": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1,
+        "offsetY": 10
+    },
+    "saradomin_spiritual_mage": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1,
+        "offsetY": 18
+    },
+    "saradomin_spiritual_warrior": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "scabaras_scarab": {
+        "model": "body",
+        "seqId": 9586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 5.5,
+        "offsetY": 8
+    },
+    "scarab_mage": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -3.5,
+        "offsetY": 0.5
+    },
+    "scarab_mage_elder": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -3,
+        "offsetY": -0.5
+    },
+    "scarab_swarm": {
+        "model": "body",
+        "seqId": 9606,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 2,
+        "offsetY": 7
+    },
+    "scarred_black_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 5,
+        "offsetY": 4
+    },
+    "scarred_greater_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 5,
+        "offsetY": 4
+    },
+    "scarred_hellhound": {
+        "model": "body",
+        "seqId": 6561,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 24.5,
+        "offsetY": 17.5
+    },
+    "scarred_imp": {
+        "model": "body",
+        "seqId": 171,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 3,
+        "offsetY": 12.5
+    },
+    "scarred_lesser_demon": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 11,
+        "offsetY": 18.5
+    },
+    "scorpion": {
+        "model": "body",
+        "seqId": 6252,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "sea_snake": {
+        "model": "body",
+        "seqId": 3535,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": 30,
+        "offsetY": -1
+    },
+    "sergeant_grimspike": {
+        "model": "body",
+        "seqId": 6153,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "sergeant_steelwill": {
+        "model": "body",
+        "seqId": 6153,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "sergeant_strongstack": {
+        "model": "body",
+        "seqId": 6153,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "serpent_shaman": {
+        "model": 50747,
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "shade": {
+        "model": "body",
+        "seqId": 1282,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "shadow_keeper": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "shadow_keeper_boss": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "shaman_spawn": {
+        "model": "body",
+        "seqId": 7191,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -2,
+        "offsetY": 17
+    },
+    "shifter": {
+        "model": "body",
+        "seqId": 3899,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -3.5,
+        "offsetY": 11.5
+    },
+    "shockwave_colossus": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 10902,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -0.5,
+        "offsetY": 18
+    },
+    "siphoned_soul": {
+        "model": "body",
+        "seqId": 5538,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "skeletal_mystic": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 5483,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "skeleton": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 5483,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "skotizo": {
+        "model": "body",
+        "seqId": 4675,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 23.5,
+        "offsetY": 5
+    },
+    "slash_bash": {
+        "model": "body",
+        "seqId": 357,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 0.5,
+        "offsetY": 9.5
+    },
+    "sleepwalker": {
+        "model": "body",
+        "seqId": 8569,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "snake": {
+        "model": "body",
+        "seqId": 277,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 18.5,
+        "offsetY": -15
+    },
+    "snakeling": {
+        "model": "body",
+        "seqId": 1721,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetY": 41.5
+    },
+    "sol_heredit": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 10874,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 5.5,
+        "offsetY": 15
+    },
+    "sotetseg": {
+        "model": "body",
+        "seqId": 8137,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 5.5,
+        "offsetY": -24
+    },
+    "spawn_of_sarachnis": {
+        "model": "body",
+        "seqId": 8320,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -1,
+        "offsetY": 10.5
+    },
+    "spinner": {
+        "model": "body",
+        "seqId": 3906,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1,
+        "offsetY": 6
+    },
+    "spitting_scarab": {
+        "model": "body",
+        "seqId": 9586,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "splatter": {
+        "model": "body",
+        "seqId": 3886,
+        "tick": 64,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "starlight": {
+        "model": "body",
+        "seqId": 6374,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 16.5,
+        "offsetY": 18.5
+    },
+    "strangled": {
+        "model": "body",
+        "seqId": 5566,
+        "tick": 26,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "strangled_bear": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 26.5,
+        "offsetY": -1.5
+    },
+    "strangled_boar": {
+        "model": "body",
+        "seqId": 12490,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 1.5,
+        "offsetY": 4
+    },
+    "strangled_brute": {
+        "model": "body",
+        "seqId": 5570,
+        "tick": 11,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": 1.5,
+        "offsetY": 8.5
+    },
+    "strangled_lynx": {
+        "model": "body",
+        "seqId": 9091,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "sulphur_lizard": {
+        "model": "body",
+        "seqId": 8282,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 17.5,
+        "offsetY": -9.5
+    },
+    "sulphur_nagua": {
+        "model": "body",
+        "seqId": 10999,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": -0.5,
+        "offsetY": 42.5
+    },
+    "sunlight_antelope": {
+        "model": "body",
+        "seqId": 6374,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 0.5,
+        "offsetY": 10
+    },
+    "swamp_crab": {
+        "model": "body",
+        "seqId": 1310,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -0.5,
+        "offsetY": 4
+    },
+    "the_leviathan": {
+        "model": "body",
+        "seqId": 10276,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "the_mimic": {
+        "model": "body",
+        "seqId": 8307,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 9
+    },
+    "the_nightmare": {
+        "model": "body",
+        "seqId": 8593,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetY": -11
+    },
+    "third_age_mage": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "third_age_ranger": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "third_age_warrior": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tob_big_nylocas_hagios": {
+        "model": "body",
+        "seqId": 7988,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1.5,
+        "offsetY": 5.5
+    },
+    "tob_big_nylocas_ischyros": {
+        "model": "body",
+        "seqId": 8002,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -2,
+        "offsetY": -6.5
+    },
+    "tob_big_nylocas_toxobolos": {
+        "model": "body",
+        "seqId": 7993,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "tob_nylocas_hagios": {
+        "model": "body",
+        "seqId": 7988,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1.5,
+        "offsetY": 5.5
+    },
+    "tob_nylocas_ischyros": {
+        "model": "body",
+        "seqId": 8002,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -1,
+        "offsetY": -10.5
+    },
+    "tob_nylocas_matomenos_feeder": {
+        "model": "body",
+        "seqId": 8096,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -1,
+        "offsetY": -19
+    },
+    "tob_nylocas_toxobolos": {
+        "model": "body",
+        "seqId": 7993,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": -10.5
+    },
+    "tob_pestilent_bloat": {
+        "model": "body",
+        "seqId": 8080,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": 4.5
+    },
+    "tob_sotetseg": {
+        "model": "body",
+        "seqId": 8137,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 5.5,
+        "offsetY": -24
+    },
+    "tob_verzik_vitur": {
+        "model": "body",
+        "seqId": 8107,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": -9,
+        "offsetY": 4.5
+    },
+    "tob_verzik_vitur_risen": {
+        "model": "body",
+        "seqId": 8113,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1,
+        "offsetY": -0.5
+    },
+    "tob_verzik_vitur_spider": {
+        "model": "body",
+        "seqId": 8120,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -1.5,
+        "offsetY": 5.5
+    },
+    "tok_xil": {
+        "model": "body",
+        "seqId": 2631,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 7
+    },
+    "torag": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "torcher": {
+        "model": "body",
+        "seqId": 3878,
+        "tick": 13,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 15,
+        "offsetY": 10.5
+    },
+    "tribesman": {
+        "model": "body",
+        "seqId": 813,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.867,
+        "offsetX": -1,
+        "offsetY": 6.5
+    },
+    "tstanon_karlak": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 11.5,
+        "offsetY": 6
+    },
+    "tumeken_warden_charging": {
+        "model": "body",
+        "seqId": 9662,
+        "tick": 91,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": -19.5,
+        "offsetY": 50.5
+    },
+    "tumeken_warden_core": {
+        "model": "body",
+        "seqId": 9704,
+        "zoom": 1.284,
+        "offsetY": 20
+    },
+    "tumeken_warden_dormant": {
+        "model": "body",
+        "seqId": 9665,
+        "tick": 7,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -3,
+        "offsetY": 22.5
+    },
+    "tumeken_warden_exposed": {
+        "model": "body",
+        "seqId": 9671,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 3,
+        "offsetY": 18
+    },
+    "tumeken_warden_last": {
+        "model": "body",
+        "seqId": 9657,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 3.488,
+        "offsetX": 8,
+        "offsetY": 17
+    },
+    "tumeken_warden_magic": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9653,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -9,
+        "offsetY": 14.5
+    },
+    "tumeken_warden_ranged": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 9653,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": -8.5,
+        "offsetY": 15.5
+    },
+    "tumeken_warden_wreck": {
+        "model": "body",
+        "seqId": 9649,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 0.5,
+        "offsetY": 19
+    },
+    "tz_kek": {
+        "model": "body",
+        "seqId": 2624,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 9
+    },
+    "tz_kih": {
+        "model": "body",
+        "seqId": 2618,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.716,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tzhaar_hur": {
+        "model": "body",
+        "seqId": 2603,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tzhaar_ket": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 2603,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tzhaar_ket_champion": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 2603,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tzhaar_mej": {
+        "model": "body",
+        "seqId": 2604,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tzhaar_xil": {
+        "model": "body",
+        "seqId": 2603,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "tztok_jad": {
+        "model": "body",
+        "seqId": 2650,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "ugthanki": {
+        "model": "body",
+        "seqId": 51,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "umbra": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "vampyre_juvenile": {
+        "model": "body",
+        "mirror": true,
+        "seqId": 4702,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "vampyre_juvinate": {
+        "model": "body",
+        "seqId": 4702,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": -0.5,
+        "offsetY": 13.5
+    },
+    "vanstrom_klause": {
+        "model": "body",
+        "seqId": 4702,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 1.5,
+        "offsetY": 11
+    },
+    "vardorvis": {
+        "model": "body",
+        "seqId": 10337,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "vardorvis_axe": {
+        "model": "body",
+        "seqId": 10366,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 11
+    },
+    "vardorvis_captor": {
+        "model": "body",
+        "seqId": 10363,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "vardorvis_head": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": -18.5,
+        "offsetY": 50
+    },
+    "varrock_hellhound": {
+        "model": "body",
+        "seqId": 6580,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 16,
+        "offsetY": 16
+    },
+    "verac": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "verzik_vitur": {
+        "model": "body",
+        "seqId": 8107,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": -11,
+        "offsetY": 5.5
+    },
+    "verzik_vitur_risen": {
+        "model": "body",
+        "seqId": 8113,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetY": -1.5
+    },
+    "verzik_vitur_spider": {
+        "model": "body",
+        "seqId": 8120,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 7
+    },
+    "voidflare": {
+        "model": "body",
+        "seqId": 12133,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1.5,
+        "offsetY": 9.5
+    },
+    "volatile_baboon": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 11.5,
+        "offsetY": 21.5
+    },
+    "vorkath": {
+        "model": "body",
+        "seqId": 7948,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 24.5
+    },
+    "vyrewatch": {
+        "model": "body",
+        "seqId": 4689,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 3.952,
+        "offsetX": 18.5,
+        "offsetY": 44.5
+    },
+    "vyrewatch_sentinel": {
+        "model": "body",
+        "seqId": 8703,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 6.5,
+        "offsetY": 18
+    },
+    "wallasalki": {
+        "model": "body",
+        "seqId": 2364,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 8.5,
+        "offsetY": 18.5
+    },
+    "wardens_energy": {
+        "model": "body",
+        "seqId": 7571,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1
+    },
+    "wardens_obelisk": {
+        "model": "body",
+        "seqId": 9720,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "wardens_obelisk_charged": {
+        "model": "body",
+        "seqId": 9723,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -1,
+        "offsetY": 7
+    },
+    "wardens_siphon": {
+        "model": "body",
+        "seqId": 9736,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -2.5,
+        "offsetY": 2
+    },
+    "wardens_siphon_reversed": {
+        "model": "body",
+        "seqId": 9736,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -2.5,
+        "offsetY": 2
+    },
+    "werewolf": {
+        "model": "body",
+        "seqId": 6539,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 2.5,
+        "offsetY": 18.5
+    },
+    "whisperer": {
+        "model": "body",
+        "seqId": 10230,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 1.5,
+        "offsetY": 10
+    },
+    "whisperer_soul": {
+        "model": "body",
+        "seqId": 5538,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "wingman_skree": {
+        "model": "body",
+        "seqId": 6952,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.397,
+        "offsetX": 4,
+        "offsetY": 47
+    },
+    "wise_old_man": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 1.5,
+        "offsetY": 22
+    },
+    "wolf": {
+        "model": "body",
+        "seqId": 6580,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 22,
+        "offsetY": 18.5
+    },
+    "xarpus": {
+        "model": "body",
+        "seqId": 8058,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.133,
+        "offsetX": 3,
+        "offsetY": -1
+    },
+    "xarth": {
+        "model": "body",
+        "seqId": 14979,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "xarth_corpse": {
+        "model": "body",
+        "seqId": 14999,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -0.5,
+        "offsetY": 18.5
+    },
+    "yak": {
+        "model": "body",
+        "seqId": 5785,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 23.5,
+        "offsetY": -1.5
+    },
+    "yama": {
+        "model": "body",
+        "seqId": 12140,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 8,
+        "offsetY": 12.5
+    },
+    "yellow_portal": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": 0.5,
+        "offsetY": 0.5
+    },
+    "yt_hurkot": {
+        "model": "body",
+        "seqId": 2636,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 1,
+        "offsetY": 11.5
+    },
+    "yt_mejkot": {
+        "model": "body",
+        "seqId": 2636,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 1,
+        "offsetY": 11.5
+    },
+    "zachariah_bolt": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.778,
+        "offsetX": -1,
+        "offsetY": 6
+    },
+    "zachariah_sword": {
+        "zoom": 2.399,
+        "offsetX": 9,
+        "offsetY": 48.5
+    },
+    "zakln_gritch": {
+        "model": "body",
+        "seqId": 66,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.283,
+        "offsetX": 4,
+        "offsetY": 3.5
+    },
+    "zalcano": {
+        "model": "body",
+        "seqId": 8429,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.648,
+        "offsetX": 6.5,
+        "offsetY": 10
+    },
+    "zamorak_spiritual_warrior": {
+        "model": "body",
+        "seqId": 808,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -3,
+        "offsetY": 17.5
+    },
+    "zebak": {
+        "model": "body",
+        "seqId": 9618,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 17.5,
+        "offsetY": 12.5
+    },
+    "zebak_blood_cloud": {
+        "model": "body",
+        "seqId": 8102,
+        "yaw": -210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": -0.5,
+        "offsetY": 10.5
+    },
+    "zebak_boulder": {
+        "model": "body",
+        "mirror": true,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 0.5
+    },
+    "zebak_croc": {
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.132,
+        "offsetX": 9,
+        "offsetY": -4
+    },
+    "zebak_jug": {
+        "model": "body",
+        "mirror": true,
+        "yaw": 185,
+        "pitch": -90,
+        "zoom": 0.687,
+        "offsetY": 4
+    },
+    "zebak_wave": {
+        "model": "body",
+        "seqId": 7877,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.999,
+        "offsetY": 6.5
+    },
+    "zebaks_phantom": {
+        "model": "body",
+        "seqId": 9618,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": 19,
+        "offsetY": 11
+    },
+    "zombie": {
+        "model": "body",
+        "seqId": 5565,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 1.454,
+        "offsetX": -1.5,
+        "offsetY": 16
+    },
+    "zombified_spawn": {
+        "model": "body",
+        "seqId": 7888,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 0.882,
+        "offsetX": -0.5,
+        "offsetY": 9.5
+    },
+    "zulrah": {
+        "model": "body",
+        "seqId": 5070,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": -4,
+        "offsetY": 28
+    },
+    "zulrah_magma": {
+        "model": "body",
+        "seqId": 5070,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": -4,
+        "offsetY": 28
+    },
+    "zulrah_tanzanite": {
+        "model": "body",
+        "seqId": 5070,
+        "yaw": 210,
+        "pitch": 125,
+        "zoom": 2.116,
+        "offsetX": -4,
+        "offsetY": 28
+    }
+}

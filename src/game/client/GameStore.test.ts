@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { shareUnchanged } from "./GameStore";
+import { createSave } from "../core/save";
+import { GameStore, shareUnchanged } from "./GameStore";
 
 describe("shareUnchanged", () => {
     test("is the old object when nothing's changed by value", () => {
@@ -33,4 +34,16 @@ describe("shareUnchanged", () => {
         expect(shareUnchanged({ a: 1, b: 2 } as typeof prev, { a: 1 })).toEqual({ a: 1 });
         expect(shareUnchanged(undefined, prev)).toBe(prev);
     });
+});
+
+test("the recent-message log only deduplicates the same text from the same source", () => {
+    const store = new GameStore(createSave());
+    store.toast("Ready", 1000, "boss");
+    store.toast("Ready", 1000, "player:Ada");
+    expect(store.getSnapshot().toastLog.map(({ source }) => source)).toEqual([
+        "player:Ada",
+        "boss",
+    ]);
+    store.toast("Ready", 1000, "player:Ada");
+    expect(store.getSnapshot().toastLog).toHaveLength(2);
 });
