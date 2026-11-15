@@ -16,7 +16,7 @@ the version in the corner).
 ### Changed
 
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
-  Achievements earn them.
+  Achievements earn them. Any you bought are refunded.
 
 ## 0.33.2 - 2026-11-15
 

@@ -162,6 +162,24 @@ describe("found pieces", () => {
             [EquipSlot.HEAD]: red.objId,
         });
     });
+
+    it("give back what Ghommal's hilts cost a save from before Combat Achievements, once", () => {
+        const [hilt1, hilt6] = [25926, 25936].map((id) => COSMETIC_BY_ID.get(id)!);
+        const [mask] = named(/^red halloween mask$/i);
+        const save = createSave();
+        save.coins = 100;
+        // Bought in 0.31 to 0.33, one hilt listed twice, and worn; the mask went unpaid in 0.32.0
+        save.cosmetics = [hilt1.objId, hilt6.objId, hilt1.objId, mask.objId, hat.objId];
+        save.look = { outfit: { [EquipSlot.SHIELD]: hilt1.objId } };
+        const old = { ...JSON.parse(JSON.stringify(save)), version: 11 };
+        const loaded = migrateSave(old);
+        expect(loaded.coins).toBe(100 + getCosmeticPrice(hilt1) + getCosmeticPrice(hilt6));
+        expect(loaded.cosmetics).toEqual([hat.objId]);
+        expect(loaded.look?.outfit).toBeUndefined();
+        // Loaded again, as 12, it isn't paid twice
+        expect(migrateSave(JSON.parse(JSON.stringify(loaded))).coins).toBe(loaded.coins);
+        expect(migrateSave({ ...old, version: 12 }).coins).toBe(100);
+    });
 });
 
 describe("a look", () => {

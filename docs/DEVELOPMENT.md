@@ -3283,7 +3283,9 @@ only a run `CombatTracker` followed has. The tiers' rewards (Ghommal's hilts) go
 Progress the summary can't show comes in `RunSummary.combatProgress`, the keys the tracker saw the
 run earn: `task:style` for each combat style a beat-with-each task has been won with. The
 optional `combatPinned` holds the tasks pinned on their screen, still to do, in the order they
-were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it.
+were pinned (`MAX_COMBAT_PINS` at most). Banking a task unpins it. The Wardrobe sold Ghommal's
+hilts until 12 made them the tiers' rewards: a save from before it gets back what each one it
+bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and its outfits.
 
 ### Languages
 

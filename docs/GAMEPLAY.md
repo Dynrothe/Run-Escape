@@ -1197,7 +1197,7 @@ version and how to run it.
   Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
   from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
   the Tombs of Amascut, Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
-  it), and Ghommal's hilts, from Combat Achievements. They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  it), and Ghommal's hilts, from Combat Achievements (hilts bought before then were refunded). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
   weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
   Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only

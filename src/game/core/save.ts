@@ -595,6 +595,11 @@ export function migrateSave(raw: unknown): SaveData {
         if (owned.size > 0) {
             save.cosmetics = [...owned];
         }
+        // The Wardrobe sold Ghommal's hilts until Combat Achievements (12) made them its rewards:
+        // what they cost comes back, once
+        if ((data.version ?? 0) < 12) {
+            save.coins += getHiltRefund(data.cosmetics);
+        }
     }
     // A time a Date can hold, or the reminder couldn't tell its day
     const exported = data.lastExported;
@@ -734,6 +739,19 @@ function getProgressMax(key: string): number {
         return 1;
     }
     return 0;
+}
+
+// What a save's bought pieces that are Combat Achievements' rewards cost in the Wardrobe (the
+// hilts), each counted once
+function getHiltRefund(cosmetics: readonly unknown[]): number {
+    let coins = 0;
+    for (const id of new Set(cosmetics)) {
+        const cosmetic = typeof id === "number" ? COSMETIC_BY_ID.get(id) : undefined;
+        if (cosmetic && getPieceTrophy(cosmetic.objId)?.from.kind === "combatTier") {
+            coins += getCosmeticPrice(cosmetic);
+        }
+    }
+    return coins;
 }
 
 // The tasks the save's records show done, from before Combat Achievements (kills, wins and
