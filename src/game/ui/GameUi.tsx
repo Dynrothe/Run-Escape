@@ -140,7 +140,6 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
-import { DebugPanel } from "./DebugPanel";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
@@ -2837,7 +2836,6 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div className="ui-fill ui-run">
             <ChoiceCountdown client={client} />
-            {client.isDebug && <DebugPanel client={client} />}
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />

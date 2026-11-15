@@ -162,7 +162,6 @@ export function GameApp(): JSX.Element {
             {
                 stress: parseInt(params.get("stress") ?? "0") || 0,
                 autostart: params.get("autostart") ?? undefined,
-                debug: import.meta.env.DEV && params.has("debug"),
                 invade: import.meta.env.DEV ? (params.get("invade") ?? undefined) : undefined,
                 director: (import.meta.env.DEV && params.get("director")) || undefined,
                 raidTest:
