@@ -154,7 +154,7 @@
     "canvas.round_heal": "Heals {times} as much in round {round}.",
     "canvas.round_hit": "Hits {times} as hard in round {round}.",
     "canvas.run_paused": " Your run is paused.",
-    "canvas.skip": "Skip ({cost} coins)",
+    "canvas.skip": "Skip (Costs {cost} coins)",
     "canvas.skip_cost": "Skipping costs {cost} coins",
     "canvas.skip_label": "Skip",
     "canvas.sold": "Sold",

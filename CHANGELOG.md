@@ -35,6 +35,7 @@ the version in the corner).
   be translated, by Iakee.
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
   Achievements earn them. Any you bought are refunded.
+- The Skip button now says "Costs" before its coin price to make the deduction clear, by braiansmarzaro.
 
 ### Fixed
 

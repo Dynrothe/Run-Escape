@@ -59,7 +59,6 @@
   "canvas.round_heal": "Cura {times} o normal na rodada {round}.",
   "canvas.round_hit": "Causa {times} o dano normal na rodada {round}.",
   "canvas.run_paused": " Sua partida está pausada.",
-  "canvas.skip": "Pular ({cost} moedas)",
   "canvas.skip_cost": "Pular custa {cost} moedas",
   "canvas.skip_label": "Pular",
   "canvas.sold": "Vendido",
