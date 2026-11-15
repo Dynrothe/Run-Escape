@@ -989,7 +989,7 @@ function TitleTile({
     return (
         <button className="ui-card ui-title-tile" onClick={onClick}>
             <ItemIcon objId={objId} spriteId={spriteId} />
-            {name}
+            <span className="ui-title-tile-name">{name}</span>
         </button>
     );
 }

@@ -379,9 +379,10 @@
 
 .ui-title-tiles {
     display: grid;
-    /* One row, however many tiles */
+    /* One row, however many tiles, each as wide as the others unless its longest word needs more
+       (Achievements), so no name runs over its tile's edges */
     grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-columns: minmax(min-content, 1fr);
     gap: 6px;
 }
 
@@ -396,6 +397,16 @@
     background: rgba(0, 0, 0, 0.22);
     border-width: 1px;
     box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.5);
+}
+
+/* Room for two lines under every tile's icon, a name of one centred in it, so the icons stay in
+   a line whether a name wraps or not */
+.ui-title-tile-name {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.2em;
+    padding: 0 2px;
 }
 
 /* A reminder to export the save, as wide as the menu above it and much

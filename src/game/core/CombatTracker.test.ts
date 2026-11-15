@@ -403,6 +403,21 @@ describe("boss kills", () => {
             "triple_jeopardy",
         ]);
     });
+
+    test("Fire in the Hole sees a dip below half put right in the same tick (a revive)", () => {
+        const sim = createSim("inferno", { hard: true });
+        const tracker = track(sim);
+        expect(status(tracker, sim, "fire_in_the_hole").state).toBe("on");
+        sim.revivesLeft = 1;
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](sim.player.maxHp * 2, "goblin", false, undefined, true);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        tracker.observe(sim, sim.takeEvents());
+        expect(status(tracker, sim, "fire_in_the_hole")).toMatchObject({
+            state: "failed",
+            reason: { kind: "hpBelow", percent: 50 },
+        });
+    });
 });
 
 describe("the rest", () => {
@@ -729,10 +744,11 @@ describe("Act II and after", () => {
 });
 
 describe("the Tombs of Amascut", () => {
-    // On a path, in its room: beaten if done is set
-    function enter(sim: Sim, path: string, done?: number): void {
+    // On a path, in its room (through its barrier, unless waiting in the safe corridor): beaten
+    // if done is set
+    function enter(sim: Sim, path: string, done?: number, started = true): void {
         sim.tombsPath = path;
-        sim.tombsRoom = { doneTick: done } as Sim["tombsRoom"];
+        sim.tombsRoom = { doneTick: done, started } as Sim["tombsRoom"];
     }
 
     test("a puzzle room beaten without a mistake is perfect; a mistake spoils it", () => {
@@ -755,6 +771,22 @@ describe("the Tombs of Amascut", () => {
             state: "failed",
             reason: "made a mistake in the room",
         });
+    });
+
+    test("a wipe starts the room over: a mistake before it doesn't spoil the next attempt", () => {
+        const sim = createSim("tombs_of_amascut");
+        const tracker = track(sim);
+        enter(sim, "apmeken");
+        tracker.observe(sim, [{ type: "tombsMistake", path: "apmeken" }]);
+        expect(status(tracker, sim, "perfect_apmeken").state).toBe("failed");
+        // A mistake in the tick they wipe was the attempt that ended
+        enter(sim, "apmeken", undefined, false);
+        tracker.observe(sim, [{ type: "tombsMistake", path: "apmeken" }]);
+        expect(status(tracker, sim, "perfect_apmeken").state).toBe("on");
+        enter(sim, "apmeken");
+        tracker.observe(sim, []);
+        enter(sim, "apmeken", sim.tick);
+        expect(ids(tracker.observe(sim, []))).toEqual(["perfect_apmeken"]);
     });
 
     test("a path cleared, and a death or a supply spoiling the raid's rules", () => {

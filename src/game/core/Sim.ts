@@ -1161,6 +1161,10 @@ export type Hero = {
     damageTaken: number;
     // Damage armour and a pet's bubble stopped: only written, never read by play
     damageBlocked: number;
+    // The lowest their hitpoints have gone, as a share of the most they had then: caught as each
+    // hit lands, before a heal or a revive in the same tick (Combat Achievements' hpAbove). Only
+    // written, never read by play.
+    lowestHpShare: number;
     // Of that, what each of a boss's attacks did, by name: for tuning a fight
     // (the balance bot prints it, and it's there in the console)
     damageByAttack: Record<string, number>;
@@ -2643,6 +2647,7 @@ export class Sim {
             casketsOpened: 0,
             damageTaken: 0,
             damageBlocked: 0,
+            lowestHpShare: 1,
             damageByAttack: {},
             raidPoints: 0,
             raidDamageAtStart: 0,
@@ -3133,6 +3138,7 @@ export class Sim {
             // Swapping off max hitpoints never kills
             player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
             player.maxHp = maxHp;
+            this.noteLowestHp();
         }
     }
 
@@ -4264,6 +4270,7 @@ export class Sim {
         ) {
             const amount = player.poisonDamage;
             player.hp -= amount;
+            this.noteLowestHp();
             const taken = Math.min(amount, Math.max(0, player.hp + amount));
             this.damageTaken += taken;
             this.emit({ type: "playerPoisoned", amount });
@@ -5738,6 +5745,15 @@ export class Sim {
     // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare. A
     // map's MapDef.hits scales it and can put it through armour. attack: the boss attack's name,
     // for the event (Combat Achievements say what spoilt a task). Returns what it took.
+    // The current hero's hitpoints as they are now, for the lowest they've gone (lowestHpShare)
+    private noteLowestHp(): void {
+        const player = this.player;
+        const share = Math.max(0, player.hp) / player.maxHp;
+        if (share < this.hero.lowestHpShare) {
+            this.hero.lowestHpShare = share;
+        }
+    }
+
     private damagePlayer(
         damage: number,
         enemyId: string,
@@ -5845,6 +5861,7 @@ export class Sim {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
         }
         player.hp -= amount;
+        this.noteLowestHp();
         // What was there to take: a fall into Ba-Ba's gap asks for a hundred bars
         const taken = Math.min(amount, Math.max(0, player.hp + amount));
         this.damageTaken += taken;

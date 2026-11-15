@@ -86,7 +86,7 @@ import {
 import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponDamageKinds, getWeaponStyle } from "../content/weapons";
-import { CombatTracker } from "../core/CombatTracker";
+import { CombatTaskStatus, CombatTracker } from "../core/CombatTracker";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import {
@@ -164,7 +164,7 @@ import {
     toggleCombatPin,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
-import { fmtNum, list, t, tl, tp } from "../i18n";
+import { Lang, fmtNum, getLang, list, t, tl, tp } from "../i18n";
 import {
     CameraRig,
     MAX_CAMERA_DISTANCE,
@@ -466,18 +466,69 @@ function describeRound(sim: Sim): string {
     });
 }
 
+// The views of the Combat Achievements a run follows, as last built: each with the status it was
+// built from, in the tracker's order, and the list as the HUD has it
+type CombatTrackCache = {
+    tracker: CombatTracker;
+    lang: Lang;
+    pinned: string;
+    rows: { view: CombatTrackView; status: CombatTaskStatus }[];
+    views: CombatTrackView[];
+};
+
 // The Combat Achievements the run follows, the pinned ones first in the order they were pinned
-// (the HUD shows those), then the rest in the list's order (the pause menu has them all)
+// (the HUD shows those), then the rest in the list's order (the pause menu has them all). A task
+// whose state, reason and progress are as they were keeps its view, and with none changed the
+// last list comes back as it was: a HUD update then builds no text, and the store has nothing to
+// compare.
 function getCombatTrackViews(
     save: SaveData,
     tracker: CombatTracker | undefined,
     sim: Sim,
-): CombatTrackView[] {
+    last: CombatTrackCache | undefined,
+): CombatTrackCache | undefined {
     if (!tracker) {
-        return [];
+        return undefined;
     }
-    const pinned = save.combatPinned ?? [];
-    const views = tracker.statuses(sim).map(({ task, state, reason, progress }) => ({
+    const pinnedIds = save.combatPinned ?? [];
+    const lang = getLang();
+    const pinned = pinnedIds.join();
+    const kept =
+        last?.tracker === tracker && last.lang === lang && last.pinned === pinned
+            ? last
+            : undefined;
+    let changed = kept === undefined;
+    const rows = tracker.statuses(sim).map((status, i) => {
+        const old = kept?.rows[i];
+        if (
+            old &&
+            old.status.state === status.state &&
+            old.status.reason === status.reason &&
+            old.status.progress?.done === status.progress?.done &&
+            old.status.progress?.of === status.progress?.of
+        ) {
+            return old;
+        }
+        changed = true;
+        return { view: getCombatTrackView(status, pinnedIds), status };
+    });
+    if (!changed) {
+        return kept;
+    }
+    const order = (view: CombatTrackView) => {
+        const at = pinnedIds.indexOf(view.id);
+        return at < 0 ? pinnedIds.length : at;
+    };
+    // (a stable sort: the rest keep the list's order)
+    const views = rows.map((row) => row.view).sort((a, b) => order(a) - order(b));
+    return { tracker, lang, pinned, rows, views };
+}
+
+function getCombatTrackView(
+    { task, state, reason, progress }: CombatTaskStatus,
+    pinned: readonly string[],
+): CombatTrackView {
+    return {
         id: task.id,
         name: combatTaskName(task),
         description: combatTaskDescription(task),
@@ -487,13 +538,7 @@ function getCombatTrackViews(
         ...(reason !== undefined && { reason: describeCombatReason(reason) }),
         ...(progress && { progress }),
         pinned: pinned.includes(task.id),
-    }));
-    const order = (view: CombatTrackView) => {
-        const at = pinned.indexOf(view.id);
-        return at < 0 ? pinned.length : at;
     };
-    // (a stable sort: the rest keep the list's order)
-    return views.sort((a, b) => order(a) - order(b));
 }
 
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
@@ -1001,6 +1046,8 @@ export class GameClient implements GameFrameHandler {
     private tasksAnnounced = new Set<string>();
     // A solo run's Combat Achievements, followed from outside the sim (none in co-op)
     private combat?: CombatTracker;
+    // Their views as the HUD last had them (getCombatTrackViews)
+    private combatViews?: CombatTrackCache;
     private attractTick = 0;
     private attractYaw = 0;
     private display = loadDisplaySettings();
@@ -5257,6 +5304,7 @@ export class GameClient implements GameFrameHandler {
                 damage: meter.totals[`weapon:${w.def.id}`] ?? 0,
             };
         }
+        this.combatViews = getCombatTrackViews(this.save, this.combat, sim, this.combatViews);
         const numbers: HudNumbers = {
             // Whole seconds, as they're shown, so standing still changes nothing
             bossIn: Math.ceil(sim.timeLeftForBoss),
@@ -5348,7 +5396,7 @@ export class GameClient implements GameFrameHandler {
             ability: this.getAbilityView(sim),
             abilities: this.getKitViews(sim),
             quests: getQuestTrackViews(this.save, sim),
-            combatTasks: getCombatTrackViews(this.save, this.combat, sim),
+            combatTasks: this.combatViews?.views ?? [],
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows
         // only that doesn't draw again

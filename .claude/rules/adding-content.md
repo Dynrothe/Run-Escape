@@ -464,7 +464,10 @@ description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts`
 
 - Goals that need nothing new from the sim are checked in `core/CombatTracker.ts`, which only reads
   the sim and its events. A goal that can't be seen from those needs a new event: an `emit` that
-  only reads state is hash-neutral, and `runHash.test.ts` must stay as it is.
+  only reads state is hash-neutral, and `runHash.test.ts` must stay as it is. What can come and
+  go within a tick needs the sim to keep it: `hpAbove` reads the hero's `lowestHpShare`, written
+  as each hit lands, as a heal or a revive in the same tick would hide the dip. Such a field is
+  only written, never read by play, and stays out of `syncHash`.
 - A goal that can be spoilt sets the watch's `reason` as it's spoilt, a `CombatReason`
   (`{ kind: "hitBy", attack: "Lunge", ... }`, which reads "hit by Lunge"): the HUD's pinned rows,
   the pause menu and a pinned task's toast show it. A new kind of reason needs its English in
@@ -484,7 +487,8 @@ description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts`
 - A `win` can ask what the run's set up with: an awakened final boss, remixes, invocation points
   or the Tombs' raid level. The tracker leaves it out of a run that isn't, as it does a hard-mode
   task on normal.
-- The Tombs of Amascut: `clearPath`, and `perfectRoom` for a puzzle room with no mistake. Each
+- The Tombs of Amascut: `clearPath`, and `perfectRoom` for a puzzle room with no mistake. A wipe
+  sends the party back to start the room over, and a mistake spoils only the attempt it's in. Each
   room's mistakes emit `tombsMistake` (`Sim.tombsMistake`): an Apmeken issue left too long, a
   Crondis spill, a wrong Scabaras step, Het's beam or an orb landing. The room's hits can't tell
   them apart, since the Scabaras room's scarabs shoot under the puzzle's id. `noDeaths` counts

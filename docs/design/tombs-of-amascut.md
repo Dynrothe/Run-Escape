@@ -325,7 +325,8 @@ matched to OSRS's own ToA ones where the game has what they ask for:
   boss's adds drop no food, and its unavoidable hits outrun a run's hitpoints), on `win`'s
   `raidLevel`.
 - **Each puzzle room** without a mistake (Perfect Apmeken, Crondis, Het and Scabaras), on
-  `perfectRoom`. The rooms emit `tombsMistake` where each mistake happens.
+  `perfectRoom`. The rooms emit `tombsMistake` where each mistake happens. A wipe starts the room
+  over, so a mistake only spoils the attempt it's in.
 - **Each path boss** with one of its attacks dodged: Ba-Ba's rolling boulders, Akkha's unstable
   orbs, Kephri's scarab stampede, Zebak's acid spray.
 

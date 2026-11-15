@@ -28,7 +28,8 @@ type Watch = {
     // Given up on for the rest of the run (a rule broken)
     failed: boolean;
     // Why it can't be done now: for the rest of the run (failed), or until its boss comes again
-    // (an endless run's next round). Undefined while it still can be.
+    // (an endless run's next round) or its room starts over (a wipe in the Tombs). Undefined
+    // while it still can be.
     reason?: CombatReason;
     // A boss's window (kill, stayInReach): open from its arrival (or last stand) to its kill
     open: boolean;
@@ -412,18 +413,24 @@ export class CombatTracker {
                 return goal.path === undefined
                     ? sim.tombsPathsDone.length > 0
                     : sim.tombsPathsDone.includes(goal.path);
-            case "perfectRoom":
-                // Its room's the one there while the party's on its path (entering one starts
-                // it afresh). A mistake in the tick it's beaten still counts.
+            case "perfectRoom": {
+                // Its room's the one there while the party's on its path. A wipe sends them back
+                // to its safe corridor to start it over, so a mistake only spoils the attempt
+                // it's in (one in the tick they wiped was the attempt that ended). A mistake in
+                // the tick it's beaten still counts.
                 if (sim.tombsPath !== goal.path) {
                     return false;
                 }
-                if (events.some((e) => e.type === "tombsMistake" && e.path === goal.path)) {
-                    watch.failed = true;
-                    watch.reason = { kind: "puzzleMistake" };
+                const room = sim.tombsRoom;
+                if (!room?.started) {
+                    watch.reason = undefined;
                     return false;
                 }
-                return sim.tombsRoom?.doneTick !== undefined;
+                if (events.some((e) => e.type === "tombsMistake" && e.path === goal.path)) {
+                    watch.reason = { kind: "puzzleMistake" };
+                }
+                return watch.reason === undefined && room.doneTick !== undefined;
+            }
             case "allOf": {
                 const parts = watch.parts!;
                 for (const part of parts) {
@@ -453,7 +460,12 @@ export class CombatTracker {
     ): CombatReason | undefined {
         const hero = sim.heroes[sim.focus];
         const rules = goal.rules ?? {};
-        if (goal.hpAbove !== undefined && hero.player.hp < hero.player.maxHp * goal.hpAbove) {
+        // The lowest they've gone, as the sim caught it hit by hit: a heal or a revive in the same
+        // tick doesn't hide a dip
+        if (
+            goal.hpAbove !== undefined &&
+            Math.min(hero.lowestHpShare, hero.player.hp / hero.player.maxHp) < goal.hpAbove
+        ) {
             return { kind: "hpBelow", percent: Math.round(goal.hpAbove * 100) };
         }
         if (rules.noGear && events.some((e) => e.type === "equip" && this.isMine(e, sim))) {
