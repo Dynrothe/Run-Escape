@@ -7,8 +7,8 @@ the version in the corner).
 
 ### Changed
 
-- A casket's gear table keeps the worn and new values beside each stat's name, rather than across
-  the card from it.
+- A casket's gear table sits in the middle of the card, with the worn and new values beside each
+  stat's name rather than across the card from it.
 
 ## 0.33.2 - 2026-11-15
 

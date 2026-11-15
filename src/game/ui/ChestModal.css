@@ -663,10 +663,10 @@
 }
 
 /* As wide as what's in it, not the card, so each value sits near its stat's
-   name rather than across the card from it */
+   name rather than across the card from it; centred, under the buttons */
 .ui-chest-table {
     max-width: 100%;
-    margin-top: 6px;
+    margin: 6px auto 0;
     border-collapse: collapse;
     color: var(--ui-white);
 }
