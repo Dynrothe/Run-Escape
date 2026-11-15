@@ -1398,14 +1398,34 @@ describe("power-ups", () => {
             expect(variants.size).toBeGreaterThan(3);
         });
 
-        test("the rare one wanders off away from the player", () => {
-            const sim = createSim();
-            sim.weapons = [];
-            const odd = goblin(sim, sim.player.x + 3, sim.player.y);
-            sim.usePowerUp(always("rare"));
-            expect(odd.polymorph?.look).toBe("rare");
-            runFor(sim, 3, "still");
-            expect(Math.hypot(odd.x - sim.player.x, odd.y - sim.player.y)).toBeGreaterThan(4);
+        test("the rare one wanders off away from the player, at half a sheep's pace", () => {
+            // How far it's gone in 3 seconds
+            const gone = () => {
+                const sim = createSim();
+                sim.weapons = [];
+                const odd = goblin(sim, sim.player.x + 3, sim.player.y);
+                sim.usePowerUp(always("rare"));
+                expect(odd.polymorph?.look).toBe("rare");
+                runFor(sim, 3, "still");
+                return Math.hypot(odd.x - sim.player.x, odd.y - sim.player.y) - 3;
+            };
+            const slow = gone();
+            // The sim reads the power-up's own def by its id, so a whole pace goes on that
+            const def = polymorph();
+            if (def.effect.kind !== "polymorph") {
+                throw new Error("not a polymorph");
+            }
+            const rare = def.effect.rare;
+            const pace = rare.pace;
+            rare.pace = 1;
+            let whole: number;
+            try {
+                whole = gone();
+            } finally {
+                rare.pace = pace;
+            }
+            expect(slow).toBeGreaterThan(0.5);
+            expect(slow / whole).toBeCloseTo(0.5, 1);
         });
 
         test("the penguin wanders like a sheep, but says Beh?", () => {
@@ -1443,7 +1463,50 @@ describe("power-ups", () => {
                 escape = sim.takeEvents().find((e) => e.type === "polymorphEscape");
             }
             expect(spy.dead).toBe(true);
-            expect(escape).toMatchObject({ powerUpId: "polymorph", x: spy.x, y: spy.y });
+            expect(escape).toMatchObject({
+                powerUpId: "polymorph",
+                look: "penguin",
+                x: spy.x,
+                y: spy.y,
+            });
+        });
+
+        test("the rare one snores ZzZ... as it goes", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            for (let i = 0; i < 5; i++) {
+                goblin(sim, sim.player.x + 3 + i, sim.player.y);
+            }
+            sim.usePowerUp(always("rare"));
+            sim.takeEvents();
+            const shouts = [];
+            for (let i = 0; i < 9 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                shouts.push(...sim.takeEvents().filter((e) => e.type === "enemyShout"));
+            }
+            expect(shouts.length).toBeGreaterThan(0);
+            for (const shout of shouts) {
+                expect(shout).toMatchObject({ text: "ZzZ...", sound: 869 });
+            }
+        });
+
+        test("killing the rare one lets a monkey child out", () => {
+            const sim = createSim();
+            const odd = goblin(sim, sim.player.x + 1, sim.player.y, 1);
+            sim.usePowerUp(always("rare"));
+            sim.takeEvents();
+            let escape;
+            for (let i = 0; i < 6 * TICKS_PER_SECOND && !escape; i++) {
+                sim.step(0, 0);
+                escape = sim.takeEvents().find((e) => e.type === "polymorphEscape");
+            }
+            expect(odd.dead).toBe(true);
+            expect(escape).toMatchObject({
+                powerUpId: "polymorph",
+                look: "rare",
+                x: odd.x,
+                y: odd.y,
+            });
         });
 
         test("a sheep killed lets nothing out", () => {
@@ -1707,6 +1770,40 @@ describe("power-ups", () => {
             expect(attacked || player.hp < hp).toBe(true);
             runFor(sim, 2, "still");
             expect(boss.polymorph).toBeUndefined();
+        });
+
+        test("a golden sheep baas with every attack it starts", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", {
+                x: player.x - 3,
+                y: player.y,
+            })!;
+            sim.usePowerUp(polymorph());
+            player.hp = player.maxHp = 1e6;
+            let attacks = 0;
+            let baasOnAttack = 0;
+            for (let i = 0; i < 9 * TICKS_PER_SECOND && !sim.runOver; i++) {
+                sim.step(0, 0);
+                const events = sim.takeEvents();
+                if (boss.anim === "attack" && boss.animStart === sim.tick) {
+                    attacks++;
+                    if (
+                        events.some(
+                            (e) =>
+                                e.type === "enemyShout" &&
+                                e.enemyUid === boss.uid &&
+                                e.text === "Baa!" &&
+                                e.seconds === 1,
+                        )
+                    ) {
+                        baasOnAttack++;
+                    }
+                }
+            }
+            expect(attacks).toBeGreaterThan(0);
+            expect(baasOnAttack).toBe(attacks);
         });
 
         test("with no one about, it still lasts, for whatever turns up", () => {

@@ -34,7 +34,13 @@ import {
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, HeroNpcLookDef, MapPropDef, PolymorphKind } from "../content/types";
+import {
+    EnemyDef,
+    HeroNpcLookDef,
+    MapPropDef,
+    PolymorphEscapees,
+    PolymorphKind,
+} from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -419,11 +425,15 @@ type SwingFx = {
 };
 // enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1), or
 // VISITOR_SHOUT for a random event's visitor
-type Shout = { enemyUid: number; text: string; start: number };
+// ms: how long it's up, if not SHOUT_MS
+type Shout = { enemyUid: number; text: string; start: number; ms?: number };
 const VISITOR_SHOUT = -1000;
-// One of a polymorphed penguin's escapees running off from (x, y) along dirX, dirY since startTick
+// One of a polymorphed animal's escapees (the penguin's) running off from (x, y) along dirX, dirY
+// since startTick
 type EscapeeFx = {
     powerUpId: string;
+    look: PolymorphKind;
+    escapees: PolymorphEscapees;
     x: number;
     y: number;
     dirX: number;
@@ -635,7 +645,15 @@ export class GameView {
                 case "enemyShout":
                     // A new line replaces what it was saying
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
-                    this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
+                    this.shouts.push({
+                        enemyUid: event.enemyUid,
+                        text: event.text,
+                        start: now,
+                        ms:
+                            event.type === "enemyShout" && event.seconds !== undefined
+                                ? event.seconds * 1000
+                                : undefined,
+                    });
                     break;
                 case "playerShout": {
                     const key = -(event.hero ?? sim.focus);
@@ -647,12 +665,22 @@ export class GameView {
                     // Away from whoever the camera's on, so they're off the screen
                     const player = sim.heroes[this.viewHero]?.player ?? sim.player;
                     const away = Math.atan2(event.y - player.y, event.x - player.x);
-                    const count = getPolymorphEffect(event.powerUpId).penguin.escapees.count;
+                    const escapees = getPolymorphLook(
+                        getPolymorphEffect(event.powerUpId),
+                        event.look,
+                        0,
+                    ).escapees;
+                    if (!escapees) {
+                        break;
+                    }
+                    const count = escapees.count;
                     for (let i = 0; i < count; i++) {
                         const angle =
                             away + (count > 1 ? (i / (count - 1) - 0.5) * ESCAPEE_SPREAD : 0);
                         this.escapees.push({
                             powerUpId: event.powerUpId,
+                            look: event.look,
+                            escapees,
                             x: event.x,
                             y: event.y,
                             dirX: Math.cos(angle),
@@ -2755,19 +2783,18 @@ export class GameView {
         });
     }
 
-    // A polymorphed penguin's escapees, running off fast till they're well off the screen (pruned
-    // in place, as keepWhile does)
+    // A polymorphed animal's escapees (the penguin's), running off fast till they're well off the
+    // screen (pruned in place, as keepWhile does)
     private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
         let kept = 0;
         for (const escapee of this.escapees) {
-            const { speed, seconds, walkSeq, scale } = getPolymorphEffect(escapee.powerUpId).penguin
-                .escapees;
+            const { speed, seconds, walkSeq, scale } = escapee.escapees;
             const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
             if (t > seconds) {
                 continue;
             }
             this.escapees[kept++] = escapee;
-            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId));
+            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId, escapee.look));
             if (!model) {
                 continue;
             }
@@ -3110,7 +3137,14 @@ export class GameView {
         scale: number,
     ): void {
         const ctx = overlay.ctx;
-        keepWhile(this.shouts, now, SHOUT_MS);
+        // (in place, as keepWhile does, each shout for its own time)
+        let kept = 0;
+        for (const shout of this.shouts) {
+            if (now - shout.start < (shout.ms ?? SHOUT_MS)) {
+                this.shouts[kept++] = shout;
+            }
+        }
+        this.shouts.length = kept;
         const pixel = Math.max(1, Math.round(scale));
         ctx.font = `${16 * pixel}px "OSRS Bold", sans-serif`;
         ctx.textAlign = "center";

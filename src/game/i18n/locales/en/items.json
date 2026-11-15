@@ -1110,6 +1110,7 @@
   "powerup.polymorph.desc": "For 10 seconds everything turns into harmless sheep. Elites and bosses become golden sheep, but still fight.",
   "powerup.polymorph.shout": "Baa!",
   "powerup.polymorph.penguin_shout": "Beh?",
+  "powerup.polymorph.rare_shout": "ZzZ...",
   "powerup.lantern.name": "Abyssal lantern",
   "powerup.lantern.desc": "Lights up 4 more tiles round you for 30 seconds.",
   "thrall.ghost.name": "Greater Ghost",

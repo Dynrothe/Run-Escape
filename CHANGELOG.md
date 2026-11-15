@@ -35,11 +35,16 @@ the version in the corner).
   be translated, by Iakee.
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
   Achievements earn them. Any you bought are refunded.
+- Polymorph's sheep baa a little louder, by GhostavoA, and a golden sheep says "Baa!" with every
+  attack.
+- Polymorph's odd sheep out turns up as often as the penguin, by GhostavoA, snores as it goes, and
+  has a surprise inside.
 
 ### Fixed
 
 - Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
   lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
+- Wolves die with a wolf's yelp, not a rat's squeak. Fixed by GhostavoA.
 
 ## 0.33.2 - 2026-11-15
 
