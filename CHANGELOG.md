@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Runs earn twice as many platinum tokens on normal and hard mode, and three times that in a
+  Cards only run. The tokens a run has earned show beside its coins, and on the results.
+- Cards show Common in green and Uncommon in yellow, as the rest of the game does.
+
 ## 0.33.1 - 2026-11-15
 
 ### Fixed
