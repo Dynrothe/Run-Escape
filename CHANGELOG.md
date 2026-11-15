@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.33.1 - 2026-11-15
+
+### Fixed
+
+- The Wardrobe no longer turns the whole game black when the Customisable max cape's hue is at
+  the far end with full saturation.
+
 ## 0.33.0 - 2026-11-15
 
 ### Added

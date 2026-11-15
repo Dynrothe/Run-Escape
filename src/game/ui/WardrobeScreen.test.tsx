@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
-import { CAPE_PARTS, DEFAULT_CAPE_COLOURS, unpackHsl } from "../content/maxCape";
+import { CAPE_PARTS, DEFAULT_CAPE_COLOURS, packHsl, unpackHsl } from "../content/maxCape";
 import { iconCache } from "./ItemIcon";
 import { CapeColours } from "./WardrobeScreen";
 
@@ -67,5 +67,23 @@ describe("the customisable max cape's colours", () => {
         expect(client.setLook).not.toHaveBeenCalled();
         act(() => vi.advanceTimersByTime(1000));
         expect(client.setCapeColours).toHaveBeenCalledTimes(1);
+    });
+
+    // The last hue at full saturation and lightness is the last HSL colour there is (0xffff),
+    // which the sliders' tracks reach: it blacked out the whole game once
+    test("draws the brightest colour of the last hue", () => {
+        const client = fakeClient();
+        const brightest = packHsl(63, 7, 127);
+        const { container } = render(
+            <CapeColours
+                look={{ capeColours: [brightest, ...DEFAULT_CAPE_COLOURS.slice(1)] }}
+                client={client as unknown as GameClient}
+            />,
+        );
+        const sliders = container.querySelectorAll<HTMLInputElement>(".ui-wardrobe-dye-slider");
+        expect(sliders).toHaveLength(3);
+        for (const slider of sliders) {
+            expect(slider.style.background).not.toMatch(/undefined|NaN/);
+        }
     });
 });
