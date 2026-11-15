@@ -2348,6 +2348,15 @@
     flex-shrink: 0;
 }
 
+/* An icon cut down to what's drawn, in the middle of its square (CentredIcon) */
+.ui-centred-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
 /* Buffs, inventory and hitpoints, bottom middle */
 
 .ui-hud-bottom {

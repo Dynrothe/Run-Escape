@@ -662,15 +662,121 @@
     width: min(540px, calc(94vw / var(--ui-scale)));
 }
 
-.ui-chest-changes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin-top: 4px;
+/* The client's chevron, green up or red down */
+.ui-chest-chevron {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    image-rendering: pixelated;
 }
 
-.ui-chest-changes .ui-stat-line {
+/* The found piece's name, then what it does better and worse; under the name, in line with it,
+   when the name's long */
+.ui-chest-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 10px;
+}
+
+.ui-chest-summary {
     display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 12px;
+}
+
+.ui-chest-summary-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* The difference first, then the stat, then what's worn and what's new, each in the middle of
+   its column under its piece. As wide as what's in it, in the middle of the card */
+.ui-chest-diff {
+    margin: 6px auto 0;
+    border-collapse: collapse;
+    color: var(--ui-white);
+}
+
+.ui-chest-diff th,
+.ui-chest-diff td {
+    padding: 2px 0 2px 8px;
+    font-weight: normal;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.ui-chest-diff thead th {
+    padding-bottom: 3px;
+    line-height: 1;
+}
+
+.ui-chest-diff-label {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ui-text-dim);
+}
+
+/* Bands rather than lines, so the eye follows a row across */
+.ui-chest-diff tbody tr:nth-child(odd) {
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.ui-chest-diff .ui-chest-diff-arrow {
+    padding-left: 6px;
+}
+
+.ui-chest-diff .ui-chest-diff-arrow .ui-chest-chevron {
+    display: block;
+}
+
+.ui-chest-diff .ui-chest-diff-change {
+    padding-left: 4px;
+    text-align: right;
+    font-family: "OSRS Bold", sans-serif;
+}
+
+.ui-chest-diff .ui-chest-diff-glyph {
+    padding-left: 14px;
+}
+
+.ui-chest-diff .ui-chest-diff-glyph .ui-centred-icon {
+    display: flex;
+}
+
+/* The stat's name wraps only if there's no room (a phone) */
+.ui-chest-diff tbody .ui-chest-diff-name {
+    padding-left: 6px;
+    white-space: normal;
+    color: var(--ui-text);
+}
+
+.ui-chest-diff .ui-chest-diff-was,
+.ui-chest-diff .ui-chest-diff-now {
+    min-width: 40px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.ui-chest-diff .ui-chest-diff-was {
+    padding-left: 22px;
+    color: var(--ui-text-dim);
+}
+
+.ui-chest-diff .ui-chest-diff-now {
+    padding-left: 14px;
+    padding-right: 8px;
+    color: var(--ui-text);
+}
+
+.ui-chest-same {
+    color: var(--ui-text-dim);
 }
 
 .ui-good {

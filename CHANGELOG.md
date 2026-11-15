@@ -25,8 +25,9 @@ the version in the corner).
 
 ### Changed
 
-- Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
-  the piece it would replace, in green or red, in place of the Wearing/New table.
+- Casket gear against what you're wearing, by Jp66600: each stat's difference comes first, with the
+  game's green or red arrow, then what's worn and what's new, and what gets better and worse shows
+  beside the item's name.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
   and Settings as pages of it. It opens on the tab you left it on.
 - Settings are in sections with the game's own icons, by Iakee, a card for each setting. The

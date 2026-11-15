@@ -71,8 +71,8 @@ function shownSteps(key: StatKey, value: number): number {
 }
 
 // How far after is from before in shown steps: above 0 better, below 0 worse, 0 when the two
-// read the same. The casket's lines and Auto equip (Production Prodigy's choice in the sim too)
-// both go by it, so changing how a stat is shown changes what they take.
+// read the same. The casket's comparison and Auto equip (Production Prodigy's choice in the sim
+// too) both go by it, so changing how a stat is shown changes what they take.
 export function compareStatValues(key: StatKey, before: number, after: number): number {
     return shownSteps(key, after) - shownSteps(key, before);
 }
@@ -143,23 +143,40 @@ export function compareStats(
     return lines;
 }
 
-// What a casket's gear changes against the piece it would replace, a line for
-// each stat that differs: "+2% damage", "-15% projectile speed". It goes by
-// the values as shown, so two pieces that read the same differ by nothing,
+// Every stat either of two pieces has, side by side: a casket's gear against
+// the piece it would replace. worn or found is undefined where that piece
+// hasn't got the stat, or it reads as nothing ("+0%"). change (found less
+// worn) is undefined when the two read the same: it and better go by the
+// values as shown, so the difference is always what the two columns say,
 // never "-0%".
-export type StatChange = { key: StatKey; text: string; better: boolean };
+export type StatPair = {
+    key: StatKey;
+    label: string;
+    worn?: string;
+    found?: string;
+    change?: string;
+    better: boolean;
+};
 
-export function statChanges(worn: Partial<Stats>, found: Partial<Stats>): StatChange[] {
-    const changes: StatChange[] = [];
+export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair[] {
+    const pairs: StatPair[] = [];
     for (const key of STAT_ORDER) {
-        const change = compareStatValues(key, worn[key] ?? 0, found[key] ?? 0);
-        if (change !== 0) {
-            changes.push({
-                key,
-                text: formatStat(key, change / statStep(key)),
-                better: change > 0,
-            });
+        const was = worn[key] ?? 0;
+        const now = found[key] ?? 0;
+        const wasShown = compareStatValues(key, 0, was) !== 0;
+        const nowShown = compareStatValues(key, 0, now) !== 0;
+        if (!wasShown && !nowShown) {
+            continue;
         }
+        const change = compareStatValues(key, was, now);
+        pairs.push({
+            key,
+            label: statHeading(key),
+            ...(wasShown && { worn: formatStatValue(key, was) }),
+            ...(nowShown && { found: formatStatValue(key, now) }),
+            ...(change !== 0 && { change: formatStatValue(key, change / statStep(key)) }),
+            better: change >= 0,
+        });
     }
-    return changes;
+    return pairs;
 }

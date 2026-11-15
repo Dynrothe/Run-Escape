@@ -2,7 +2,7 @@ import { DamageKind } from "../content/damageKinds";
 import { Rarity } from "../content/rarity";
 import type { RemixId } from "../content/remixes";
 import type { About } from "../content/statLore";
-import { StatChange, StatText } from "../content/stats";
+import { StatPair, StatText } from "../content/stats";
 import { GearSlot, StatKey } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -191,8 +191,8 @@ export type ChestView = {
     upgradedFrom?: string;
     isGear: boolean;
     // Gear: what it replaces (alched when the new piece goes on), and each
-    // stat that would change
-    replaces?: { item: ItemView; alchCoins: number; changes: StatChange[] };
+    // stat either piece has, worn against found
+    replaces?: { item: ItemView; alchCoins: number; stats: StatPair[] };
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;

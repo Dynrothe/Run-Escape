@@ -856,7 +856,9 @@ src/game/
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
-            above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
+            above), useSpriteFrame (a sprite's frame at its own size), CentredIcon (an icon cut
+            down to what's drawn and set in the middle of a square, so a column of different
+            icons lines up: the casket's comparison), DescriptionButton
             (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
             off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real

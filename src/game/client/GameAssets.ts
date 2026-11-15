@@ -46,6 +46,7 @@ import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
+    CHANGE_SPRITES,
     CHECKBOX_SPRITES,
     CLOSE_SPRITES,
     CLOUD_SAVE_SPRITES,
@@ -223,6 +224,7 @@ export function getGameSpriteIds(): number[] {
         ...Object.values(SOUND_ORB_SPRITES),
         ...Object.values(CHECKBOX_SPRITES),
         ...Object.values(CLOSE_SPRITES),
+        ...Object.values(CHANGE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         ...LOCKED_GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
