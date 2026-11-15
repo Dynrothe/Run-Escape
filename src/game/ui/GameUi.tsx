@@ -93,6 +93,7 @@ import {
 } from "../content/remixes";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
+import { HP_ORB_SPRITES } from "../content/titleIcons";
 import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
@@ -184,6 +185,7 @@ import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 import { useDialog } from "./useDialog";
 import { usePhoneLayout } from "./usePhoneLayout";
+import { useSpriteFrame } from "./useSpriteFrame";
 
 type Props = {
     store: GameStore;
@@ -4314,6 +4316,47 @@ function HpBar({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
+function HpOrb({ client }: { client: GameClient }): JSX.Element | null {
+    const hp = useHudNumber(client, (n) => n.hp);
+    const maxHp = useHudNumber(client, (n) => n.maxHp);
+    const share = useHudNumber(client, (n) => n.hpShare);
+    const poisoned = useHudNumber(client, (n) => n.poisoned);
+    const frame = useSpriteFrame(HP_ORB_SPRITES.frame, 0);
+    const fill = useSpriteFrame(poisoned ? HP_ORB_SPRITES.poisoned : HP_ORB_SPRITES.fill, 0);
+    const heart = useSpriteFrame(HP_ORB_SPRITES.heart, 0);
+    if (hp === undefined || maxHp === undefined) {
+        return null;
+    }
+    const fraction = Math.max(0, Math.min(1, share ?? (maxHp > 0 ? hp / maxHp : 0)));
+    const label = `${hp} / ${maxHp}${poisoned ? ` · ${t("ui.hud.poisoned")}` : ""}`;
+    return (
+        <div
+            className={"ui-hp-orb" + (poisoned ? " ui-hp-orb-poisoned" : "")}
+            role="meter"
+            aria-label={t("ui.hud.hitpoints")}
+            aria-valuemin={0}
+            aria-valuemax={maxHp}
+            aria-valuenow={hp}
+            aria-valuetext={label}
+            title={label}
+        >
+            {frame && <img className="ui-hp-orb-frame" src={frame} alt="" draggable={false} />}
+            <span className="ui-hp-orb-fill">
+                {fill && (
+                    <img
+                        src={fill}
+                        alt=""
+                        draggable={false}
+                        style={{ clipPath: `inset(${(1 - fraction) * 100}% 0 0)` }}
+                    />
+                )}
+            </span>
+            <span className="ui-hp-orb-value">{hp}</span>
+            {heart && <img className="ui-hp-orb-heart" src={heart} alt="" draggable={false} />}
+        </div>
+    );
+}
+
 // Sanity, under hitpoints, on a map of two worlds (RealmRuleDef.sanity): full in the city, draining
 // in the Shadow Realm
 function SanityBar({ client }: { client: GameClient }): JSX.Element | null {
@@ -4456,7 +4499,7 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
 
 // The client's minimap frame and compass around a canvas the game draws on
 // (runs face north, so the compass does too)
-// The sound's orb sits at its upper left, where the client's hitpoints orb is
+// Hitpoints and sound sit at its upper left.
 const Minimap = memo(function Minimap({
     client,
     muted,
@@ -4473,6 +4516,7 @@ const Minimap = memo(function Minimap({
             <canvas className="ui-minimap-map" ref={canvasRef} />
             <img className="ui-minimap-frame" src={minimapFrame} />
             <img className="ui-minimap-compass" src={compass} />
+            <HpOrb client={client} />
             <SoundOrb client={client} muted={muted} />
         </div>
     );

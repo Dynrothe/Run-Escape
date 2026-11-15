@@ -889,8 +889,13 @@ Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.ic
 deployment's slim cache cover them too. Equipped slots still show their item's model; small phones
 still hide the gear row.
 
-The sound has an orb like the client's, at the minimap's upper left where the client's hitpoints
-orb is (under the pause button on a touch screen, which has that place), and at the title
+Hitpoints have an orb at the minimap's upper left, above sound (both under the pause button
+on touch screens). `HpOrb` in `ui/GameUi.tsx` reads the local hero's `HudNumbers`, as the bottom
+health bar does, and shows current HP on its plate. Its red fill drains from the top and turns
+green while poisoned; its tooltip includes maximum HP and poison status. `HP_ORB_SPRITES` in
+`content/titleIcons.ts` lists the cache's heart and fills, kept by `getGameSpriteIds`.
+
+The sound has an orb like the client's, below hitpoints by the minimap, and at the title
 screen's top right (`ui/SoundOrb.tsx`): the client's orb frame and an orb's fill, the Music tab's
 harp in its circle, and cloud save's "no" sign over that while the sound's off
 (`SOUND_ORB_SPRITES` in `content/titleIcons.ts`, in `getGameSpriteIds` too). The frame's wider

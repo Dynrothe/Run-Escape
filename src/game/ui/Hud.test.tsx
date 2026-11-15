@@ -15,6 +15,7 @@ import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
 import { getPassive } from "../content/passives";
+import { HP_ORB_SPRITES } from "../content/titleIcons";
 import { describeUnlockTask } from "../content/unlocks";
 import { getWeapon } from "../content/weapons";
 import { createSave } from "../core/save";
@@ -114,6 +115,53 @@ afterEach(() => {
 });
 
 describe("the run's HUD", () => {
+    test.each([false, true])(
+        "updates the hitpoints orb on touch=%s without replacing the bar",
+        (coarse) => {
+            device.coarse = coarse;
+            vi.spyOn(iconCache, "getFrame").mockImplementation((id) => `sprite-${id}`);
+            vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+            const { store, view } = renderHud();
+            const orb = screen.getByRole("meter", { name: "Hitpoints" });
+            const fill = () => orb.querySelector(".ui-hp-orb-fill img")!;
+            expect(orb.closest(".ui-minimap")).not.toBeNull();
+            expect(orb).toHaveAttribute("aria-valuenow", "20");
+            expect(orb).toHaveAttribute("aria-valuemax", "25");
+            expect(orb.querySelector(".ui-hp-orb-value")).toHaveTextContent("20");
+            expect(fill()).toHaveAttribute("src", `sprite-${HP_ORB_SPRITES.fill}`);
+            expect(view.container.querySelector(".ui-hp span")).toHaveTextContent("20 / 25");
+
+            act(() =>
+                store.setNumbers(numbers({ hp: 10, maxHp: 40, hpShare: 0.25, poisoned: true })),
+            );
+            expect(orb).toHaveAttribute("aria-valuenow", "10");
+            expect(orb).toHaveAttribute("aria-valuemax", "40");
+            expect(orb).toHaveAttribute("aria-valuetext", "10 / 40 · Poisoned");
+            expect(orb.querySelector(".ui-hp-orb-value")).toHaveTextContent("10");
+            expect(fill()).toHaveStyle({ clipPath: "inset(75% 0 0)" });
+            expect(fill()).toHaveAttribute("src", `sprite-${HP_ORB_SPRITES.poisoned}`);
+            act(() => store.setNumbers(numbers({ hp: 25, hpShare: 1 })));
+            expect(orb).not.toHaveClass("ui-hp-orb-poisoned");
+            expect(fill()).toHaveStyle({ clipPath: "inset(0% 0 0)" });
+        },
+    );
+
+    test("the orb follows fractional HP and stays bounded at empty and overhealed", () => {
+        vi.spyOn(iconCache, "getFrame").mockReturnValue("sprite");
+        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        const { store } = renderHud();
+        const orb = screen.getByRole("meter", { name: "Hitpoints" });
+        const fill = () => orb.querySelector(".ui-hp-orb-fill img")!;
+        act(() => store.setNumbers(numbers({ hp: 13, hpShare: 0.5 })));
+        expect(fill()).toHaveStyle({ clipPath: "inset(50% 0 0)" });
+        act(() => store.setNumbers(numbers({ hp: 0, maxHp: 0 })));
+        expect(fill()).toHaveStyle({ clipPath: "inset(100% 0 0)" });
+        expect(orb.querySelector(".ui-hp-orb-value")).toHaveTextContent("0");
+        act(() => store.setNumbers(numbers({ hp: 30, maxHp: 25 })));
+        expect(fill()).toHaveStyle({ clipPath: "inset(0% 0 0)" });
+        expect(orb.querySelector(".ui-hp-orb-value")).toHaveTextContent("30");
+    });
+
     test("adjusts camera zoom from the mobile HUD in solo and co-op runs", () => {
         device.coarse = true;
         const { store, setCameraZoom } = renderHud();

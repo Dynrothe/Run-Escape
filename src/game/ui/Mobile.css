@@ -296,9 +296,14 @@
         filter: drop-shadow(1px 1px 0 #000);
     }
 
-    /* The sound's orb under the pause button, which has its place by the minimap */
+    /* Hitpoints and sound under the pause button. */
+    .ui-minimap .ui-hp-orb,
     .ui-minimap .ui-sound-orb {
         left: -62px;
+        top: 92px;
+    }
+
+    .ui-minimap .ui-hp-orb {
         top: 56px;
     }
 
@@ -1213,11 +1218,16 @@
         zoom: 0.56;
     }
 
-    /* The sound's orb near its own size beside the smaller minimap, under the pause button, which
+    /* The orbs near their own size beside the smaller minimap, under the pause button, which
        has its place by the minimap (its zoom scales its own offsets too) */
+    .ui-minimap .ui-hp-orb,
     .ui-minimap .ui-sound-orb {
         zoom: 1.6;
         left: -39px;
+        top: 103px;
+    }
+
+    .ui-minimap .ui-hp-orb {
         top: 67px;
     }
 

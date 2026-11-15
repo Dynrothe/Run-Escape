@@ -1640,7 +1640,8 @@
 /* The sound's orb (ui/SoundOrb.tsx), as the client's are: its frame (57x34) at its own size, an
    orb's fill in the circle (26x26 at 27,4), the harp over it and the "no" sign over that, and its
    key on the plate (the light face at 4,14, 23x15) in the orbs' green */
-.ui-sound-orb {
+.ui-sound-orb,
+.ui-hp-orb {
     position: relative;
     width: 57px;
     height: 34px;
@@ -1651,21 +1652,29 @@
     pointer-events: auto;
 }
 
-.ui-sound-orb > * {
+.ui-hp-orb {
+    cursor: default;
+}
+
+.ui-sound-orb > *,
+.ui-hp-orb > * {
     position: absolute;
 }
 
-.ui-sound-orb-frame {
+.ui-sound-orb-frame,
+.ui-hp-orb-frame {
     left: 0;
     top: 0;
 }
 
-.ui-sound-orb-fill {
+.ui-sound-orb-fill,
+.ui-hp-orb-fill {
     left: 27px;
     top: 4px;
 }
 
-.ui-sound-orb-key {
+.ui-sound-orb-key,
+.ui-hp-orb-value {
     left: 4px;
     top: 14px;
     width: 23px;
@@ -1693,11 +1702,36 @@
     top: 8px;
 }
 
-/* In a run, against the minimap's upper left under the compass, where the client's hitpoints orb
-   is */
+.ui-hp-orb-fill {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #14110e;
+}
+
+.ui-hp-orb-fill img {
+    display: block;
+}
+
+.ui-hp-orb-heart {
+    left: 27px;
+    top: 4px;
+}
+
+.ui-hp-orb-poisoned .ui-hp-orb-value {
+    color: #b6df5c;
+}
+
+/* Hitpoints under the compass, with sound below it. */
+.ui-minimap .ui-hp-orb,
 .ui-minimap .ui-sound-orb {
     position: absolute;
     left: -31px;
+    top: 72px;
+}
+
+.ui-minimap .ui-hp-orb {
     top: 36px;
 }
 

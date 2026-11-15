@@ -24,6 +24,14 @@ export const SOUND_ORB_SPRITES = {
     off: CLOUD_SAVE_SPRITES.problem,
 } as const;
 
+// Hitpoints beside the minimap: the client's red/poisoned fills and heart.
+export const HP_ORB_SPRITES = {
+    frame: SOUND_ORB_SPRITES.frame,
+    fill: 1060,
+    poisoned: 1061,
+    heart: 1067,
+} as const;
+
 // The client's square checkbox (ui/RsCheckbox.tsx): empty and ticked, and each lit up under the
 // mouse
 export const CHECKBOX_SPRITES = {
