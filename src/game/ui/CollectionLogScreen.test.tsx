@@ -132,8 +132,9 @@ describe("the Collection log during a run", () => {
     const trophy = TROPHIES.find((def) => REWARD_MAPS.includes(getTrophyMap(def)))!;
     const mapId = getTrophyMap(trophy);
 
-    // A paused run's menu, with a client whose run has found the trophy, not saved yet
-    function pauseRun(runLog = false) {
+    // A paused run's menu, with a client whose run has found the trophy, not saved yet, on its
+    // Collection log's page or not (the menu opens on the page it was left on)
+    function pauseRun(open = false) {
         vi.spyOn(iconCache, "get").mockImplementation((objId: number) => `obj:${objId}`);
         vi.spyOn(iconCache, "request").mockImplementation(() => {});
         vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
@@ -142,10 +143,8 @@ describe("the Collection log during a run", () => {
         const withRun = createSave();
         withRun.trophies.push(trophy.id);
         const calls = {
-            openRunLog: vi.fn(() => store.set({ runLog: true })),
-            closeRunLog: vi.fn(() => store.set({ runLog: false })),
             getRunLogSaves: vi.fn(() => ({ saved: save, withRun })),
-            resume: vi.fn(() => store.set({ overlay: "none", runLog: false })),
+            resume: vi.fn(() => store.set({ overlay: "none" })),
         };
         const client = new Proxy(
             { store, input: { stick: {} }, ...calls },
@@ -157,7 +156,6 @@ describe("the Collection log during a run", () => {
         store.set({
             screen: "run",
             overlay: "paused",
-            runLog,
             hud: {
                 mapId: "lumbridge",
                 level: 1,
@@ -174,11 +172,26 @@ describe("the Collection log during a run", () => {
             },
         });
         render(<GameUi store={store} client={client as unknown as GameClient} />);
+        if ((queryRunLog() !== null) !== open) {
+            act(() => {
+                fireEvent.click(logButton());
+            });
+        }
         return { store, calls };
     }
 
+    function queryRunLog(): HTMLElement | null {
+        return screen.queryByRole("region", { name: /^Collection log/ });
+    }
+
     function runLog(): HTMLElement {
-        return screen.getByRole("dialog", { name: /^Collection log/ });
+        return screen.getByRole("region", { name: /^Collection log/ });
+    }
+
+    // The menu's Collection log button, along its bottom
+    function logButton(): HTMLElement {
+        const pause = screen.getByRole("dialog", { name: "Paused" });
+        return within(pause).getByRole("button", { name: "Collection log" });
     }
 
     // A pad's button pressed once in the menus, and the keys the pad sent for it (GameInput
@@ -219,46 +232,66 @@ describe("the Collection log during a run", () => {
         return keys;
     }
 
-    test("opens from the pause menu, over it, and its X goes back to the menu", () => {
-        const { store, calls } = pauseRun();
+    test("opens as a page of the pause menu, in place of its tab, and its button goes back", () => {
+        const { store } = pauseRun();
         const pause = screen.getByRole("dialog", { name: "Paused" });
-        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
+        const loadout = within(pause).getByRole("tab", { name: "Loadout" });
+        expect(loadout).toHaveAttribute("aria-selected", "true");
         act(() => {
-            fireEvent.click(within(pause).getByRole("button", { name: "Collection log" }));
+            fireEvent.click(logButton());
         });
-        expect(calls.openRunLog).toHaveBeenCalled();
         const log = runLog();
-        // A window over the menu, which is out of reach meanwhile
-        expect(log.closest(".ui-modal")?.parentElement?.closest(".ui-modal")).toBe(
-            pause.closest(".ui-modal"),
-        );
-        expect(pause).toHaveAttribute("inert");
+        // In the menu, not a window over it: no X of its own, and the menu stays in reach
+        expect(pause).toContainElement(log);
+        expect(pause).not.toHaveAttribute("inert");
+        expect(within(log).queryByRole("button", { name: "Close" })).toBeNull();
+        expect(logButton()).toHaveAttribute("aria-pressed", "true");
+        expect(loadout).toHaveAttribute("aria-selected", "false");
         act(() => {
-            fireEvent.click(within(log).getByRole("button", { name: "Close" }));
+            fireEvent.click(logButton());
         });
-        expect(calls.closeRunLog).toHaveBeenCalled();
+        expect(queryRunLog()).toBeNull();
+        expect(loadout).toHaveAttribute("aria-selected", "true");
         expect(store.getSnapshot().overlay).toBe("paused");
-        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
-        expect(screen.getByRole("dialog", { name: "Paused" })).not.toHaveAttribute("inert");
+    });
+
+    test("goes back to the tab it came from, through the settings too", () => {
+        pauseRun();
+        const pause = screen.getByRole("dialog", { name: "Paused" });
+        act(() => {
+            fireEvent.click(within(pause).getByRole("tab", { name: "Combat" }));
+        });
+        act(() => {
+            fireEvent.click(logButton());
+        });
+        act(() => {
+            fireEvent.click(within(pause).getByRole("button", { name: "Settings" }));
+        });
+        expect(queryRunLog()).toBeNull();
+        act(() => {
+            fireEvent.click(within(pause).getByRole("button", { name: "Settings" }));
+        });
+        expect(within(pause).getByRole("tab", { name: "Combat" })).toHaveAttribute(
+            "aria-selected",
+            "true",
+        );
+        // Left on the Loadout for the tests after
+        act(() => {
+            fireEvent.click(within(pause).getByRole("tab", { name: "Loadout" }));
+        });
     });
 
     test("leaves Escape to the client, whose pause key it is in a run", () => {
         const { calls } = pauseRun(true);
         fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
-        expect(calls.closeRunLog).not.toHaveBeenCalled();
+        expect(calls.resume).not.toHaveBeenCalled();
+        expect(runLog()).toBeInTheDocument();
     });
 
-    test("sends a pad's Start and back to the client as P and Escape, not to the menu's Resume", () => {
-        const { calls } = pauseRun();
-        // On the menu alone, Start presses its Resume
+    test("leaves a pad's Start to the menu's Resume, as on its other pages", () => {
+        const { calls } = pauseRun(true);
         expect(pressPad(PAD.start)).toEqual([]);
         expect(calls.resume).toHaveBeenCalledOnce();
-        cleanup();
-        const run = pauseRun(true);
-        // The log has no main button of its own, so Start is P (GameClient.pressPauseKey)
-        expect(pressPad(PAD.start)).toEqual(["KeyP"]);
-        expect(pressPad(PAD.east)).toEqual(["Escape"]);
-        expect(run.calls.resume).not.toHaveBeenCalled();
     });
 
     test("opens where it was left once a co-op run's level up or casket has taken it away", () => {
@@ -269,7 +302,7 @@ describe("the Collection log during a run", () => {
         expect(pageTitle(runLog())).toBe(theatre);
         // The menu goes for a moment, and the log with it; the run's still on the log
         act(() => store.set({ overlay: "none" }));
-        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
+        expect(queryRunLog()).toBeNull();
         act(() => store.set({ overlay: "paused" }));
         expect(pageTitle(runLog())).toBe(theatre);
         expect(within(runLog()).getByRole("button", { name: "Raids" })).toHaveAttribute(

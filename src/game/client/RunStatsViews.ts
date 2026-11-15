@@ -2,6 +2,7 @@ import { getCharacter } from "../content/characters";
 import { DAMAGE_KINDS } from "../content/damageKinds";
 import { upgradedName } from "../content/endless";
 import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
+import { RUN_SET, TOMBS_SET, invocationDescription, invocationName } from "../content/invocations";
 import { getItem } from "../content/items";
 import { getPowerUp } from "../content/powerups";
 import { RARITIES } from "../content/rarity";
@@ -96,6 +97,21 @@ export function getKillViews(stats: RunStats): KillView[] {
 // The current hero's damage and kills so far, for the pause menu's Combat tab
 export function getCombatView(sim: Sim): CombatView {
     const stats = sim.getRunStats();
+    const set = sim.map.tombs ? TOMBS_SET : RUN_SET;
+    const invocations = sim.invocations.flatMap((id) => {
+        const invocation = set.byId.get(id);
+        return invocation
+            ? [
+                  {
+                      id,
+                      name: invocationName(invocation),
+                      description: invocationDescription(invocation),
+                      iconSpriteId: invocation.icon,
+                      points: invocation.level,
+                  },
+              ]
+            : [];
+    });
     return {
         damageDealt: stats.sources.reduce((total, source) => total + source.damage, 0),
         damageTaken: stats.damageTaken,
@@ -106,6 +122,9 @@ export function getCombatView(sim: Sim): CombatView {
         kinds: getDamageKindViews(stats),
         sources: getDamageViews(sim, stats, true),
         kills: getKillViews(stats),
+        invocations,
+        invocationTotal: sim.map.tombs ? sim.raidLevel : sim.invocationPoints,
+        tombsInvocations: sim.map.tombs !== undefined,
     };
 }
 

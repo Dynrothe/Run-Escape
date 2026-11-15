@@ -1020,9 +1020,7 @@
         border-left: none;
     }
 
-    /* Under the equipment and what's on the hero, not between them and the cards */
     .ui-loadout-stats-panel {
-        order: 1;
         box-sizing: border-box;
         width: 100%;
     }

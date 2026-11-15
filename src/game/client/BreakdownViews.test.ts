@@ -4,7 +4,7 @@ import { RARITIES } from "../content/rarity";
 import { emptyStats } from "../content/types";
 import { weaponStatSteps } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import { Sim } from "../core/Sim";
+import { Sim, SimOptions } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
     getBonusLine,
@@ -19,7 +19,7 @@ import {
 } from "./BreakdownViews";
 import { getStatRows } from "./LoadoutViews";
 
-function createSim(): Sim {
+function createSim(options: Partial<SimOptions> = {}): Sim {
     const rows = Array.from({ length: 72 }, (_, y) =>
         Array.from({ length: 72 }, (_, x) =>
             x === 0 || y === 0 || x === 71 || y === 71 ? "#" : ".",
@@ -34,6 +34,7 @@ function createSim(): Sim {
         spawnX: 1036.5,
         spawnY: 1036.5,
         endless: false,
+        ...options,
     });
 }
 
@@ -146,7 +147,9 @@ test("a stat's sources add up to its size: the adventurer, the shop, passives an
     sim.equip(gear.id);
     const sources = sim.getStatSources();
     for (const [key, list] of Object.entries(sources)) {
-        const total = list!.reduce((sum, source) => sum + source.value, 0);
+        const total = list!
+            .filter((source) => !source.multiplier)
+            .reduce((sum, source) => sum + source.value, 0);
         expect(total).toBeCloseTo(sim.stats[key as keyof typeof sim.stats], 6);
     }
     // The passive's two picks are one line with two numbers
@@ -158,6 +161,26 @@ test("a stat's sources add up to its size: the adventurer, the shop, passives an
     expect(line.parts[1].color).toBe(RARITIES.common.color);
     // A source of the hero's has the sum's head
     expect(getStatBreakdown("might", "Damage", "+1%", []).total).toBe("+1%");
+});
+
+test("stat sources include relics and multiplicative invocation hitpoints", () => {
+    const sim = createSim({
+        mapId: "desert",
+        relics: ["fairys_flight"],
+        invocations: ["run_glass_cannon"],
+    });
+    const sources = sim.getStatSources();
+    expect(sources.moveSpeed).toContainEqual(
+        expect.objectContaining({ kind: "relic", name: "Fairy's Flight", value: 0.1 }),
+    );
+    const glass = sources.maxHp?.find((source) => source.kind === "invocation");
+    expect(glass).toMatchObject({ name: "Glass Cannon", value: -0.5, multiplier: true });
+    const breakdown = getStatBreakdown("maxHp", "Max hitpoints", String(sim.player.maxHp), [
+        glass!,
+    ]);
+    expect(breakdown.lines.some((line) => line.parts.some((part) => part.text === "×0.5"))).toBe(
+        true,
+    );
 });
 
 test("worn gear's lines come with a make-up each: its own size, and an upgrade's half again", () => {

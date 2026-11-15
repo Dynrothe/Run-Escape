@@ -909,10 +909,6 @@ export function PauseLoadout({
                     </div>
                 </section>
             </div>
-            <section className="ui-loadout-stats-panel">
-                <Heading name={t("pause.heading.your_stats")} />
-                <StatsPanel rows={hud.statRows} />
-            </section>
             <div className="ui-loadout-column ui-loadout-column-side">
                 <section className="ui-loadout-equipment">
                     <Heading name={t("pause.heading.worn_equipment")} />
@@ -929,6 +925,10 @@ export function PauseLoadout({
                     </section>
                 )}
             </div>
+            <section className="ui-loadout-stats-panel">
+                <Heading name={t("pause.heading.your_stats")} />
+                <StatsPanel rows={hud.statRows} />
+            </section>
         </div>
     );
 }

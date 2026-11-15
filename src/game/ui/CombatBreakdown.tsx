@@ -11,7 +11,7 @@ import {
 import { enemyName, getEnemy } from "../content/enemies";
 import { SLAYER_SPRITE_ID } from "../content/questIcons";
 import type { StatIconRef } from "../content/statIcons";
-import { t, tl } from "../i18n";
+import { fmtNum, t, tl } from "../i18n";
 import { BreakdownTip } from "./BreakdownTip";
 import "./CombatBreakdown.css";
 import { EnemyHead } from "./EnemyHead";
@@ -108,9 +108,7 @@ export function CombatBreakdown({
                 <div className="ui-combat-column">
                     <h3 className="ui-pause-heading">
                         {t("combat.heading.kills")}
-                        {killed > 0 && (
-                            <span className="ui-combat-count">{killed.toLocaleString()}</span>
-                        )}
+                        {killed > 0 && <span className="ui-combat-count">{fmtNum(killed)}</span>}
                     </h3>
                     {kills.length === 0 ? (
                         <p className="ui-subtle ui-combat-empty">{t("combat.none_killed")}</p>
@@ -126,13 +124,16 @@ export function CombatBreakdown({
                                             "ui-combat-kill" +
                                             (kill.boss ? " ui-combat-kill-boss" : "")
                                         }
-                                        title={`${name}: ${kill.kills.toLocaleString()}`}
+                                        title={t("combat.kill_entry_title", {
+                                            name,
+                                            count: fmtNum(kill.kills),
+                                        })}
                                     >
                                         <span className="ui-combat-kill-head">
-                                            {!def.outfits && <EnemyHead enemy={def} size={52} />}
+                                            <EnemyHead enemy={def} size={52} />
                                         </span>
                                         <span className="ui-combat-kill-count">
-                                            {kill.kills.toLocaleString()}
+                                            {fmtNum(kill.kills)}
                                         </span>
                                         <span className="ui-combat-kill-name">{name}</span>
                                     </li>
@@ -284,13 +285,14 @@ export function CombatReport({
 }): JSX.Element {
     const portraitFrame = useStoneSlot();
     const dealt = kinds.reduce((sum, kind) => sum + kind.damage, 0);
+    const ranked = sources.some((row) => row.damage > 0);
     const killed = kills.reduce((sum, kill) => sum + kill.kills, 0);
     const top = Math.max(1, ...sources.map((row) => row.damage));
     const mostKilled = Math.max(1, ...kills.map((kill) => kill.kills));
     const tiles = getTiles(totals);
     // The best weapons wear a medal (rankMedalCount), and the worst one, if it isn't among them, a
     // plank in place of its number
-    const medals = RANK_MEDALS.slice(0, rankMedalCount(sources.length));
+    const medals = ranked ? RANK_MEDALS.slice(0, rankMedalCount(sources.length)) : [];
     // The star's and the plank's line, a new one each time the tab's opened
     const [pick] = useState(() => Math.random());
     const mvpLine = t(`combat.rank.mvp.${1 + Math.floor(pick * MVP_LINES)}`);
@@ -384,7 +386,8 @@ export function CombatReport({
                             <ol className="ui-cr-rank" aria-label={t("combat.heading.by_source")}>
                                 {sources.map((row, i) => {
                                     const medal = medals[i];
-                                    const worst = !medal && i === sources.length - 1 && i > 0;
+                                    const worst =
+                                        ranked && !medal && i === sources.length - 1 && i > 0;
                                     return (
                                         <li
                                             key={i}
@@ -402,7 +405,7 @@ export function CombatReport({
                                             <BreakdownTip
                                                 className="ui-cr-rank-no"
                                                 content={
-                                                    i === 0 ? (
+                                                    ranked && i === 0 ? (
                                                         <RankTip
                                                             name={t("combat.rank.mvp")}
                                                             text={mvpLine}
@@ -415,7 +418,7 @@ export function CombatReport({
                                                     ) : undefined
                                                 }
                                             >
-                                                {i === 0 ? (
+                                                {ranked && i === 0 ? (
                                                     "★"
                                                 ) : worst ? (
                                                     <span className="ui-cr-rank-plank">
@@ -492,9 +495,7 @@ export function CombatReport({
                 <div className="ui-cr-col ui-cr-col-kills">
                     <h3 className="ui-loadout-heading">
                         <span>{t("combat.heading.kills")}</span>
-                        {killed > 0 && (
-                            <span className="ui-loadout-count">{killed.toLocaleString()}</span>
-                        )}
+                        {killed > 0 && <span className="ui-loadout-count">{fmtNum(killed)}</span>}
                     </h3>
                     {kills.length === 0 ? (
                         <p className="ui-subtle ui-combat-empty">{t("combat.none_killed")}</p>
@@ -509,10 +510,13 @@ export function CombatReport({
                                         className={
                                             "ui-cr-kill" + (kill.boss ? " ui-cr-kill-boss" : "")
                                         }
-                                        title={`${name}: ${kill.kills.toLocaleString()}`}
+                                        title={t("combat.kill_entry_title", {
+                                            name,
+                                            count: fmtNum(kill.kills),
+                                        })}
                                     >
                                         <span className="ui-cr-kill-head">
-                                            {!def.outfits && <EnemyHead enemy={def} size={48} />}
+                                            <EnemyHead enemy={def} size={48} />
                                         </span>
                                         <span className="ui-cr-kill-main">
                                             <span className="ui-cr-kill-name">{name}</span>
@@ -525,7 +529,7 @@ export function CombatReport({
                                             </span>
                                         </span>
                                         <span className="ui-cr-kill-count">
-                                            {kill.kills.toLocaleString()}
+                                            {fmtNum(kill.kills)}
                                         </span>
                                     </li>
                                 );

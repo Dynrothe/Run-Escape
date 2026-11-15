@@ -1077,12 +1077,26 @@ export type Debuff = {
     light?: { off: number; to?: number };
 };
 
-// Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the shop,
-// a passive's pick (with the rarity it was picked at), a worn piece, a set, a potion or a drain
+// Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the map,
+// upgrades and equipment, temporary effects, relics, blessings or invocations
 export type StatSource = {
-    kind: "adventurer" | "shop" | "passive" | "gear" | "set" | "buff" | "debuff" | "level";
+    kind:
+        | "adventurer"
+        | "shop"
+        | "map"
+        | "passive"
+        | "gear"
+        | "set"
+        | "buff"
+        | "debuff"
+        | "relic"
+        | "blessing"
+        | "invocation"
+        | "level";
     name: string;
     value: number;
+    // Applied after the additive stat (Glass Cannon and a gauntlet blessing's hitpoints)
+    multiplier?: boolean;
     // A passive's pick: the rarity it was offered at
     quality?: Rarity;
     // A worn piece's own rarity, for its colour

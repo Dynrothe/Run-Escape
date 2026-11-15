@@ -47,7 +47,7 @@ export function listNames(names: string[], most = 3): string {
 // Damage a second, with a decimal while it's small
 export function formatPerSecond(perSecond: number): string {
     return perSecond < 100_000
-        ? perSecond.toLocaleString(undefined, { maximumFractionDigits: perSecond < 10 ? 1 : 0 })
+        ? fmtNum(perSecond, { maximumFractionDigits: perSecond < 10 ? 1 : 0 })
         : formatBig(perSecond);
 }
 
@@ -57,13 +57,13 @@ export function formatPerSecond(perSecond: number): string {
 export function formatBig(value: number): string {
     const n = Math.round(value);
     if (n < 100_000) {
-        return n.toLocaleString();
+        return fmtNum(n);
     }
     if (n < 10_000_000) {
-        return `${Math.floor(n / 1000).toLocaleString()}K`;
+        return `${fmtNum(Math.floor(n / 1000))}K`;
     }
     if (n < 10_000_000_000) {
-        return `${Math.floor(n / 1_000_000).toLocaleString()}M`;
+        return `${fmtNum(Math.floor(n / 1_000_000))}M`;
     }
     return formatCompact(n);
 }
@@ -71,7 +71,7 @@ export function formatBig(value: number): string {
 // A stat's number, shortened when it's big, in full when pointed at
 export function Big({ value }: { value: number }): JSX.Element {
     const n = Math.round(value);
-    return <span title={n >= 100_000 ? n.toLocaleString() : undefined}>{formatBig(n)}</span>;
+    return <span title={n >= 100_000 ? fmtNum(n) : undefined}>{formatBig(n)}</span>;
 }
 
 // The chest at the end of a raid: what it was rolled with, and what came out
@@ -188,8 +188,8 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                         {tombs.party.map((player, i) => (
                             <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
                                 <td>{player.name || t("ui.tombs.board.you")}</td>
-                                <td>{player.points.toLocaleString("en-GB")}</td>
-                                <td>{player.deaths}</td>
+                                <td>{fmtNum(player.points)}</td>
+                                <td>{fmtNum(player.deaths)}</td>
                                 {/* None with no purple left to find, as their chest's line */}
                                 <td>
                                     {player.chance === undefined
@@ -201,8 +201,8 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                         {tombs.party.length > 1 && (
                             <tr className="ui-tombs-board-total">
                                 <td>{t("ui.tombs.board.party")}</td>
-                                <td>{party.toLocaleString("en-GB")}</td>
-                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
+                                <td>{fmtNum(party)}</td>
+                                <td>{fmtNum(tombs.party.reduce((sum, p) => sum + p.deaths, 0))}</td>
                                 <td />
                             </tr>
                         )}

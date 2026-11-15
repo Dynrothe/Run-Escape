@@ -11,6 +11,18 @@
     gap: 4px;
 }
 
+/* A page of the pause menu: as big as the page, with no X to keep its counts clear of */
+.ui-log.ui-log-in-pause {
+    flex: 1 1 auto;
+    width: auto;
+    height: auto;
+    min-height: 0;
+}
+
+.ui-log-in-pause .ui-log-counts {
+    padding-right: 0;
+}
+
 /* The title, the tabs and the X, which comes after the tabs in the page but is drawn on the
    title's row */
 .ui-log-top {

@@ -403,6 +403,14 @@ export type DamageKindView = { kind: DamageKind; damage: number };
 // Kills of one enemy, most first; boss: it's a boss
 export type KillView = { enemyId: string; kills: number; boss: boolean };
 
+export type ActiveInvocationView = {
+    id: string;
+    name: string;
+    description: string;
+    iconSpriteId: number;
+    points: number;
+};
+
 // The pause menu's Combat tab, and the results' (PlayerResultView has the same): the hero's
 // damage by kind and by source, kills by enemy, and the totals
 // The hero's chances to be brought back: left is the ring's revives and, in co-op, what teammates
@@ -420,6 +428,9 @@ export type CombatView = {
     kinds: DamageKindView[];
     sources: DamageView[];
     kills: KillView[];
+    invocations: ActiveInvocationView[];
+    invocationTotal: number;
+    tombsInvocations: boolean;
 };
 
 // fraction: of its hitpoints, or a fight in phases' shield. fight: how that
@@ -629,8 +640,6 @@ export type UiSnapshot = {
     expert: boolean;
     hud?: HudView;
     overlay: RunOverlay;
-    // The Collection log, open over the pause menu (or co-op's menu, with the run going on)
-    runLog?: boolean;
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
@@ -791,7 +800,7 @@ export class GameStore {
         this.set({
             toasts: toasts.slice(-4),
             toastLog:
-                log[0]?.text === text
+                log[0]?.text === text && log[0]?.source === source
                     ? log
                     : [{ text, seconds: this.toastSeconds?.(), source }, ...log].slice(
                           0,

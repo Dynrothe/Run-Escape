@@ -428,7 +428,7 @@
     outline-offset: 1px;
 }
 
-/* Settings: behind the title screen's button, and in the pause menu */
+/* Settings' rows: behind the title screen's button, in cloud save's panel and the pause menu */
 
 .ui-settings {
     width: min(500px, calc(94vw / var(--ui-scale)));
@@ -448,18 +448,9 @@
     padding-right: 4px;
 }
 
-.ui-settings-section + .ui-settings-section {
-    margin-top: 12px;
-}
-
-.ui-settings-section h3 {
-    margin: 0 0 2px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid var(--ui-edge-light);
-    font-family: "OSRS Bold", sans-serif;
-    font-weight: normal;
-    font-size: 18px;
-    color: var(--ui-orange);
+/* The title's Settings: the pause menu's sections and cards (.ui-ps), as wide as the pause menu */
+.ui-settings-cards {
+    width: min(920px, calc(94vw / var(--ui-scale)));
 }
 
 .ui-setting {
@@ -489,15 +480,6 @@
 .ui-setting-note {
     display: block;
     color: var(--ui-text);
-}
-
-/* A kind of setting, inside a section */
-.ui-settings-group {
-    margin: 8px 0 0;
-    font-family: "OSRS Bold", sans-serif;
-    font-weight: normal;
-    font-size: 15px;
-    color: var(--ui-yellow);
 }
 
 .ui-setting-control {
@@ -1465,18 +1447,39 @@
     transform: translateY(1px);
 }
 
-/* The pause menu's settings button, beside Give up and Resume: pressed in while their page is open */
-.ui-pause-settings-button {
+/* The pause menu's buttons along the bottom (Give up, Collection log, Settings, Resume): stone
+   tabs like the pages' above, an icon beside each name, all as wide as each other. Settings is
+   pressed in while its page is open. */
+.ui-pause-actions {
+    gap: 8px;
+}
+
+.ui-pause-action {
+    flex: 1 1 0;
+    min-width: 0;
     display: flex;
     flex-direction: row;
     align-items: center;
+    justify-content: center;
     gap: 6px;
+    min-height: 40px;
+    padding: 4px 10px;
     box-shadow:
         inset 1px 1px 0 var(--ui-edge-light),
         inset -1px -1px 0 rgba(0, 0, 0, 0.55);
 }
 
-.ui-pause-settings-button[aria-pressed="true"] {
+.ui-pause-action > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-pause-action > :first-child {
+    flex: none;
+}
+
+.ui-pause-action[aria-pressed="true"] {
     color: var(--ui-green);
     box-shadow:
         inset 2px 2px 0 rgba(0, 0, 0, 0.75),
@@ -3091,19 +3094,14 @@
 }
 
 @media (max-width: 560px) {
-    .ui-page-tabs .ui-page-tab-name {
-        display: none;
-    }
-
-    /* Give up, Collection log, Settings and Resume don't fit across a phone: they share two rows */
+    /* Give up, Collection log, Settings and Resume don't fit across a phone: two by two */
     .ui-pause > .ui-row {
         flex-wrap: wrap;
         gap: 6px;
     }
 
-    .ui-pause > .ui-row .ui-button {
-        flex: 1 1 auto;
-        justify-content: center;
+    .ui-pause > .ui-row .ui-pause-action {
+        flex: 1 1 calc(50% - 3px);
         padding-left: 8px;
         padding-right: 8px;
     }
@@ -3120,6 +3118,16 @@
     scrollbar-color: #a58b61 #23201b;
     padding-right: 4px;
     padding-bottom: 6px;
+}
+
+/* The Collection log's page: the log scrolls its own entries and items, so the page holds it at its
+   height instead of scrolling it whole */
+.ui-pause-page.ui-pause-page-log {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    padding-right: 0;
 }
 
 .ui-pause-page::-webkit-scrollbar-thumb {
@@ -3161,8 +3169,8 @@
     }
 }
 
-/* The pause menu's settings, in the Loadout's and Quests' style: two columns of sections while
-   there's room, one on a narrow window */
+/* Settings in the Loadout's and Quests' style, the pause menu's and the title's: two columns of
+   sections while there's room, one on a narrow window */
 .ui-ps {
     display: flex;
     gap: 20px;

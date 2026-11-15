@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import type { GameClient } from "../client/GameClient";
-import { GameStore, HudNumbers, HudView } from "../client/GameStore";
+import { CombatView, GameStore, HudNumbers, HudView } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 
@@ -45,13 +45,13 @@ function numbers(): HudNumbers {
     };
 }
 
-function paused() {
+function paused(combatView?: CombatView, methods: Partial<GameClient> = {}) {
     const store = new GameStore(createSave());
     store.set({ screen: "run", overlay: "paused", hud: hud() });
     store.setNumbers(numbers());
     const noop = () => {};
     const client = new Proxy(
-        { store, input: { stick: {} } },
+        { store, input: { stick: {} }, getCombatView: () => combatView, ...methods },
         { get: (target, key) => (key in target ? target[key as keyof typeof target] : noop) },
     ) as unknown as GameClient;
     return render(<GameUi store={store} client={client} />);
@@ -71,6 +71,23 @@ test("pause is a labelled modal, isolates the run and starts on its selected tab
     expect(background.length).toBeGreaterThan(0);
     expect(background.every((element) => element.hasAttribute("inert"))).toBe(true);
     expect(view.container.querySelector(".ui-run")).not.toBeNull();
+});
+
+test("Give up offers Restart and Abandon match as distinct actions", async () => {
+    const restartRun = vi.fn();
+    const abandonRun = vi.fn();
+    paused(undefined, { restartRun, abandonRun } as Partial<GameClient>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Give up" }));
+    await screen.findByRole("alertdialog", { name: "Give up this run?" });
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    await waitFor(() => expect(restartRun).toHaveBeenCalledOnce());
+    expect(abandonRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Give up" }));
+    await screen.findByRole("alertdialog", { name: "Give up this run?" });
+    fireEvent.click(screen.getByRole("button", { name: "Abandon match" }));
+    await waitFor(() => expect(abandonRun).toHaveBeenCalledOnce());
 });
 
 test("Tab and Shift+Tab wrap inside the pause dialog", () => {
@@ -123,4 +140,47 @@ test("the settings button goes back to the page it came from, even after the men
     );
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("tab", { name: "Loadout" })).toHaveAttribute("aria-selected", "true");
+});
+
+test("arrow keys follow the focused tab while Settings is open", () => {
+    paused();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const loadout = screen.getByRole("tab", { name: "Loadout" });
+    loadout.focus();
+    fireEvent.keyDown(loadout, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Combat" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    loadout.focus();
+    fireEvent.keyDown(loadout, { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { name: "Combat" })).toHaveFocus();
+});
+
+test("the Combat page shows invocations that are active on this map", () => {
+    paused({
+        damageDealt: 0,
+        damageTaken: 0,
+        damageBlocked: 0,
+        healed: 0,
+        highestHit: 0,
+        revives: { left: 0, given: 0, coop: false },
+        kinds: [],
+        sources: [],
+        kills: [],
+        invocations: [
+            {
+                id: "run_glass_cannon",
+                name: "Glass Cannon",
+                description: "Half hitpoints.",
+                iconSpriteId: 8730,
+                points: 20,
+            },
+        ],
+        invocationTotal: 20,
+        tombsInvocations: false,
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Combat" }));
+    expect(screen.getByRole("list", { name: "Invocations" })).toHaveTextContent("Glass Cannon");
+    expect(screen.getByText("20 points", { selector: ".ui-loadout-count" })).toBeVisible();
 });

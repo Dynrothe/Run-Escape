@@ -586,6 +586,11 @@
         width: min(560px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
     }
 
+    /* The title's Settings in two columns, as the pause menu's: the whole width */
+    .ui-settings.ui-settings-cards {
+        width: calc(100vw - var(--safe-left) - var(--safe-right) - 12px);
+    }
+
     /* Title: the name on the left, the menu on the right */
 
     .ui-title {

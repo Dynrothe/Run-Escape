@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { useConfirm } from "./ConfirmDialog";
+import { ConfirmAnswer, useConfirm } from "./ConfirmDialog";
 
 afterEach(cleanup);
 
 function Asker({
     onAnswer,
     onKey,
+    alternative,
 }: {
-    onAnswer: (confirmed: boolean) => void;
+    onAnswer: (answer: ConfirmAnswer) => void;
     onKey?: () => void;
+    alternative?: string;
 }): JSX.Element {
     const [confirm, dialog] = useConfirm();
     return (
@@ -22,6 +24,7 @@ function Asker({
                             title: "Give up?",
                             body: "The run ends here.",
                             confirm: "Give up",
+                            alternative,
                             cancel: "Keep playing",
                         }),
                     )
@@ -34,8 +37,8 @@ function Asker({
     );
 }
 
-async function open(onAnswer = vi.fn(), onKey?: () => void) {
-    render(<Asker onAnswer={onAnswer} onKey={onKey} />);
+async function open(onAnswer = vi.fn(), onKey?: () => void, alternative?: string) {
+    render(<Asker onAnswer={onAnswer} onKey={onKey} alternative={alternative} />);
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     await screen.findByRole("alertdialog", { name: "Give up?" });
     return onAnswer;
@@ -52,6 +55,15 @@ test("the confirm button says yes", async () => {
         fireEvent.click(screen.getByRole("button", { name: "Give up" }));
     });
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith(true);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+test("an alternative button returns its own answer", async () => {
+    const onAnswer = await open(vi.fn(), undefined, "Restart");
+    await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    });
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith("alternative");
     expect(screen.queryByRole("alertdialog")).toBeNull();
 });
 

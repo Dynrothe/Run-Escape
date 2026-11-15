@@ -8,20 +8,25 @@ export const TITLE_TAB_SPRITES = {
 } as const;
 
 // The pause menu's tabs: the client's own side tab icons (crossed swords for Combat options,
-// the clan chat's for the party), and the title's for the rest. scripts/cache/slim-cache.ts keeps
-// them in the slim cache.
+// the clan chat's for the party), and the title's for the rest. Its buttons along the bottom too:
+// the logout tab's door to give up, and the run orb's boot, lit, to resume. scripts/cache/slim-cache.ts
+// keeps them in the slim cache.
 export const PAUSE_TAB_SPRITES = {
     loadout: TITLE_TAB_SPRITES.armoury,
     combat: 168,
     quests: TITLE_TAB_SPRITES.quests,
     party: 895,
     settings: TITLE_TAB_SPRITES.settings,
+    giveUp: 907,
+    resume: 1070,
 } as const;
 
 // The pause menu's settings, by section: the client's own Settings interface's icons (its sound
 // waves, monitor, keyboard's Shift key and joystick), the emote tab's dancer for a run's and the
-// clan chat's for co-op. Also kept in the slim cache by scripts/cache/slim-cache.ts.
+// clan chat's for co-op. The title's Settings has the save too: cloud save's storage chest. Also
+// kept in the slim cache by scripts/cache/slim-cache.ts.
 export const SETTINGS_SECTION_SPRITES = {
+    save: 1106,
     sound: 2244,
     display: 1084,
     run: 909,

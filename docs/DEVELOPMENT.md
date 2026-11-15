@@ -900,8 +900,11 @@ zooming never moves the picture, pitched or not. They were set by eye with the e
 sequence uses more of the cache, so deploy it with a new slim cache.
 
 The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
-(`PauseModal`), and its settings are a button at the bottom, beside Give up and Resume, whose page
-replaces the open one (the button goes back to it). The menu opens on the tab it was left on, and
+(`PauseModal`), and its Collection log and settings are buttons at the bottom, beside Give up and
+Resume, each one's page replacing the open tab (`PAUSE_BUTTON_PAGES`; the button goes back to the
+tab it came from, through the other's page too). Those four buttons are one
+kind (`.ui-pause-action`): as wide as each other, an icon beside each name (`PAUSE_TAB_SPRITES`,
+the Collection log's item), two by two on a phone. The menu opens on the tab it was left on, and
 each tab keeps how far it was scrolled (`lastPauseTab` and `lastPauseScroll`, module state: this
 page's, not saved). The window is a dialog (`useDialog`, modal
 except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`). The Loadout
@@ -912,7 +915,10 @@ a `.ui-ps-heading` with the client's Settings icon for it (`SETTINGS_SECTION_SPR
 `getGameSpriteIds` for the slim cache), and every setting is a card whose edge follows its toggle
 (`--ui-state-*`, the quests' red and green: use those for an on, off or under-way colour). A new
 setting goes in the section it belongs to; one with a toggle gets its edge by itself (`:has`). The
-title's Settings panel shares the same setting components without the cards. A volume's slider
+title's Settings panel (`SettingsPanel`, `.ui-settings-cards`) is laid out the same way, with the
+same `SettingsSection`s, and adds what only it has: the save first (its export, cloud save and
+unreadable saves), the menu's camera and screen shake under Display, Share run stats under the run
+and Co-op flag under Co-op. A setting in both goes in the same section in each. A volume's slider
 (`VolumeSetting`, its sums in `ui/volume.ts`) moves in whole percents and, with Shift held, a tenth
 of the pointer's way, to a tenth of a percent (GameAudio takes any level from 0 to 1). A language's
 flag is its `LANGS` entry's `country`, from co-op's `FLAG_FRAMES`. A weapon's stat cells
@@ -970,7 +976,7 @@ hit says when too: `getHealChanceLines` (the amulet's chance, its `BLOOD_FURY_HE
 once-a-second roll, for the stat and the piece) and `getLifestealStat` (a weapon's `lifesteal`), so
 a new way to heal on a hit needs a line there.
 
-The pause panel keeps its buttons (Give up, Settings, Resume) in view: it's a flex column whose
+The pause panel keeps its buttons (Give up, Collection log, Settings, Resume) in view: it's a flex column whose
 page (`.ui-pause-page`) takes the room left and scrolls inside it, never shorter than a minimum
 that shows the main items. Only a window shorter than the title, tabs and that minimum scrolls the
 whole panel. The Loadout tightens to the room its page has: `useFit` (in `PauseLoadout.tsx`) draws
@@ -1008,10 +1014,6 @@ its arena turned on the boss) and `other` for the rest (an enemy's blast catchin
 floor's burns, Het's beam). The kinds, their names and their cache icons are in
 `content/damageKinds.ts`; a new kind needs its `combat.kind.<kind>` and `.desc` keys in `ui.json`.
 Kills by enemy count a boss's co-op copies once, as `enemyKills` does.
-
-`Hero.recentHitsTaken` keeps the last `RECENT_HITS_KEPT` hits the hero took (when, how much, the
-enemy and the boss attack's name; none for poison). Nothing shows it yet, and the sim never reads
-it. None of this touches the RNG, so `runHash.test.ts` keeps its runs.
 
 A loc blocks only the ground its model stands on (below about waist height, from
 `RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
@@ -1576,19 +1578,16 @@ adventurer can have:
   always in view. Narrower than 600px, or on a phone held upright (the rotate notice's own
   query), the entries are a dropdown, and the log is the one screen the rotate notice leaves
   readable there (`GameUi.tsx`).
-- **The log in a run**: the pause menu's Collection log opens the same screen over it
-  (`CollectionLogScreen`'s `inRun`, the store's `runLog`, `GameClient.openRunLog`). It's only the
-  UI's: a solo run stays paused under it, and a co-op run goes on, as it does under co-op's menu,
-  except that the run's out of reach while the log hides it. The hero stands still (a zero move,
-  as while choosing a level up: `updateCoop`'s `deciding`), and Space and 1 to 4, which work
-  under co-op's menu, do nothing (`onKeyPress`'s `coopMenu`). Escape and P are the client's
-  pause keys there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's
-  back and Start (P, with no `.ui-button-go` in the log) do the same. The panel saying nothing's
-  being saved comes before either, as it does for `useMenuKeys`. Anything that leaves the menu
-  shuts the log with it (`leavePauseMenu`: resuming, giving up, a run starting or left), so the
-  next pause opens on the menu. A co-op level up or casket takes the menu away a moment, the log
-  with it, and the log opens again where it was left (`LogPlace`, kept by `RunScreen`). The log
-  is a `memo`, so the menu under it drawing again as a co-op run goes on doesn't redraw it.
+- **The log in a run**: a page of the pause menu, from its Collection log button, as the settings
+  are (`CollectionLogScreen`'s `inRun`): the same log without its window or X
+  (`.ui-log-in-pause`), filling the page, which holds it rather than scrolling it whole
+  (`.ui-pause-page-log`), as the log scrolls its own entries and items. It's only the UI's, with
+  nothing in the client or the store: a solo run stays paused, and a co-op run goes on behind it
+  as behind any of the menu's pages, in reach. Escape and P resume, and a pad's Start presses
+  Resume, as on the menu's other pages. A co-op level up or casket takes the menu away a moment,
+  the log with it, and the menu opens again on the log (`lastPauseTab`), where it was left
+  (`LogPlace`, kept by `RunScreen`). The log is a `memo`, so the menu drawing again as a co-op
+  run goes on doesn't redraw it.
 - **What the run's found**: marked New in the log in a run (`LogItem.thisRun`).
   `GameClient.getRunLogSaves` gives the save and a copy with the run's result banked on it as it
   stands, by the same `bankRun` that `finishRun` banks the run with, and `getRunLogEntries`

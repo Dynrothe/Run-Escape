@@ -25,6 +25,7 @@ import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import {
     BuffView,
+    CombatView,
     GameStore,
     GearSlotView,
     HudNumbers,
@@ -859,7 +860,9 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
-// Behind the title screen's Settings button
+// Behind the title screen's Settings button: the pause menu's sections and cards, with what only
+// the title has besides (the save, the menu's camera, screen shake, run stats and co-op's flag).
+// The save on the left, first, as it's what a player can lose.
 function SettingsPanel({
     ui,
     client,
@@ -867,72 +870,94 @@ function SettingsPanel({
 }: ScreenProps & { onClose: () => void }): JSX.Element {
     const padKind = usePadKind();
     return (
-        <div className="ui-panel rs-border rs-background ui-settings">
+        <div className="ui-panel rs-border rs-background ui-settings ui-settings-cards">
             <h2>{t("settings.title")}</h2>
-            <div className="ui-settings-body">
-                {/* First: it's what a player can lose */}
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.save")}</h3>
-                    <SaveSetting ui={ui} client={client} />
-                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
-                    <UnreadableSaveSettings ui={ui} client={client} />
-                </section>
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.sound")}</h3>
-                    <SoundSettings ui={ui} client={client} />
-                </section>
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.game")}</h3>
-                    <h4 className="ui-settings-group">{t("settings.group.general")}</h4>
-                    <LanguageSetting />
-                    <h4 className="ui-settings-group">{t("settings.group.camera")}</h4>
-                    <Setting
-                        name={t("settings.camera_spin.name")}
-                        text={t("settings.camera_spin.desc")}
+            <div className="ui-settings-body ui-ps">
+                <div className="ui-ps-column">
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.save}
+                        title={t("settings.section.save")}
                     >
-                        <Toggle
-                            on={ui.display.menuSpin}
-                            label={t("settings.camera_spin.name")}
-                            onToggle={() => client.toggleMenuSpin()}
+                        <SaveSetting ui={ui} client={client} />
+                        <CloudSaveSettings
+                            cloud={ui.cloud}
+                            client={client}
+                            saving={!ui.saveBlock}
                         />
-                    </Setting>
-                    <Setting
-                        name={t("settings.screen_shake.name")}
-                        text={t("settings.screen_shake.desc")}
+                        <UnreadableSaveSettings ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.sound}
+                        title={t("settings.section.sound")}
                     >
-                        <Toggle
-                            on={ui.display.screenShake}
-                            label={t("settings.screen_shake.name")}
-                            onToggle={() => client.toggleScreenShake()}
-                        />
-                    </Setting>
-                    <h4 className="ui-settings-group">{t("settings.group.run")}</h4>
-                    <PickupTimerSetting ui={ui} client={client} />
-                    <GearPanelSetting ui={ui} client={client} />
-                    <PuzzleHelperSetting ui={ui} client={client} />
-                    <AutoPauseSetting ui={ui} client={client} />
-                    <AutoAlchSetting ui={ui} client={client} />
-                    <AutoEquipSetting ui={ui} client={client} />
-                    <RunStatsSetting ui={ui} client={client} />
-                    <h4 className="ui-settings-group">{t("settings.group.coop")}</h4>
-                    <MovePredictionSetting ui={ui} client={client} />
-                    <CoopFlagSetting ui={ui} client={client} />
-                    <h4 className="ui-settings-group">{t("settings.group.performance")}</h4>
-                    <FrameRateSetting ui={ui} client={client} />
-                </section>
-                {padKind ? (
-                    <section className="ui-settings-section">
-                        <h3>{t("settings.section.controller")}</h3>
-                        <PadControls />
-                    </section>
-                ) : (
-                    !isCoarsePointer && (
-                        <section className="ui-settings-section">
-                            <h3>{t("settings.section.keyboard")}</h3>
-                            <KeyboardControls />
-                        </section>
-                    )
-                )}
+                        <SoundSettings ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.display}
+                        title={t("settings.group.display")}
+                    >
+                        <LanguageSetting />
+                        <Setting
+                            name={t("settings.camera_spin.name")}
+                            text={t("settings.camera_spin.desc")}
+                        >
+                            <Toggle
+                                on={ui.display.menuSpin}
+                                label={t("settings.camera_spin.name")}
+                                onToggle={() => client.toggleMenuSpin()}
+                            />
+                        </Setting>
+                        <Setting
+                            name={t("settings.screen_shake.name")}
+                            text={t("settings.screen_shake.desc")}
+                        >
+                            <Toggle
+                                on={ui.display.screenShake}
+                                label={t("settings.screen_shake.name")}
+                                onToggle={() => client.toggleScreenShake()}
+                            />
+                        </Setting>
+                        <GearPanelSetting ui={ui} client={client} />
+                        <PickupTimerSetting ui={ui} client={client} />
+                        <FrameRateSetting ui={ui} client={client} />
+                    </SettingsSection>
+                </div>
+                <div className="ui-ps-column">
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.run}
+                        title={t("settings.group.run")}
+                    >
+                        <AutoPauseSetting ui={ui} client={client} />
+                        <AutoAlchSetting ui={ui} client={client} />
+                        <AutoEquipSetting ui={ui} client={client} />
+                        <PuzzleHelperSetting ui={ui} client={client} />
+                        <RunStatsSetting ui={ui} client={client} />
+                    </SettingsSection>
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.coop}
+                        title={t("settings.group.coop")}
+                    >
+                        <MovePredictionSetting ui={ui} client={client} />
+                        <CoopFlagSetting ui={ui} client={client} />
+                    </SettingsSection>
+                    {padKind ? (
+                        <SettingsSection
+                            spriteId={SETTINGS_SECTION_SPRITES.controller}
+                            title={t("settings.section.controller")}
+                        >
+                            <PadControls />
+                        </SettingsSection>
+                    ) : (
+                        !isCoarsePointer && (
+                            <SettingsSection
+                                spriteId={SETTINGS_SECTION_SPRITES.keyboard}
+                                title={t("settings.section.keyboard")}
+                            >
+                                <KeyboardControls />
+                            </SettingsSection>
+                        )
+                    )}
+                </div>
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
@@ -3314,8 +3339,8 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
 
 function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
-    // Where the Collection log over the pause menu was left, so it opens there again: a co-op
-    // run's level up or casket takes the menu away a moment, the log with it
+    // Where the pause menu's Collection log was left, so it opens there again: a co-op run's level
+    // up or casket takes the menu away a moment, the log with it
     const logPlace = useRef<LogPlace | undefined>(undefined);
     return (
         <div className="ui-fill ui-run">
@@ -3929,7 +3954,7 @@ function KillsAndCoins({ client }: { client: GameClient }): JSX.Element {
     return (
         <>
             <div>
-                <span className="ui-skull">☠</span> {kills.toLocaleString()}
+                <span className="ui-skull">☠</span> {fmtNum(kills)}
             </div>
             <Coins amount={coins} />
         </>
@@ -4695,7 +4720,7 @@ function DamagePanel({
 }
 
 function exact(value: number): string {
-    return Math.round(value).toLocaleString();
+    return fmtNum(Math.round(value));
 }
 
 // The quests this run is getting on with, under the minimap: click the title
@@ -4759,19 +4784,23 @@ function questTrackClass(quest: QuestTrackView): string {
 function formatQuestProgress(quest: QuestTrackView): string {
     return quest.finished
         ? t("ui.quest.done")
-        : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`;
+        : t("quest.progress", { done: fmtNum(quest.done), total: fmtNum(quest.of) });
 }
 
-type PauseTab = "loadout" | "combat" | "quests" | "party" | "settings";
+type PauseTab = "loadout" | "combat" | "quests" | "party" | "collection" | "settings";
 
-// The tab the menu was left on, open again next time it's opened (this page's, not saved), the page
-// the settings were opened from, and how far each page was scrolled
+// The pages opened from a button along the bottom, not a tab along the top
+const PAUSE_BUTTON_PAGES: PauseTab[] = ["collection", "settings"];
+
+// The tab the menu was left on, open again next time it's opened (this page's, not saved), the tab
+// the Collection log or the settings were opened from, and how far each page was scrolled
 let lastPauseTab: PauseTab = "loadout";
 let lastPauseFrom: PauseTab = "loadout";
 const lastPauseScroll: Partial<Record<PauseTab, number>> = {};
 
 // The pause menu: a page for each part of it (the run's loadout, its fighting, the quests, the
-// party and the settings) under a row of the client's own side tab icons
+// party) under a row of the client's own side tab icons, and the Collection log's and the
+// settings' from their buttons along the bottom
 function PauseModal({
     ui,
     hud,
@@ -4818,20 +4847,25 @@ function PauseModal({
     ];
     const [picked, setPicked] = useState<PauseTab>(lastPauseTab);
     // One that's gone (the last quest done with, the party's left) falls back to the first. The
-    // settings are not a tab: their button's at the bottom, and its page replaces the open one.
+    // Collection log and the settings are not tabs: their buttons are at the bottom, and each
+    // one's page replaces the open one.
     const open: PauseTab =
-        picked === "settings" || tabs.some((tab) => tab.id === picked) ? picked : tabs[0].id;
+        PAUSE_BUTTON_PAGES.includes(picked) || tabs.some((tab) => tab.id === picked)
+            ? picked
+            : tabs[0].id;
     const openTab = (tab: PauseTab) => {
         lastPauseTab = tab;
         setPicked(tab);
     };
-    // The page the settings came from, for the button to go back to
-    const toggleSettings = () => {
-        if (open === "settings") {
+    // A bottom button's page, or back to the tab it came from when it's open
+    const togglePage = (page: PauseTab) => {
+        if (open === page) {
             openTab(lastPauseFrom);
         } else {
-            lastPauseFrom = open;
-            openTab("settings");
+            if (!PAUSE_BUTTON_PAGES.includes(open)) {
+                lastPauseFrom = open;
+            }
+            openTab(page);
         }
     };
     // Each page keeps how far it was scrolled: as it opens (or the menu does) it goes back there
@@ -4845,7 +4879,7 @@ function PauseModal({
     const [confirm, confirmDialog] = useConfirm();
     const host = coop && ui.coop.room?.hostId === ui.coop.you;
     const quit = async () => {
-        const confirmed = await confirm(
+        const answer = await confirm(
             coop
                 ? {
                       title: t("confirm.leave.title"),
@@ -4855,13 +4889,20 @@ function PauseModal({
                   }
                 : {
                       title: t("confirm.quit.title"),
-                      body: t("confirm.quit.body"),
-                      confirm: t("confirm.quit.confirm"),
+                      body: tr(
+                          "confirm.quit.body_with_restart",
+                          "Restart begins this match again from the start. Abandon match ends it " +
+                              "and returns to the main menu; you keep the coins found so far.",
+                      ),
+                      alternative: tr("confirm.quit.restart", "Restart"),
+                      confirm: tr("confirm.quit.abandon", "Abandon match"),
                       cancel: t("confirm.quit.cancel"),
                   },
         );
-        if (confirmed) {
-            client.quitRun();
+        if (answer === "alternative") {
+            client.restartRun();
+        } else if (answer) {
+            client.abandonRun();
         }
     };
     // The menu opens on its selected tab (useDialog's focus goes on the window itself)
@@ -4923,14 +4964,16 @@ function PauseModal({
                 )}
                 <TabBar
                     tabs={tabs}
-                    open={open === "settings" ? undefined : open}
+                    open={PAUSE_BUTTON_PAGES.includes(open) ? undefined : open}
                     onOpen={openTab}
                     idPrefix="pause"
                     label={t("pause.tabs_aria")}
                 />
                 <div
                     ref={pageRef}
-                    className="ui-pause-page"
+                    className={
+                        open === "collection" ? "ui-pause-page ui-pause-page-log" : "ui-pause-page"
+                    }
                     onScroll={(event) => {
                         lastPauseScroll[open] = event.currentTarget.scrollTop;
                     }}
@@ -4944,37 +4987,53 @@ function PauseModal({
                     )}
                     {open === "quests" && <PauseQuests quests={quests} />}
                     {open === "party" && <PauseParty kickable={kickable} client={client} />}
+                    {open === "collection" && (
+                        <CollectionLogScreen
+                            save={ui.save}
+                            client={client}
+                            inRun
+                            place={logPlace}
+                        />
+                    )}
                     {open === "settings" && <PauseSettings ui={ui} client={client} />}
                 </div>
-                <div className="ui-row">
+                {/* Four buttons of one kind: as wide as each other, each with its icon */}
+                <div className="ui-row ui-pause-actions">
                     <button
-                        className="ui-button"
+                        className="ui-button ui-pause-action"
                         title={host ? t("pause.quit.host_warning") : undefined}
                         onClick={quit}
                     >
-                        {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.giveUp} size={24} />
+                        <span>{coop ? t("pause.quit.leave") : t("pause.quit.give_up")}</span>
                     </button>
-                    <button className="ui-button" onClick={() => client.openRunLog()}>
-                        {t("collection.title")}
+                    <button
+                        id="pause-tab-collection"
+                        className="ui-button ui-pause-action"
+                        aria-pressed={open === "collection"}
+                        onClick={() => togglePage("collection")}
+                    >
+                        <ItemIcon objId={COLLECTION_LOG_OBJ} size={24} />
+                        <span>{t("collection.title")}</span>
                     </button>
                     <button
                         id="pause-tab-settings"
-                        className="ui-button ui-pause-settings-button"
+                        className="ui-button ui-pause-action"
                         aria-pressed={open === "settings"}
-                        onClick={toggleSettings}
+                        onClick={() => togglePage("settings")}
                     >
                         <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.settings} size={24} />
                         <span>{t("pause.tab.settings")}</span>
                     </button>
-                    <button className="ui-button ui-button-go" onClick={() => client.resume()}>
-                        {t("pause.resume")}
+                    <button
+                        className="ui-button ui-button-go ui-pause-action"
+                        onClick={() => client.resume()}
+                    >
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.resume} size={24} />
+                        <span>{t("pause.resume")}</span>
                     </button>
                 </div>
             </div>
-            {/* Over the menu, which is there again once it's closed */}
-            {ui.runLog && (
-                <CollectionLogScreen save={ui.save} client={client} inRun place={logPlace} />
-            )}
             {confirmDialog}
         </div>
     );
@@ -5010,6 +5069,7 @@ function PauseCombat({
                 kills={view.kills}
                 totals={view}
             />
+            {view.invocations.length > 0 && <ActiveInvocations view={view} />}
             {log.length > 0 && (
                 <section className="ui-cr-recent">
                     <h3 className="ui-loadout-heading">
@@ -5019,6 +5079,38 @@ function PauseCombat({
                 </section>
             )}
         </>
+    );
+}
+
+// The modifiers that are actually shaping this map. The sim has already cleaned the ids against
+// the map's board, so this never shows selections that are inactive here.
+function ActiveInvocations({ view }: { view: CombatView }): JSX.Element {
+    const total = view.tombsInvocations
+        ? t("ui.invocations.raid_level", { level: view.invocationTotal })
+        : t("ui.invocations.points", { points: view.invocationTotal });
+    return (
+        <section className="ui-cr-invocations">
+            <h3 className="ui-loadout-heading">
+                <span>{t("ui.invocations.title")}</span>
+                <span className="ui-loadout-count">{total}</span>
+            </h3>
+            <ul aria-label={t("ui.invocations.title")}>
+                {view.invocations.map((invocation) => (
+                    <li key={invocation.id}>
+                        <span className="ui-cr-invocation-icon">
+                            <ItemIcon objId={-1} spriteId={invocation.iconSpriteId} size={32} />
+                        </span>
+                        <span className="ui-cr-invocation-copy">
+                            <span className="ui-cr-invocation-name">{invocation.name}</span>
+                            <span className="ui-subtle">{invocation.description}</span>
+                        </span>
+                        <span className="ui-cr-invocation-points">
+                            {t("ui.invocations.detail_points", { points: invocation.points })}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </section>
     );
 }
 
@@ -5049,7 +5141,7 @@ function PauseParty({
     );
 }
 
-// A section of the pause menu's settings: its heading, with the client's own icon for it, over a
+// A section of the settings (the pause menu's and the title's): its heading, with the client's own icon for it, over a
 // card for each setting
 function SettingsSection({
     spriteId,

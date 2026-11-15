@@ -168,7 +168,8 @@ test("the active effects sit in the equipment's column, under it, and the stats 
         equipment.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(side.querySelector(".ui-loadout-stats-panel")).toBeNull();
-    expect(view.container.querySelector(".ui-loadout > .ui-loadout-stats-panel")).not.toBeNull();
+    const stats = view.container.querySelector(".ui-loadout > .ui-loadout-stats-panel")!;
+    expect(side.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("worn equipment uses the canonical OSRS slot map", () => {

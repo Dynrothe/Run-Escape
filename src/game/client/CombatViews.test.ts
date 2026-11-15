@@ -1,7 +1,7 @@
 import { DAMAGE_KINDS } from "../content/damageKinds";
 import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
-import { RECENT_HITS_KEPT, Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { Sim, SimOptions, TICKS_PER_SECOND } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
     getCombatView,
@@ -10,7 +10,7 @@ import {
     getPlayerResultViews,
 } from "./RunStatsViews";
 
-function createSim(party?: string[]): Sim {
+function createSim(party?: string[], options: Partial<SimOptions> = {}): Sim {
     return new Sim({
         grid: makeGrid(Array(72).fill(".".repeat(72)), 1000, 1000),
         characterId: "warrior",
@@ -22,6 +22,7 @@ function createSim(party?: string[]): Sim {
             party: party.map((name) => ({ name, characterId: "warrior", metaStats: emptyStats() })),
             focus: 0,
         }),
+        ...options,
     });
 }
 
@@ -82,25 +83,24 @@ describe("damage by type and kills by monster", () => {
         expect(DAMAGE_KINDS).toContain("other");
     });
 
-    test("keeps the last hits taken, and nothing more", () => {
-        const sim = createSim();
-        const damagePlayer = (sim as unknown as { damagePlayer: Sim["damageEnemy"] }).damagePlayer;
-        for (let i = 0; i < RECENT_HITS_KEPT + 5; i++) {
-            sim.player.hp = sim.player.maxHp;
-            sim.player.invulnerable = 0;
-            (damagePlayer as unknown as (...args: unknown[]) => number).call(
-                sim,
-                3,
-                "goblin",
-                false,
-                undefined,
-                false,
-                false,
-            );
-        }
-        const hits = sim.heroes[0].recentHitsTaken;
-        expect(hits).toHaveLength(RECENT_HITS_KEPT);
-        expect(hits.every((hit) => hit.enemyId === "goblin" && hit.amount > 0)).toBe(true);
+    test("the Combat view lists only the invocations active on this map", () => {
+        const invoked = createSim(undefined, {
+            mapId: "desert",
+            invocations: ["run_glass_cannon", "run_ancient_haste"],
+        });
+        const view = getCombatView(invoked);
+        expect(view.invocations.map((invocation) => invocation.id)).toEqual([
+            "run_glass_cannon",
+            "run_ancient_haste",
+        ]);
+        expect(view.invocationTotal).toBe(30);
+        expect(view.tombsInvocations).toBe(false);
+
+        const inactive = createSim(undefined, {
+            mapId: "lumbridge",
+            invocations: ["run_glass_cannon"],
+        });
+        expect(getCombatView(inactive).invocations).toEqual([]);
     });
 });
 

@@ -100,7 +100,10 @@ export function PauseQuests({ quests }: { quests: QuestTrackView[] }): JSX.Eleme
                         <span className="ui-pq-progress">
                             {quest.finished
                                 ? t("ui.quest.done")
-                                : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`}
+                                : t("quest.progress", {
+                                      done: fmtNum(quest.done),
+                                      total: fmtNum(quest.of),
+                                  })}
                         </span>
                         <Reward quest={quest} />
                     </div>

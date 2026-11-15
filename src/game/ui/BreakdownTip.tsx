@@ -148,6 +148,8 @@ export function BreakdownTip({
         };
         const keys = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
                 dismiss();
                 setFocused(false);
                 return;

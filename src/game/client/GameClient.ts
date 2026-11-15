@@ -2984,13 +2984,9 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Out of the pause menu, and so out of the Collection log over it: the next pause opens on
-    // the menu
+    // Out of the pause menu (its Collection log and settings are pages of it, the UI's alone)
     private leavePauseMenu(): void {
         this.paused = false;
-        if (this.store.getSnapshot().runLog) {
-            this.store.set({ runLog: false });
-        }
     }
 
     // The page lost its graphics (GameApp): a solo run stops where it stands, and
@@ -3022,19 +3018,6 @@ export class GameClient implements GameFrameHandler {
         this.leavePauseMenu();
         this.accumulator = 0;
         this.syncOverlay();
-    }
-
-    // The Collection log over the pause menu. Only the UI's: a solo run stays paused under it,
-    // and a co-op run goes on as it does under co-op's menu, with nothing sent.
-    openRunLog(): void {
-        if (this.sim && this.store.getSnapshot().overlay === "paused") {
-            this.store.set({ runLog: true });
-        }
-    }
-
-    // Back to the pause menu
-    closeRunLog(): void {
-        this.store.set({ runLog: false });
     }
 
     // The save, and the save as this run would leave it if it ended now, for the log's "Found
@@ -3099,6 +3082,39 @@ export class GameClient implements GameFrameHandler {
         if (this.coopRun) {
             this.coop.leave();
         }
+        this.leaveRun();
+    }
+
+    // Starts this solo match over from its beginning, with the same map, mode and loadout. Unlike
+    // retry(), this does not jump straight to a map's lair. A shared co-op run can't be restarted
+    // by one player from their pause menu.
+    restartRun(): void {
+        const sim = this.sim;
+        if (!sim || this.coopRun) {
+            return;
+        }
+        const mapId = sim.map.id;
+        const vault = this.runVault !== undefined ? getVault(this.runVault) : undefined;
+        const gauntlet = this.gauntletRun?.phase === "fight" ? this.gauntletRun : undefined;
+        this.leaveRun(false);
+        void this.startRun(mapId, false, gauntlet, vault);
+    }
+
+    // Ends the current match and returns directly to the main menu. A solo run is still banked,
+    // so coins and completed tasks are kept as the confirmation says, but its results are skipped.
+    abandonRun(): void {
+        const sim = this.sim;
+        if (!sim) {
+            return;
+        }
+        if (this.coopRun) {
+            this.quitRun();
+            return;
+        }
+        this.leavePauseMenu();
+        sim.giveUp();
+        this.finishRun(t("ui.result.gave_up"), "abandoned");
+        this.dropGauntlet();
         this.leaveRun();
     }
 
@@ -3597,10 +3613,9 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return;
         }
-        const { overlay, runLog } = this.store.getSnapshot();
-        // The run goes on behind co-op's menu, in reach, but not behind the Collection log over
-        // it, which hides it (the hero stands still too: updateCoop)
-        const coopMenu = overlay === "paused" && this.coopRun !== undefined && !runLog;
+        const { overlay } = this.store.getSnapshot();
+        // The run goes on behind co-op's menu, in reach
+        const coopMenu = overlay === "paused" && this.coopRun !== undefined;
         if (code === "Escape" || code === "KeyP") {
             this.pressPauseKey(code);
         } else if (overlay === "event" && code.startsWith("Digit")) {
@@ -3632,16 +3647,18 @@ export class GameClient implements GameFrameHandler {
     // main button), for the top window: a window over the run and its menu first, then the
     // menu's resume, the run's pause, and Escape leaves an event
     private pressPauseKey(code: string): void {
-        const { overlay, runLog, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        const { overlay, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        // Escape dismisses the description currently over the menu before it resumes the run.
+        // The tip is still in the DOM while this native key listener handles the same event.
+        if (code === "Escape" && document.querySelector(".ui-description-tip")) {
+            return;
+        }
         if (saveBlock && !saveBlockClosed) {
             // The panel saying nothing's being saved comes first, as it does for useMenuKeys: the
             // run behind it stays as it is till the player picks what to do
             return;
         }
-        if (overlay === "paused" && runLog) {
-            // The Collection log over the menu, back to the menu
-            this.closeRunLog();
-        } else if (overlay === "paused") {
+        if (overlay === "paused") {
             this.resume();
         } else if (overlay === "none") {
             this.pause();
@@ -4103,7 +4120,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         if (this.coopRun) {
-            this.store.toast("The shot editor is for solo runs.");
+            this.store.toast(t("toast.shot_editor_solo"));
             return;
         }
         if (this.sim?.map.id !== mapId) {
@@ -4114,7 +4131,7 @@ export class GameClient implements GameFrameHandler {
         }
         const sim = this.sim;
         if (!sim || sim.map.id !== mapId) {
-            this.store.toast(`No run started on ${mapId}: is it open in this save?`, 6000);
+            this.store.toast(t("toast.shot_editor_no_run", { map: mapId }), 6000);
             return;
         }
         const choices = getDirectorChoices(sim.map);
@@ -4221,15 +4238,15 @@ export class GameClient implements GameFrameHandler {
                 this.warmUpTrailer(sim, spec.warmup);
             }
             const file = await recorder.record();
-            this.store.toast(`Trailer saved to ${file}`, 10000);
+            this.store.toast(t("toast.trailer_saved", { file }), 10000);
             return file;
         } catch (error) {
             if (recorder.cancelled) {
-                this.store.toast("Trailer cancelled.");
+                this.store.toast(t("toast.trailer_cancelled"));
             } else {
                 console.error("No trailer", error);
                 const why = error instanceof Error ? error.message : String(error);
-                this.store.toast(`No trailer: ${why}`, 10000);
+                this.store.toast(t("toast.trailer_failed", { why }), 10000);
             }
             return undefined;
         } finally {
@@ -4429,13 +4446,9 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        // and through the opening cinematic, and while the Collection log over the menu hides the
-        // run (whose keys are out of reach then too: onKeyPress)
-        const { overlay, runLog } = this.store.getSnapshot();
-        const deciding =
-            (overlay !== "none" && !this.paused) ||
-            (overlay === "paused" && runLog === true) ||
-            this.cinematic !== undefined;
+        // and through the opening cinematic
+        const { overlay } = this.store.getSnapshot();
+        const deciding = (overlay !== "none" && !this.paused) || this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);

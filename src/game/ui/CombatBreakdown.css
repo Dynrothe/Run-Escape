@@ -337,6 +337,53 @@
     border-left: 1px solid var(--ui-divider);
 }
 
+/* The invocations currently affecting this map, below the combat report. */
+.ui-cr-invocations {
+    margin-top: 18px;
+}
+
+.ui-cr-invocations > ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ui-cr-invocations > ul > li {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 7px 9px;
+    background: var(--ui-card);
+    border: 1px solid var(--ui-divider);
+}
+
+.ui-cr-invocation-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+}
+
+.ui-cr-invocation-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ui-cr-invocation-name,
+.ui-cr-invocation-points {
+    color: var(--ui-orange);
+}
+
+.ui-cr-invocation-points {
+    white-space: nowrap;
+}
+
 .ui-cr-gap {
     margin-top: 14px;
 }
@@ -565,6 +612,10 @@
 }
 
 @media (max-width: 760px) {
+    .ui-cr-invocations > ul {
+        grid-template-columns: 1fr;
+    }
+
     .ui-cr-body {
         flex-direction: column;
     }

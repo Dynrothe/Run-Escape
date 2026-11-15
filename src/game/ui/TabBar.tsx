@@ -51,7 +51,10 @@ export function TabBar<T extends string>({
             role="tablist"
             aria-label={label}
             onKeyDown={(event) => {
-                const next = getTabFromKey(event.key, ids, open);
+                const focused = tabs.find(
+                    (tab) => `${idPrefix}-tab-${tab.id}` === (event.target as HTMLElement).id,
+                )?.id;
+                const next = getTabFromKey(event.key, ids, focused ?? open);
                 if (next) {
                     event.preventDefault();
                     onOpen(next);
@@ -70,6 +73,7 @@ export function TabBar<T extends string>({
                     tabIndex={open === tab.id || (open === undefined && tab === tabs[0]) ? 0 : -1}
                     aria-selected={open === tab.id}
                     aria-controls={`${idPrefix}-page-${tab.id}`}
+                    aria-label={tab.name}
                     title={tab.name}
                     onClick={() => onOpen(tab.id)}
                 >

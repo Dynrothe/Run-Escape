@@ -359,7 +359,9 @@ export function getStatBreakdown(
     const lines: BreakdownLine[] = [];
     for (const source of sources ?? []) {
         const part = {
-            text: formatStatValue(key, source.value),
+            text: source.multiplier
+                ? `×${fmtNum(1 + source.value, { maximumFractionDigits: 2 })}`
+                : formatStatValue(key, source.value),
             color: colour(source.quality ?? source.rarity),
         };
         // Names the sim writes in English, for what isn't an item, passive or adventurer

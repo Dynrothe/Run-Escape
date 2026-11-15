@@ -13,9 +13,10 @@ the version in the corner).
 
 ### Changed
 
-- The pause menu is in tabs: Loadout, Combat, Quests and Party, with Settings as a button at the
-  bottom beside Give up, the Collection log and Resume. Every tab is the same size, and those
-  buttons stay in view (in two rows on a phone).
+- The pause menu is in tabs: Loadout, Combat, Quests and Party, with the Collection log and
+  Settings as buttons at the bottom beside Give up and Resume. Each opens as a page of the menu,
+  not a window over it, and its button takes you back. Every tab is the same size, and those
+  four buttons stay in view, all the same width with an icon each (two by two on a phone).
 - The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
   ends with the run's recent messages.
 - The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
@@ -26,6 +27,8 @@ the version in the corner).
 - The pause menu's Settings look like its other tabs: sections for Sound, Display, the run, Co-op
   and the keys, each with the game's own settings icon, and a card for each setting, edged green
   while it's on and red while it's off. Off and On are in the quests' red and green.
+- The title screen's Settings look the same as the pause menu's, in the same sections and cards,
+  with your save first.
 - Settings explain themselves better, the language shows its flag, and holding Shift on the volume
   (dragging it or with the arrow keys) sets it a tenth of a percent at a time.
 - The pause menu's sections all start with the same strip (name at the left, count at the right), on

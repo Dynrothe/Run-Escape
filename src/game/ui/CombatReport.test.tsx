@@ -63,6 +63,23 @@ test("the worst weapon has a plank and falling lights, but never when it's one o
     expect(one.container.querySelector(".ui-cr-rank-worst")).toBeNull();
 });
 
+test("zero damage has no MVP medal, star or plank", () => {
+    const rows = sources(3).map((source) => ({ ...source, damage: 0 }));
+    const view = render(
+        <CombatReport
+            kinds={[]}
+            sources={rows}
+            kills={[]}
+            totals={{ ...totals, damageDealt: 0, highestHit: 0 }}
+        />,
+    );
+    expect(view.container.querySelector(".ui-cr-rank-medal")).toBeNull();
+    expect(view.container.querySelector(".ui-cr-rank-worst")).toBeNull();
+    expect(
+        [...view.container.querySelectorAll(".ui-cr-rank-no")].map((place) => place.textContent),
+    ).toEqual(["1", "2", "3"]);
+});
+
 test("the tiles have icons, the damage blocked and the revives left", () => {
     const view = render(<CombatReport kinds={[]} sources={[]} kills={[]} totals={totals} />);
     const tiles = [...view.container.querySelectorAll(".ui-cr-tile")];

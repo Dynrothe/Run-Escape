@@ -43,6 +43,7 @@ import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
     ANCIENT_FOCUS,
     BlessingId,
+    BLESSINGS as GAUNTLET_BLESSINGS,
     GauntletFightOptions,
     SARADOMIN_HP,
     SECOND_WIND_HP,
@@ -149,6 +150,7 @@ import {
     GLOBETROTTER,
     LAST_RECALL,
     PRODUCTION_PRODIGY,
+    RELIC_BY_ID,
     RELOADED,
     SPECIALIST,
     TRICKSTER,
@@ -1003,18 +1005,6 @@ export type RunResult = {
     stats: RunStats;
 };
 
-// One of the last hits a hero took (Hero.recentHitsTaken): who by (an enemy's id; none for
-// poison), with which of a boss's attacks, and when. Kept for a later screen, not shown yet.
-export type RecentHit = {
-    seconds: number;
-    amount: number;
-    enemyId?: string;
-    attack?: string;
-};
-
-// How many of the last hits a hero took are kept
-export const RECENT_HITS_KEPT = 10;
-
 // The stats screen's numbers: damage and kills by what dealt them, most
 // damage first (seconds: how long a weapon was had, for its damage a second)
 export type RunStats = {
@@ -1162,8 +1152,6 @@ export type Hero = {
     damageTaken: number;
     // Damage armour and a pet's bubble stopped: only written, never read by play
     damageBlocked: number;
-    // The last few hits taken, oldest first (RECENT_HITS_KEPT)
-    recentHitsTaken: RecentHit[];
     // Of that, what each of a boss's attacks did, by name: for tuning a fight
     // (the balance bot prints it, and it's there in the console)
     damageByAttack: Record<string, number>;
@@ -2648,7 +2636,6 @@ export class Sim {
             killsBySource: {},
             damageByKind: {},
             killsByEnemy: {},
-            recentHitsTaken: [],
             casketsOpened: 0,
             damageTaken: 0,
             damageBlocked: 0,
@@ -3211,6 +3198,7 @@ export class Sim {
         add(character.bonus, { kind: "adventurer", name: character.name });
         // The shop's upgrades have no icon of their own, so they wear the coins that pay for them
         add(this.metaStats, { kind: "shop", name: "Shop upgrades", iconObjId: 995 });
+        add(this.map.fight?.stats ?? {}, { kind: "map", name: this.map.name });
         for (const passive of this.passives) {
             const def = getPassive(passive.id);
             const picks = this.upgradeQualities.passives[passive.id] ?? [];
@@ -3256,6 +3244,52 @@ export class Sim {
         }
         for (const debuff of this.debuffs) {
             add(debuff.stats, { kind: "debuff", name: debuff.name, iconObjId: debuff.iconObjId });
+        }
+        const addRelic = (id: string, stats: Partial<Stats>): void => {
+            const relic = RELIC_BY_ID.get(id);
+            if (relic && this.hasRelic(id)) {
+                add(stats, { kind: "relic", name: relic.name, iconObjId: relic.iconObjId });
+            }
+        };
+        addRelic("fairys_flight", { moveSpeed: FAIRYS_FLIGHT.moveSpeed });
+        addRelic("globetrotter", { powerUpRate: GLOBETROTTER.rate });
+        addRelic("specialist", { weaponSlots: -SPECIALIST.slots, might: SPECIALIST.might });
+        const blessings = this.map.blessings;
+        if (blessings) {
+            for (const { id, count } of this.blessings) {
+                const blessing = getBlessing(blessings, id);
+                const stats = Object.fromEntries(
+                    Object.entries(blessing.stats ?? {}).map(([key, value]) => [
+                        key,
+                        value * count,
+                    ]),
+                ) as Partial<Stats>;
+                add(stats, {
+                    kind: "blessing",
+                    name: blessing.name,
+                    iconObjId: blessing.iconObjId,
+                });
+            }
+        }
+        if (this.invoked("run_glass_cannon")) {
+            const invocation = RUN_SET.byId.get("run_glass_cannon")!;
+            (sources.maxHp ??= []).push({
+                kind: "invocation",
+                name: invocation.name,
+                value: GLASS_CANNON_HP - 1,
+                multiplier: true,
+                iconSpriteId: invocation.icon,
+            });
+        }
+        if (this.blessed("saradomin")) {
+            const blessing = GAUNTLET_BLESSINGS.find(({ id }) => id === "saradomin")!;
+            (sources.maxHp ??= []).push({
+                kind: "blessing",
+                name: blessing.name,
+                value: SARADOMIN_HP,
+                multiplier: true,
+                iconObjId: blessing.iconObjId,
+            });
         }
         const levelMight = this.stats.levelMight;
         if (levelMight) {
@@ -4245,7 +4279,6 @@ export class Sim {
             player.hp -= amount;
             const taken = Math.min(amount, Math.max(0, player.hp + amount));
             this.damageTaken += taken;
-            this.recordHitTaken(taken);
             this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
@@ -5714,23 +5747,6 @@ export class Sim {
         this.launchProjectiles(enemy, shotAttack(shot), enemy.damage, true);
     }
 
-    // The current hero's last few hits taken (Hero.recentHitsTaken): the sim never reads them
-    private recordHitTaken(amount: number, enemyId?: string, attack?: string): void {
-        if (amount <= 0) {
-            return;
-        }
-        const hits = this.hero.recentHitsTaken;
-        if (hits.length >= RECENT_HITS_KEPT) {
-            hits.shift();
-        }
-        hits.push({
-            seconds: this.seconds,
-            amount,
-            ...(enemyId !== undefined && { enemyId }),
-            ...(attack !== undefined && { attack }),
-        });
-    }
-
     // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
     // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare. A
     // map's MapDef.hits scales it and can put it through armour. Returns what it took.
@@ -5829,7 +5845,6 @@ export class Sim {
         // What was there to take: a fall into Ba-Ba's gap asks for a hundred bars
         const taken = Math.min(amount, Math.max(0, player.hp + amount));
         this.damageTaken += taken;
-        this.recordHitTaken(taken, enemyId, attack);
         // A blood cloud's touch heals Zebak
         if (enemyId === "zebak_blood_cloud") {
             this.zebakCloudHit(amount);
