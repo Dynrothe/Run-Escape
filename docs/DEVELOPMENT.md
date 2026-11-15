@@ -67,8 +67,12 @@ runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`
 file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
 version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
 be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
-reused cache still has its chunks' hashes checked and gets the current build. `caches/slim/` isn't
-kept between CI jobs. Chunks are written under a temporary name and renamed into place (tried again
+reused cache still has its chunks' hashes checked and gets the current build. The release workflow
+restores `caches/slim/` separately from the full cache and saves it after a successful slim-cache
+run. Its CI key includes the runner OS, full cache name and commit, with a restore prefix for
+earlier commits on the same OS and full cache. The builder's fingerprints, not the CI key, decide
+which results can be reused; a cache miss still builds and checks everything. Changing the
+`slim-cache-v1-` prefix starts a fresh CI cache. Chunks are written under a temporary name and renamed into place (tried again
 for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
 chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
 `slim-cache-boot.mjs`, which registers it.

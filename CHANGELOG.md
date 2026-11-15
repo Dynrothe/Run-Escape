@@ -25,6 +25,7 @@ the version in the corner).
 
 ### Changed
 
+- Preparing game updates reuses checked assets, by Deivid Smarzaro, without changing downloads.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
