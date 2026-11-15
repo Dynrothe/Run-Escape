@@ -70,6 +70,9 @@ function shownSteps(key: StatKey, value: number): number {
     return Math.sign(value) * Math.round(Math.abs(value) * statStep(key));
 }
 
+// How far after is from before in shown steps: above 0 better, below 0 worse, 0 when the two
+// read the same. The casket's lines and Auto equip (Production Prodigy's choice in the sim too)
+// both go by it, so changing how a stat is shown changes what they take.
 export function compareStatValues(key: StatKey, before: number, after: number): number {
     return shownSteps(key, after) - shownSteps(key, before);
 }

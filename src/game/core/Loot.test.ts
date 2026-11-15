@@ -19,8 +19,8 @@ import {
 } from "../content/items";
 import { MAPS, getMap, hasPoison } from "../content/maps";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
-import { SETS, getSetPieces } from "../content/sets";
-import { formatStats } from "../content/stats";
+import { SETS, getItemSet, getSetPieces } from "../content/sets";
+import { formatStats, statChanges } from "../content/stats";
 import { CasketTier, GearSlot } from "../content/types";
 import {
     SET_PIECE_CHANCE,
@@ -173,6 +173,35 @@ describe("items", () => {
             const worn = getGear("amulet_of_strength");
             const offered = { ...worn, stats: { might, armor } };
             expect(shouldAutoEquip({ neck: worn.id }, {}, offered, 0)).toBe(expected);
+        });
+
+        // The casket lists what a piece changes in green or red, so a piece it shows only gains
+        // for is the one Auto equip takes, whatever's hidden in the rounding
+        test("takes what the casket lists only gains for, upgraded or not", () => {
+            for (const worn of GEAR.filter((item) => !getItemSet(item))) {
+                for (const offered of GEAR.filter((item) => item.slot === worn.slot)) {
+                    for (const [wornUpgrades, upgrades] of [
+                        [0, 0],
+                        [0, 1],
+                        [1, 0],
+                        [1, 1],
+                    ]) {
+                        const lines = statChanges(
+                            getGearStats(worn, wornUpgrades),
+                            getGearStats(offered, upgrades),
+                        );
+                        expect(
+                            shouldAutoEquip(
+                                { [worn.slot]: worn.id },
+                                { [worn.slot]: wornUpgrades },
+                                offered,
+                                upgrades,
+                            ),
+                            `${worn.id}+${wornUpgrades} to ${offered.id}+${upgrades}`,
+                        ).toBe(lines.length > 0 && lines.every((line) => line.better));
+                    }
+                }
+            }
         });
     });
 

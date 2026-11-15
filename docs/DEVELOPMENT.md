@@ -2719,8 +2719,11 @@ dear), or a refused action would hold up the real one.
 
 Auto alch and Auto equip are local `DisplaySettings`, off by default, so never apply them in `Sim`:
 `GameClient.autoAnswerChest` sends the casket's usual action through `act`, as a click would, and
-Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip` (the stats as upgraded and rounded
-as shown by `stats.compareStatValues`, none lower and at least one higher), not the rarity-based `shouldWear`, and never
+Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip`, as Production Prodigy does in
+the sim: the stats as upgraded and rounded as the casket shows them (`stats.compareStatValues`,
+which its lines use too), none lower and at least one higher. So it takes what the casket lists
+only in green, though a stat can be lower by less than a shown step (2.5% and 3% both show +3%).
+It's not the rarity-based `shouldWear`, and it never
 replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
 remembers which casket it was). In co-op the casket stays hidden, though the menu still opens,
 until the host's frame brings the answer back. One that's lost or turned away would leave nothing
