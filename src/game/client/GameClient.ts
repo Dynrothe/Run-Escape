@@ -256,14 +256,41 @@ import { getBossKillViews, getCombatView, getPlayerResultViews } from "./RunStat
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
-import { CoopLobby, makeLoadout, roomPlaysCardsOnly } from "./coop/CoopLobby";
+import {
+    CoopLobby,
+    RoomAccess,
+    accessFlags,
+    makeLoadout,
+    roomPlaysCardsOnly,
+} from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
+import { FriendsClient } from "./coop/Friends";
+import { AddResult } from "./coop/FriendsStore";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
 import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
+
+// The game's address for others, when the build gives one: the desktop and
+// Android apps' own is one nobody else can open, so invite links go by this
+const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL as string | undefined;
+
+// What joining a friend's room came to: on the way (the co-op screen, joining),
+// not during a run (finish it or leave it first), or nothing to join any more
+export type FriendJoinResult = "joining" | "inRun" | "gone";
+
+// Takes ?room= out of the address, keeping the rest, without a reload
+function forgetRoomParam(): void {
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("room")) {
+            url.searchParams.delete("room");
+            window.history.replaceState(window.history.state, "", url.toString());
+        }
+    } catch {}
+}
 // Seconds into a boss's fight a fight's own button says what it's for, until it's first used: from
 // a moment after the boss is up (risen from its intro), for long enough to read (AbilityView.hint)
 const ABILITY_HINT_FROM = 3;
@@ -904,6 +931,8 @@ export class GameClient implements GameFrameHandler {
     readonly cloud?: CloudSync;
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
+    // Friends, on their own connection to the relay, for as long as the page is open
+    readonly friends: FriendsClient;
     private coopRun?: CoopRun;
     private movementDiagnostics = false;
     private reportRun?: ReturnType<typeof startRunAnalytics>;
@@ -1118,8 +1147,15 @@ export class GameClient implements GameFrameHandler {
                 this.pause();
             }
         };
-        this.coop = new CoopLobby(store);
-        this.coop.onStart = (game) => this.beginCoopRun(game);
+        this.friends = new FriendsClient(store);
+        this.coop = new CoopLobby(store, this.friends.identity);
+        this.coop.onStart = (game) => {
+            this.noteRecentPlayers();
+            void this.beginCoopRun(game);
+        };
+        // A New name sticks, as one picked does
+        this.coop.onNamed = (name) => this.friends.rememberName(name);
+        this.coop.onDeclined = (from) => this.friends.noteDeclined(from);
         this.coop.onUp = (from, message) => this.toCoopRun((run) => run.receiveUp(from, message));
         this.coop.onDown = (message) => this.toCoopRun((run) => run.receiveDown(message));
         this.coop.onLeft = (id) => this.toCoopRun((run) => run.playerLeft(id));
@@ -1146,8 +1182,13 @@ export class GameClient implements GameFrameHandler {
             }
             this.refreshCoopLoadout();
         };
-        // Co-op's offered only where there's a relay to play it through
-        this.coop.checkAvailable();
+        // Co-op's offered only where there's a relay to play it through, and
+        // friends connect only to one that says it has them
+        void this.coop.checkAvailable().then((available) => {
+            if (available && this.coop.probedFriends) {
+                this.friends.start();
+            }
+        });
         document.addEventListener("visibilitychange", this.onVisibilityChange);
         if (CLOUD_SAVE_URL) {
             this.cloud = new CloudSync(CLOUD_SAVE_URL, {
@@ -1172,7 +1213,11 @@ export class GameClient implements GameFrameHandler {
         } else if (options.director) {
             void this.direct(options.director);
         } else if (invite) {
-            this.openCoop().then(() => this.joinRoom(invite));
+            this.openCoop().then(() => {
+                this.joinRoom(invite);
+                // Tried once: a reload mustn't join a room that's likely gone by then
+                forgetRoomParam();
+            });
         } else {
             this.showScreen("title");
         }
@@ -1188,6 +1233,7 @@ export class GameClient implements GameFrameHandler {
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopCoopTicker();
         this.coop.close();
+        this.friends.close();
         this.input.dispose();
         this.audio.dispose();
         if (this.renderer.game === this) {
@@ -1764,6 +1810,10 @@ export class GameClient implements GameFrameHandler {
             hideCountry: !this.display.coopFlag,
         });
         await this.coop.connect();
+        // A relay with friends after all (its HTTP check may have failed): friends too
+        if (this.store.getSnapshot().coop.friends) {
+            this.friends.start();
+        }
     }
 
     // Back to the title, out of any room
@@ -1780,15 +1830,28 @@ export class GameClient implements GameFrameHandler {
         this.coop.rename();
     }
 
-    // A room of this player's, for the map picked
-    createRoom(open: boolean): void {
-        const { mapId, endless, hard } = this.store.getSnapshot();
+    // A room of this player's, for the map picked. access: who can join it
+    // without its code (true and false: open and invite only, as before rooms
+    // for friends). For friends falls back to invite only on a relay without
+    // friends.
+    createRoom(access: RoomAccess | boolean): void {
+        const { mapId, endless, hard, coop } = this.store.getSnapshot();
+        const { open, friends } = accessFlags(
+            access === true ? "open" : access === false ? "invite" : access,
+        );
+        const forFriends = friends && coop.friends;
         // A solo-only fight picked on your own: the room starts on the first map instead
         if (!isCoopMap(getMap(mapId))) {
-            this.coop.create(open, MAPS[0].id, false, false);
+            this.coop.create(open, MAPS[0].id, false, false, forFriends);
             return;
         }
-        this.coop.create(open, mapId, endless, hard);
+        this.coop.create(open, mapId, endless, hard, forFriends);
+    }
+
+    // The host's: who can join the room without its code
+    setRoomAccess(access: RoomAccess): void {
+        const { open, friends } = accessFlags(access);
+        this.coop.setAccess(open, friends);
     }
 
     // Another page of the open rooms
@@ -1840,10 +1903,135 @@ export class GameClient implements GameFrameHandler {
 
     // The invite link for the room, for its code
     getInviteLink(code: string): string {
-        const url = new URL(window.location.href);
+        let url: URL;
+        try {
+            url = new URL(PUBLIC_URL || window.location.href);
+        } catch {
+            url = new URL(window.location.href);
+        }
         url.search = "";
         url.searchParams.set("room", code);
         return url.toString();
+    }
+
+    // ---- Friends (coop/Friends.ts; the store's friends) ----
+
+    // By their code, typed or pasted: added, or why not (invalid, self, already, full). Adding
+    // someone who's asked accepts them.
+    addFriend(codeOrText: string): AddResult {
+        return this.friends.addFriend(codeOrText);
+    }
+
+    removeFriend(id: string): void {
+        this.friends.removeFriend(id);
+    }
+
+    acceptFriendRequest(id: string): AddResult {
+        return this.friends.acceptRequest(id);
+    }
+
+    // Their requests are hidden from now on (until they're added by their code)
+    ignoreFriendRequest(id: string): void {
+        this.friends.ignoreRequest(id);
+    }
+
+    // The name this player goes by, picked: kept for good, and at once on the relay's
+    // connections (a room sees it straight away, except during its run, when the relay refuses
+    // it). False for one that's empty once tidied.
+    setPlayerName(text: string): boolean {
+        if (!this.friends.setName(text)) {
+            return false;
+        }
+        if (!this.coop.room?.started) {
+            this.coop.setName(text);
+        }
+        return true;
+    }
+
+    // Asks a friend into this player's room. False when there's no room (or no friends on this
+    // relay); the relay's answer marks coop.invited, or sets coop.error.
+    inviteFriend(id: string): boolean {
+        return this.coop.invite(id);
+    }
+
+    // A friend's invite, taken up: to the co-op screen, into their room (out of any other)
+    acceptInvite(friendId: string): FriendJoinResult {
+        if (this.isBusyForRoom()) {
+            return "inRun";
+        }
+        const code = this.friends.takeInvite(friendId);
+        if (!code) {
+            return "gone";
+        }
+        this.goToRoom(code);
+        return "joining";
+    }
+
+    declineInvite(friendId: string): void {
+        this.friends.declineInvite(friendId);
+    }
+
+    // Into a friend's room, while it can be joined without asking (their room's code)
+    joinFriend(friendId: string): FriendJoinResult {
+        if (this.isBusyForRoom()) {
+            return "inRun";
+        }
+        const code = this.friends.friendRoom(friendId);
+        if (!code) {
+            return "gone";
+        }
+        this.goToRoom(code);
+        return "joining";
+    }
+
+    // A line for the room's chat; false if there was nothing to say or nowhere to say it
+    sendChat(text: string): boolean {
+        return this.coop.sendChat(text);
+    }
+
+    dismissFriendPopup(id: number): void {
+        this.friends.dismissPopup(id);
+    }
+
+    // A run (or its results, or the Forgotten Four's camp between fights) or a map loading: no
+    // going off to a room from there
+    private isBusyForRoom(): boolean {
+        return (
+            this.sim !== undefined ||
+            this.gauntletRun !== undefined ||
+            this.store.getSnapshot().screen === "loading" ||
+            this.coop.room?.started === true
+        );
+    }
+
+    // As an invite link goes (?room=): the co-op screen, then the room, leaving any other first
+    private goToRoom(code: string): void {
+        if (this.coop.room && this.coop.room.code !== code) {
+            this.coop.leave();
+        }
+        void this.openCoop().then(() => {
+            if (this.coop.room?.code !== code) {
+                this.joinRoom(code);
+            }
+        });
+    }
+
+    // A co-op run's other players, for Recent: those whose game said who it is
+    private noteRecentPlayers(): void {
+        const room = this.coop.room;
+        if (room) {
+            this.friends.noteRecent(room.members.filter((m) => m.id !== this.coop.id));
+        }
+    }
+
+    // Friends hear whether this player's on a run of their own: a solo run, its results, or the
+    // Forgotten Four between fights. A co-op run the relay knows of itself.
+    private syncSolo(): void {
+        // ?.: tests make a client without its constructor, and no friends
+        this.friends?.setSolo(
+            (this.sim !== undefined && this.coopRun === undefined) ||
+                this.gauntletRun !== undefined,
+        );
     }
 
     // The maps this player has, and has endless and hard mode for, which rooms
@@ -2018,6 +2206,7 @@ export class GameClient implements GameFrameHandler {
             this.coopRun = undefined;
             // Solo now: rendering steps it, as any solo run
             this.stopCoopTicker();
+            this.syncSolo();
             this.store.toast(t("toast.coop_lost_others"), 6000);
         } else {
             this.endCoopRunEarly(t("toast.coop_lost_server"));
@@ -2728,6 +2917,7 @@ export class GameClient implements GameFrameHandler {
         this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;
+        this.syncSolo();
         // A new run's bosses explain themselves again
         this.instructionsSeen.clear();
         this.instructions = [];
@@ -3278,6 +3468,7 @@ export class GameClient implements GameFrameHandler {
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
         this.assets.setCharacterLook(this.store.getSnapshot().characterId, this.save.look);
+        this.syncSolo();
         if (!show) {
             return;
         }
@@ -3385,6 +3576,7 @@ export class GameClient implements GameFrameHandler {
 
     private setGauntlet(run: GauntletRun, more: { campEnds?: number } = {}): void {
         this.gauntletRun = run;
+        this.syncSolo();
         const view = this.store.getSnapshot().gauntlet;
         this.store.set({
             gauntlet: {
@@ -3521,6 +3713,7 @@ export class GameClient implements GameFrameHandler {
         window.clearTimeout(this.campTimer);
         this.campTimer = undefined;
         this.gauntletRun = undefined;
+        this.syncSolo();
         const view = this.store.getSnapshot().gauntlet;
         if (view?.run) {
             this.store.set({ gauntlet: { order: view.order, hard: view.hard } });

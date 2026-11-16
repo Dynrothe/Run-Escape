@@ -35,9 +35,68 @@ export type Loadout = {
 // A relay from before 0.23.0 sends no hard
 export type Unlocks = { maps: string[]; endless: string[]; hard?: string[] };
 
+// Friends (this fork's, on the Node relay only: a relay that has them says so
+// with `friends` in its welcome). There are still no accounts. A game keeps a
+// secret of its own (client/coop/FriendsStore.ts) and shows it to the relay in
+// `hello`; the relay works out a friend code from it, which is what players
+// give each other. Two players are friends once each has the other's code in
+// the list their game sends (`friends`), and only then does either hear about
+// the other. The relay keeps none of it once a player's gone.
+
+// A friend code's length: capitals and digits, from the relay's room code
+// alphabet. Shown in groups of four.
+export const FRIEND_CODE_LENGTH = 12;
+// The codes a game can list as friends
+export const MAX_FRIENDS = 200;
+// A name a player picks, in characters, and a line of a room's chat
+export const MAX_NAME_LENGTH = 20;
+export const MAX_CHAT_LENGTH = 200;
+
+// A code as typed or pasted ("abcd-efgh jkmn"): the code, or undefined if it
+// can't be one
+export function parseFriendCode(text: string): string | undefined {
+    const code = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return code.length === FRIEND_CODE_LENGTH ? code : undefined;
+}
+
+// A code in groups of four, as it's shown
+export function formatFriendCode(code: string): string {
+    return code.replace(/(.{4})(?=.)/g, "$1-");
+}
+
+// Where a friend is: in the menus, on a run of their own, in a room that's
+// waiting, or in a room's run
+export type FriendState = "menu" | "solo" | "room" | "run";
+
+// A friend's room. code: only while they could be joined there without asking
+// (the room's waiting, and open or for friends); a full one still has it.
+export type FriendRoom = {
+    code?: string;
+    name: string;
+    mapId: string;
+    endless: boolean;
+    hard: boolean;
+    players: number;
+    max: number;
+};
+
+// A friend, as the relay tells it. One who's gone is only { id, online: false }.
+export type FriendPresence = {
+    id: string;
+    online: boolean;
+    name?: string;
+    state?: FriendState;
+    room?: FriendRoom;
+};
+
+// A player by their friend code
+export type FriendRef = { id: string; name: string };
+
 export type MemberView = {
     id: string;
-    // Given by the relay (server/name-gen.mjs), not picked
+    // Their friend code, once their game's said who it is (hello)
+    friendId?: string;
+    // Given by the relay (server/name-gen.mjs), or the one they picked (hello, name)
     name: string;
     characterId: string;
     ready: boolean;
@@ -65,6 +124,9 @@ export type RoomView = {
     name: string;
     // Listed for anyone to join, or invite only (by its code)
     open: boolean;
+    // For friends: not listed, but a friend of anyone in it sees its code and
+    // can join. An open room is for friends too, whatever this says.
+    friends?: boolean;
     hostId: string;
     mapId: string;
     endless: boolean;
@@ -186,9 +248,30 @@ export type ClientMessage =
     | { t: "ping" }
     // A page of the open rooms (0 for the first), size to a page
     | { t: "list"; page?: number; size?: number }
+    // Who this game is, once a connection and before anything else on it.
+    // secret: 32 to 128 of A-Z a-z 0-9 _ -. name: the one they picked, cleaned
+    // by the relay. presence: this connection is the one that hears about
+    // friends (client/coop/Friends.ts), kept open in the menus and through
+    // runs, so the relay doesn't close it for sitting idle. Answered with
+    // `identity`.
+    | { t: "hello"; secret: string; name?: string; presence?: true }
+    // A name of their own choosing (not during a run). Answered with `named`.
+    | { t: "name"; name: string }
+    // Every friend code this game has, whenever the list changes. Answered
+    // with a full `presence`.
+    | { t: "friends"; ids: string[] }
+    // On a run of their own, or back from it (the presence connection's)
+    | { t: "status"; solo: boolean }
+    // Ask a friend into the room this connection's in
+    | { t: "invite"; to: string }
+    // No thanks, to an invite to this room from this friend
+    | { t: "decline"; to: string; code: string }
+    // A line for the room's chat
+    | { t: "chat"; text: string }
     | {
           t: "create";
           open: boolean;
+          friends?: boolean;
           mapId: string;
           endless: boolean;
           hard: boolean;
@@ -199,7 +282,14 @@ export type ClientMessage =
     | ({ t: "me"; meSeq?: number } & Partial<Member>)
     // A new name, from the relay (not during a run)
     | { t: "rename" }
-    | { t: "settings"; open?: boolean; mapId?: string; endless?: boolean; hard?: boolean }
+    | {
+          t: "settings";
+          open?: boolean;
+          friends?: boolean;
+          mapId?: string;
+          endless?: boolean;
+          hard?: boolean;
+      }
     | { t: "kick"; id: string }
     | { t: "disband" }
     | { t: "start"; game: GameStart }
@@ -219,7 +309,28 @@ export type ServerMessage =
           country?: string;
           // The open rooms come again whenever they change, without asking
           listUpdates?: boolean;
+          // The relay has friends: hello, friends, invite, chat and the rest
+          friends?: true;
       }
+    // Who the relay takes this game for, after its hello: its friend code,
+    // and its name as others will see it
+    | { t: "identity"; friendId: string; name: string }
+    // How friends are. full: every friend who's on, in answer to `friends`, so
+    // anyone it leaves out is off (or hasn't this player's code in their own
+    // list). Otherwise only those who've changed.
+    | { t: "presence"; friends: FriendPresence[]; full?: true }
+    // This player has listed yours as a friend, and you haven't theirs. Once
+    // for each connection of yours.
+    | { t: "friendRequest"; from: FriendRef }
+    // A friend's asked you into their room
+    | { t: "invited"; from: FriendRef; room: FriendRoom & { code: string } }
+    // Your invite reached this friend's game
+    | { t: "inviteSent"; to: string }
+    // A friend's said no to your invite
+    | { t: "declined"; from: FriendRef }
+    // A line of the room's chat, from this member (their id in the room), to
+    // everyone in it, whoever said it too
+    | { t: "chat"; from: string; text: string }
     // This player's new name, after asking for one
     | { t: "named"; name: string }
     | { t: "pong" }

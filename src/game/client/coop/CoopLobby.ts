@@ -2,12 +2,16 @@ import { MAP_BY_ID } from "../../content/maps";
 import { WardrobeLook } from "../../content/wardrobe";
 import { t, tl } from "../../i18n";
 import { GameStore } from "../GameStore";
+import type { FriendsIdentity } from "./Friends";
+import { cleanName } from "./FriendsStore";
 import {
     ClientMessage,
     DownMessage,
+    FriendRef,
     GameStart,
     GoneReason,
     Loadout,
+    MAX_CHAT_LENGTH,
     Member,
     MissingMap,
     RoomListing,
@@ -51,7 +55,32 @@ export type CoopView = {
     available?: boolean;
     // The relay lets players into rooms on maps they haven't unlocked
     anyMap: boolean;
+    // The relay has friends (welcome.friends): invites, chat, picked names and rooms for friends.
+    // Without it none of those are offered.
+    friends: boolean;
+    // This game's friend code, as the relay said after its hello
+    myCode?: string;
+    // The room's chat, oldest first, the last MAX_CHAT_LINES of it. Emptied on leaving the room
+    // or losing the connection.
+    chat: ChatLine[];
+    // Friends invited into this room, by their code: the invite reached their game (sent), or
+    // they said no (declined). Emptied on leaving the room.
+    invited: Record<string, "sent" | "declined">;
 };
+
+// A line of the room's chat. id: to key it by, counting up. from: the member's id in the room.
+// name: theirs when it came ("" if they'd gone by then). mine: this player said it. at:
+// Date.now() when it came.
+export type ChatLine = {
+    id: number;
+    from: string;
+    name: string;
+    text: string;
+    mine: boolean;
+    at: number;
+};
+
+export const MAX_CHAT_LINES = 50;
 
 export const OFFLINE: CoopView = {
     status: "offline",
@@ -62,6 +91,9 @@ export const OFFLINE: CoopView = {
     roomsFull: false,
     name: "",
     anyMap: false,
+    friends: false,
+    chat: [],
+    invited: {},
 };
 
 // How long to wait for the relay to say it's there
@@ -134,7 +166,7 @@ const GONE_TEXT: Record<GoneReason, string> = {
 
 // Where the relay is: VITE_COOP_URL when the build gives one, otherwise
 // coop beside the page (the dev server's, or one a host puts there)
-function getRelayUrl(): string {
+export function getRelayUrl(): string {
     const configured = import.meta.env.VITE_COOP_URL as string | undefined;
     if (configured) {
         return configured;
@@ -157,10 +189,15 @@ function getRoomUrl(code: string, ticket: string, param = "ticket"): string {
 
 // What goes to the room's own connection, when there is one: everything said
 // in a room. The rest (pings, the list, making or joining one) is the lobby's.
+// The Cloudflare relay hasn't friends, so never gets name, invite or chat, but
+// they're the room's all the same.
 const ROOM_MESSAGES: ReadonlySet<ClientMessage["t"]> = new Set([
     "leave",
     "me",
     "rename",
+    "name",
+    "invite",
+    "chat",
     "settings",
     "kick",
     "disband",
@@ -175,6 +212,20 @@ function getStatusUrl(): string {
     const url = new URL(getRelayUrl());
     url.protocol = url.protocol === "wss:" ? "https:" : "http:";
     return url.toString();
+}
+
+// Who can join a room without its code: anyone (open, and listed), friends of
+// anyone in it (friends), or no one (invite, by its code or a friend's invite)
+export type RoomAccess = "invite" | "friends" | "open";
+
+// A room's flags for an access (the create and settings messages')
+export function accessFlags(access: RoomAccess): { open: boolean; friends: boolean } {
+    return { open: access === "open", friends: access !== "invite" };
+}
+
+// A room's access, by its flags: an open room's for friends too, whatever it says
+export function roomAccess(room: Pick<RoomView, "open" | "friends">): RoomAccess {
+    return room.open ? "open" : room.friends ? "friends" : "invite";
 }
 
 // Room codes are this long (the relay makes them)
@@ -260,6 +311,15 @@ export class CoopLobby {
     private view: CoopView;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
+    // The lobby's connection has had its welcome. Before then a create or join
+    // waits (beforeWelcome), so that on a relay with friends nothing goes ahead
+    // of the hello.
+    private welcomed = false;
+    private beforeWelcome?: ClientMessage;
+    private chatId = 0;
+    // The relay's HTTP check said it has friends too (checkAvailable): only
+    // then is the friends' connection made. Its welcome still has the last word.
+    probedFriends = false;
 
     onStart?: (game: GameStart) => void;
     onUp?: (from: string, message: UpMessage) => void;
@@ -273,8 +333,16 @@ export class CoopLobby {
     // The host's tab changed between Cards only and the usual, or the room has a new host: each
     // player's loadout goes by it
     onRoomCardsOnlyChanged?: () => void;
+    // The relay's given this player a name (named): New name's, or one they picked
+    onNamed?: (name: string) => void;
+    // A friend said no to this player's invite
+    onDeclined?: (from: FriendRef) => void;
 
-    constructor(readonly store: GameStore) {
+    // identity: who this game is, for a relay with friends (FriendsClient.identity)
+    constructor(
+        readonly store: GameStore,
+        private readonly identity?: FriendsIdentity,
+    ) {
         this.view = OFFLINE;
     }
 
@@ -303,7 +371,15 @@ export class CoopLobby {
         const previousMap = this.view.room?.mapId;
         const previousCardsOnly = roomPlaysCardsOnly(this.view.room);
         const previousHost = this.view.room?.hostId;
+        const previousCode = this.view.room?.code;
         this.view = { ...this.view, ...changes };
+        // A room's chat and invites are that room's: gone with it, every way out
+        if (
+            this.view.room?.code !== previousCode &&
+            (this.view.chat.length > 0 || Object.keys(this.view.invited).length > 0)
+        ) {
+            this.view = { ...this.view, chat: [], invited: {} };
+        }
         this.store.set({ coop: this.view });
         if (this.view.room?.mapId !== previousMap) {
             this.onMapChanged?.();
@@ -334,6 +410,8 @@ export class CoopLobby {
                 return;
             }
             this.socket = socket;
+            this.welcomed = false;
+            this.beforeWelcome = undefined;
             socket.onmessage = (event) => {
                 let message: ServerMessage;
                 try {
@@ -366,6 +444,10 @@ export class CoopLobby {
                     you: undefined,
                     // A new one comes with the next connection
                     name: "",
+                    friends: false,
+                    myCode: undefined,
+                    chat: [],
+                    invited: {},
                     rooms: [],
                     roomsPage: 0,
                     error: wasOnline ? t("coop.lost_server") : t("coop.couldnt_reach_server"),
@@ -382,11 +464,17 @@ export class CoopLobby {
         this.stopTimers();
         this.closeRoomSockets();
         socket?.close();
+        this.welcomed = false;
+        this.beforeWelcome = undefined;
         this.update({
             status: "offline",
             room: undefined,
             you: undefined,
             name: "",
+            friends: false,
+            myCode: undefined,
+            chat: [],
+            invited: {},
             rooms: [],
             roomsPage: 0,
         });
@@ -399,6 +487,12 @@ export class CoopLobby {
     }
 
     private send(message: ClientMessage): void {
+        // A create or join before the welcome (an invite link's, as the page
+        // opens) waits for it, and goes after the hello
+        if (this.socket && !this.welcomed && (message.t === "create" || message.t === "join")) {
+            this.beforeWelcome = message;
+            return;
+        }
         if (this.resuming && ROOM_MESSAGES.has(message.t)) {
             if (this.resuming.waiting.length < MAX_WAITING_MESSAGES) {
                 this.resuming.waiting.push(JSON.stringify(message));
@@ -780,8 +874,19 @@ export class CoopLobby {
 
     private receive(message: ServerMessage): void {
         switch (message.t) {
-            case "welcome":
+            case "welcome": {
                 this.stopTimers();
+                const friends = message.friends === true && this.identity !== undefined;
+                this.welcomed = true;
+                // Who this game is, before anything else on the connection
+                if (friends) {
+                    const name = this.identity!.name();
+                    this.send({
+                        t: "hello",
+                        secret: this.identity!.secret(),
+                        ...(name && { name }),
+                    });
+                }
                 this.update({
                     status: "online",
                     you: message.id,
@@ -790,9 +895,16 @@ export class CoopLobby {
                     error: undefined,
                     available: true,
                     anyMap: message.anyMap === true,
+                    friends,
+                    myCode: undefined,
                 });
                 this.activeAt = Date.now();
                 this.refresh();
+                const waiting = this.beforeWelcome;
+                this.beforeWelcome = undefined;
+                if (waiting) {
+                    this.send(waiting);
+                }
                 if (message.listUpdates !== true) {
                     this.listTimer = window.setInterval(() => {
                         if (!this.view.room) {
@@ -802,8 +914,31 @@ export class CoopLobby {
                 }
                 this.pingTimer = window.setInterval(() => this.tick(), PING_INTERVAL_MS);
                 break;
+            }
             case "named":
                 this.update({ name: message.name });
+                this.onNamed?.(message.name);
+                break;
+            case "identity":
+                this.update({ myCode: message.friendId, name: message.name });
+                break;
+            case "chat":
+                this.receiveChat(message.from, message.text);
+                break;
+            case "inviteSent":
+                if (this.view.room && typeof message.to === "string") {
+                    this.update({ invited: { ...this.view.invited, [message.to]: "sent" } });
+                }
+                break;
+            case "declined":
+                if (typeof message.from?.id === "string") {
+                    if (this.view.room) {
+                        this.update({
+                            invited: { ...this.view.invited, [message.from.id]: "declined" },
+                        });
+                    }
+                    this.onDeclined?.(message.from);
+                }
                 break;
             case "rooms":
                 this.update({
@@ -885,6 +1020,7 @@ export class CoopLobby {
             });
             const status = response.ok ? await response.json() : undefined;
             available = status?.coop === true;
+            this.probedFriends = available && status?.friends === true;
         } catch {
             available = false;
         }
@@ -979,12 +1115,15 @@ export class CoopLobby {
         this.send({ t: "me", ...pending.changes, meSeq: pending.sequence });
     }
 
-    create(open: boolean, mapId: string, endless: boolean, hard: boolean): void {
+    // friends: for friends (RoomView.friends), on a relay that has them
+    create(open: boolean, mapId: string, endless: boolean, hard: boolean, friends = false): void {
         this.activeAt = Date.now();
         this.update({ error: undefined });
         const message: ClientMessage = {
             t: "create",
             open,
+            // Left out unless asked for, as before friends
+            ...(friends && { friends: true }),
             mapId,
             endless,
             hard,
@@ -1041,6 +1180,67 @@ export class CoopLobby {
     // The host's
     setOpen(open: boolean): void {
         this.send({ t: "settings", open });
+    }
+
+    // The host's: open (listed), for friends, or neither (invite only). A
+    // relay without friends hears only open.
+    setAccess(open: boolean, friends: boolean): void {
+        this.send({ t: "settings", open, ...(this.view.friends && { friends }) });
+    }
+
+    // Asks a friend into this room, on a relay with friends. The relay
+    // answers inviteSent (invited marks it), or an error.
+    invite(friendId: string): boolean {
+        if (!this.view.friends || !this.view.room) {
+            return false;
+        }
+        this.activeAt = Date.now();
+        // A no from before is forgotten: this is a new ask
+        const invited = { ...this.view.invited };
+        delete invited[friendId];
+        this.update({ invited, error: undefined });
+        this.send({ t: "invite", to: friendId });
+        return true;
+    }
+
+    // A line for the room's chat. It shows when the relay sends it back, to
+    // everyone at once. False for an empty one, or no room or chat to say it in.
+    sendChat(text: string): boolean {
+        const line = text.trim().slice(0, MAX_CHAT_LENGTH);
+        if (!line || !this.view.friends || !this.view.room) {
+            return false;
+        }
+        this.activeAt = Date.now();
+        this.send({ t: "chat", text: line });
+        return true;
+    }
+
+    // A name this player picked, on a relay with friends (it answers named, or
+    // an error during a run). False for one that's empty once tidied.
+    setName(text: string): boolean {
+        const name = cleanName(text);
+        if (!name || !this.view.friends) {
+            return false;
+        }
+        this.activeAt = Date.now();
+        this.send({ t: "name", name });
+        return true;
+    }
+
+    private receiveChat(from: string, text: string): void {
+        const room = this.view.room;
+        if (!room || typeof from !== "string" || typeof text !== "string") {
+            return;
+        }
+        const line: ChatLine = {
+            id: ++this.chatId,
+            from,
+            name: room.members.find((m) => m.id === from)?.name ?? "",
+            text: text.slice(0, MAX_CHAT_LENGTH),
+            mine: from === this.view.you,
+            at: Date.now(),
+        };
+        this.update({ chat: [...this.view.chat, line].slice(-MAX_CHAT_LINES) });
     }
 
     setMap(mapId: string, endless: boolean, hard: boolean): void {

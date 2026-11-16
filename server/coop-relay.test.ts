@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { Server, createServer } from "node:http";
 import { AddressInfo, Socket, connect as connectTcp } from "node:net";
@@ -205,6 +206,7 @@ describe("co-op relay", () => {
         roomsPerNetwork: 1000,
         createsPerMinute: 1000,
         roomUpdateMs: 5,
+        presenceMs: 5,
         anyMap: true,
         metrics: false,
         metricsPort: 0,
@@ -570,7 +572,7 @@ describe("co-op relay", () => {
         await party(1);
         const response = await fetch(url.replace("ws:", "http:"));
         expect(response.headers.get("access-control-allow-origin")).toBe("*");
-        expect(await response.json()).toEqual({ coop: true });
+        expect(await response.json()).toEqual({ coop: true, friends: true });
         expect((await fetch(url.replace("ws:", "http:") + "/nope")).status).toBe(404);
     });
 
@@ -632,7 +634,7 @@ describe("co-op relay", () => {
                 // Co-op's fine, and the public listener still says nothing
                 await party(1);
                 const status = await fetch(url.replace("ws:", "http:"));
-                expect(await status.json()).toEqual({ coop: true });
+                expect(await status.json()).toEqual({ coop: true, friends: true });
                 expect((await fetch(publicMetricsUrl())).status).toBe(404);
             } finally {
                 error.mockRestore();
@@ -659,7 +661,7 @@ describe("co-op relay", () => {
             }
             expect((await fetch(publicMetricsUrl(), { method: "HEAD" })).status).toBe(404);
             const status = await fetch(url.replace("ws:", "http:"));
-            expect(await status.json()).toEqual({ coop: true });
+            expect(await status.json()).toEqual({ coop: true, friends: true });
             expect((await fetch(metricsUrl())).status).toBe(200);
         });
 
@@ -694,6 +696,8 @@ describe("co-op relay", () => {
                 coop_rooms_in_run: 0,
                 coop_rooms_public: 0,
                 coop_rooms_private: 0,
+                coop_friends_players: 0,
+                coop_friends_presence_connections: 0,
                 coop_connections_total: 0,
                 coop_rooms_created_total: 0,
                 coop_runs_started_total: 0,
@@ -1487,6 +1491,586 @@ describe("co-op relay", () => {
         }
         expect((await guests[0].next("gone")).reason).toBe("hostLeft");
         expect(guests[0].messages.filter((m) => m.t === "down").length).toBeLessThan(5);
+    });
+
+    describe("friends", () => {
+        const secretOf = (who: string) => `${who}-secret`.padEnd(40, "x");
+        // Longer than a presence flush (presenceMs) or a room update takes
+        const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+        type Player = TestClient & { friendId: string; picked: string };
+
+        // A game that's said who it is: its presence connection, unless not
+        async function player(
+            who: string,
+            { presence = true, name }: { presence?: boolean; name?: string } = {},
+        ): Promise<Player> {
+            const client = await connect();
+            client.send({ t: "hello", secret: secretOf(who), presence, name });
+            const { friendId, name: picked } = await client.next("identity");
+            return Object.assign(client, { friendId, picked });
+        }
+
+        // Says who its friends are, and takes the full presence in reply
+        async function befriend(client: Player, ...friends: Player[]): Promise<Message> {
+            client.send({ t: "friends", ids: friends.map((friend) => friend.friendId) });
+            for (;;) {
+                const presence = await client.next("presence");
+                if (presence.full) {
+                    return presence;
+                }
+            }
+        }
+
+        // The next presence a client hears of this friend that's like this
+        async function presenceOf(
+            client: TestClient,
+            id: string,
+            test: (presence: any) => boolean = () => true,
+        ): Promise<any> {
+            for (;;) {
+                const { friends } = await client.next("presence");
+                const found = friends.find((presence: any) => presence.id === id);
+                if (found && test(found)) {
+                    return found;
+                }
+            }
+        }
+
+        // What a client's heard of this friend, waiting for anything on its way
+        async function heardOf(client: TestClient, id: string): Promise<Message[]> {
+            await settle();
+            return client.messages.filter((m) => JSON.stringify(m).includes(id));
+        }
+
+        function closed(client: TestClient): Promise<void> {
+            return new Promise((resolve) => {
+                if (client.socket.readyState === WebSocket.CLOSED) {
+                    resolve();
+                }
+                client.socket.addEventListener("close", () => resolve());
+            });
+        }
+
+        it("gives the same secret the same friend code, on any relay, and others another", async () => {
+            const welcome = new TestClient(url);
+            clients.push(welcome);
+            expect((await welcome.next("welcome")).friends).toBe(true);
+            const alice = await player("alice");
+            const again = await player("alice", { presence: false });
+            const bob = await player("bob");
+            // Players' friends lists hold these: it can never change
+            expect(alice.friendId).toBe("2FCZ64P2FHPK");
+            expect(bob.friendId).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{12}$/);
+            expect(again.friendId).toBe(alice.friendId);
+            expect(bob.friendId).not.toBe(alice.friendId);
+            await restart({});
+            expect((await player("alice")).friendId).toBe(alice.friendId);
+        });
+
+        it("ignores a secret that can't be one, a second hello, and one from a room", async () => {
+            const client = await connect();
+            for (const secret of [
+                "x".repeat(31),
+                "x".repeat(129),
+                "x".repeat(40) + "!",
+                "x".repeat(20) + " " + "x".repeat(20),
+                12345678901234567890123456789012345,
+                ["x".repeat(40)],
+                null,
+            ]) {
+                client.send({ t: "hello", secret });
+            }
+            client.send({ t: "hello" });
+            client.send({ t: "ping" });
+            await client.next("pong");
+            expect(client.messages.filter((m) => m.t === "identity")).toEqual([]);
+            // The shortest and longest there can be
+            client.send({ t: "hello", secret: "a".repeat(32), name: "First" });
+            const first = await client.next("identity");
+            expect(first.name).toBe("First");
+            client.send({ t: "hello", secret: "_-".repeat(64), name: "Second" });
+            client.send({ t: "ping" });
+            await client.next("pong");
+            expect(client.messages.filter((m) => m.t === "identity")).toEqual([]);
+            const longest = await connect();
+            longest.send({ t: "hello", secret: "_-".repeat(64) });
+            expect((await longest.next("identity")).friendId).not.toBe(first.friendId);
+            const { host } = await party(0);
+            host.send({ t: "hello", secret: secretOf("host") });
+            host.send({ t: "ping" });
+            await host.next("pong");
+            expect(host.messages.filter((m) => m.t === "identity")).toEqual([]);
+        });
+
+        it("takes a name a player picks, cleaned, for their room too, but not mid-run", async () => {
+            const cleaned = async (name: unknown) => {
+                const client = await connect();
+                client.send({ t: "hello", secret: secretOf("namer"), name });
+                return (await client.next("identity")).name;
+            };
+            expect(await cleaned(" ‮Ada\u0000 ​ Love​lace\n\n")).toBe("Ada Lovelace");
+            expect(await cleaned("W".repeat(30))).toBe("W".repeat(20));
+            // Characters, not UTF-16's units, and composed
+            expect(await cleaned("😀".repeat(25))).toBe("😀".repeat(20));
+            expect(await cleaned("René")).toBe("René");
+            // Cut, then trimmed again
+            expect(await cleaned("x".repeat(19) + " yz")).toBe("x".repeat(19));
+            // Nothing left, or not a name: the one the relay gave
+            for (const name of ["\u0000​ \t", 42, { name: "Bob" }]) {
+                expect(await cleaned(name)).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+            }
+
+            const ada = await player("ada", { name: "Ada" });
+            expect(ada.picked).toBe("Ada");
+            ada.send({ t: "create", me: { name: "Typed Name" } });
+            const { room } = await ada.room();
+            expect(room.members[0]).toMatchObject({ name: "Ada", friendId: ada.friendId });
+            ada.send({ t: "name", name: "  Countess\u0007 of  Lovelace " });
+            expect((await ada.next("named")).name).toBe("Countess of Lovelace");
+            await ada.roomWhere((r) => r.members[0].name === "Countess of Lovelace");
+            // A player the relay names has no friend code in the room
+            const guest = await connect();
+            guest.send({ t: "join", code: room.code, me: {} });
+            const joined = (await guest.room()).room;
+            expect(joined.members[1].friendId).toBeUndefined();
+            ada.send({ t: "start", game: {} });
+            await ada.roomWhere((r) => r.started);
+            ada.send({ t: "name", name: "Mid Run" });
+            ada.send({ t: "ping" });
+            await ada.next("pong");
+            expect(ada.messages.some((m) => m.t === "named")).toBe(false);
+        });
+
+        it("slows down changing names", async () => {
+            await restart({ namesPerMinute: 2 });
+            const client = await connect();
+            for (const name of ["One", "Two", "Three"]) {
+                client.send({ t: "name", name });
+            }
+            client.send({ t: "ping" });
+            await client.next("pong");
+            expect(client.messages.filter((m) => m.t === "named").map((m) => m.name)).toEqual([
+                "One",
+                "Two",
+            ]);
+        });
+
+        it("tells nothing of a friend who hasn't listed you back, and both of you once they have", async () => {
+            const alice = await player("alice", { name: "Alice" });
+            const bob = await player("bob", { name: "Bob" });
+            // Only codes that can be one, upper-cased, and not her own
+            expect(
+                await befriend(
+                    alice,
+                    { friendId: bob.friendId.toLowerCase() } as Player,
+                    { friendId: "nonsense" } as Player,
+                    { friendId: 5 } as unknown as Player,
+                    alice,
+                ),
+            ).toEqual({ t: "presence", friends: [], full: true });
+            expect((await bob.next("friendRequest")).from).toEqual({
+                id: alice.friendId,
+                name: "Alice",
+            });
+            // Whatever Bob does, she hears nothing about him
+            bob.send({ t: "create", open: true, me: {} });
+            const { room } = await bob.room();
+            bob.send({ t: "status", solo: true });
+            expect(await heardOf(alice, bob.friendId)).toEqual([]);
+
+            expect(await befriend(bob, alice)).toEqual({
+                t: "presence",
+                friends: [{ id: alice.friendId, online: true, name: "Alice", state: "menu" }],
+                full: true,
+            });
+            expect(await presenceOf(alice, bob.friendId)).toEqual({
+                id: bob.friendId,
+                online: true,
+                name: "Bob",
+                state: "room",
+                room: {
+                    code: room.code,
+                    name: room.name,
+                    mapId: "lumbridge",
+                    endless: false,
+                    hard: false,
+                    players: 1,
+                    max: 4,
+                },
+            });
+
+            // She drops him: he hears she's off, and that she's still his
+            // to add back (as he lists her)
+            expect(await befriend(alice)).toEqual({ t: "presence", friends: [], full: true });
+            expect(await presenceOf(bob, alice.friendId)).toEqual({
+                id: alice.friendId,
+                online: false,
+            });
+            expect((await alice.next("friendRequest")).from.id).toBe(bob.friendId);
+            bob.send({ t: "leave" });
+            expect(await heardOf(alice, bob.friendId)).toEqual([]);
+        });
+
+        it("follows a friend from the menus through a room and its run, and off", async () => {
+            const alice = await player("alice");
+            const bob = await player("bob", { name: "Bob" });
+            // His game's room connection, as well as its presence one
+            const bobsRoom = await player("bob", { presence: false });
+            expect(bobsRoom.friendId).toBe(bob.friendId);
+            await befriend(alice, bob);
+            await befriend(bob, alice);
+            const seen = (test: (presence: any) => boolean) =>
+                presenceOf(alice, bob.friendId, test);
+            expect(await seen((p) => p.online)).toEqual({
+                id: bob.friendId,
+                online: true,
+                name: "Bob",
+                state: "menu",
+            });
+            bob.send({ t: "status", solo: true });
+            await seen((p) => p.state === "solo");
+            // Only his presence connection's
+            bobsRoom.send({ t: "status", solo: false });
+            expect(await heardOf(alice, bob.friendId)).toEqual([]);
+            bob.send({ t: "status", solo: false });
+            await seen((p) => p.state === "menu");
+
+            // Invite only: no code
+            bobsRoom.send({ t: "create", open: false, me: {} });
+            const { room } = await bobsRoom.room();
+            const lobby = { name: room.name, mapId: "lumbridge", endless: false, hard: false };
+            expect((await seen((p) => p.state === "room")).room).toEqual({
+                ...lobby,
+                players: 1,
+                max: 4,
+            });
+            bobsRoom.send({ t: "settings", friends: true });
+            expect((await seen((p) => p.room?.code !== undefined)).room.code).toBe(room.code);
+            const guest = await connect();
+            guest.send({ t: "join", code: room.code, me: {} });
+            await seen((p) => p.room?.players === 2);
+            bobsRoom.send({ t: "settings", friends: false, open: true, hard: true });
+            expect((await seen((p) => p.room?.hard)).room).toEqual({
+                ...lobby,
+                hard: true,
+                code: room.code,
+                players: 2,
+                max: 4,
+            });
+            bobsRoom.send({ t: "settings", open: false });
+            await seen((p) => p.room && !p.room.code);
+            bobsRoom.send({ t: "settings", open: true });
+            await seen((p) => p.room?.code === room.code);
+
+            // A run: no code, as nobody can join it
+            bobsRoom.send({ t: "start", game: {} });
+            expect(await seen((p) => p.state === "run")).toEqual({
+                id: bob.friendId,
+                online: true,
+                name: "Bob",
+                state: "run",
+                room: { ...lobby, hard: true, players: 2, max: 4 },
+            });
+            bobsRoom.send({ t: "end" });
+            expect((await seen((p) => p.state === "room")).room.code).toBe(room.code);
+            bobsRoom.send({ t: "name", name: "Robert" });
+            await seen((p) => p.name === "Robert");
+            bobsRoom.send({ t: "leave" });
+            expect(await seen((p) => p.state === "menu")).toEqual({
+                id: bob.friendId,
+                online: true,
+                name: "Robert",
+                state: "menu",
+            });
+            // Still on, by his presence connection
+            bobsRoom.socket.close();
+            await closed(bobsRoom);
+            expect(await heardOf(alice, bob.friendId)).toEqual([]);
+            bob.socket.close();
+            expect(await seen(() => true)).toEqual({ id: bob.friendId, online: false });
+        });
+
+        it("tells a friend who comes back again", async () => {
+            const alice = await player("alice");
+            let bob = await player("bob");
+            await befriend(alice, bob);
+            await befriend(bob, alice);
+            await presenceOf(alice, bob.friendId, (p) => p.online);
+            bob.socket.close();
+            await presenceOf(alice, bob.friendId, (p) => !p.online);
+            bob = await player("bob");
+            expect((await befriend(bob, alice)).friends.map((p: any) => p.id)).toEqual([
+                alice.friendId,
+            ]);
+            await presenceOf(alice, bob.friendId, (p) => p.online);
+        });
+
+        it("sends a friend request once, whoever comes first", async () => {
+            // He's on first
+            const alice = await player("alice", { name: "Alice" });
+            const bob = await player("bob");
+            await befriend(bob);
+            await befriend(alice, bob);
+            expect(await bob.next("friendRequest")).toEqual({
+                t: "friendRequest",
+                from: { id: alice.friendId, name: "Alice" },
+            });
+            await befriend(alice, bob);
+            await befriend(bob);
+            expect(await heardOf(bob, alice.friendId)).toEqual([]);
+
+            // She's on first
+            const carol = await player("carol", { name: "Carol" });
+            await befriend(carol, { friendId: secretless("dave") } as Player);
+            const dave = await player("dave");
+            expect(dave.friendId).toBe(secretless("dave"));
+            await befriend(dave);
+            expect((await dave.next("friendRequest")).from.id).toBe(carol.friendId);
+            await befriend(dave);
+            expect(await heardOf(dave, carol.friendId)).toEqual([]);
+            // Once for each of his connections. Not his room's, which hears
+            // nothing of friends.
+            const davesOther = await player("dave");
+            const davesRoom = await player("dave", { presence: false });
+            await befriend(davesOther);
+            expect((await davesOther.next("friendRequest")).from.id).toBe(carol.friendId);
+            expect(await heardOf(dave, carol.friendId)).toEqual([]);
+            await befriend(davesRoom);
+            expect(davesRoom.messages.filter((m) => m.t === "friendRequest")).toEqual([]);
+            // Nor any to someone who's added them back
+            await befriend(dave, carol);
+            await befriend(carol, dave);
+            expect(carol.messages.filter((m) => m.t === "friendRequest")).toEqual([]);
+        });
+
+        // A code as the relay works it out, for a player who isn't on yet
+        function secretless(who: string): string {
+            const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+            const digest = createHash("sha256")
+                .update(`run-escape-friend:${secretOf(who)}`)
+                .digest();
+            return Array.from(digest.subarray(0, 12), (byte) => chars[byte % chars.length]).join(
+                "",
+            );
+        }
+
+        it("takes invites only to friends who are on, and a no thanks back", async () => {
+            const alice = await player("alice", { name: "Alice" });
+            const bob = await player("bob", { name: "Bob" });
+            // Carol hasn't listed Alice back
+            const carol = await player("carol");
+            await befriend(alice, bob, carol, { friendId: secretless("dave") } as Player);
+            await befriend(bob, alice);
+            await carol.next("friendRequest");
+            const errorFor = async (client: TestClient, to: string) => {
+                client.send({ t: "invite", to });
+                return (await client.next("error")).message;
+            };
+            expect(await errorFor(alice, bob.friendId)).toBe(
+                "You need to be in a room to invite friends.",
+            );
+            const alicesRoom = await player("alice", { presence: false });
+            alicesRoom.send({ t: "create", open: false, me: {} });
+            const { room } = await alicesRoom.room();
+            alicesRoom.send({ t: "invite", to: bob.friendId.toLowerCase() });
+            expect(await bob.next("invited")).toEqual({
+                t: "invited",
+                from: { id: alice.friendId, name: "Alice" },
+                room: {
+                    code: room.code,
+                    name: room.name,
+                    mapId: "lumbridge",
+                    endless: false,
+                    hard: false,
+                    players: 1,
+                    max: 4,
+                },
+            });
+            expect(await alicesRoom.next("inviteSent")).toEqual({
+                t: "inviteSent",
+                to: bob.friendId,
+            });
+            expect(await errorFor(alicesRoom, bob.friendId)).toBe(
+                "You've just invited them. Give them a few seconds.",
+            );
+            // One who hasn't listed her back is the same as one who's off
+            expect(await errorFor(alicesRoom, carol.friendId)).toBe("That friend isn't online.");
+            expect(await errorFor(alicesRoom, secretless("dave"))).toBe(
+                "That friend isn't online.",
+            );
+            expect(await errorFor(alicesRoom, secretless("erin"))).toBe(
+                "You can only invite your friends.",
+            );
+            expect(await heardOf(carol, alice.friendId)).toEqual([]);
+
+            bob.send({ t: "decline", to: alice.friendId, code: room.code.toLowerCase() });
+            expect(await alicesRoom.next("declined")).toEqual({
+                t: "declined",
+                from: { id: bob.friendId, name: "Bob" },
+            });
+            // Only to her connection in that room, and only from a friend
+            carol.send({ t: "decline", to: alice.friendId, code: room.code });
+            bob.send({ t: "decline", to: alice.friendId, code: "ZZZZZZZZ" });
+            await settle();
+            expect(alicesRoom.messages.filter((m) => m.t === "declined")).toEqual([]);
+            expect(alice.messages.filter((m) => m.t === "declined")).toEqual([]);
+        });
+
+        it("says why an invite can't go, and slows down sending them", async () => {
+            await restart({ inviteAgainMs: 0, invitesPerMinute: 2 });
+            const alice = await player("alice");
+            const bob = await player("bob");
+            await befriend(alice, bob);
+            await befriend(bob, alice);
+            const alicesRoom = await player("alice", { presence: false });
+            alicesRoom.send({ t: "create", me: {} });
+            await alicesRoom.room();
+            for (let i = 0; i < 3; i++) {
+                alicesRoom.send({ t: "invite", to: bob.friendId });
+            }
+            alicesRoom.send({ t: "ping" });
+            await alicesRoom.next("pong");
+            expect(alicesRoom.messages.filter((m) => m.t === "inviteSent")).toHaveLength(2);
+            expect(alicesRoom.messages.filter((m) => m.t === "error")).toEqual([
+                {
+                    t: "error",
+                    message: "That's a lot of invites. Wait a minute and try again.",
+                },
+            ]);
+
+            await restart({});
+            const host = await player("alice");
+            const friend = await player("bob");
+            await befriend(host, friend);
+            await befriend(friend, host);
+            host.send({ t: "create", me: {} });
+            const made = (await host.room()).room;
+            const errorFor = async () => {
+                host.send({ t: "invite", to: friend.friendId });
+                return (await host.next("error")).message;
+            };
+            const friendsRoom = await player("bob", { presence: false });
+            friendsRoom.send({ t: "join", code: made.code, me: {} });
+            await host.roomWhere((r) => r.members.length === 2);
+            expect(await errorFor()).toBe("That friend's already in your room.");
+            host.send({ t: "start", game: {} });
+            await host.roomWhere((r) => r.started);
+            expect(await errorFor()).toBe("Your room's run has already started.");
+            host.send({ t: "end" });
+            await host.roomWhere((r) => !r.started);
+            for (let i = 0; i < 2; i++) {
+                const guest = await connect();
+                guest.send({ t: "join", code: made.code, me: {} });
+                await guest.room();
+            }
+            expect(await errorFor()).toBe("Your room is full.");
+        });
+
+        it("shows a room for friends in its view, without listing it", async () => {
+            const host = await connect();
+            host.send({ t: "create", friends: true, me: {} });
+            const { room } = await host.room();
+            expect(room).toMatchObject({ open: false, friends: true });
+            const guest = await connect();
+            guest.send({ t: "join", code: room.code, me: {} });
+            await guest.room();
+            guest.send({ t: "settings", friends: false });
+            host.send({ t: "settings", mapId: "draynor" });
+            expect((await guest.roomWhere((r) => r.mapId === "draynor")).room.friends).toBe(true);
+            host.send({ t: "settings", friends: false });
+            expect((await guest.roomWhere((r) => !r.friends)).room.friends).toBe(false);
+            const browser = await connect();
+            browser.send({ t: "list" });
+            expect((await browser.next("rooms")).rooms).toEqual([]);
+            const plain = await connect();
+            plain.send({ t: "create", me: {} });
+            expect((await plain.room()).room.friends).toBe(false);
+        });
+
+        it("sends a room's chat round it, cleaned, and slows down a flood", async () => {
+            const { host, guests } = await party(1);
+            const { room } = await host.room();
+            guests[0].send({ t: "chat", text: "  hi\u0000 there\n\n" + "!".repeat(300) });
+            const line = {
+                t: "chat",
+                from: room.members[1].id,
+                text: ("hi there " + "!".repeat(300)).slice(0, 200),
+            };
+            expect(await host.next("chat")).toEqual(line);
+            expect(await guests[0].next("chat")).toEqual(line);
+            // Nothing to say, or nobody to say it to
+            guests[0].send({ t: "chat", text: "​ \n" });
+            guests[0].send({ t: "chat", text: 42 });
+            const outside = await connect();
+            outside.send({ t: "chat", text: "anyone?" });
+            for (let i = 0; i < 10; i++) {
+                host.send({ t: "chat", text: `line ${i}` });
+            }
+            host.send({ t: "ping" });
+            await host.next("pong");
+            await settle();
+            expect(host.messages.filter((m) => m.t === "chat").map((m) => m.text)).toEqual(
+                Array.from({ length: 8 }, (_, i) => `line ${i}`),
+            );
+            expect(guests[0].messages.filter((m) => m.t === "chat")).toHaveLength(8);
+            expect(outside.messages.filter((m) => m.t === "chat")).toEqual([]);
+        });
+
+        it("keeps a room open while its players talk", async () => {
+            await restart({ idleMs: 1000 });
+            const { host } = await party(0);
+            const start = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            host.send({ t: "chat", text: "still here" });
+            await host.next("chat");
+            relay.sweep(start + 1050);
+            expect(relay.roomCount).toBe(1);
+        });
+
+        it("keeps a presence connection open however idle, and no other for its friends or status", async () => {
+            await restart({ idleConnectionMs: 300 });
+            const presence = await player("alice");
+            const plain = await player("bob", { presence: false });
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            plain.send({ t: "friends", ids: [presence.friendId] });
+            plain.send({ t: "status", solo: true });
+            plain.send({ t: "chat", text: "hello?" });
+            plain.send({ t: "invite", to: presence.friendId });
+            plain.send({ t: "decline", to: presence.friendId, code: "ABCDEFGH" });
+            await plain.next("error");
+            relay.sweep(Date.now());
+            await closed(plain);
+            relay.sweep(Date.now() + 24 * 60 * 60_000);
+            presence.send({ t: "ping" });
+            await presence.next("pong");
+        });
+
+        it("keeps nothing of anyone once they've gone", async () => {
+            const alice = await player("alice");
+            const bob = await player("bob");
+            const carol = await player("carol");
+            const bobsRoom = await player("bob", { presence: false });
+            await befriend(alice, bob, carol, { friendId: secretless("dave") } as Player);
+            await befriend(bob, alice);
+            await befriend(carol, bob);
+            bobsRoom.send({ t: "create", friends: true, me: {} });
+            await bobsRoom.room();
+            await presenceOf(alice, bob.friendId, (p) => p.state === "room");
+            expect(relay.friendsHeld).toMatchObject({ identities: 3, listed: 4 });
+            for (const client of clients) {
+                client.socket.close();
+            }
+            await vi.waitFor(() =>
+                expect(relay.friendsHeld).toEqual({
+                    identities: 0,
+                    listed: 0,
+                    departed: 0,
+                    dirty: 0,
+                }),
+            );
+            expect(relay.roomCount).toBe(0);
+        });
     });
 });
 

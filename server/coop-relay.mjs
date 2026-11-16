@@ -128,7 +128,8 @@ const MAX_JOINS_PER_MINUTE = 12;
 const MAX_CONNECTIONS = 800;
 // A connection that's in no room and has done nothing but ping, or ask for the
 // same page of rooms again, for this long is closed (a room left alone goes by
-// IDLE_MS): a tab left open on the list
+// IDLE_MS): a tab left open on the list. Not a presence connection (hello),
+// which a game keeps open for friends as long as it's running.
 const IDLE_CONNECTION_MS = 10 * 60_000;
 // Room codes that don't exist, tried from one address, before it has to wait
 const MAX_WRONG_CODES_PER_MINUTE = 20;
@@ -139,8 +140,35 @@ const MAX_WRONG_CODES_PER_NETWORK_PER_MINUTE = 80;
 const IDLE_MS = 30 * 60_000;
 // Messages that don't count as doing anything in a room, for IDLE_MS: pings,
 // browsing, and a player's own updates and name, which could otherwise be
-// sent now and then to hold a room for ever.
-const IDLE_MESSAGES = new Set(["ping", "list", "me", "rename"]);
+// sent now and then to hold a room for ever. The same goes for what the
+// friends system sends by itself, and for invites. A line of chat is someone
+// there, but only once it's gone round the room ("chat" sees to that).
+const IDLE_MESSAGES = new Set([
+    "ping",
+    "list",
+    "me",
+    "rename",
+    "hello",
+    "name",
+    "friends",
+    "status",
+    "invite",
+    "decline",
+    "chat",
+]);
+// And those that don't count as a connection doing anything, for
+// IDLE_CONNECTION_MS: what a game sends on its own while it waits (a friends
+// list or a status could be sent for ever), and what's only for a room. A
+// presence connection is never closed for being idle anyway.
+const PASSIVE_MESSAGES = new Set([
+    "ping",
+    "list",
+    "friends",
+    "status",
+    "invite",
+    "decline",
+    "chat",
+]);
 // Bigger than any real loadout (the shop's bonuses, unlocked items and
 // Armoury); a bigger one is dropped rather than sent round the room
 export const MAX_LOADOUT_BYTES = 16 * 1024;
@@ -209,6 +237,37 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 // Long enough that no number of addresses can guess one
 const CODE_LENGTH = 8;
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+// Friends (this fork's). These four are the game's too, in
+// src/game/client/coop/protocol.ts: change them there as well.
+const FRIEND_CODE_LENGTH = 12;
+const MAX_FRIENDS = 200;
+const MAX_NAME_LENGTH = 20;
+const MAX_CHAT_LENGTH = 200;
+// What a game shows the relay to say who it is (hello). Only its friend code
+// is kept, and only while it's connected.
+const SECRET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+const FRIEND_CODE_PATTERN = new RegExp(`^[${CODE_CHARS}]{${FRIEND_CODE_LENGTH}}$`);
+// Picked names, on one connection
+const MAX_NAMES_PER_MINUTE = 10;
+// Friends lists, on one connection: each is a reply with every friend who's on
+const MAX_FRIEND_LISTS_PER_MINUTE = 30;
+// Friend requests reaching one connection, so codes made up by the hundred
+// can't bury a player in them. Past it they wait for the next list either
+// side sends.
+const MAX_FRIEND_REQUESTS_PER_MINUTE = 20;
+// Who a connection's had a request from, at most: past it, those who've gone
+// are forgotten, and then nobody new is heard
+const MAX_REQUESTS_REMEMBERED = 1000;
+// Invites from one connection, and to the same friend again
+const MAX_INVITES_PER_MINUTE = 20;
+const INVITE_AGAIN_MS = 10_000;
+const MAX_DECLINES_PER_MINUTE = 20;
+// Lines of a room's chat from one connection, in 10 seconds
+const MAX_CHATS_PER_TEN_SECONDS = 8;
+// How often friends hear how their friends are, with the latest, however
+// often that changes (a room's players coming and going, say)
+const PRESENCE_MS = 500;
 
 // ---- WebSocket (RFC 6455): just what browsers send ----
 
@@ -629,6 +688,38 @@ function cleanId(id) {
     return typeof id === "string" ? id.replace(/[^a-z0-9_]/g, "").slice(0, 40) : "";
 }
 
+// Text a player typed (a name, a line of chat), as everyone else can be shown
+// it: no control or invisible characters, one space where there were any, and
+// at most max characters. Empty if there's nothing left.
+function cleanText(text, max) {
+    if (typeof text !== "string") {
+        return "";
+    }
+    const cleaned = text
+        .normalize("NFC")
+        // A run with a space or line break in it is a space; the rest go
+        .replace(/[\s\p{C}]+/gu, (run) => (/\s/u.test(run) ? " " : ""))
+        .trim();
+    // Characters, not UTF-16 units: an emoji is one. No more than 2 units
+    // each, so that's all that needs splitting up.
+    return Array.from(cleaned.slice(0, max * 2))
+        .slice(0, max)
+        .join("")
+        .trim();
+}
+
+// A player's friend code, from the secret their game keeps. The same secret
+// always gives the same code, on any relay, so never change this: players'
+// friends lists are made of them.
+function friendCode(secret) {
+    const digest = createHash("sha256").update(`run-escape-friend:${secret}`).digest();
+    let code = "";
+    for (let i = 0; i < FRIEND_CODE_LENGTH; i++) {
+        code += CODE_CHARS[digest[i] % CODE_CHARS.length];
+    }
+    return code;
+}
+
 // limits: any of the relay's limits to change (the tests' tighter or looser
 // ones); the rest are as above
 export function createRelay(limits = {}) {
@@ -651,6 +742,15 @@ export function createRelay(limits = {}) {
         roomUpdateMs = ROOM_UPDATE_MS,
         listPushMs = LIST_PUSH_MS,
         idleMs = IDLE_MS,
+        // Friends (see PRESENCE_MS and the limits by it)
+        presenceMs = PRESENCE_MS,
+        namesPerMinute = MAX_NAMES_PER_MINUTE,
+        friendListsPerMinute = MAX_FRIEND_LISTS_PER_MINUTE,
+        friendRequestsPerMinute = MAX_FRIEND_REQUESTS_PER_MINUTE,
+        invitesPerMinute = MAX_INVITES_PER_MINUTE,
+        inviteAgainMs = INVITE_AGAIN_MS,
+        declinesPerMinute = MAX_DECLINES_PER_MINUTE,
+        chatsPerTenSeconds = MAX_CHATS_PER_TEN_SECONDS,
         // The proxy in front (see client-ip.mjs), as the server's set it
         proxy = proxyMode(),
         // Rooms take players without their map (see isAnyMapOn)
@@ -688,7 +788,8 @@ export function createRelay(limits = {}) {
     };
     let metricsServer;
     let stopMetrics = () => {};
-    // Every connected player's name, so no two have the same
+    // Every name the relay's given a connected player, so no two have the
+    // same. Names players pick for themselves needn't be.
     const playerNames = new Set();
     let nextId = 1;
     // Connections from each address and network, and when each address made
@@ -704,6 +805,19 @@ export function createRelay(limits = {}) {
     // room changes, and the timer that sends them to everyone browsing
     let openRooms;
     let listTimer;
+    // Players who've said who they are (hello), by friend code: their
+    // connections (a presence one, a room's, another tab's), their name, the
+    // codes they've listed, which of those friends know how they are
+    // (audience) and what they were told last (shown). Gone with their last
+    // connection.
+    const identities = new Map();
+    // Who lists each code, of the players here, for friend requests
+    const listedBy = new Map();
+    // Friend codes whose presence may have changed, for the next flush, and
+    // the audience of those that have gone, to tell they're off
+    const presenceDirty = new Set();
+    const departed = new Map();
+    let presenceTimer;
 
     function metricsText() {
         let lobbyPlayers = 0;
@@ -719,6 +833,12 @@ export function createRelay(limits = {}) {
             }
             if (room.open) {
                 publicRooms++;
+            }
+        }
+        let presenceConnections = 0;
+        for (const client of clients) {
+            if (client.presence) {
+                presenceConnections++;
             }
         }
         // Prometheus text 0.0.4: fixed names and help, numeric samples only.
@@ -751,6 +871,16 @@ export function createRelay(limits = {}) {
                 "coop_rooms_private",
                 "Invite-only rooms, including started rooms.",
                 rooms.size - publicRooms,
+            ),
+            metric(
+                "coop_friends_players",
+                "Players connected who've said who they are, for friends.",
+                identities.size,
+            ),
+            metric(
+                "coop_friends_presence_connections",
+                "Connections kept open for friends' presence.",
+                presenceConnections,
             ),
             metric(
                 "coop_connections_total",
@@ -864,6 +994,7 @@ export function createRelay(limits = {}) {
             code: room.code,
             name: room.name,
             open: room.open,
+            friends: room.friends,
             hostId: room.hostId,
             mapId: room.mapId,
             endless: room.endless,
@@ -871,6 +1002,7 @@ export function createRelay(limits = {}) {
             started: room.started,
             members: room.members.map((client) => ({
                 id: client.id,
+                friendId: client.identity?.id,
                 name: client.name,
                 characterId: client.characterId,
                 ready: client.ready,
@@ -905,6 +1037,10 @@ export function createRelay(limits = {}) {
         // round now or later. Players' loadouts and ready don't show.
         if (listingChanged(room)) {
             listChanged();
+        }
+        // And maybe how its players' friends see it, which the flush works out
+        for (const member of room.members) {
+            presenceChanged(member.identity);
         }
         if (room.updateTimer) {
             room.updateWaiting = true;
@@ -1028,6 +1164,7 @@ export function createRelay(limits = {}) {
         client.room = undefined;
         client.ready = false;
         client.lastActive = Date.now();
+        presenceChanged(client.identity);
         room.members = room.members.filter((member) => member !== client);
         if (reason) {
             client.connection.send({ t: "gone", reason });
@@ -1062,6 +1199,7 @@ export function createRelay(limits = {}) {
         listChanged();
         for (const member of room.members) {
             member.room = undefined;
+            presenceChanged(member.identity);
             // Back to the list, which they've only just started waiting on
             member.lastActive = Date.now();
             member.ready = false;
@@ -1099,10 +1237,11 @@ export function createRelay(limits = {}) {
     }
 
     // Whether this address has done something (made a room, tried a wrong
-    // code) fewer than limit times in the last minute, and if so, notes it
-    function underLimit(times, address, limit) {
+    // code) fewer than limit times in the last minute, and if so, notes it.
+    // Or a connection, by what it did (client.recent), in another window.
+    function underLimit(times, address, limit, windowMs = 60_000) {
         const now = Date.now();
-        const recent = (times.get(address) ?? []).filter((t) => now - t < 60_000);
+        const recent = (times.get(address) ?? []).filter((t) => now - t < windowMs);
         const under = recent.length < limit;
         if (under) {
             recent.push(now);
@@ -1123,8 +1262,8 @@ export function createRelay(limits = {}) {
         );
     }
 
-    // What a player's told the room about themselves. Their name isn't theirs
-    // to say: the relay gives it.
+    // What a player's told the room about themselves. Their name isn't said
+    // here: the relay gives it, or they pick one with hello or name.
     function setMember(client, message) {
         const pick = pickOf(client);
         if (message.characterId !== undefined) {
@@ -1251,17 +1390,386 @@ export function createRelay(limits = {}) {
         return true;
     }
 
+    // ---- Friends ----
+
+    // A message for any number of connections, encoded once
+    function frameOf(message) {
+        return encodeFrame(0x1, Buffer.from(JSON.stringify(message), "utf8"));
+    }
+
+    // Only presence connections hear about friends: presence, requests, invites
+    function presenceClients(identity) {
+        return [...identity.clients].filter((client) => client.presence);
+    }
+
+    function isMutual(a, b) {
+        return a.friends.has(b.id) && b.friends.has(a.id);
+    }
+
+    // A room as a player's friends see it. Its code only while they could
+    // walk in: waiting, and open or for friends.
+    function friendRoom(room, withCode = !room.started && (room.open || room.friends)) {
+        return {
+            ...(withCode && { code: room.code }),
+            name: room.name,
+            mapId: room.mapId,
+            endless: room.endless,
+            hard: room.hard,
+            players: room.members.length,
+            max: MAX_PARTY,
+        };
+    }
+
+    // How a player's friends see them (FriendPresence), from all their
+    // connections: a run in any of them, else a room, else a run of their own
+    function presenceOf(identity) {
+        let room;
+        let solo = false;
+        for (const client of identity.clients) {
+            if (client.room && (!room || (client.room.started && !room.started))) {
+                room = client.room;
+            }
+            solo ||= client.solo;
+        }
+        return {
+            id: identity.id,
+            online: true,
+            name: identity.name,
+            state: room ? (room.started ? "run" : "room") : solo ? "solo" : "menu",
+            ...(room && { room: friendRoom(room) }),
+        };
+    }
+
+    // How a player is may have changed: their friends hear at the next flush,
+    // if it has
+    function presenceChanged(identity) {
+        if (!identity) {
+            return;
+        }
+        presenceDirty.add(identity.id);
+        if (!presenceTimer) {
+            presenceTimer = setTimeout(flushPresence, presenceMs);
+            presenceTimer.unref?.();
+        }
+    }
+
+    // Tells friends how the players who've changed are. Each player's
+    // presence is encoded once, and whoever hears about the same ones gets
+    // the same frame.
+    function flushPresence() {
+        presenceTimer = undefined;
+        // Each friend's presence connections, and the presences they're due
+        const due = new Map();
+        const tell = (id, text) => {
+            if (!due.has(id)) {
+                due.set(id, []);
+            }
+            due.get(id).push(text);
+        };
+        for (const id of presenceDirty) {
+            const identity = identities.get(id);
+            const before = identity?.audience ?? departed.get(id) ?? new Set();
+            departed.delete(id);
+            const after = new Set();
+            if (identity) {
+                const text = JSON.stringify(presenceOf(identity));
+                for (const friendId of identity.friends) {
+                    const friend = identities.get(friendId);
+                    if (friend?.friends.has(id)) {
+                        after.add(friendId);
+                        if (text !== identity.shown || !before.has(friendId)) {
+                            tell(friendId, text);
+                        }
+                    }
+                }
+                identity.audience = after;
+                identity.shown = text;
+            }
+            // Gone, or no longer friends both ways
+            const off = JSON.stringify({ id, online: false });
+            for (const friendId of before) {
+                if (!after.has(friendId) && identities.has(friendId)) {
+                    tell(friendId, off);
+                }
+            }
+        }
+        presenceDirty.clear();
+        const frames = new Map();
+        for (const [friendId, texts] of due) {
+            const message = `{"t":"presence","friends":[${texts.join(",")}]}`;
+            if (!frames.has(message)) {
+                frames.set(message, encodeFrame(0x1, Buffer.from(message, "utf8")));
+            }
+            for (const client of presenceClients(identities.get(friendId))) {
+                client.connection.write(frames.get(message));
+            }
+        }
+    }
+
+    // A game saying who it is: its friend code, from its secret
+    function hello(client, message) {
+        if (typeof message.secret !== "string" || !SECRET_PATTERN.test(message.secret)) {
+            return;
+        }
+        const id = friendCode(message.secret);
+        const picked = cleanText(message.name, MAX_NAME_LENGTH);
+        if (picked) {
+            playerNames.delete(client.name);
+            client.name = picked;
+            client.picked = true;
+        }
+        client.presence = message.presence === true;
+        let identity = identities.get(id);
+        if (!identity) {
+            identity = {
+                id,
+                name: client.name,
+                friends: new Set(),
+                clients: new Set(),
+                // Back before its friends heard it had gone: they're told
+                // how it is now, instead
+                audience: departed.get(id) ?? new Set(),
+                shown: undefined,
+            };
+            departed.delete(id);
+            identities.set(id, identity);
+        } else if (picked) {
+            identity.name = picked;
+        }
+        identity.clients.add(client);
+        client.identity = identity;
+        client.connection.send({ t: "identity", friendId: id, name: client.name });
+        presenceChanged(identity);
+    }
+
+    // A player's whole friends list, from their game: every friend who's on
+    // in reply, friends told how they are, and requests to those who haven't
+    // listed them back
+    function setFriends(client, ids) {
+        const identity = client.identity;
+        const friends = new Set();
+        for (const value of ids) {
+            if (friends.size >= MAX_FRIENDS) {
+                break;
+            }
+            const code = typeof value === "string" ? value.toUpperCase() : "";
+            if (FRIEND_CODE_PATTERN.test(code) && code !== identity.id) {
+                friends.add(code);
+            }
+        }
+        const before = identity.friends;
+        for (const code of before) {
+            if (!friends.has(code)) {
+                unlist(code, identity.id);
+            }
+        }
+        for (const code of friends) {
+            if (!before.has(code)) {
+                listOf(code).add(identity.id);
+            }
+        }
+        identity.friends = friends;
+        // Each friend's presence as their friends were told it last, so this
+        // player is one of them now, unless it's changed since (and goes out
+        // at the next flush). Nothing at all about anyone not both ways.
+        const shown = [];
+        for (const code of new Set([...before, ...friends])) {
+            const friend = identities.get(code);
+            if (!friend) {
+                continue;
+            }
+            if (isMutual(identity, friend)) {
+                const text = JSON.stringify(presenceOf(friend));
+                shown.push(text);
+                if (text === friend.shown) {
+                    friend.audience.add(identity.id);
+                } else {
+                    friend.audience.delete(identity.id);
+                    presenceChanged(friend);
+                }
+            } else {
+                friend.audience.delete(identity.id);
+            }
+        }
+        // To every presence connection of theirs, as it's the whole of it
+        const full = encodeFrame(
+            0x1,
+            Buffer.from(`{"t":"presence","friends":[${shown.join(",")}],"full":true}`, "utf8"),
+        );
+        for (const to of new Set([client, ...presenceClients(identity)])) {
+            to.connection.write(full);
+        }
+        // Who they're friends with both ways has changed, maybe
+        presenceChanged(identity);
+        for (const code of friends) {
+            const friend = identities.get(code);
+            if (friend && !friend.friends.has(identity.id)) {
+                requestFriend(identity, friend);
+            }
+        }
+        for (const code of listedBy.get(identity.id) ?? []) {
+            if (!friends.has(code)) {
+                requestFriend(identities.get(code), identity);
+            }
+        }
+    }
+
+    function listOf(code) {
+        if (!listedBy.has(code)) {
+            listedBy.set(code, new Set());
+        }
+        return listedBy.get(code);
+    }
+
+    function unlist(code, by) {
+        const list = listedBy.get(code);
+        list?.delete(by);
+        if (list?.size === 0) {
+            listedBy.delete(code);
+        }
+    }
+
+    // Tells a player someone's listed them, once on each connection
+    function requestFriend(from, to) {
+        let frame;
+        for (const client of presenceClients(to)) {
+            const sent = client.requestsFrom;
+            if (sent.has(from.id)) {
+                continue;
+            }
+            if (sent.size >= MAX_REQUESTS_REMEMBERED) {
+                for (const id of sent) {
+                    if (!identities.has(id)) {
+                        sent.delete(id);
+                    }
+                }
+            }
+            if (
+                sent.size >= MAX_REQUESTS_REMEMBERED ||
+                !underLimit(client.recent, "request", friendRequestsPerMinute)
+            ) {
+                continue;
+            }
+            sent.add(from.id);
+            frame ??= frameOf({ t: "friendRequest", from: { id: from.id, name: from.name } });
+            client.connection.write(frame);
+        }
+    }
+
+    // A connection's gone: its player's gone too, with their last one
+    function leaveIdentity(client) {
+        const identity = client.identity;
+        if (!identity) {
+            return;
+        }
+        client.identity = undefined;
+        identity.clients.delete(client);
+        presenceChanged(identity);
+        if (identity.clients.size > 0) {
+            return;
+        }
+        identities.delete(identity.id);
+        for (const code of identity.friends) {
+            unlist(code, identity.id);
+            // Nobody to tell now
+            identities.get(code)?.audience.delete(identity.id);
+        }
+        if (identity.audience.size > 0) {
+            departed.set(identity.id, identity.audience);
+        }
+    }
+
+    // A name for a player: given by the relay (rename), or their own
+    function setName(client, name, picked) {
+        if (!client.picked) {
+            playerNames.delete(client.name);
+        }
+        client.name = name;
+        client.picked = picked;
+        if (!picked) {
+            playerNames.add(name);
+        }
+        client.connection.send({ t: "named", name });
+        if (client.identity) {
+            client.identity.name = name;
+            presenceChanged(client.identity);
+        }
+        if (client.room) {
+            membersChanged(client.room);
+        }
+    }
+
+    // Asks a friend into this player's room, or says why not
+    function invite(client, message) {
+        const identity = client.identity;
+        const room = client.room;
+        const error = (text) => client.connection.send({ t: "error", message: text });
+        if (!room) {
+            error("You need to be in a room to invite friends.");
+            return;
+        }
+        if (room.started) {
+            error("Your room's run has already started.");
+            return;
+        }
+        if (room.members.length >= MAX_PARTY) {
+            error("Your room is full.");
+            return;
+        }
+        const to = typeof message.to === "string" ? message.to.toUpperCase() : "";
+        if (!identity.friends.has(to)) {
+            error("You can only invite your friends.");
+            return;
+        }
+        // One who hasn't listed this player back looks the same as one who's
+        // off, as in their presence
+        const friend = identities.get(to);
+        const reached = friend?.friends.has(identity.id) ? presenceClients(friend) : [];
+        if (reached.length === 0) {
+            error("That friend isn't online.");
+            return;
+        }
+        if (room.members.some((member) => member.identity === friend)) {
+            error("That friend's already in your room.");
+            return;
+        }
+        const now = Date.now();
+        if (now - (client.invited.get(to) ?? -Infinity) < inviteAgainMs) {
+            error("You've just invited them. Give them a few seconds.");
+            return;
+        }
+        if (!underLimit(client.recent, "invite", invitesPerMinute)) {
+            error("That's a lot of invites. Wait a minute and try again.");
+            return;
+        }
+        if (client.invited.size >= MAX_FRIENDS) {
+            for (const [id, at] of client.invited) {
+                if (now - at >= inviteAgainMs) {
+                    client.invited.delete(id);
+                }
+            }
+        }
+        client.invited.set(to, now);
+        // Always with its code, which is how an invite-only room's shared
+        const invited = frameOf({
+            t: "invited",
+            from: { id: identity.id, name: identity.name },
+            room: friendRoom(room, true),
+        });
+        for (const target of reached) {
+            target.connection.write(invited);
+        }
+        client.connection.send({ t: "inviteSent", to });
+    }
+
     // payload: the message's bytes as they came, for passing on
     function handle(client, message, payload) {
         const room = client.room;
-        if (message.t !== "ping" && message.t !== "list") {
+        if (!PASSIVE_MESSAGES.has(message.t)) {
             client.lastActive = Date.now();
         }
-        if (!IDLE_MESSAGES.has(message.t)) {
-            client.lastActive = Date.now();
-            if (room) {
-                room.lastActive = client.lastActive;
-            }
+        if (room && !IDLE_MESSAGES.has(message.t)) {
+            room.lastActive = Date.now();
         }
         const isHost = room !== undefined && room.hostId === client.id;
         const error = (text) => client.connection.send({ t: "error", message: text });
@@ -1281,6 +1789,91 @@ export function createRelay(limits = {}) {
                 // Said again, as it was asked for
                 client.listSent = undefined;
                 sendRooms(client);
+                return;
+            }
+            case "hello":
+                // Once, from the menus: a room's members have their names
+                if (!client.identity && !room) {
+                    hello(client, message);
+                }
+                return;
+            case "name": {
+                // Not mid-run, as with rename
+                if (room?.started) {
+                    return;
+                }
+                const name = cleanText(message.name, MAX_NAME_LENGTH);
+                if (name && underLimit(client.recent, "name", namesPerMinute)) {
+                    setName(client, name, true);
+                }
+                return;
+            }
+            case "friends":
+                if (
+                    client.identity &&
+                    Array.isArray(message.ids) &&
+                    underLimit(client.recent, "friends", friendListsPerMinute)
+                ) {
+                    setFriends(client, message.ids);
+                }
+                return;
+            case "status":
+                if (client.presence && typeof message.solo === "boolean") {
+                    if (client.solo !== message.solo) {
+                        client.solo = message.solo;
+                        presenceChanged(client.identity);
+                    }
+                }
+                return;
+            case "invite":
+                if (client.identity) {
+                    invite(client, message);
+                }
+                return;
+            case "decline": {
+                // Back to the friend's connections in that room, the one
+                // they asked from
+                const identity = client.identity;
+                const inviter =
+                    typeof message.to === "string"
+                        ? identities.get(message.to.toUpperCase())
+                        : undefined;
+                const code =
+                    typeof message.code === "string" ? message.code.toUpperCase() : undefined;
+                if (
+                    !identity ||
+                    !inviter ||
+                    !isMutual(identity, inviter) ||
+                    !underLimit(client.recent, "decline", declinesPerMinute)
+                ) {
+                    return;
+                }
+                let declined;
+                for (const to of inviter.clients) {
+                    if (to.room && to.room.code === code) {
+                        declined ??= frameOf({
+                            t: "declined",
+                            from: { id: identity.id, name: identity.name },
+                        });
+                        to.connection.write(declined);
+                    }
+                }
+                return;
+            }
+            case "chat": {
+                if (!room) {
+                    return;
+                }
+                const text = cleanText(message.text, MAX_CHAT_LENGTH);
+                if (!text || !underLimit(client.recent, "chat", chatsPerTenSeconds, 10_000)) {
+                    return;
+                }
+                // Someone's there, talking (see IDLE_MESSAGES)
+                room.lastActive = Date.now();
+                const line = frameOf({ t: "chat", from: client.id, text });
+                for (const member of room.members) {
+                    member.connection.write(line);
+                }
                 return;
             }
             case "create": {
@@ -1315,6 +1908,9 @@ export function createRelay(limits = {}) {
                     code: newCode(),
                     name: newRoomName(),
                     open: message.open === true,
+                    // Not listed, nor kept to friends: only whether friends
+                    // see its code (friendRoom)
+                    friends: message.friends === true,
                     hostId: client.id,
                     mapId: cleanId(message.mapId) || "lumbridge",
                     endless: message.endless === true,
@@ -1416,20 +2012,16 @@ export function createRelay(limits = {}) {
                 // Not mid-run: everyone's copy of it has the old name
                 if (!room?.started) {
                     // Picked while the old one's still taken, so it's a new one
-                    const name = newPlayerName();
-                    playerNames.delete(client.name);
-                    client.name = name;
-                    playerNames.add(name);
-                    client.connection.send({ t: "named", name: client.name });
-                    if (room) {
-                        membersChanged(room);
-                    }
+                    setName(client, newPlayerName(), false);
                 }
                 return;
             case "settings":
                 if (isHost && !room.started) {
                     if (message.open !== undefined) {
                         room.open = message.open === true;
+                    }
+                    if (message.friends !== undefined) {
+                        room.friends = message.friends === true;
                     }
                     const mapId =
                         message.mapId !== undefined
@@ -1625,16 +2217,32 @@ export function createRelay(limits = {}) {
             listSent: undefined,
             upSecond: 0,
             upsThisSecond: 0,
+            // A name of their own (hello, name), not one of playerNames
+            picked: false,
+            // Friends: who this is, once it's said (hello); whether it's the
+            // connection that hears about them, kept open without being
+            // closed for idling; on a run of its own (status)
+            identity: undefined,
+            presence: false,
+            solo: false,
+            // Who it's had friend requests from, when it last invited each
+            // friend, and when it last did each thing that's limited
+            requestsFrom: new Set(),
+            invited: new Map(),
+            recent: new Map(),
         };
         client.connection = new Connection(
             socket,
             (message, payload) => handle(client, message, payload),
             () => {
                 clients.delete(client);
-                playerNames.delete(client.name);
+                if (!client.picked) {
+                    playerNames.delete(client.name);
+                }
                 addCount(connectionsFrom, address, -1);
                 addCount(connectionsFromNetwork, network, -1);
                 leaveRoom(client);
+                leaveIdentity(client);
             },
             bytesPerSecond,
         );
@@ -1652,6 +2260,8 @@ export function createRelay(limits = {}) {
             country: client.country,
             // Changes to the open rooms are sent without asking
             listUpdates: true,
+            // Friend codes, presence, invites and chat (this fork's)
+            friends: true,
         });
         if (head && head.length > 0) {
             client.connection.receive(head);
@@ -1677,7 +2287,7 @@ export function createRelay(limits = {}) {
             }
         }
         for (const client of clients) {
-            if (!client.room && now - client.lastActive > idleConnectionMs) {
+            if (!client.room && !client.presence && now - client.lastActive > idleConnectionMs) {
                 client.connection.close(1001);
             }
         }
@@ -1728,7 +2338,7 @@ export function createRelay(limits = {}) {
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",
             });
-            res.end(JSON.stringify({ coop: true }));
+            res.end(JSON.stringify({ coop: true, friends: true }));
             return true;
         },
         // Closes idle rooms as if it were this time (for the tests)
@@ -1742,9 +2352,21 @@ export function createRelay(limits = {}) {
             for (const client of clients) {
                 client.connection.close(1001);
             }
+            // After they've gone, which their friends would otherwise hear
+            clearTimeout(presenceTimer);
         },
         get roomCount() {
             return rooms.size;
+        },
+        // What the friends system's holding on to (for the tests: none of it
+        // once everyone's gone)
+        get friendsHeld() {
+            return {
+                identities: identities.size,
+                listed: listedBy.size,
+                departed: departed.size,
+                dirty: presenceDirty.size,
+            };
         },
     };
 }

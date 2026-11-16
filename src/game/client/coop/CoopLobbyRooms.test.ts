@@ -1,5 +1,14 @@
 import { GameStore } from "../GameStore";
-import { CoopLobby, LOBBY_IDLE_MS, RESUME_WINDOW_MS } from "./CoopLobby";
+import {
+    CoopLobby,
+    CoopView,
+    LOBBY_IDLE_MS,
+    MAX_CHAT_LINES,
+    RESUME_WINDOW_MS,
+    accessFlags,
+    roomAccess,
+} from "./CoopLobby";
+import { MAX_CHAT_LENGTH } from "./protocol";
 
 // A WebSocket that's open at once and keeps what's sent, for driving the
 // lobby as a relay would
@@ -793,5 +802,184 @@ describe("the lobby's timers", () => {
         relay.receive({ t: "error", message: "There's no room ZZZZZZZZ." });
         await vi.advanceTimersByTimeAsync(LOBBY_IDLE_MS + 60_000);
         expect(relay.readyState).toBe(FakeSocket.CLOSED);
+    });
+});
+
+describe("a relay with friends", () => {
+    beforeEach(() => {
+        FakeSocket.all = [];
+        vi.stubGlobal("WebSocket", FakeSocket);
+        vi.stubGlobal("window", {
+            location: { href: "https://example.com/game/" },
+            setInterval: () => 0,
+            clearInterval: () => {},
+            setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+            clearTimeout: (id: number) => clearTimeout(id),
+        });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    const SECRET = "s".repeat(43);
+    const members = [
+        { id: "p1", name: "Steady Chicken", characterId: "wizard", ready: false },
+        { id: "p2", name: "Lucky Cow", characterId: "ranger", ready: false, friendId: "B" },
+    ];
+
+    // A lobby that knows who it is, and the store's latest view of it
+    function friendsLobby(name?: string) {
+        const set = vi.fn();
+        const store = { set, get: () => ({}) } as unknown as GameStore;
+        const lobby = new CoopLobby(store, { secret: () => SECRET, name: () => name });
+        const view = (): CoopView => set.mock.calls.at(-1)![0].coop;
+        return { lobby, view };
+    }
+
+    async function welcomed(friends: boolean, name?: string) {
+        const made = friendsLobby(name);
+        const connecting = made.lobby.connect();
+        const relay = FakeSocket.all[0];
+        await Promise.resolve();
+        relay.receive({
+            t: "welcome",
+            id: "p1",
+            name: "Steady Chicken",
+            ...(friends && { friends: true }),
+        });
+        await connecting;
+        return { ...made, relay };
+    }
+
+    async function inRoom() {
+        const made = await welcomed(true);
+        made.lobby.create(false, "lumbridge", false, false);
+        made.relay.receive({ t: "room", room: { ...ROOM, members }, you: "p1" });
+        return made;
+    }
+
+    it("says hello first, and only to a relay that has friends", async () => {
+        const { relay } = await welcomed(true, "Zezima");
+        expect(relay.sent[0]).toEqual({ t: "hello", secret: SECRET, name: "Zezima" });
+        expect(relay.sent.slice(1).map((m) => m.t)).toEqual(["list"]);
+
+        FakeSocket.all = [];
+        const older = await welcomed(false, "Zezima");
+        expect(older.relay.sent.map((m) => m.t)).toEqual(["list"]);
+        expect(older.view().friends).toBe(false);
+    });
+
+    it("holds a join made before the welcome until after the hello", async () => {
+        const { lobby, view } = friendsLobby();
+        const connecting = lobby.connect();
+        const relay = FakeSocket.all[0];
+        await Promise.resolve();
+        // Open, but no welcome yet (an invite link's join, as the page opens)
+        lobby.join("abcdefgh");
+        expect(relay.sent).toEqual([]);
+        relay.receive({ t: "welcome", id: "p1", name: "Steady Chicken", friends: true });
+        await connecting;
+        expect(relay.sent.map((m) => m.t)).toEqual(["hello", "list", "join"]);
+        expect(relay.sent[0]).toEqual({ t: "hello", secret: SECRET });
+        expect(relay.sent[2]).toMatchObject({ code: "ABCDEFGH" });
+
+        relay.receive({ t: "identity", friendId: "MMMMMMMMMMMM", name: "Picked" });
+        expect(view()).toMatchObject({ friends: true, myCode: "MMMMMMMMMMMM", name: "Picked" });
+    });
+
+    it("keeps the room's chat, its names and whose, the last 50, till leaving", async () => {
+        const { lobby, relay, view } = await inRoom();
+        relay.receive({ t: "chat", from: "p2", text: "hi" });
+        relay.receive({ t: "chat", from: "p1", text: "hello" });
+        relay.receive({ t: "chat", from: "p9", text: "gone already" });
+        expect(view().chat).toEqual([
+            expect.objectContaining({ from: "p2", name: "Lucky Cow", text: "hi", mine: false }),
+            expect.objectContaining({ from: "p1", name: "Steady Chicken", mine: true }),
+            expect.objectContaining({ from: "p9", name: "" }),
+        ]);
+        for (let i = 0; i < 60; i++) {
+            relay.receive({ t: "chat", from: "p2", text: `line ${i}` });
+        }
+        const chat = view().chat;
+        expect(chat).toHaveLength(MAX_CHAT_LINES);
+        expect(chat.at(-1)?.text).toBe("line 59");
+        expect(new Set(chat.map((line) => line.id)).size).toBe(MAX_CHAT_LINES);
+
+        expect(lobby.sendChat("   ")).toBe(false);
+        expect(lobby.sendChat(`  ${"x".repeat(MAX_CHAT_LENGTH + 10)}  `)).toBe(true);
+        expect(relay.sent.at(-1)).toEqual({ t: "chat", text: "x".repeat(MAX_CHAT_LENGTH) });
+
+        lobby.leave();
+        expect(view().chat).toEqual([]);
+        expect(lobby.sendChat("anyone?")).toBe(false);
+    });
+
+    it("marks friends invited, and those who said no", async () => {
+        const { lobby, relay, view } = await inRoom();
+        const onDeclined = vi.fn();
+        lobby.onDeclined = onDeclined;
+        expect(lobby.invite("BBBBBBBBBBBB")).toBe(true);
+        expect(relay.sent.at(-1)).toEqual({ t: "invite", to: "BBBBBBBBBBBB" });
+        relay.receive({ t: "inviteSent", to: "BBBBBBBBBBBB" });
+        expect(view().invited).toEqual({ BBBBBBBBBBBB: "sent" });
+        relay.receive({ t: "declined", from: { id: "BBBBBBBBBBBB", name: "Bob" } });
+        expect(view().invited).toEqual({ BBBBBBBBBBBB: "declined" });
+        expect(onDeclined).toHaveBeenCalledWith({ id: "BBBBBBBBBBBB", name: "Bob" });
+        // Asked again: the no's forgotten
+        lobby.invite("BBBBBBBBBBBB");
+        expect(view().invited).toEqual({});
+        relay.receive({ t: "inviteSent", to: "BBBBBBBBBBBB" });
+        lobby.leave();
+        expect(view().invited).toEqual({});
+        expect(lobby.invite("BBBBBBBBBBBB")).toBe(false);
+    });
+
+    it("offers no invites, chat or names on a relay without friends", async () => {
+        const { lobby, relay } = await welcomed(false);
+        lobby.create(false, "lumbridge", false, false);
+        relay.receive({ t: "room", room: { ...ROOM, members }, you: "p1" });
+        const sent = relay.sent.length;
+        expect(lobby.invite("BBBBBBBBBBBB")).toBe(false);
+        expect(lobby.sendChat("hi")).toBe(false);
+        expect(lobby.setName("Zezima")).toBe(false);
+        lobby.setAccess(false, true);
+        expect(relay.sent.slice(sent)).toEqual([{ t: "settings", open: false }]);
+    });
+
+    it("makes and sets rooms for friends", async () => {
+        const { lobby, relay } = await welcomed(true);
+        lobby.create(false, "lumbridge", false, false, true);
+        expect(relay.sent.at(-1)).toMatchObject({ t: "create", open: false, friends: true });
+        lobby.create(true, "lumbridge", false, false);
+        expect(relay.sent.at(-1)).not.toHaveProperty("friends");
+        lobby.setAccess(false, true);
+        expect(relay.sent.at(-1)).toEqual({ t: "settings", open: false, friends: true });
+
+        expect(accessFlags("invite")).toEqual({ open: false, friends: false });
+        expect(accessFlags("friends")).toEqual({ open: false, friends: true });
+        expect(accessFlags("open")).toEqual({ open: true, friends: true });
+        expect(roomAccess({ open: true, friends: false })).toBe("open");
+        expect(roomAccess({ open: false, friends: true })).toBe("friends");
+        expect(roomAccess({ open: false })).toBe("invite");
+    });
+
+    it("asks for a picked name, and passes on the one the relay gives", async () => {
+        const { lobby, relay } = await welcomed(true);
+        const onNamed = vi.fn();
+        lobby.onNamed = onNamed;
+        expect(lobby.setName("  ")).toBe(false);
+        expect(lobby.setName(" Big  Bad ")).toBe(true);
+        expect(relay.sent.at(-1)).toEqual({ t: "name", name: "Big Bad" });
+        relay.receive({ t: "named", name: "Big Bad" });
+        expect(lobby.name).toBe("Big Bad");
+        expect(onNamed).toHaveBeenCalledWith("Big Bad");
+    });
+
+    it("forgets the chat when the connection drops", async () => {
+        const { relay, view } = await inRoom();
+        relay.receive({ t: "chat", from: "p2", text: "hi" });
+        relay.close();
+        expect(view()).toMatchObject({ chat: [], invited: {}, friends: false });
     });
 });

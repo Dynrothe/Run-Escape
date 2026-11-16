@@ -272,23 +272,29 @@ can't tell where anyone is, and nobody gets a flag.
 
 Its limits, at the top of `server/coop-relay.mjs`:
 
-| What                          | Limit                                                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it) |
-| Connections from one address  | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                           |
-| Rooms hosted from one address | 4, and 16 from one IPv6 /48                                                                           |
-| Rooms made from one address   | 10 a minute                                                                                           |
-| Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                           |
-| Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                           |
-| A room with nothing happening | closed after 30 minutes (pings, looking at the list, and players' own updates and names don't count)  |
-| A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                   |
-| What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                    |
-| A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                               |
-| A player's own update         | 40 KB, or it's ignored                                                                                |
-| A player's loadout            | 16 KB, or it's dropped                                                                                |
-| A message                     | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames         |
-| One connection                | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped              |
-| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                      |
+| What                           | Limit                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Rooms on the relay             | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it)                    |
+| Connections from one address   | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                                              |
+| Rooms hosted from one address  | 4, and 16 from one IPv6 /48                                                                                              |
+| Rooms made from one address    | 10 a minute                                                                                                              |
+| Rooms joined from one address  | 12 a minute (joining and leaving are each a room update for everyone in it)                                              |
+| Wrong room codes               | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                                              |
+| A room with nothing happening  | closed after 30 minutes (pings, looking at the list, players' own updates and names, and invites don't count; chat does) |
+| A room hearing how it is       | at most once each 250 ms, with the latest, however often it changes                                                      |
+| What a host sends its room     | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                                       |
+| A guest's input for the host   | 1 KB each and 60 a second; past that it goes no further                                                                  |
+| A player's own update          | 40 KB, or it's ignored                                                                                                   |
+| A player's loadout             | 16 KB, or it's dropped                                                                                                   |
+| A message                      | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames                            |
+| One connection                 | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped                                 |
+| Waiting to go out to one       | 1 MB: a connection that stops reading is dropped                                                                         |
+| A name a player picks          | 20 characters, cleaned of control and invisible ones; 10 changes a minute on one connection                              |
+| A friends list                 | 200 codes, sent 30 times a minute on one connection                                                                      |
+| Friend requests                | once from each player to each connection, and 20 a minute reaching one connection                                        |
+| Invites                        | the same friend once each 10 seconds, and 20 a minute from one connection; 20 declines a minute                          |
+| A room's chat                  | 200 characters a line, and 8 lines each 10 seconds from one connection                                                   |
+| Friends hearing how others are | at most once each 500 ms, with the latest, however often it changes                                                      |
 
 An IPv6 address counts by its /64, which is what one home or server gets, and its /48 has looser
 limits of its own: one person can easily have all of a /48's /64s, but a mobile provider can put
@@ -301,6 +307,15 @@ would break. A message that isn't a JSON object is ignored. One that isn't UTF-8
 makes the relay throw drops that connection, never the relay, and a request whose path isn't a URL
 is a 400. `serve.mjs` turns away WebSocket upgrades to any other path rather than leaving them
 open, and answers `Range` with 206, as the cache's download resumes with one.
+
+This fork's friends (friend codes, presence, invites, rooms for friends and chat) are only on this
+relay, not the Cloudflare one: it says so with `friends` in its welcome and its plain GET. A game
+that's said who it is (`hello`) with `presence` keeps that connection open for as long as it runs,
+to hear about friends, and the relay never closes it for being idle (it still has to answer
+pings). Friends lists and statuses don't count as doing anything on any other connection. So a
+player with friends holds two connections, their presence one and the one for the lobby or their
+room, and both count against the 16 from one address. A relay keeps a player's friend code, list
+and name only while they're connected, and never their secret.
 
 A room of four is about 12 KB/s through the relay, both ways, and about 0.15% of a core: 500 rooms
 is around 50 Mbit/s and three quarters of one core. Set `MULTIPLAYER_MAX_ROOMS` (or
@@ -353,7 +368,10 @@ The metrics are:
 
 - Player gauges: `coop_players_connected`, split into `coop_players_browsing` (no room),
   `coop_players_lobby` and `coop_players_in_run`. These count WebSocket connections, so multiple tabs
-  count separately; single-player games aren't counted.
+  count separately; single-player games aren't counted. A friends player's presence connection is
+  one of them, browsing while it's in no room.
+- Friends gauges: `coop_friends_players` (players connected who've said who they are) and
+  `coop_friends_presence_connections`.
 - Room gauges: `coop_rooms`, split into `coop_rooms_lobby` and `coop_rooms_in_run`, and separately
   into `coop_rooms_public` and `coop_rooms_private`. Public rooms include full and started rooms.
 - Counters since startup: `coop_connections_total` (accepted connections), `coop_rooms_created_total`
@@ -395,7 +413,8 @@ a local reverse proxy. Keep port 8788 out of public proxy routes and container p
 run the request on the server (inside its container if applicable), or use an SSH tunnel. `HOST`
 only controls the game/relay listener and cannot make metrics listen publicly.
 Metrics contain aggregate numbers only, with no player names, addresses or room codes. The public
-`/coop` availability response contains only `{"coop":true}`, so it doesn't expose aggregate counts.
+`/coop` availability response contains only `{"coop":true,"friends":true}`, so it doesn't expose
+aggregate counts.
 
 **Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
 end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
