@@ -2399,11 +2399,12 @@ the item reaches as it turns, not over its top. The Power-up timers setting
 (`DisplaySettings.pickupTimers`, in Settings and the pause menu, on by default) turns it off;
 `GameClient` hands it to the view each frame.
 
-`PowerUpDef.scale` enlarges only a dropped model, not its pickup range or effect. Giant rune
-essence and the Drill Demon's camo helmet use it to stand out; their timers use the same scale
-to stay above the models.
-`PowerUpDef.centerGroundModel` centres an offset item's horizontal bounds during baking, so
-the Drill Demon's helmet rotates around its pickup and marker rather than orbiting them.
+`PowerUpDef.scale` draws a dropped item bigger, for one that's hard to spot, and its timer rises
+with it. Its pickup range and effect stay as they are.
+
+`PowerUpDef.centerGroundModel` bakes an item whose model sits off its own middle centred, so it
+turns on the spot rather than circling its pickup (the Drill Demon's helmet). It goes by the obj
+id (`obj:<id>`), so anything else drawing that item gets the centred model too.
 
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.

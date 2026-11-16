@@ -4195,7 +4195,8 @@ export type PowerUpDef = {
     locId?: number;
     // Drawn this many times bigger on the ground than other power-ups
     scale?: number;
-    // Centre an offset item model on the pickup before it rotates
+    // Centre an offset item model on the pickup before it rotates. It's baked once by its obj id,
+    // so every other use of that item gets the centred model too
     centerGroundModel?: boolean;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;

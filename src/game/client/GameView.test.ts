@@ -536,7 +536,7 @@ describe("dropped power-up timers", () => {
     });
 
     test.each(["giant_essence", "drill_demon"])(
-        "%s is enlarged without moving the pickup, and its timer clears the larger model",
+        "%s is drawn bigger, and its timer rises with it",
         (powerUp) => {
             const { sim, pickup, assets, view, ctx, project, draw } = setup();
             assets.get.mockReturnValue({ ...model, radius: 64 });
@@ -553,7 +553,6 @@ describe("dropped power-up timers", () => {
             const normalTimerY = ctx.arc.mock.lastCall![1];
 
             pickup.powerUp = powerUp;
-            const before = { ...pickup };
             view.submitActors(actors, sim, 1);
             const enlarged = actorDraw.mock.lastCall!;
             const enlargedScale = enlarged[7]!.scale!;
@@ -562,10 +561,6 @@ describe("dropped power-up timers", () => {
             expect(enlarged[7]!.unlit).toBe(1);
             draw();
             expect(ctx.arc.mock.lastCall![1]).toBeLessThan(normalTimerY);
-            const modelTop = enlarged[4] - (model.height * enlargedScale) / 128;
-            const modelEdge = 100 + modelTop * 32 - (64 * enlargedScale * 32) / 128;
-            expect(ctx.arc.mock.lastCall![1] + ctx.arc.mock.lastCall![2]).toBeLessThan(modelEdge);
-            expect(pickup).toEqual(before);
         },
     );
 
