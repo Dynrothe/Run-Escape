@@ -38,7 +38,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
   and passive effects, levels and unlocks.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
-  adventurer, shared levels, and the run going on while anyone's standing.
+  adventurer, shared levels, live party stats in the menu, and the run going on while anyone's
+  standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
 - **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark

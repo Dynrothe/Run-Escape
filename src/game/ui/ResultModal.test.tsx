@@ -146,7 +146,7 @@ test("starts on your own stats and cycles every player with themed buttons and a
     expect(stat("Individual stats", "Kills")).toBe("2");
     expect(stat("Individual stats", "Damage dealt")).toBe("200");
     expect(stat("Party totals", "Kills")).toBe("10");
-    expect(stat("Party totals", "Damage dealt")).toBe("1,000");
+    expect(stat("Party totals", "Damage dealt")).toBe((1000).toLocaleString());
 
     fireEvent.click(screen.getByRole("button", { name: "Next player's stats" }));
     expect(screen.getByText("Charlie")).toBeInTheDocument();

@@ -8,6 +8,7 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    PlayerResultView,
     SlotView,
     UiSnapshot,
 } from "../client/GameStore";
@@ -106,6 +107,77 @@ function renderHud(methods: Record<string, unknown> = {}, devTools = false) {
     const view = render(<GameUi store={store} client={client} />);
     return { store, view, setCameraZoom, client };
 }
+
+test.each([false, true])("co-op menu browses live player stats (touch %s)", (coarse) => {
+    device.coarse = coarse;
+    const { store } = renderHud();
+    const players: PlayerResultView[] = ["Alice", "Bob", "Charlie"].map((name, index) => ({
+        name,
+        characterName: "Warrior",
+        isLocal: index === 1,
+        down: index === 0,
+        left: index === 2,
+        kills: index + 1,
+        damageDealt: (index + 1) * 100,
+        caskets: index,
+        highestHit: 30 + index,
+        damageTaken: 10 + index,
+        healed: 20 + index,
+        rerollsUsed: 0,
+        skips: 0,
+        damage: [{ name: `${name}'s weapon`, damage: 100, kills: index + 1, perSecond: 5 }],
+    }));
+    act(() =>
+        store.set({
+            overlay: "paused",
+            party: players
+                .filter((player) => !player.isLocal)
+                .map((player) => ({
+                    name: player.name,
+                    characterId: "warrior",
+                    hp: 10,
+                    maxHp: 20,
+                    down: player.down,
+                    left: player.left,
+                    revivable: false,
+                    reviveProgress: 0,
+                    immune: false,
+                })),
+        }),
+    );
+    // The menu can mount before its first numbers update.
+    expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
+    act(() => store.setNumbers(numbers({ partyStats: players })));
+    expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next player's stats" }));
+    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+    const individual = () => screen.getByRole("table", { name: "Individual stats" });
+    expect(individual()).toHaveTextContent("300");
+    expect(screen.getByRole("table", { name: "Damage breakdown" })).toHaveTextContent(
+        "Charlie's weapon",
+    );
+    act(() =>
+        store.setNumbers(
+            numbers({
+                partyStats: players.map((player) =>
+                    player.name === "Charlie" ? { ...player, damageDealt: 450 } : player,
+                ),
+            }),
+        ),
+    );
+    expect(individual()).toHaveTextContent("450");
+    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next player's stats" }));
+    expect(screen.getByText("Player 1 of 3 · Down")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Previous player's stats" }));
+    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+    act(() => store.set({ overlay: "none" }));
+    expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
+    act(() => store.set({ overlay: "paused" }));
+    expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+    cleanup();
+    device.coarse = false;
+});
 
 afterEach(() => {
     cleanup();

@@ -29,6 +29,7 @@ import {
     HudNumbers,
     HudView,
     InventorySlotView,
+    PlayerResultView,
     QuestTrackView,
     SlotView,
     UiSnapshot,
@@ -4850,6 +4851,189 @@ function formatQuestProgress(quest: QuestTrackView): string {
         : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`;
 }
 
+function PlayerStatsNav({
+    players,
+    playerIndex,
+    changePlayer,
+}: {
+    players: PlayerResultView[];
+    playerIndex: number;
+    changePlayer: (direction: number) => void;
+}): JSX.Element {
+    const player = players[playerIndex];
+    return (
+        <div
+            className="ui-result-player-nav"
+            role="group"
+            aria-label={t("ui.result.player_nav_aria")}
+        >
+            <button
+                className="ui-button ui-result-arrow"
+                aria-label={t("ui.result.prev_player_aria")}
+                title={t("ui.result.prev_player_title")}
+                onClick={() => changePlayer(-1)}
+            >
+                <span className="ui-result-arrow-left" aria-hidden="true" />
+            </button>
+            <div className="ui-result-player" aria-live="polite" aria-atomic="true">
+                <div className="ui-result-player-name">
+                    {player.name}
+                    {player.isLocal && t("ui.result.you")}
+                </div>
+                <div className="ui-result-player-detail">
+                    {t("ui.result.player_index", {
+                        current: playerIndex + 1,
+                        total: players.length,
+                    })}
+                    {player.left ? t("ui.result.left_run") : player.down ? t("ui.result.down") : ""}
+                </div>
+            </div>
+            <button
+                className="ui-button ui-result-arrow"
+                aria-label={t("ui.result.next_player_aria")}
+                title={t("ui.result.next_player_title")}
+                onClick={() => changePlayer(1)}
+            >
+                <span className="ui-result-arrow-right" aria-hidden="true" />
+            </button>
+        </div>
+    );
+}
+
+function PlayerStatsTable({ player }: { player: PlayerResultView }): JSX.Element {
+    return (
+        <table className="ui-result-table" aria-label={t("ui.result.individual_stats")}>
+            <tbody>
+                <tr>
+                    <td>{t("ui.result.stat.adventurer")}</td>
+                    <td>{tl(player.characterName)}</td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.kills")}</td>
+                    <td>
+                        <Big value={player.kills} />
+                    </td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.damage_dealt")}</td>
+                    <td>
+                        <Big value={player.damageDealt} />
+                    </td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.biggest_hit")}</td>
+                    <td>
+                        <Big value={player.highestHit} />
+                    </td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.damage_taken")}</td>
+                    <td>
+                        <Big value={player.damageTaken} />
+                    </td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.healed")}</td>
+                    <td>
+                        <Big value={player.healed} />
+                    </td>
+                </tr>
+                <tr>
+                    <td>{t("ui.result.stat.caskets")}</td>
+                    <td>{player.caskets}</td>
+                </tr>
+                {(player.rerollsUsed > 0 || player.skips > 0) && (
+                    <tr>
+                        <td>{t("ui.result.stat.rerolls_skips")}</td>
+                        <td>
+                            {player.rerollsUsed} / {player.skips}
+                        </td>
+                    </tr>
+                )}
+            </tbody>
+        </table>
+    );
+}
+
+function PlayerDamageTable({ player }: { player: PlayerResultView }): JSX.Element {
+    return (
+        <table className="ui-result-damage" aria-label={t("ui.result.damage_breakdown")}>
+            <thead>
+                <tr>
+                    <th />
+                    <th>{t("ui.result.damage")}</th>
+                    <th>{t("ui.result.stat.kills")}</th>
+                    <th>{t("ui.damage.dps")}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {player.damage.map((row, i) => (
+                    <tr key={i}>
+                        <td>
+                            <span className="ui-result-source">
+                                {row.iconObjId !== undefined && (
+                                    <ItemIcon
+                                        objId={row.iconObjId}
+                                        spriteId={row.iconSpriteId}
+                                        size={24}
+                                    />
+                                )}
+                                <span
+                                    className="ui-result-name"
+                                    style={{ color: row.color }}
+                                    title={tl(row.name)}
+                                >
+                                    {tl(row.name)}
+                                </span>
+                            </span>
+                        </td>
+                        <td>
+                            <Big value={row.damage} />
+                        </td>
+                        <td>
+                            <Big value={row.kills} />
+                        </td>
+                        <td>{row.perSecond !== undefined ? formatPerSecond(row.perSecond) : ""}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+function PartyStats({ client }: { client: GameClient }): JSX.Element | null {
+    const players = useHudNumber(client, (n) => n.partyStats);
+    // Undefined follows the local player even if the first live snapshot arrives after mounting.
+    const [selected, setSelected] = useState<number>();
+    if (!players?.length) return null;
+    const playerIndex =
+        selected ??
+        Math.max(
+            0,
+            players.findIndex((player) => player.isLocal),
+        );
+    const player = players[playerIndex];
+    return (
+        <>
+            <h3 className="ui-pause-heading">{t("pause.heading.party_stats")}</h3>
+            <PlayerStatsNav
+                players={players}
+                playerIndex={playerIndex}
+                changePlayer={(direction) =>
+                    setSelected((playerIndex + direction + players.length) % players.length)
+                }
+            />
+            <PlayerStatsTable player={player} />
+            {player.damage.length > 0 && (
+                <>
+                    <h3 className="ui-pause-heading">{t("ui.result.damage_breakdown")}</h3>
+                    <PlayerDamageTable player={player} />
+                </>
+            )}
+        </>
+    );
+}
+
 function PauseModal({
     ui,
     hud,
@@ -4911,6 +5095,7 @@ function PauseModal({
                 )}
                 <div className="ui-pause-columns">
                     <div className="ui-pause-column">
+                        {coop && <PartyStats client={client} />}
                         {hud.stats.length > 0 && (
                             <>
                                 <h3 className="ui-pause-heading">
@@ -5367,45 +5552,11 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </p>
                 ))}
                 {multiplayer && player && (
-                    <div
-                        className="ui-result-player-nav"
-                        role="group"
-                        aria-label={t("ui.result.player_nav_aria")}
-                    >
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.prev_player_aria")}
-                            title={t("ui.result.prev_player_title")}
-                            onClick={() => changePlayer(-1)}
-                        >
-                            <span className="ui-result-arrow-left" aria-hidden="true" />
-                        </button>
-                        <div className="ui-result-player" aria-live="polite" aria-atomic="true">
-                            <div className="ui-result-player-name">
-                                {player.name}
-                                {player.isLocal && t("ui.result.you")}
-                            </div>
-                            <div className="ui-result-player-detail">
-                                {t("ui.result.player_index", {
-                                    current: playerIndex + 1,
-                                    total: players.length,
-                                })}
-                                {player.left
-                                    ? t("ui.result.left_run")
-                                    : player.down
-                                      ? t("ui.result.down")
-                                      : ""}
-                            </div>
-                        </div>
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.next_player_aria")}
-                            title={t("ui.result.next_player_title")}
-                            onClick={() => changePlayer(1)}
-                        >
-                            <span className="ui-result-arrow-right" aria-hidden="true" />
-                        </button>
-                    </div>
+                    <PlayerStatsNav
+                        players={players}
+                        playerIndex={playerIndex}
+                        changePlayer={changePlayer}
+                    />
                 )}
                 {result && player && (
                     <div className="ui-result-columns">
@@ -5415,59 +5566,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {t("ui.result.individual_stats")}
                                 </h3>
                             )}
-                            <table
-                                className="ui-result-table"
-                                aria-label={t("ui.result.individual_stats")}
-                            >
-                                <tbody>
-                                    <tr>
-                                        <td>{t("ui.result.stat.adventurer")}</td>
-                                        <td>{tl(player.characterName)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.kills")}</td>
-                                        <td>
-                                            <Big value={player.kills} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_dealt")}</td>
-                                        <td>
-                                            <Big value={player.damageDealt} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.biggest_hit")}</td>
-                                        <td>
-                                            <Big value={player.highestHit} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_taken")}</td>
-                                        <td>
-                                            <Big value={player.damageTaken} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.healed")}</td>
-                                        <td>
-                                            <Big value={player.healed} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.caskets")}</td>
-                                        <td>{player.caskets}</td>
-                                    </tr>
-                                    {(player.rerollsUsed > 0 || player.skips > 0) && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.rerolls_skips")}</td>
-                                            <td>
-                                                {player.rerollsUsed} / {player.skips}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                            <PlayerStatsTable player={player} />
                             <h3 className="ui-pause-heading">
                                 {multiplayer
                                     ? t("ui.result.party_totals")
@@ -5595,54 +5694,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                 <h3 className="ui-pause-heading">
                                     {t("ui.result.damage_breakdown")}
                                 </h3>
-                                <table
-                                    className="ui-result-damage"
-                                    aria-label={t("ui.result.damage_breakdown")}
-                                >
-                                    <thead>
-                                        <tr>
-                                            <th />
-                                            <th>{t("ui.result.damage")}</th>
-                                            <th>{t("ui.result.stat.kills")}</th>
-                                            <th>{t("ui.damage.dps")}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {player.damage.map((row, i) => (
-                                            <tr key={i}>
-                                                <td>
-                                                    <span className="ui-result-source">
-                                                        {row.iconObjId !== undefined && (
-                                                            <ItemIcon
-                                                                objId={row.iconObjId}
-                                                                spriteId={row.iconSpriteId}
-                                                                size={24}
-                                                            />
-                                                        )}
-                                                        <span
-                                                            className="ui-result-name"
-                                                            style={{ color: row.color }}
-                                                            title={tl(row.name)}
-                                                        >
-                                                            {tl(row.name)}
-                                                        </span>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <Big value={row.damage} />
-                                                </td>
-                                                <td>
-                                                    <Big value={row.kills} />
-                                                </td>
-                                                <td>
-                                                    {row.perSecond !== undefined
-                                                        ? formatPerSecond(row.perSecond)
-                                                        : ""}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <PlayerDamageTable player={player} />
                             </div>
                         )}
                     </div>

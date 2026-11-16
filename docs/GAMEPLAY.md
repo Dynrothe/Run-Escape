@@ -1264,7 +1264,9 @@ version and how to run it.
       while they were down are theirs to choose once they're back, but a casket picked up
       meanwhile has no item for them.
     - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
-      leaving ends it for everyone.
+      leaving ends it for everyone. **Party stats** shows each player's live kills, damage,
+      healing and caskets, with their weapons' damage, kills and average DPS as on the results
+      screen. Use the arrows to browse everyone, including downed players and those who left.
     - Teammates show with their names in green, an arrow at the edge of the screen when they're out
       of view, green dots on the minimap and their hitpoints down the left of the screen.
     - **Movement prediction** (on by default, in Settings and the pause menu): a player who

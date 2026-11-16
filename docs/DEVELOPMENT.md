@@ -2544,6 +2544,13 @@ it again when it's next opened on it.
 
 ### Co-op
 
+The co-op menu's **Party stats** reuses the results' player navigation, individual totals and
+damage tables in `ui/GameUi.tsx`. `GameClient.updateHud` publishes `HudNumbers.partyStats` using
+`RunStatsViews.getPlayerResultViews` only while the co-op menu is open (not its Collection log).
+It follows the HUD's number store, so browsing updates live without changing the sim or sending
+network actions. DPS is the results' average over each source's active time, not the HUD meter's
+recent window.
+
 Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from the same seed and
 everyone's loadout (`GameStart`), and only what the players do goes over the network. The host
 numbers the ticks (frames) and sends, every frame or two, what happened at each: who changed what
