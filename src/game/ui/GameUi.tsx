@@ -3748,7 +3748,8 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                     className={
                         "ui-buff" +
                         (buff.harmful ? " ui-buff-harmful" : "") +
-                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "") +
+                        (buff.id === "ring_of_life" ? " ui-buff-revive-ring" : "")
                     }
                     aria-label={tl(buff.name)}
                     description={

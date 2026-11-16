@@ -334,10 +334,12 @@ describe("the run's HUD", () => {
             ),
         );
         const ring = view.getByRole("button", { name: "Ring of life" });
+        expect(ring).toHaveClass("ui-buff-revive-ring");
         expect(ring.querySelector(".ui-icon")).not.toBeNull();
         expect(ring).not.toHaveTextContent(/\ds/);
         expect(ring.querySelector(".ui-buff-bar")).toBeNull();
         const timed = view.getByRole("button", { name: "Potion" });
+        expect(timed).not.toHaveClass("ui-buff-revive-ring");
         expect(timed).toHaveTextContent("30s");
         expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
         fireEvent.focus(timed);
