@@ -629,6 +629,8 @@ const POLYMORPH_TURN_SECONDS = [1, 2.5];
 const POLYMORPH_GRAZE_CHANCE = 0.25;
 // At most one of a polymorphed flock says its line this often, so a big one can't fill the screen
 const POLYMORPH_SHOUT_GAP = 0.4;
+// A golden sheep's "Baa!" with each attack is up only this long, as it comes so often
+const GOLDEN_SHEEP_SHOUT_SECONDS = 1;
 // What each of a polymorphed enemy's own rolls is for (Sim.polymorphRoll), so no two share one
 const POLYMORPH_ROLL = { look: 0, variant: 1, graze: 2, heading: 3, turn: 4, shout: 5, sound: 6 };
 // Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
@@ -4151,6 +4153,7 @@ export class Sim {
         this.stepTethers();
         this.stepEnemyProjectiles();
         this.stepBossFight();
+        this.stepGoldenSheep();
         this.stepFloor();
         this.stepRule();
         this.stepRelics();
@@ -20472,11 +20475,20 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
-        // A polymorphed penguin's cover is blown, and the agents inside make a run for it
-        if (polymorph?.look === "penguin") {
+        // A polymorphed penguin's cover is blown, and the agents inside make a run for it (or
+        // whatever else was inside an animal)
+        if (
+            polymorph &&
+            getPolymorphLook(
+                getPolymorphEffect(polymorph.powerUpId),
+                polymorph.look,
+                polymorph.variant,
+            ).escapees
+        ) {
             this.emit({
                 type: "polymorphEscape",
                 powerUpId: polymorph.powerUpId,
+                look: polymorph.look,
                 x: enemy.x,
                 y: enemy.y,
             });
@@ -24459,7 +24471,8 @@ export class Sim {
         enemy.anim = "walk";
         const player = this.player;
         const grid = this.getMoveGrid(enemy.def);
-        const speed = enemy.speed * effect.speed;
+        const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
+        const speed = enemy.speed * effect.speed * (look.pace ?? 1);
         const fromX = enemy.x;
         const fromY = enemy.y;
         // Knockback still throws it about, frozen or not, as it does the rest
@@ -24535,6 +24548,38 @@ export class Sim {
             return;
         }
         this.nextPolymorphShout = this.tick + secondsToTicks(POLYMORPH_SHOUT_GAP);
+        this.emitPolymorphShout(enemy, polymorph, effect);
+    }
+
+    // A golden sheep says its line with every attack it starts, whatever the flock's gap
+    private stepGoldenSheep(): void {
+        const polymorphing = this.polymorphing;
+        if (!polymorphing || this.tick >= polymorphing.endTick) {
+            return;
+        }
+        for (const enemy of this.enemies) {
+            const polymorph = this.polymorphOf(enemy);
+            if (
+                polymorph?.look === "golden" &&
+                enemy.anim === "attack" &&
+                enemy.animStart === this.tick
+            ) {
+                this.emitPolymorphShout(
+                    enemy,
+                    polymorph,
+                    getPolymorphEffect(polymorph.powerUpId),
+                    GOLDEN_SHEEP_SHOUT_SECONDS,
+                );
+            }
+        }
+    }
+
+    private emitPolymorphShout(
+        enemy: Enemy,
+        polymorph: EnemyPolymorph,
+        effect: PolymorphEffect,
+        seconds?: number,
+    ): void {
         const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
         const sounds = look.shoutSounds ?? effect.shoutSounds;
         this.emit({
@@ -24546,6 +24591,7 @@ export class Sim {
             ],
             x: enemy.x,
             y: enemy.y,
+            seconds,
         });
     }
 

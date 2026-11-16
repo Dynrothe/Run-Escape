@@ -45,6 +45,10 @@ the version in the corner).
   instead of a thin line. The Chain-hit axes' and the Dagannoth Supreme's too.
 - Giant rune essence and the Drill Demon's helmet are bigger on the ground, by Deivid Smarzaro, so
   they're easier to spot.
+- Polymorph's sheep baa a little louder, by GhostavoA, and a golden sheep says "Baa!" with every
+  attack.
+- Polymorph's odd sheep out turns up as often as the penguin, by GhostavoA, snores as it goes, and
+  has a surprise inside.
 
 ### Fixed
 
@@ -53,6 +57,7 @@ the version in the corner).
 - The Ring of life showing your revive sits in the middle of its box. Fixed by Deivid Smarzaro.
 - The Drill Demon's dropped helmet turns on the spot, in the middle of its pickup. Fixed by Deivid
   Smarzaro.
+- Wolves die with a wolf's yelp, not a rat's squeak. Fixed by GhostavoA.
 
 ## 0.33.2 - 2026-11-15
 

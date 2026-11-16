@@ -665,9 +665,9 @@ export function getPolymorphKey(powerUpId: string, look: PolymorphKind, variant:
     return `polymorph:${powerUpId}:${look}:${variant}`;
 }
 
-// What runs out of a polymorph's penguin (PolymorphEscapees)
-export function getPolymorphEscapeeKey(powerUpId: string): string {
-    return `polymorph:${powerUpId}:escapee`;
+// What runs out of a polymorph's animal, the penguin say (PolymorphLook.escapees)
+export function getPolymorphEscapeeKey(powerUpId: string, look: PolymorphKind): string {
+    return `polymorph:${powerUpId}:${look}:escapee`;
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -1135,14 +1135,15 @@ export class GameAssets {
                             def.attackSeq ?? -1,
                         ].filter((s) => s !== -1),
                     });
+                    if (def.escapees) {
+                        requests.push({
+                            kind: "npc",
+                            key: getPolymorphEscapeeKey(id, look),
+                            npcId: def.escapees.npcId,
+                            seqIds: [def.escapees.walkSeq],
+                        });
+                    }
                 }
-                const { npcId, walkSeq } = effect.penguin.escapees;
-                requests.push({
-                    kind: "npc",
-                    key: getPolymorphEscapeeKey(id),
-                    npcId,
-                    seqIds: [walkSeq],
-                });
             }
         }
         // The visitors, and the Tombs' Helpful Spirit drawn as one

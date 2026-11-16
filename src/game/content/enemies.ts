@@ -2415,8 +2415,8 @@ export const ENEMIES: EnemyDef[] = [
         speed: 2.6,
         radius: 0.35,
         xp: 8,
-        // A rat's
-        sounds: { attack: 710, hit: 713, death: 711 },
+        // A rat's, but its own death
+        sounds: { attack: 710, hit: 713, death: 911 },
         scale: 0.8,
     },
     {

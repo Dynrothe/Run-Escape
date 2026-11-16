@@ -325,14 +325,28 @@ export const POWER_UPS: PowerUpDef[] = [
                 shoutSounds: [1855],
                 escapees: { npcId: 842, walkSeq: 5666, count: 2, speed: 4.5, seconds: 5, scale: 1 },
             },
-            // One in 3000 wanders off the other way
+            // One in 1000 is asleep on its feet and wanders off the other way, snoring, and a
+            // monkey child runs out of it when it's killed
             rare: {
                 npcId: 10594,
                 idleSeq: 232,
                 walkSeq: 233,
                 deathSeq: -1,
                 scale: 1,
-                chance: 1 / 3000,
+                // Half asleep, so half as quick
+                pace: 0.5,
+                chance: 1 / 1000,
+                shout: "ZzZ...",
+                // Troll snoring
+                shoutSounds: [869],
+                escapees: {
+                    npcId: 5268,
+                    walkSeq: 1380,
+                    count: 1,
+                    speed: 4.5,
+                    seconds: 5,
+                    scale: 1,
+                },
             },
             shout: "Baa!",
             shoutSeconds: 8,
