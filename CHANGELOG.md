@@ -69,6 +69,8 @@ the version in the corner).
 - The Drill Demon's dropped helmet turns on the spot, in the middle of its pickup. Fixed by Deivid
   Smarzaro.
 - Wolves die with a wolf's yelp, not a rat's squeak. Fixed by GhostavoA.
+- Barrows' blocking plants now have low wooden bases to distinguish them from passable foliage.
+  Fixed by Deivid Smarzaro.
 
 ## 0.33.2 - 2026-11-15
 

@@ -1086,9 +1086,11 @@ gives a ScapeRune map a loc a different model or size, and two bugs were fixed (
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 
-Karamja's blocking Jungle plants (the ids in `JUNGLE_PLANTS`) have low wooden bases, made from the
-cache's Tree stump (loc 1354, model 1635), because loc 1398's model also stands there as a "Plant"
-(loc 1390) you can walk through. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
+Karamja's blocking Jungle plants and Barrows' swamp Plants (the ids in `BARRIER_PLANTS`) have low
+wooden bases, made from the cache's Tree stump (loc 1354, model 1635). They distinguish solid
+plants from passable foliage: Karamja's loc 1398 even shares its model with a "Plant" (loc 1390)
+you can walk through. The selected loc types get the same cue wherever they occur.
+`src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
 render list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and
 the minimap stay unchanged. It copies the model, scales it to sit under the plant's leaves, keeps
 one copy for each size in a map square, and fits each to the terrain. A plant still blocks out to
