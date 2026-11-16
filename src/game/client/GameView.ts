@@ -218,6 +218,12 @@ const FLUNG_ARC_HEIGHT = 3;
 
 const HITSPLAT_MS = 900;
 const MAX_HITSPLATS = 120;
+const HITSPLAT_OFFSETS = [
+    [0, 0],
+    [0, -20],
+    [-15, -10],
+    [15, -10],
+] as const;
 // Each kind of swoosh, aura and blast is pruned as it's drawn, but a co-op
 // tab that's hidden keeps stepping without drawing, so they're capped too
 const MAX_EFFECTS = 200;
@@ -387,6 +393,7 @@ type Hitsplat = {
     y: number;
     amount: number;
     start: number;
+    slot: number;
     // Follows this enemy, or this hero (Sim.heroes, -1 for none)
     enemyUid: number;
     hero: number;
@@ -558,11 +565,34 @@ export class GameView {
         this.flash = undefined;
     }
 
-    private addHitsplat(hitsplat: Omit<Hitsplat, "start">): void {
+    private addHitsplat(hitsplat: Omit<Hitsplat, "start" | "slot">, now: number): void {
+        let occupied = 0;
+        let oldest = -1;
+        for (let i = 0; i < this.hitsplats.length; i++) {
+            const active = this.hitsplats[i];
+            if (
+                active.hero === hitsplat.hero &&
+                active.enemyUid === hitsplat.enemyUid &&
+                active.start + HITSPLAT_MS > now
+            ) {
+                occupied |= 1 << active.slot;
+                if (oldest === -1) {
+                    oldest = i;
+                }
+            }
+        }
+        let slot = 0;
+        while (occupied & (1 << slot)) {
+            slot++;
+        }
+        if (slot >= HITSPLAT_OFFSETS.length) {
+            slot = this.hitsplats[oldest].slot;
+            this.hitsplats.splice(oldest, 1);
+        }
         if (this.hitsplats.length >= MAX_HITSPLATS) {
             this.hitsplats.shift();
         }
-        this.hitsplats.push({ ...hitsplat, start: performance.now() + this.rngDelay() });
+        this.hitsplats.push({ ...hitsplat, slot, start: now + this.rngDelay() });
     }
 
     // Where hitsplats on a hero go, in tiles above the ground
@@ -583,35 +613,41 @@ export class GameView {
                     const model =
                         enemy && this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
                     const height = model ? (model.height * enemy.scale) / 128 : 1;
-                    this.addHitsplat({
-                        kind: event.blocked ? "block" : event.poison ? "poison" : "damage",
-                        x: event.x,
-                        y: event.y,
-                        amount: event.amount,
-                        enemyUid: event.enemyUid,
-                        hero: -1,
-                        height: height * 0.6,
-                    });
+                    this.addHitsplat(
+                        {
+                            kind: event.blocked ? "block" : event.poison ? "poison" : "damage",
+                            x: event.x,
+                            y: event.y,
+                            amount: event.amount,
+                            enemyUid: event.enemyUid,
+                            hero: -1,
+                            height: height * 0.6,
+                        },
+                        now,
+                    );
                     break;
                 }
                 case "playerHit":
                 case "playerPoisoned": {
                     const hero = event.hero ?? sim.focus;
                     const player = sim.heroes[hero].player;
-                    this.addHitsplat({
-                        kind:
-                            event.type === "playerHit"
-                                ? event.missed
-                                    ? "block"
-                                    : "damage"
-                                : "poison",
-                        x: player.x,
-                        y: player.y,
-                        amount: event.amount,
-                        enemyUid: 0,
-                        hero,
-                        height: this.playerHitsplatHeight(hero),
-                    });
+                    this.addHitsplat(
+                        {
+                            kind:
+                                event.type === "playerHit"
+                                    ? event.missed
+                                        ? "block"
+                                        : "damage"
+                                    : "poison",
+                            x: player.x,
+                            y: player.y,
+                            amount: event.amount,
+                            enemyUid: 0,
+                            hero,
+                            height: this.playerHitsplatHeight(hero),
+                        },
+                        now,
+                    );
                     break;
                 }
                 case "bossImpact":
@@ -3199,17 +3235,20 @@ export class GameView {
             if (!p.visible) {
                 continue;
             }
+            const [offsetX, offsetY] = HITSPLAT_OFFSETS[hitsplat.slot];
+            const x = p.x + offsetX * pixel;
+            const y = p.y + offsetY * pixel;
             ctx.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
             const sprite = this.assets.getSprite(HITSPLAT_SPRITES[hitsplat.kind]);
             if (sprite && cache) {
                 const image = this.hitsplatImages.get(sprite, font, pixel, hitsplat);
                 ctx.drawImage(
                     image.canvas,
-                    Math.round(p.x - image.inkWidth / 2) + image.left,
-                    Math.round(p.y - image.inkHeight / 2) + image.top,
+                    Math.round(x - image.inkWidth / 2) + image.left,
+                    Math.round(y - image.inkHeight / 2) + image.top,
                 );
             } else {
-                drawHitsplat(ctx, sprite, p.x, p.y, pixel, hitsplat.amount, hitsplat.kind);
+                drawHitsplat(ctx, sprite, x, y, pixel, hitsplat.amount, hitsplat.kind);
             }
         }
         ctx.globalAlpha = 1;
