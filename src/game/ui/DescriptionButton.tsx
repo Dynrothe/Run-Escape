@@ -18,6 +18,7 @@ import { tl, tp } from "../i18n";
 import { StatLine } from "./StatLine";
 
 const LONG_PRESS_MS = 500;
+const SHORT_PRESS_MS = 200;
 // Ignore the browser's and SharedTaps' clicks after handling a touch on release.
 const PRESS_CLICK_MS = 400;
 
@@ -30,6 +31,7 @@ type Props = Pick<
     children: ReactNode;
     onUse?: () => void;
     touch?: boolean;
+    shortHold?: boolean;
     silent?: boolean;
 };
 
@@ -39,6 +41,7 @@ export function DescriptionButton({
     children,
     onUse,
     touch = false,
+    shortHold = false,
     silent = true,
     disabled = false,
     ...props
@@ -173,12 +176,15 @@ export function DescriptionButton({
                     held: false,
                     cancelled: false,
                 };
-                timer.current = setTimeout(() => {
-                    if (press.current) {
-                        press.current.held = true;
-                        setHeld(true);
-                    }
-                }, LONG_PRESS_MS);
+                timer.current = setTimeout(
+                    () => {
+                        if (press.current) {
+                            press.current.held = true;
+                            setHeld(true);
+                        }
+                    },
+                    shortHold ? SHORT_PRESS_MS : LONG_PRESS_MS,
+                );
             }}
             onPointerMove={(e) => {
                 const start = press.current;

@@ -3567,6 +3567,7 @@ const Slots = memo(function Slots({
                 return (
                     <DescriptionButton
                         key={i}
+                        shortHold
                         itemId={slot?.id}
                         disabled={!slot || disabled}
                         aria-label={
