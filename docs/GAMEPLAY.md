@@ -488,18 +488,19 @@ version and how to run it.
   opened, gear and rare finds included, with a line saying what it was and no casket screen. It's
   the same as clicking High alch: alching a piece of a set you've started stops that set too.
 - **Auto equip** (off by default, in Settings and the pause menu) equips casket gear into empty
-  slots, or replaces gear only if no stat bonus decreases and at least one increases, including
-  Armoury and endless upgrades. Equal gear, trade-offs and utility items still ask. Replacing a
+  slots, or replaces gear only if no stat bonus decreases as shown and at least one increases,
+  including Armoury and endless upgrades: a stat lower by less than the casket shows (2.5% against
+  3%, both +3%) counts as the same. Equal gear, trade-offs and utility items still ask. Replacing a
   worn set piece always asks, even before its set bonus is active or when upgrading within the
   same set. Replaced gear is high alched as usual, with a line saying what was equipped and alched.
-  Auto alch takes priority if both settings are on.
+  Auto alch takes priority if both settings are on. Production Prodigy wears gear by the same rule.
 - **Elites** (golden, bigger, about one a minute) drop **reward caskets**, and any enemy can
   drop one now and then. They come in clue scroll tiers (easy, medium, hard, elite, and master
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
   edge of the screen points to ones out of view. Walk over one to open it: it rattles, bursts
   open and gives some coins and one item, which you equip, keep, use or high alch for coins.
-  Gear is set beside the piece it would replace: each stat's value on both, the difference, and
-  both pieces' set bonuses.
+  Gear lists its stats, then only the differences from the piece it would replace, green for
+  gains and red for losses. Both pieces' set bonuses show too.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
@@ -1199,8 +1200,8 @@ version and how to run it.
   Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
   Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
   from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
-  the Tombs of Amascut, and Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
-  it). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  the Tombs of Amascut, Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
+  it), and Ghommal's hilts, from Combat Achievements (hilts bought before then were refunded). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
   weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
   Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
@@ -1281,6 +1282,26 @@ version and how to run it.
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got, and the
   ones done all over if the map has what they're after (no Ratcatchers in the Inferno).
+- **Combat Achievements** (on the title screen) are challenges for solo runs, in six tiers from
+  Easy to Grandmaster: kill a boss without it hitting you, avoid one of its attacks, beat a map
+  under a restriction, or kill it fast. What no one can dodge (a parasite bursting, the
+  sleepwalkers' blast) never counts against one. Each pays its tier's coins once (100 to 3,000)
+  when the run it's done in ends, with a toast as it's done, and its points earn each tier's reward,
+  Ghommal's hilt 1 to 6, for the Collection log. Kill counts add up over solo runs. Co-op runs,
+  the Forgotten Four's gauntlet, the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
+  endless rounds they'd already done, without the coins. The screen has an overview of the tiers
+  and every task, with filters by tier, type and map. Some take more than one run: wins with a
+  melee, a ranged and a magic adventurer, every Act II map beaten, one of each Awakened invader
+  killed. One of the Theatre of Blood's takes all its perfect room tasks in the same run. Act II's
+  maps, the Awakened fights (a phase reached, the kill, an attack dodged, the fight's button used
+  well, a speed kill), Beneath Cursed Sands and the Thanksgiving Harvest have their own. So does
+  the Tombs of Amascut: a path cleared, the raid beaten at raid levels from 150 to 500, without
+  dying or without the Helpful Spirit's supplies, each path boss's attack dodged, and each puzzle
+  room without a mistake (Perfect Apmeken, Crondis, Het and Scabaras). Some ask for a win set up a
+  certain way: with a remix on, all four, 100 to 300 invocation points, or a final boss awakened
+  by an Awakener's orb. Pin up to five tasks there: in a run, the pinned ones the map has get a
+  row under the quests, which turns red with a toast saying what did it ("hit by Lunge") once
+  they're spoilt. The pause menu's Quests tab has every task the run is following, and how each is going.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).

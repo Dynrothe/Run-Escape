@@ -2138,6 +2138,152 @@ export type QuestDef = {
     coins: number;
 };
 
+// Combat Achievements (combatTasks.ts): challenges done in solo runs, by tier
+export type CombatTier = "easy" | "medium" | "hard" | "elite" | "master" | "grandmaster";
+export type CombatTaskType =
+    | "killCount"
+    | "speed"
+    | "perfection"
+    | "restriction"
+    | "mechanical"
+    | "stamina";
+
+// What a kill has to be without, from its boss's arrival to its kill: hits from the boss,
+// damage from these attacks by name, any damage at all, a hit while cursed, a sleepwalker
+// reaching it, or a healer (Phosani's parasites) healing it. Damage and hits while cursed let
+// through the goal's except.
+export type CombatAvoid =
+    | "hits"
+    | "damage"
+    | "hurtCursed"
+    | "sleepwalkers"
+    | "heals"
+    | { attacks: string[] };
+
+// What a run has to keep to while it beats its map
+export type CombatRules = {
+    // One weapon at most (evolutions replace it in place)
+    oneWeapon?: boolean;
+    // No rerolls, skips or banishes
+    noTakeBacks?: boolean;
+    noPassives?: boolean;
+    // No casket gear put on
+    noGear?: boolean;
+    // No Skills upgrades on the adventurer's page, and nothing in the Armoury
+    noUpgrades?: boolean;
+    // A raid: no teleporter used; no raid points spent at the supply chest, and no supply used
+    // (the Tombs of Amascut's, from the Helpful Spirit)
+    noTeleports?: boolean;
+    noSupplies?: boolean;
+    // No sleepwalker reaching its boss
+    noSleepwalkers?: boolean;
+    // The Tombs of Amascut: no death (each one a room started over)
+    noDeaths?: boolean;
+    // Under the cold (ColdRuleDef): never frozen solid
+    noFreezing?: boolean;
+};
+
+export type CombatGoal =
+    // Over every solo run (and old saves' runs, at migration). maps: these, the campaign's, or
+    // any that can be won; all: every one of them, rather than one
+    | {
+          kind: "beatMap";
+          maps: string[] | "campaign" | "any";
+          all?: boolean;
+          hard?: boolean;
+          expert?: boolean;
+      }
+    // Over every solo run: a map of these beaten with an adventurer of each of these styles
+    | {
+          kind: "beatWithEach";
+          maps: string[] | "campaign" | { campaignFrom: string };
+          styles: CombatStyle[];
+      }
+    // Over every solo run: count of these killed in all; each: one of each of them (count is then
+    // their number)
+    | { kind: "killCount"; enemyIds: string[]; count: number; each?: boolean }
+    | { kind: "endlessRound"; round: number; hard?: boolean }
+    // In one run: a phased boss reaching this phase (counted from 1)
+    | { kind: "reachPhase"; bossId: string; phase: number }
+    // Kill a boss (bossIds: all its forms, the first the one that arrives) without any of
+    // these, within this many seconds of its arrival if set. from: "finale" times it from its
+    // last stand rather than its arrival. except: attacks whose damage doesn't count, as
+    // nothing the player does can stop it (a mark, the sleepwalkers' blast). healers: only heals
+    // by these count against "heals" (Phosani's egg-hatched parasites, not one that bursts out of
+    // the player beside her)
+    | {
+          kind: "kill";
+          bossIds: string[];
+          without?: CombatAvoid[];
+          within?: number;
+          from?: "finale";
+          except?: string[];
+          healers?: string[];
+      }
+    // Each of these bosses killed within this many seconds of its own arrival
+    | { kind: "killEachWithin"; bossIds: string[]; seconds: number }
+    // Each of the map's bosses killed before the next one's due (its events), up to the last
+    | { kind: "killBeforeNext"; mapId: string }
+    // count of this boss killed within this many seconds, first to last
+    | { kind: "killTogether"; bossId: string; count: number; seconds: number }
+    // Beat the map (maps: these, the campaign's from this one on, or any), keeping to these. hard:
+    // on hard mode; within: seconds; damage: taken at most, leaving out except's attacks (as a
+    // kill's); hpAbove: never below this fraction. What the run's set up with, as it starts:
+    // awakened, its final boss by an Awakener's orb; remixes, at least this many on; points, at
+    // least this many invocation points (hard mode's among them); raidLevel, the Tombs of
+    // Amascut's at least this.
+    | {
+          kind: "win";
+          maps: string[] | "any" | { campaignFrom: string };
+          hard?: boolean;
+          within?: number;
+          damage?: number;
+          except?: string[];
+          hpAbove?: number;
+          rules?: CombatRules;
+          awakened?: boolean;
+          remixes?: number;
+          points?: number;
+          raidLevel?: number;
+      }
+    // Evolve this many weapons in one run
+    | { kind: "evolve"; count: number }
+    // Clear a raid's room (counted from 0)
+    | { kind: "clearRoom"; room: number }
+    // Kill this enemy before it gets away with the coins it stole
+    | { kind: "coinsBack"; enemyId: string }
+    // From a boss's arrival to its kill, never out of the fight's strike reach for longer than
+    // this many seconds at a time (not while it kneels or leaps)
+    | { kind: "stayInReach"; bossId: string; seconds: number }
+    // In one run, a boss's guard dropped (BossDef.guard) count times by any of these causes (its
+    // own attacks' names that missed, its arena's that caught it, or "Pillar"); stunned: only
+    // the times it was stunned
+    | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean }
+    // In one run, the fight's button (MapDef.fight.ability) landed on its boss count times;
+    // opened: only while the boss's guard was down (BossDef.guard)
+    | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean }
+    // The Tombs of Amascut: this path cleared, its room and its boss (any of them, without one)
+    | { kind: "clearPath"; path?: string }
+    // The Tombs of Amascut: this path's puzzle room beaten without a mistake in it (Sim's
+    // tombsMistake: a pillar or vent left, a spill, a wrong step, a beam or orb)
+    | { kind: "perfectRoom"; path: string }
+    // In one run, each of these tasks' goals met, whether they were done before or not (none of
+    // them another allOf); win: and the map beaten
+    | { kind: "allOf"; taskIds: string[]; win?: boolean };
+
+export type CombatTaskDef = {
+    // Never renamed: it's in saves
+    id: string;
+    name: string;
+    description: string;
+    tier: CombatTier;
+    type: CombatTaskType;
+    // The map it's done on: which runs track it, and the list's groups. None for the ones done
+    // all over.
+    mapId?: string;
+    goal: CombatGoal;
+};
+
 export type CharacterDef = {
     id: string;
     name: string;

@@ -4,6 +4,7 @@ import { createSave } from "../core/save";
 import { tp } from "../i18n";
 import { isMapOut } from "./acts";
 import {
+    COMBAT_ENTRY,
     LOG_TABS,
     REWARD_MAPS,
     getLogEntries,
@@ -38,7 +39,9 @@ describe("the Collection log's rewards", () => {
 
     it("lists every trophy once, under its own map, but a map's that isn't out yet", () => {
         const save = createSave();
-        const listed = REWARD_MAPS.flatMap((mapId) => getRewards(save, mapId).map((r) => r.id));
+        const listed = [...REWARD_MAPS, COMBAT_ENTRY].flatMap((mapId) =>
+            getRewards(save, mapId).map((r) => r.id),
+        );
         for (const trophy of TROPHIES) {
             const map = MAP_BY_ID.get(getTrophyMap(trophy));
             const out = !map || isMapOut(map);
@@ -52,6 +55,19 @@ describe("the Collection log's rewards", () => {
         const halloween = getRewards(save, "halloween").map((r) => r.id);
         expect(halloween).not.toContain("ghrazi_rapier");
         expect(halloween).not.toContain("lil_zik");
+    });
+
+    it("has Ghommal's hilts in a Combat Achievements entry under Other, with the points had", () => {
+        const save = createSave();
+        save.combatTasks = ["bite_proof"];
+        const entry = getLogEntries(save).find((e) => e.id === COMBAT_ENTRY)!;
+        expect(entry.tab).toBe("other");
+        expect(entry.items.map((item) => item.id)).toEqual(
+            [1, 2, 3, 4, 5, 6].map((n) => `ghommals_hilt_${n}`),
+        );
+        expect(entry.tally?.n).toBeGreaterThan(0);
+        expect(REWARD_MAPS).not.toContain(COMBAT_ENTRY);
+        expect(getRewards(save, "halloween").map((r) => r.id)).not.toContain("ghommals_hilt_1");
     });
 
     it("lists the weapons a map brings in: the Theatre's chest's, the Nightmare's", () => {

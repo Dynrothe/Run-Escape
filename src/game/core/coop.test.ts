@@ -1241,6 +1241,24 @@ describe("co-op boss encounters", () => {
     });
 });
 
+describe("co-op revives given", () => {
+    afterEach(() => usePortableMath(false));
+
+    it("counts a revive for who gave it, for the pause menu", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        down(sim, b);
+        standOver(a, b);
+        for (let i = 0; i < REVIVE_SECONDS * TICKS_PER_SECOND; i++) {
+            sim.step();
+        }
+        expect(b.down).toBe(false);
+        expect(a.revivesGiven).toBe(1);
+        expect(b.revivesGiven).toBe(0);
+        expect(b.revived).toBe(1);
+    });
+});
+
 describe("portable math", () => {
     afterEach(() => usePortableMath(false));
 

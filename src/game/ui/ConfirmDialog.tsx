@@ -10,16 +10,27 @@ export type ConfirmOptions = {
     body: ReactNode;
     // What the button does ("Give up"), not "OK"
     confirm: string;
+    // An optional third choice, between cancelling and confirming
+    alternative?: string;
     // Omitted for a message with only the one button
     cancel?: string;
 };
 
-type Props = ConfirmOptions & { onAnswer: (confirmed: boolean) => void };
+export type ConfirmAnswer = boolean | "alternative";
+
+type Props = ConfirmOptions & { onAnswer: (answer: ConfirmAnswer) => void };
 
 // In place of the browser's confirm and alert, in the game's own panels. The keys go to it alone:
 // it listens first, so the screen or run behind it doesn't hear them. The focus starts on the way
 // out, so Enter can't do the irreversible thing by accident.
-export function ConfirmDialog({ title, body, confirm, cancel, onAnswer }: Props): JSX.Element {
+export function ConfirmDialog({
+    title,
+    body,
+    confirm,
+    alternative,
+    cancel,
+    onAnswer,
+}: Props): JSX.Element {
     const titleId = useId();
     const bodyId = useId();
     const panel = useRef<HTMLDivElement>(null);
@@ -67,8 +78,17 @@ export function ConfirmDialog({ title, body, confirm, cancel, onAnswer }: Props)
                             {cancel}
                         </button>
                     )}
+                    {alternative !== undefined && (
+                        <button
+                            ref={cancel === undefined ? first : undefined}
+                            className="ui-button"
+                            onClick={() => onAnswer("alternative")}
+                        >
+                            {alternative}
+                        </button>
+                    )}
                     <button
-                        ref={cancel === undefined ? first : undefined}
+                        ref={cancel === undefined && alternative === undefined ? first : undefined}
                         className="ui-button"
                         onClick={() => onAnswer(true)}
                     >
@@ -81,14 +101,14 @@ export function ConfirmDialog({ title, body, confirm, cancel, onAnswer }: Props)
     );
 }
 
-export type Confirm = (options: ConfirmOptions) => Promise<boolean>;
+export type Confirm = (options: ConfirmOptions) => Promise<ConfirmAnswer>;
 
-// The way a screen asks: await confirm({...}) is true once the player says yes. Render the second
-// value somewhere in the screen.
+// The way a screen asks: await confirm({...}) is true once the player confirms, false when they
+// cancel, or "alternative" for an optional third choice. Render the second value in the screen.
 export function useConfirm(): [Confirm, JSX.Element | null] {
     const [asking, setAsking] = useState<{
         options: ConfirmOptions;
-        resolve: (confirmed: boolean) => void;
+        resolve: (answer: ConfirmAnswer) => void;
     }>();
     const confirm = useCallback<Confirm>(
         (options) => new Promise((resolve) => setAsking({ options, resolve })),

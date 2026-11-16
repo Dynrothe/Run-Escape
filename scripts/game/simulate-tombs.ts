@@ -24,8 +24,10 @@
 //   MINUTES=15   how long a room gets before it counts as failed (the raid gets 90)
 //   VERBOSE=1    the run's log as it goes (tombsBot's TombsLog)
 //   SMITE=0      never presses the raid's button (TombsDef.ability), nor goes in for it
+//   CA=1         which Combat Achievements each run did, and what spoilt the rest (solo only)
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
+import { describeCombatReason } from "../../src/game/content/combatTasks";
 import { INVOCATIONS, cleanInvocations, getRaidLevel } from "../../src/game/content/invocations";
 import { CASKET_GEAR } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
@@ -33,8 +35,10 @@ import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { WARDENS } from "../../src/game/content/tombs";
 import { CombatStyle, emptyStats } from "../../src/game/content/types";
 import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
+import { CombatTracker } from "../../src/game/core/CombatTracker";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
+import { createSave } from "../../src/game/core/save";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { loadRegionData } from "./collision-snapshot";
 import {
@@ -491,6 +495,7 @@ class PuzzleWatch {
 function runOnce(seed: number): Outcome {
     const sim = newSim(seed);
     setUp(sim);
+    const combat = process.env.CA === "1" ? CombatTracker.forRun(sim, createSave()) : undefined;
     const log = verbose ? new TombsLog() : undefined;
     const watch = new PuzzleWatch();
     const bossWatch = new BossWatch();
@@ -604,7 +609,9 @@ function runOnce(seed: number): Outcome {
         const deathsBefore = sim.tombsDeaths;
         sim.step();
         let lastHit: string | undefined;
-        for (const event of sim.takeEvents()) {
+        const events = sim.takeEvents();
+        combat?.observe(sim, events);
+        for (const event of events) {
             if (event.type === "playerHit") {
                 hits.set(event.enemyId, (hits.get(event.enemyId) ?? 0) + event.amount);
                 lastHit = event.enemyId;
@@ -649,8 +656,22 @@ function runOnce(seed: number): Outcome {
                 : []),
             ...attackNotes(sim),
             ...(roomArg === "raid" || roomArg === "wardens" ? boardNotes(sim) : []),
+            ...(combat ? combatNotes(combat, sim) : []),
         ],
     };
+}
+
+// The Combat Achievements the run did, and what spoilt the ones it didn't (CA=1)
+function combatNotes(combat: CombatTracker, sim: Sim): string[] {
+    const statuses = combat.statuses(sim);
+    const done = statuses.filter((s) => s.state === "done").map((s) => s.task.id);
+    const failed = statuses
+        .filter((s) => s.state === "failed")
+        .map((s) => `${s.task.id} (${s.reason ? describeCombatReason(s.reason) : ""})`);
+    return [
+        `combat tasks done: ${done.join(", ") || "none"}`,
+        `combat tasks failed: ${failed.join(", ") || "none"}`,
+    ];
 }
 
 // Which boss attacks did the damage, every hero's together
