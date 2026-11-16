@@ -1949,8 +1949,7 @@
 }
 
 /* The damage meter, under the quest tracker, and each weapon's under it */
-/* Only the DPS takes clicks: the panel under it lets them through to the
-   game, the mouse wheel's zoom included */
+/* The DPS and its open panel take clicks; the gaps let them through to the game. */
 .ui-damage {
     display: flex;
     flex-direction: column;
@@ -1975,6 +1974,12 @@
 }
 
 .ui-damage-panel {
+    pointer-events: auto;
+    cursor: pointer;
+    box-sizing: content-box;
+    font: inherit;
+    color: inherit;
+    text-align: left;
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
     align-items: center;

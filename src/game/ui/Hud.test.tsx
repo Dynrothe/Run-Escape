@@ -440,6 +440,43 @@ describe("the run's HUD", () => {
         expect(levels()).toEqual(["2", "1"]);
     });
 
+    test.each([false, true])("the DPS and open panel toggle once (touch: %s)", (coarse) => {
+        device.coarse = coarse;
+        const toggleDamagePanel = vi.fn(() =>
+            store.set({
+                display: {
+                    ...store.getSnapshot().display,
+                    damagePanel: !store.getSnapshot().display.damagePanel,
+                },
+            }),
+        );
+        const { store, view } = renderHud({ toggleDamagePanel });
+        act(() =>
+            store.set({
+                display: { ...store.getSnapshot().display, damagePanel: false },
+            }),
+        );
+        const toggle = view.container.querySelector(".ui-damage > .ui-dps")!;
+        const panel = () => view.container.querySelector(".ui-damage-panel");
+        expect(panel()).toBeNull();
+
+        for (const selector of [null, ".ui-damage-name", ".ui-damage-dps", ".ui-damage-bar"]) {
+            toggleDamagePanel.mockClear();
+            fireEvent.click(toggle);
+            expect(toggleDamagePanel).toHaveBeenCalledTimes(1);
+            expect(store.getSnapshot().display.damagePanel).toBe(true);
+            expect(panel()).not.toBeNull();
+            toggleDamagePanel.mockClear();
+            fireEvent.click(selector ? panel()!.querySelector(selector)! : panel()!);
+            expect(toggleDamagePanel).toHaveBeenCalledTimes(1);
+            expect(panel()).toBeNull();
+        }
+
+        fireEvent.click(toggle);
+        fireEvent.click(toggle);
+        expect(panel()).toBeNull();
+    });
+
     test("the DPS keeps out of the way of a fight button over the items, and only that", () => {
         const { store, view } = renderHud();
         const damage = () => view.container.querySelector(".ui-damage")!;
