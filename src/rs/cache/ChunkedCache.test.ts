@@ -169,22 +169,34 @@ describe("fetchChunks", () => {
         });
     });
 
-    test("bounds both stored reads and downloads, including an entirely missing cache", async () => {
+    test("checks and downloads a few at a time each, and reports a download as it lands", async () => {
         const cache = new FakeCache();
+        // Nothing stored: a first load
         const site = await served(
             Array.from({ length: 14 }, (_, i) => group(7, i * getChunkSpan(7), 10)),
         );
         let releaseReads!: () => void;
-        let releaseDownloads!: () => void;
         const reads = new Promise<void>((resolve) => (releaseReads = resolve));
-        const downloads = new Promise<void>((resolve) => (releaseDownloads = resolve));
+        let reading = 0;
+        let mostReading = 0;
         const match = cache.match.bind(cache);
         const read = vi.spyOn(cache, "match").mockImplementation(async (request) => {
+            mostReading = Math.max(mostReading, ++reading);
             await reads;
+            reading--;
             return match(request);
         });
+        // Each download held until it's let go, or none once they're open
+        const gates = new Map<string, () => void>();
+        let open = false;
+        let downloading = 0;
+        let mostDownloading = 0;
         const fetcher = vi.fn(async (url: RequestInfo | URL) => {
-            await downloads;
+            mostDownloading = Math.max(mostDownloading, ++downloading);
+            if (!open) {
+                await new Promise<void>((resolve) => gates.set(String(url), resolve));
+            }
+            downloading--;
             return site.fetcher(url);
         });
         const onProgress = vi.fn();
@@ -192,18 +204,30 @@ describe("fetchChunks", () => {
             fetcher,
             onProgress,
         });
+        const total = site.chunks.reduce((sum, bytes) => sum + bytes.byteLength, 0);
         try {
             await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(6));
             expect(fetcher).not.toHaveBeenCalled();
             releaseReads();
+            // Every check finishes with the downloads held, so the total's known
+            await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(site.list.length));
             await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(6));
-            expect(read).toHaveBeenCalledTimes(6);
+            // and the first to land counts at once, while the rest are still coming
+            gates.get(BASE + site.list[0].file)!();
+            await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
+            expect(onProgress).toHaveBeenCalledWith({
+                total,
+                current: site.chunks[0].byteLength,
+                part: site.chunks[0],
+            });
         } finally {
             releaseReads();
-            releaseDownloads();
+            open = true;
+            gates.forEach((release) => release());
         }
         expect(await loading).toEqual(site.chunks);
-        const total = site.chunks.reduce((sum, bytes) => sum + bytes.byteLength, 0);
+        expect(mostReading).toBe(6);
+        expect(mostDownloading).toBe(6);
         expect(onProgress).toHaveBeenCalledTimes(site.list.length);
         let current = 0;
         for (const [progress] of onProgress.mock.calls) {

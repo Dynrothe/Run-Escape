@@ -103,11 +103,12 @@ loaded again.
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
   a change to a group renames only its own chunk, and a player who's played before downloads only
   that one. Changing a span renames that index's chunks.
-- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses. It
-  reads and checks stored chunks in a bounded pipeline, downloading a missing or damaged chunk
-  as soon as its check finishes while other stored chunks are still being read. It checks each
-  download against its name, and after loading drops the ones `caches.json` doesn't list.
-  Download progress waits for the stored checks to finish so its total counts only missing bytes.
+- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses.
+  `fetchChunks` reads and checks the stored ones six at a time and hands each missing or damaged
+  one straight to its downloads, six at a time apart from the checks, so a download never holds
+  them up. It checks each download against its name, and after loading drops the ones
+  `caches.json` doesn't list. Progress counts only what's downloaded, so it starts once every
+  stored chunk's been checked and the total's known.
 - **A cache made for another build** would stop partway through loading, on a group it hasn't
   got, so the game checks `caches.json`'s build against its own before it starts. On a mismatch it
   reloads the page once, as the page may be an old copy, and then says what's wrong rather than
