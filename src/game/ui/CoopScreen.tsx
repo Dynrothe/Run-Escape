@@ -2,7 +2,13 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { ReviveView, TeammateView, UiSnapshot } from "../client/GameStore";
-import { describeMissing, parseRoomCode, roomPlaysCardsOnly } from "../client/coop/CoopLobby";
+import {
+    RoomAccess as Access,
+    describeMissing,
+    parseRoomCode,
+    roomAccess,
+    roomPlaysCardsOnly,
+} from "../client/coop/CoopLobby";
 import { RoomListing, RoomView } from "../client/coop/protocol";
 import { CHARACTERS, characterName, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
@@ -36,6 +42,7 @@ import { CardNeedsWindow } from "./CardNeeds";
 import { useConfirm } from "./ConfirmDialog";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
+import { FriendsButton, FriendsWindow, NameForm } from "./FriendsPanel";
 import {
     AdventurerPanel,
     PhoneAdventurerCard,
@@ -50,6 +57,7 @@ import {
     RunInvocationsButton,
 } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
+import { RoomChat } from "./RoomChat";
 import { useMenuKeys } from "./menuKeys";
 import { usePhoneLayout } from "./usePhoneLayout";
 
@@ -68,41 +76,62 @@ function openRoomTitle(ui: UiSnapshot): string {
         : t("coop.open_room_title");
 }
 
-// Who can join, as a pair: the same when making a room and, for its host, in it
+const ACCESS_NAMES: Record<Access, string> = {
+    invite: "coop.invite_only",
+    friends: "coop.access_friends",
+    open: "coop.open_to_all",
+};
+
+// Who can join: the same when making a room and, for its host, in it. A pair (invite only, open
+// to all), or with rooms for friends between them on a relay that has friends.
 function RoomAccess({
     ui,
-    open,
+    access,
     onChange,
     className = "",
 }: {
     ui: UiSnapshot;
-    open: boolean;
-    onChange: (open: boolean) => void;
+    access: Access;
+    onChange: (access: Access) => void;
     className?: string;
 }): JSX.Element {
+    const choices: Access[] = ui.coop.friends ? ["invite", "friends", "open"] : ["invite", "open"];
+    // Without friends, a room for friends is one by invite as far as anyone can tell
+    const shown = choices.includes(access) ? access : "invite";
     return (
         <div
             className={"ui-coop-choice " + className}
             role="group"
             aria-label={t("coop.who_can_join")}
         >
-            <button
-                className={"ui-button ui-button-small" + (open ? "" : " ui-toggle-on")}
-                aria-pressed={!open}
-                onClick={() => open && onChange(false)}
-            >
-                {t("coop.invite_only")}
-            </button>
-            <button
-                className={"ui-button ui-button-small" + (open ? " ui-toggle-on" : "")}
-                aria-pressed={open}
-                title={openRoomTitle(ui)}
-                onClick={() => !open && onChange(true)}
-            >
-                {t("coop.open_to_all")}
-            </button>
+            {choices.map((choice) => (
+                <button
+                    key={choice}
+                    className={
+                        "ui-button ui-button-small" + (shown === choice ? " ui-toggle-on" : "")
+                    }
+                    aria-pressed={shown === choice}
+                    title={
+                        choice === "open"
+                            ? openRoomTitle(ui)
+                            : choice === "friends"
+                              ? t("coop.friends_room_note")
+                              : undefined
+                    }
+                    onClick={() => shown !== choice && onChange(choice)}
+                >
+                    {t(ACCESS_NAMES[choice])}
+                </button>
+            ))}
         </div>
     );
+}
+
+// Under the choice while it's for friends, as a title doesn't show on a touch screen
+function FriendsRoomNote({ access }: { access: Access }): JSX.Element | null {
+    return access === "friends" ? (
+        <div className="ui-coop-access-note">{t("coop.friends_room_note")}</div>
+    ) : null;
 }
 
 export function CoopScreen({ ui, client }: Props): JSX.Element {
@@ -118,7 +147,11 @@ export function CoopScreen({ ui, client }: Props): JSX.Element {
 function CoopMenu({ ui, client }: Props): JSX.Element {
     const coop = ui.coop;
     const [code, setCode] = useState("");
-    const [open, setOpen] = useState(false);
+    const [access, setAccess] = useState<Access>("invite");
+    // Friends, on a relay that has them: the window, and the name typed in place
+    const [friendsOpen, setFriendsOpen] = useState(false);
+    const [naming, setNaming] = useState(false);
+    const [nameEmpty, setNameEmpty] = useState(false);
     const online = coop.status === "online";
     const canJoin = online;
     // Rooms on maps this game hasn't got (a newer game's) can't be joined
@@ -151,34 +184,67 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                 <div className="ui-coop-rows">
                     <div className="ui-coop-row">
                         <span className="ui-coop-label">{t("coop.your_name")}</span>
-                        {/* The relay gives everyone a name; another's a click away */}
-                        <span className="ui-coop-name">
-                            <CountryFlag
-                                country={ui.display.coopFlag ? coop.country : undefined}
-                                label={t("coop.flag_label_self")}
+                        {coop.friends && naming ? (
+                            // A relay with friends takes a name typed in
+                            <NameForm
+                                current={coop.name}
+                                client={client}
+                                autoFocus
+                                onSaved={() => {
+                                    setNaming(false);
+                                    setNameEmpty(false);
+                                }}
+                                onEmpty={() => setNameEmpty(true)}
+                                onCancel={() => {
+                                    setNaming(false);
+                                    setNameEmpty(false);
+                                }}
                             />
-                            {coop.name || "..."}
-                        </span>
-                        <button
-                            className="ui-button ui-button-small"
-                            disabled={!online}
-                            onClick={() => client.renameCoop()}
-                        >
-                            {t("coop.new_name")}
-                        </button>
+                        ) : (
+                            <>
+                                {/* The relay gives everyone a name; another's a click away */}
+                                <span className="ui-coop-name">
+                                    <CountryFlag
+                                        country={ui.display.coopFlag ? coop.country : undefined}
+                                        label={t("coop.flag_label_self")}
+                                    />
+                                    {coop.name || "..."}
+                                </span>
+                                {coop.friends && (
+                                    <button
+                                        className="ui-button ui-button-small"
+                                        disabled={!online}
+                                        onClick={() => setNaming(true)}
+                                    >
+                                        {t("friends.change_name")}
+                                    </button>
+                                )}
+                                <button
+                                    className="ui-button ui-button-small"
+                                    disabled={!online}
+                                    onClick={() => client.renameCoop()}
+                                >
+                                    {t("coop.new_name")}
+                                </button>
+                            </>
+                        )}
                     </div>
+                    {coop.friends && naming && nameEmpty && (
+                        <div className="ui-coop-error">{t("friends.name_empty")}</div>
+                    )}
                     <div className="ui-coop-row">
                         <span className="ui-coop-label">{t("coop.new_room")}</span>
-                        <RoomAccess ui={ui} open={open} onChange={setOpen} />
+                        <RoomAccess ui={ui} access={access} onChange={setAccess} />
                         <button
                             className="ui-button ui-button-go"
                             disabled={!canJoin || coop.roomsFull}
                             title={coop.roomsFull ? t("coop.rooms_full") : undefined}
-                            onClick={() => client.createRoom(open)}
+                            onClick={() => client.createRoom(access)}
                         >
                             {t("coop.create")}
                         </button>
                     </div>
+                    {coop.friends && <FriendsRoomNote access={access} />}
                     <form
                         className="ui-coop-row"
                         onSubmit={(e) => {
@@ -310,8 +376,18 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                     <button className="ui-button" onClick={() => client.closeCoop()}>
                         {t("canvas.back")}
                     </button>
+                    {coop.friends && (
+                        <FriendsButton
+                            view={ui.friends}
+                            label={t("friends.title")}
+                            onOpen={() => setFriendsOpen(true)}
+                        />
+                    )}
                 </div>
             </div>
+            {coop.friends && friendsOpen && (
+                <FriendsWindow ui={ui} client={client} onClose={() => setFriendsOpen(false)} />
+            )}
         </div>
     );
 }
@@ -415,6 +491,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             client.disbandRoom();
         }
     };
+    // Friends, on a relay that has them: the window, where Invite asks one in
+    const friends = ui.coop.friends;
+    const [friendsOpen, setFriendsOpen] = useState(false);
+    const listed = new Set(ui.friends.friends.map((f) => f.id));
+    const myCode = ui.friends.myCode ?? ui.coop.myCode;
+    const access = roomAccess(room);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
@@ -455,19 +537,36 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 <button className="ui-button ui-button-small" onClick={copyInvite}>
                     {copied ? t("coop.copied") : t("coop.copy_invite")}
                 </button>
+                {friends && (
+                    <FriendsButton
+                        view={ui.friends}
+                        label={t("coop.invite_friends")}
+                        className="ui-button-small"
+                        onOpen={() => setFriendsOpen(true)}
+                    />
+                )}
                 {isHost ? (
                     <RoomAccess
                         ui={ui}
-                        open={room.open}
-                        onChange={(open) => client.setRoomOpen(open)}
+                        access={access}
+                        onChange={(next) =>
+                            friends
+                                ? client.setRoomAccess(next)
+                                : client.setRoomOpen(next === "open")
+                        }
                         className="ui-coop-open"
                     />
                 ) : (
                     <span className="ui-coop-open">
-                        {room.open ? t("coop.open") : t("coop.invite_only")}
+                        {room.open
+                            ? t("coop.open")
+                            : friends && access === "friends"
+                              ? t("coop.access_friends")
+                              : t("coop.invite_only")}
                     </span>
                 )}
             </div>
+            {friends && isHost && <FriendsRoomNote access={access} />}
             <div className="ui-coop-members">
                 {room.members.map((member) => {
                     const character = getCharacter(
@@ -513,6 +612,22 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                             >
                                 {member.ready ? t("coop.ready") : t("coop.not_ready")}
                             </span>
+                            {/* Someone whose game said who it is, and who isn't on the list yet */}
+                            {friends &&
+                                member.id !== you &&
+                                member.friendId &&
+                                member.friendId !== myCode &&
+                                !listed.has(member.friendId) && (
+                                    <button
+                                        className="ui-button ui-button-small"
+                                        aria-label={t("friends.add_label_name", {
+                                            name: member.name,
+                                        })}
+                                        onClick={() => client.addFriend(member.friendId!)}
+                                    >
+                                        {t("friends.add_friend")}
+                                    </button>
+                                )}
                             {isHost && !host && (
                                 <button
                                     className="ui-button ui-button-small ui-coop-kick"
@@ -770,8 +885,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             )}
         </>
     );
+    const chat = friends ? <RoomChat ui={ui} client={client} phone={phone} /> : null;
     const overlays = (
         <>
+            {friends && friendsOpen && (
+                <FriendsWindow ui={ui} client={client} onClose={() => setFriendsOpen(false)} />
+            )}
             {board && isHost && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
@@ -806,11 +925,17 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     map={map}
                     onCardNeeds={setNeedsFor}
                 />
-                <div className="ui-panel rs-border rs-background ui-select-panel ui-select-maps ui-coop-party">
+                <div
+                    className={
+                        "ui-panel rs-border rs-background ui-select-panel ui-select-maps ui-coop-party" +
+                        (chat ? " ui-coop-party-chat" : "")
+                    }
+                >
                     {party}
                     {mapHeading}
                     {isHost ? mapList : <div className="ui-select-details">{mapSummary}</div>}
                     {notes}
+                    {chat}
                 </div>
                 <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
                     {leave}
@@ -873,9 +998,15 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     );
     return (
         <div className="ui-fill ui-select ui-coop-phone">
-            <div className="ui-panel rs-border rs-background ui-select-panel ui-coop-party">
+            <div
+                className={
+                    "ui-panel rs-border rs-background ui-select-panel ui-coop-party" +
+                    (chat ? " ui-coop-party-chat" : "")
+                }
+            >
                 {party}
                 {notes}
+                {chat}
             </div>
             <div className="ui-coop-phone-side">
                 {isHost ? (

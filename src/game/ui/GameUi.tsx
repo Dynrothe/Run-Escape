@@ -161,6 +161,8 @@ import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
+import { FriendPopups } from "./FriendPopups";
+import { FriendsButton, FriendsWindow } from "./FriendsPanel";
 import "./GameUi.css";
 import { CampScreen, GauntletBadge, GauntletResultModal, GauntletScreen } from "./Gauntlet";
 import { InventoryItem } from "./InventoryItem";
@@ -306,6 +308,8 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
+            {/* Friends' popups over every screen, under the windows that come after them */}
+            {ui.friends.supported && <FriendPopups ui={ui} client={client} />}
             {ui.actEnding && (
                 <ActEndingModal key={ui.actEnding} actId={ui.actEnding} client={client} />
             )}
@@ -1015,6 +1019,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     const [settingsOpen, setSettingsOpen] = useState(false);
     // Cloud save's own panel, from its button
     const [cloudOpen, setCloudOpen] = useState(false);
+    // Friends' window, on a relay that has them (it keeps the title's keys while it's open)
+    const [friendsOpen, setFriendsOpen] = useState(false);
     // The notice, until it's closed (once for each new one)
     const [notice, setNotice] = useState<Notice>();
     useEffect(() => {
@@ -1120,7 +1126,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
             </div>
             <div className="ui-title-bottom">
                 <div className="ui-panel rs-border rs-background ui-title-menu">
-                    <div className="ui-title-play">
+                    <div
+                        className={
+                            "ui-title-play" + (ui.friends.supported ? " ui-title-play-friends" : "")
+                        }
+                    >
                         <button
                             className="ui-button ui-button-big"
                             onClick={() => {
@@ -1137,6 +1147,15 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             >
                                 {t("ui.title.multiplayer")}
                             </button>
+                        )}
+                        {ui.friends.supported && (
+                            <FriendsButton
+                                view={ui.friends}
+                                label={t("friends.title")}
+                                showOnline
+                                className="ui-title-friends"
+                                onOpen={() => setFriendsOpen(true)}
+                            />
                         )}
                     </div>
                     <div className="ui-title-tiles">
@@ -1233,6 +1252,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <div className="ui-title-dev">
                     <MapGeneratorButton client={client} />
                 </div>
+            )}
+            {ui.friends.supported && friendsOpen && (
+                <FriendsWindow ui={ui} client={client} onClose={() => setFriendsOpen(false)} />
             )}
             {savePanel ? null : choicePanel ? (
                 choicePanel

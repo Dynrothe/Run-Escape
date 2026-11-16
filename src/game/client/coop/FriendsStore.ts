@@ -63,10 +63,15 @@ export function makeSecret(): string {
     return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// A name as typed: one line, spaces tidied, no longer than the relay takes. Empty if nothing's
-// left.
+// A name as typed, cleaned as the relay cleans it (cleanText in server/coop-relay.mjs), so what's
+// kept is what it keeps: one line, spaces tidied, no control or invisible characters, and no more
+// than MAX_NAME_LENGTH characters (an emoji's one, and never cut in half). Empty if nothing's left.
 export function cleanName(text: string): string {
-    return text.replace(/\s+/g, " ").trim().slice(0, MAX_NAME_LENGTH).trim();
+    const cleaned = text
+        .normalize("NFC")
+        .replace(/[\s\p{C}]+/gu, (run) => (/\s/u.test(run) ? " " : ""))
+        .trim();
+    return Array.from(cleaned).slice(0, MAX_NAME_LENGTH).join("").trim();
 }
 
 function isCode(id: unknown): id is string {

@@ -6,6 +6,12 @@
             "runtimeExecutable": "bun",
             "runtimeArgs": ["run", "start:singleplayer"],
             "port": 5173
+        },
+        {
+            "name": "game-coop",
+            "runtimeExecutable": "bun",
+            "runtimeArgs": ["run", "start"],
+            "port": 5173
         }
     ]
 }

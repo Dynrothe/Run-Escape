@@ -1,5 +1,12 @@
-import { FRIENDS_KEY, FriendsStore, MAX_RECENT, makeSecret, readFriendsData } from "./FriendsStore";
-import { MAX_FRIENDS } from "./protocol";
+import {
+    FRIENDS_KEY,
+    FriendsStore,
+    MAX_RECENT,
+    cleanName,
+    makeSecret,
+    readFriendsData,
+} from "./FriendsStore";
+import { MAX_FRIENDS, MAX_NAME_LENGTH } from "./protocol";
 
 // localStorage as one browser has it, for every tab
 function memory(initial?: string) {
@@ -170,6 +177,19 @@ describe("the friends record", () => {
         } finally {
             vi.unstubAllGlobals();
         }
+    });
+
+    it("cleans a name as the relay does, counting characters", () => {
+        expect(cleanName("  Zed\u0007 the\u0000  Great ")).toBe("Zed the Great");
+        expect(cleanName(" ‮Ada\u0000 ​ Love​lace\n\n")).toBe("Ada Lovelace");
+        expect(cleanName("W".repeat(30))).toBe("W".repeat(MAX_NAME_LENGTH));
+        // An emoji's one character, never cut in half
+        expect(cleanName("a".repeat(19) + "\u{1F600}\u{1F600}")).toBe("a".repeat(19) + "\u{1F600}");
+        expect(cleanName("\u{1F600}".repeat(25))).toBe("\u{1F600}".repeat(MAX_NAME_LENGTH));
+        expect(cleanName("René")).toBe("René");
+        // Cut, then trimmed again; nothing a name can be made of
+        expect(cleanName("x".repeat(19) + " yz")).toBe("x".repeat(19));
+        expect(cleanName("\u0000​ \t\u0007")).toBe("");
     });
 
     it("works with no storage at all", () => {

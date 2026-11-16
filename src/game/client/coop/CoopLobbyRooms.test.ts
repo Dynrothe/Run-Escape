@@ -976,6 +976,37 @@ describe("a relay with friends", () => {
         expect(onNamed).toHaveBeenCalledWith("Big Bad");
     });
 
+    it("gives the room a name picked during its run once the run's over", async () => {
+        let name = "Steady Chicken";
+        const { lobby, relay } = await (async () => {
+            const set = vi.fn();
+            const store = { set, get: () => ({}) } as unknown as GameStore;
+            const made = new CoopLobby(store, { secret: () => SECRET, name: () => name });
+            const connecting = made.connect();
+            const socket = FakeSocket.all[0];
+            await Promise.resolve();
+            socket.receive({ t: "welcome", id: "p1", name, friends: true });
+            await connecting;
+            return { lobby: made, relay: socket };
+        })();
+        lobby.create(false, "lumbridge", false, false);
+        const room = { ...ROOM, members };
+        relay.receive({ t: "room", room, you: "p1" });
+        relay.receive({ t: "room", room: { ...room, started: true }, you: "p1" });
+        // Picked mid-run: only the friends' connection said it
+        name = "Zezima";
+        const sent = relay.sent.length;
+        relay.receive({ t: "room", room: { ...room, started: true }, you: "p1" });
+        expect(relay.sent.slice(sent)).toEqual([]);
+        relay.receive({ t: "room", room, you: "p1" });
+        expect(relay.sent.slice(sent)).toEqual([{ t: "name", name: "Zezima" }]);
+        // Once the room has it, or with nothing new, nothing more
+        const named = { ...room, members: [{ ...members[0], name: "Zezima" }, members[1]] };
+        relay.receive({ t: "room", room: { ...named, started: true }, you: "p1" });
+        relay.receive({ t: "room", room: named, you: "p1" });
+        expect(relay.sent.slice(sent)).toHaveLength(1);
+    });
+
     it("forgets the chat when the connection drops", async () => {
         const { relay, view } = await inRoom();
         relay.receive({ t: "chat", from: "p2", text: "hi" });

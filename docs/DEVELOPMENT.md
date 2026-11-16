@@ -2743,7 +2743,7 @@ seconds. Add anything else big that sits inside the checkout to `server.watch.ig
 imports goes in `optimizeDeps.include`, as `threads/worker` and `jszip` do: Vite's startup scan
 doesn't follow workers, so it would find the package mid-load and reload the page.
 
-URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
+URL flags: `?room=ABCDE` joins a co-op room (the invite link, taken out of the address once tried), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
@@ -3044,27 +3044,29 @@ A game that's given a map or adventurer it hasn't got (from a newer or made-up g
 leaves the room rather than playing a run it can't, and other players' shop bonuses are kept within
 what the shop sells.
 
-Nobody types a name. The relay gives each player one as they connect (in `welcome`), and each room
-one as it's made, from `server/name-gen.mjs`: two words, like "Plucky Chinchompa" or "Moonlit
-Crossing", from short lists picked so any pair reads fine. That's why there's no list of banned
-words to keep. A name's only one player's (or room's) at a time, and a number goes on the end once
-the pairs it tries are all taken. **New name** (`rename`) asks for another, except during a run,
-when everyone's copy of it has the old one. A name a game sends is ignored, and there are no
-accounts, so a reconnect gets a new name. When adding words, keep them ones that can't make
-something unfortunate next to any word in the other list.
+The relay gives each player a name as they connect (in `welcome`), and each room one as it's made,
+from `server/name-gen.mjs`: two words, like "Plucky Chinchompa" or "Moonlit Crossing", from short
+lists picked so any pair reads fine. A name it gives is only one player's (or room's) at a time,
+and a number goes on the end once the pairs it tries are all taken. **New name** (`rename`) asks
+for another, except during a run, when everyone's copy of it has the old one. On the Cloudflare
+relay that's all there is: a name a game sends is ignored, so a reconnect gets a new one. This
+fork's Node relay also takes a name the player types, and keeps the one they last had (see
+Friends, below). When adding words, keep them ones that can't make something unfortunate next to
+any word in the other list.
 
-`server/coop-relay.mjs` holds the rooms (code, name, open or invite only, host, map, members and their
-ready state and loadout) and forwards `up` messages from guests to the host and `down` messages
-from the host to everyone else. The host leaving a run ends it for everyone; in the lobby the
-room goes to the next player. The balance bot plays a party with `PARTY=4`, each player on their
-own, so it can't show teamwork.
+`server/coop-relay.mjs` holds the rooms (code, name, who sees its code: anyone, friends or
+only those given it, host, map, members and their ready state and loadout) and forwards `up`
+messages from guests to the host and `down` messages from the host to everyone else. The host
+leaving a run ends it for everyone; in the lobby the room goes to the next player. The balance bot
+plays a party with `PARTY=4`, each player on their own, so it can't show teamwork.
 
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`
 then makes or joins the room on that room's own connection, at `coop/room/<code>`. What's said in
 a room goes over that connection (`ROOM_MESSAGES` in `CoopLobby.ts`); pings, the list and
 making or joining go to the lobby's. The Node relay never sends `goto`, so with it there's only
-the one connection. Change the protocol in both relays.
+the one connection for a room. Change the protocol in both relays, apart from friends, which only
+the Node relay has (Friends, below).
 
 Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
 `room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
@@ -3173,6 +3175,97 @@ playing from".
 To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
 game's open in another tab, and Play without saving lets it play (see Saves).
+
+#### Friends
+
+This fork adds friends to co-op, on its Node relay only. There are still no accounts. Each game
+makes a secret of its own and keeps it in localStorage under `rune-survivors-friends`
+(`client/coop/FriendsStore.ts`), with its friends list, the requests it's ignored, the players it's
+had a run with and the name it picked. That's apart from the save on purpose, like cloud save's
+code: the secret is who the game is, so it must never go out in an exported or cloud save. A new
+browser, a private window or the desktop app is a new secret, so a new code. The game shows the
+secret to the relay in `hello`, and the relay works out a friend code from it (`friendCode` in
+`server/coop-relay.mjs`, a hash): twelve capitals and digits, shown in fours
+(`formatFriendCode`). Players give each other codes, never secrets. Never change how a code comes
+from a secret, or rename the key: players' lists are made of codes.
+
+**Lists go both ways.** A game sends the relay its whole list (`friends`), and two players are
+friends once each lists the other. Until then the relay tells neither anything about the other:
+otherwise anyone with a code could add it and watch where its player is. So a friend added from
+their code shows as waiting (`FriendView.pending`) until they add this game back, and an invite
+to someone who hasn't looks the same as one to someone who's offline. Adding a code sends its
+player a request (`friendRequest`), once on each connection. Accepting adds them back; Ignore
+hides their requests until they're added by their code. Removing a friend ignores their requests
+too, as a game still listing this one would come straight back as a request.
+
+**Presence** goes over a connection of its own (`client/coop/Friends.ts`, `FriendsClient`), opened
+once the relay's said it has friends and kept for the life of the page: the title, the menus and
+runs, solo and co-op. Its `hello` says `presence`, and the relay never closes it for being idle
+(it still has to answer pings), so a player with friends holds two connections, that one and the
+lobby's or their room's. Each friend is in the menus, on a run of their own (`status`, which the
+game sends from `GameClient.syncSolo`), in a room that's waiting, or in a room's run. A room's
+code comes with it only while a friend could walk in: the room's waiting, and it's open or for
+friends. A full one still has it.
+
+**Invites** go from a room that's waiting, to a friend who's online and not in it. The relay
+answers `inviteSent`, which marks `CoopView.invited`, or an error in its own English, which the
+game shows with `tl()` (the texts are `coop.relay.*` keys, so other languages can have them).
+A friend's game keeps one invite from each friend for `INVITE_MS`, or until they leave that
+room or go offline; Decline tells the inviter, whose game pops up that they said no. Taking one
+up, or joining a friend's room from the list, is the same as following an invite link, and isn't
+done during a run, its results or a map loading (`FriendJoinResult` says why).
+
+**Rooms for friends** (`RoomView.friends`, `RoomAccess` in `CoopLobby.ts`) aren't in the open
+list, but a friend of anyone in one sees its code, so can join. It's who can see the room, not who
+can get in: the code is still the key, and anyone with it can join, as with an invite-only room.
+An open room is for friends too.
+
+**Names.** On a relay with friends a player can type a name (`name`, and in `hello`). The game
+cleans it exactly as the relay does (`cleanName` in `FriendsStore.ts`, `cleanText` in the relay),
+so what it keeps is what the relay keeps: NFC, a run of spaces and control or invisible
+characters becomes one space if it has a space in it and nothing otherwise, and `MAX_NAME_LENGTH`
+code points at most. A name the relay gives (New name) is kept as well, so a player keeps the
+name they last had. A player has one name on all their connections: a `hello` with no name, from
+a connection whose player the relay already knows, takes the name they have (`hello` in the
+relay). The relay won't take a name during a room's run, as everyone's copy has the old one, so
+`GameClient.setPlayerName` doesn't send it to the room then, and `CoopLobby` sends it once the
+run's over (`sendNameAfterRun`).
+
+**Chat** is a room's, on the room's connection (`chat`), sent back to everyone in it, the sender
+too. The game keeps the last `MAX_CHAT_LINES` (`CoopView.chat`) and empties them on leaving the
+room. A line is shown as text, never as HTML.
+
+**Recent players** are the others in a co-op run, noted as it starts, by the codes their games
+gave the room (`MemberView.friendId`); never someone already a friend.
+
+**Popups** are in the store (`FriendsView.popups`): an invite, a request, a friend come online,
+a friend saying no. The core takes an invite's or a request's away once it's answered or gone; a
+friend online or saying no stays until the UI dismisses it (`FriendPopups` does after
+`POPUP_MS`). They're shown over every screen (`ui/FriendPopups.tsx`), but they're no window:
+nothing's made inert for them (`inertOthers` spares them as it does windows), a click on one
+leaves the focus where it was, and in a run they keep to the left and wait under its windows.
+The Friends window (`ui/FriendsPanel.tsx`) takes every key while it's open, as `ConfirmDialog`
+does, since the title starts a run on Space and the co-op menu leaves on Escape. A room's chat
+input stops its keys going further, too.
+
+**Invite links.** The desktop and Android apps' own address is one nobody else can open, so a
+build with `VITE_PUBLIC_URL` (the website's address) makes invite links with that instead. A
+link's `?room=` is taken out of the address once it's been tried, so a reload doesn't join a room
+that's likely gone.
+
+**Only the Node relay has friends.** It says so with `friends: true` in `welcome`, and its plain
+GET (`/coop`, the status probe `CoopLobby.checkAvailable` makes) says `"friends":true`. The
+presence connection is made once the probe says so (or the co-op menu's welcome does, if the probe
+failed), and each connection's own welcome has the last word (`CoopView.friends`,
+`FriendsView.supported`). On any other relay (Cloudflare's) none of it shows, and the game is as it
+was. Its limits are with the others' in Co-op relay, above.
+
+**Tests.** Each half has its own against a fake of the other: the relay's in
+`server/coop-relay.test.ts`, the game's in `client/coop/Friends.test.ts`, `FriendsStore.test.ts`
+and `CoopLobbyRooms.test.ts`, and the UI's in `ui/FriendsPanel.test.tsx`.
+`client/coop/FriendsRelay.test.ts` is where they meet: the real relay in the test's process and
+the game's own `FriendsClient` and `CoopLobby`, a few players at once, over real WebSockets. It
+takes about 40 seconds, and needs Node's `WebSocket`, as the relay's tests do.
 
 #### Measuring prediction
 

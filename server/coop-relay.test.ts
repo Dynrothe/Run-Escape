@@ -1604,9 +1604,11 @@ describe("co-op relay", () => {
         });
 
         it("takes a name a player picks, cleaned, for their room too, but not mid-run", async () => {
+            // Each a player of their own: one already on would keep their name
+            let namers = 0;
             const cleaned = async (name: unknown) => {
                 const client = await connect();
-                client.send({ t: "hello", secret: secretOf("namer"), name });
+                client.send({ t: "hello", secret: secretOf(`namer${namers++}`), name });
                 return (await client.next("identity")).name;
             };
             expect(await cleaned(" ‮Ada\u0000 ​ Love​lace\n\n")).toBe("Ada Lovelace");
@@ -1640,6 +1642,19 @@ describe("co-op relay", () => {
             ada.send({ t: "ping" });
             await ada.next("pong");
             expect(ada.messages.some((m) => m.t === "named")).toBe(false);
+        });
+
+        it("gives every connection of a player their one name, said first or not at all", async () => {
+            // A lobby that says hello before the game's kept a name, then its presence connection
+            const lobby = await player("ada", { presence: false });
+            const presence = await player("ada");
+            expect(presence.picked).toBe(lobby.picked);
+            lobby.send({ t: "create", me: {} });
+            expect((await lobby.room()).room.members[0].name).toBe(lobby.picked);
+            // A name picked on one is everyone's, and the next hello without one keeps it
+            presence.send({ t: "name", name: "Ada" });
+            await presence.next("named");
+            expect((await player("ada", { presence: false })).picked).toBe("Ada");
         });
 
         it("slows down changing names", async () => {

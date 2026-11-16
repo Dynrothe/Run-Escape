@@ -1,0 +1,298 @@
+/* Friends (FriendsPanel.tsx, FriendPopups.tsx, RoomChat.tsx): the window, the button that opens
+   it, the popups over every screen and a room's chat. Phones' rules are in Mobile.css. */
+
+.ui-friends {
+    width: min(540px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-friends > h2,
+.ui-friends > .ui-row,
+.ui-friends-note {
+    flex-shrink: 0;
+}
+
+/* Everything between the title and Close scrolls as one, with room for a controller's
+   highlight at its edges */
+.ui-friends-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+/* What the last thing done came to */
+.ui-friends-note {
+    text-align: center;
+    color: var(--ui-text-dim);
+}
+
+.ui-friends-note:not(:empty) {
+    margin-bottom: 6px;
+}
+
+.ui-friends-bad {
+    color: var(--ui-red-text);
+}
+
+/* Connecting, or not, in one quiet line */
+.ui-friends-quiet {
+    margin: 0;
+    text-align: center;
+    font-size: 15px;
+    color: var(--ui-text-faint);
+}
+
+/* This game's friend code, to read out or copy */
+.ui-friends-code {
+    flex: 1;
+    min-width: 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--ui-yellow);
+    user-select: all;
+    white-space: nowrap;
+}
+
+/* The name, typed: as wide as the row lets it be */
+.ui-friends-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-friends-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-friends-empty {
+    padding: 6px 4px;
+}
+
+.ui-friends-empty p {
+    margin: 2px 0;
+}
+
+/* A friend, a request, an invite or someone played with: their name and where they are, and
+   what can be done */
+.ui-friend {
+    min-height: 34px;
+}
+
+.ui-friend-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.ui-friend-name {
+    color: var(--ui-white);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-friend-status {
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+.ui-friend-online .ui-friend-status {
+    color: var(--ui-green-text);
+}
+
+.ui-friend-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Invited, or declined */
+.ui-friend-tag {
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+/* Under who can join, while it's for friends */
+.ui-coop-access-note {
+    font-size: 14px;
+    text-align: center;
+    color: var(--ui-text-dim);
+}
+
+/* The button that opens the window: what's waiting in a badge on its corner */
+.ui-friends-button {
+    position: relative;
+}
+
+.ui-friends-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border-radius: 9px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: center;
+    color: var(--ui-white);
+    background: #a01408;
+    box-shadow: 0 0 0 1px #000;
+}
+
+/* On the title, beside Multiplayer: narrower than the big buttons, with how many are online
+   under its name */
+.ui-title-play.ui-title-play-friends {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.ui-button.ui-title-friends {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    font-size: 18px;
+}
+
+.ui-friends-button-online {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: var(--ui-green-text);
+}
+
+/* Popups: a column in the top left corner, newest at the bottom. Only they take pointers, so
+   the screen under the column's gaps is still in reach. */
+.ui-friend-popups {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: min(300px, calc(100vw / var(--ui-scale) - 20px));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+}
+
+/* In a run: on the left, low, under the party's frames and clear of the bottom's bars */
+.ui-friend-popups-run {
+    top: auto;
+    bottom: 120px;
+    left: 8px;
+    width: min(260px, calc(40vw / var(--ui-scale)));
+}
+
+/* The newest two, in a run */
+.ui-friend-popups-run .ui-friend-popup:nth-last-child(n + 3) {
+    display: none;
+}
+
+.ui-friend-popup {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 6px 8px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+.ui-friend-popup-text {
+    flex: 1 1 140px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.ui-friend-popup-line {
+    color: var(--ui-yellow);
+}
+
+.ui-friend-popup-detail {
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+.ui-friend-popup-note {
+    font-size: 14px;
+    color: var(--ui-red-text);
+}
+
+.ui-friend-popup-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* A room's chat, at the bottom of the party's panel. It never gives up height: the host's map
+   list does (it scrolls), down to a row, and only past that does the panel scroll, so the lines
+   and the input stay together and in reach. */
+.ui-room-chat {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Two lines at least, four or so at most */
+.ui-chat.ui-room-chat-log {
+    flex: none;
+    min-height: 52px;
+    max-height: 96px;
+    box-sizing: border-box;
+    font-size: 15px;
+    overflow-wrap: anywhere;
+}
+
+.ui-coop-party.ui-coop-party-chat {
+    overflow-y: auto;
+}
+
+.ui-coop-party-chat > .ui-coop-maps {
+    min-height: 48px;
+}
+
+/* One empty place shows rather than every one, as on a phone, to leave the chat its room */
+.ui-coop-party-chat .ui-coop-member-empty + .ui-coop-member-empty {
+    display: none;
+}
+
+.ui-room-chat-empty {
+    color: var(--ui-text-faint);
+}
+
+.ui-room-chat-mine .ui-chat-source {
+    color: var(--ui-yellow);
+}
+
+.ui-room-chat-say {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.ui-room-chat-toggle {
+    align-self: flex-start;
+}

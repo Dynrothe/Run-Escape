@@ -145,6 +145,12 @@ go stale. Add anything that cost you time to work out.
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
+| Friends: how they work, and what not to break          | `docs/DEVELOPMENT.md` (Co-op, Friends)                                 |
+| Friends' store: the secret, the list, recent players   | `client/coop/FriendsStore.ts` (`rune-survivors-friends`)               |
+| Friends' connection: presence, requests, invites       | `client/coop/Friends.ts`, `GameClient` (Friends), `protocol.ts`        |
+| Friends' window, popups, a room's chat and access      | `ui/FriendsPanel.tsx`, `ui/FriendPopups.tsx`, `ui/RoomChat.tsx`        |
+| Friends on the relay (the Node one only)               | `server/coop-relay.mjs` (`friendCode`, `setFriends`, `invite`)         |
+| Friends end to end: the real relay and client (~40 s)  | `client/coop/FriendsRelay.test.ts`                                     |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |
@@ -197,6 +203,16 @@ echoes arrive, but keep the prediction's clock moving meanwhile. Keep the rapid-
 tests below the relay's input limit. `?movementDiagnostics` opts into local prediction counters
 and a bounded sample buffer (see Development, Measuring prediction); don't log or allocate per
 frame for diagnostics, or treat input-to-confirmation time as network ping.
+
+Friends (this fork's) are on the Node relay only; the Cloudflare one hasn't got them. Every bit of
+their UI stays hidden unless the relay says it has them (`FriendsView.supported`,
+`CoopView.friends`), so on any other relay the game looks exactly as before. **Never rename
+`rune-survivors-friends`, or change how a friend code comes from a game's secret** (`friendCode`
+in `server/coop-relay.mjs`): players' friends lists are made of codes. The secret is the game's
+identity, so it never goes in `SaveData`, an export or a cloud save. Lists go both ways: the relay
+tells nobody anything about a player who hasn't listed them back, and that has to stay so.
+`cleanName` (`FriendsStore.ts`) cleans a name exactly as the relay's `cleanText` does: change one,
+change the other.
 
 ## Commands
 

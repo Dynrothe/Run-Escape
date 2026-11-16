@@ -1535,6 +1535,14 @@ export function createRelay(limits = {}) {
             identities.set(id, identity);
         } else if (picked) {
             identity.name = picked;
+        } else {
+            // One player, one name: a connection that names nobody (a lobby that said hello
+            // before the game had a name to keep) goes by the one they have already
+            if (!client.picked) {
+                playerNames.delete(client.name);
+            }
+            client.name = identity.name;
+            client.picked = true;
         }
         identity.clients.add(client);
         client.identity = identity;

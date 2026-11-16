@@ -3,6 +3,27 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Friends for co-op: give a friend your friend code and add theirs, and you're friends once you've
+  both added each other. No account needed.
+- See which friends are online and where: in the menus, on a run of their own, or in a room you
+  can join with a click.
+- Invite friends into your room from it, and take up or decline their invites from anywhere in the
+  game.
+- Rooms for friends: friends of anyone in the room can see it and join, without it being open to
+  all.
+- Pick your own name for co-op.
+- A chat in co-op rooms.
+- Recently played with: the players from your last co-op runs, to add as friends.
+
+### Fixed
+
+- Joining from an invite link no longer leaves the link in the address, so a reload doesn't try
+  to join again.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

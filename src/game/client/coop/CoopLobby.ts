@@ -949,7 +949,7 @@ export class CoopLobby {
                     roomsFull: message.full === true,
                 });
                 break;
-            case "room":
+            case "room": {
                 if (message.token) {
                     this.resume = { code: message.room.code, token: message.token };
                 }
@@ -960,13 +960,21 @@ export class CoopLobby {
                 ) {
                     this.pendingMe = undefined;
                 }
+                const runOver =
+                    this.view.room?.code === message.room.code &&
+                    this.view.room.started &&
+                    !message.room.started;
                 this.update({
                     room: message.room,
                     you: message.you,
                     // Until it's confirmed or chosen again, as others' updates come
                     error: this.pendingMe?.gaveUp ? UNCONFIRMED_TEXT : undefined,
                 });
+                if (runOver) {
+                    this.sendNameAfterRun();
+                }
                 break;
+            }
             case "goto":
                 this.enterRoom(message.code, message.ticket);
                 break;
@@ -1225,6 +1233,17 @@ export class CoopLobby {
         this.activeAt = Date.now();
         this.send({ t: "name", name });
         return true;
+    }
+
+    // Back in the room after a run: a name picked during it, which only friends heard (the relay
+    // takes no name in a run, and GameClient.setPlayerName sends none here then), goes to the
+    // room now
+    private sendNameAfterRun(): void {
+        const picked = this.view.friends ? this.identity?.name() : undefined;
+        const me = this.view.room?.members.find((m) => m.id === this.view.you);
+        if (picked && me && me.name !== picked) {
+            this.send({ t: "name", name: picked });
+        }
     }
 
     private receiveChat(from: string, text: string): void {

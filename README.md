@@ -17,6 +17,22 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 > and everything in its game cache belong to Jagex, and the cache isn't part of this repository:
 > you download it yourself (see below).
 
+## This fork
+
+This is a private fork of [Dynrothe/Run-Escape](https://github.com/Dynrothe/Run-Escape), with a
+friends system for co-op. It adds:
+
+- **Friend codes**, with no accounts: share yours, add theirs, and you're friends once you've both
+  added each other.
+- **Who's online**, and where: in the menus, on a run of their own, or in a room to join.
+- **Invites** into your room, and popups for them anywhere in the game.
+- **Rooms for friends**, which friends of anyone in the room can see and join.
+- **Your own name**, a **chat** in each room, and the players you've **recently played with**.
+
+It needs this fork's own Node relay, which `bun run start` runs in development and `bun run serve`
+beside a build. The Cloudflare relay hasn't got friends, and on it the game is as it was. How it
+works is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Co-op, Friends).
+
 ## What's in it
 
 - **12 campaign maps**, each opened by beating the one before, each with its own monsters, three

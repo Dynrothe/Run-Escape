@@ -12,7 +12,8 @@ export function inertOthers(element: Element, { spareWindows = true } = {}): () 
         if (
             sibling.hasAttribute("inert") ||
             sibling.matches(".ui-toasts") ||
-            (spareWindows && sibling.matches(".ui-modal"))
+            // Friends' popups, as windows are: they can still be answered
+            (spareWindows && sibling.matches(".ui-modal, .ui-friend-popups"))
         ) {
             return;
         }

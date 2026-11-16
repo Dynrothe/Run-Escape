@@ -1796,6 +1796,55 @@
     .ui-coop-map-side .ui-invocations-button {
         width: 100%;
     }
+
+    /* A party member with two buttons (Add friend and Kick): the second beside the first */
+    .ui-coop-phone .ui-coop-member > .ui-button + .ui-button {
+        grid-column: 5;
+    }
+}
+
+/* Friends: their window as the notices', the popups clear of the notch, and the title's button
+   beside Multiplayer */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-friends {
+        width: min(560px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-friends-body {
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    .ui-friend-popups {
+        top: calc(var(--safe-top) + 6px);
+        left: calc(var(--safe-left) + 6px);
+        width: min(300px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+    }
+
+    /* In a run: the newest one, on the left above where a thumb rests on the stick */
+    .ui-friend-popups-run {
+        top: auto;
+        bottom: calc(var(--safe-bottom) + 128px);
+        width: min(240px, 40vw);
+    }
+
+    .ui-friend-popups-run .ui-friend-popup:nth-last-child(n + 2) {
+        display: none;
+    }
+
+    .ui-title-play-friends .ui-button-big {
+        font-size: 20px;
+    }
+
+    .ui-button.ui-title-friends {
+        padding: 2px 6px;
+        font-size: 16px;
+    }
+
+    .ui-chat.ui-room-chat-log {
+        max-height: 96px;
+    }
 }
 
 /* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
