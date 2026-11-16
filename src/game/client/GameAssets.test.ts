@@ -33,6 +33,7 @@ import {
     HINT_ARROW_SPRITE,
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
+    getCannonModelKey,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
@@ -549,6 +550,25 @@ describe("player bakes", () => {
 });
 
 describe("power-ups in the cache", () => {
+    test("a cannon adds its three parts in order over one second, with every stage baked", () => {
+        const requests = GameAssets.getBaseRequests();
+        for (const [age, locId] of [
+            [0, 7],
+            [16, 7],
+            [17, 8],
+            [33, 8],
+            [34, 9],
+            [49, 9],
+            [50, 6],
+            [51, 6],
+            [1000, 6],
+        ]) {
+            const key = getCannonModelKey(age);
+            expect(key).toBe("loc:" + locId);
+            expect(requests).toContainEqual({ kind: "loc", key, locId });
+        }
+    });
+
     test("a look puts its item in hand, takes the shield off and leaves the rest", () => {
         const appearance = createAppearance({
             [EquipSlot.WEAPON]: 1277,

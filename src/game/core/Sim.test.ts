@@ -1867,6 +1867,37 @@ describe("power-ups", () => {
         });
     });
 
+    test.each([0, 1])("a cannon waits one second to fire with duration bonus %s", (duration) => {
+        const stats = emptyStats();
+        stats.duration = duration;
+        stats.cooldown = 0.5;
+        const sim = createSim("warrior", 1, "lumbridge", stats);
+        sim.weapons = [];
+        sim.player.invulnerable = 10000;
+        sim.tick = 3 * TICKS_PER_SECOND;
+        sim.usePowerUp(getPowerUp("cannon"));
+        const turret = sim.turrets[0];
+        const target = goblin(sim, turret.x + 3, turret.y);
+        target.frozen = 1000;
+        sim.takeEvents();
+
+        for (let i = 0; i < TICKS_PER_SECOND - 1; i++) {
+            sim.step(0, 0);
+        }
+        expect(sim.projectiles).toHaveLength(0);
+        expect(sim.takeEvents().some((event) => event.type === "cannonFire")).toBe(false);
+
+        sim.step(0, 0);
+        expect(sim.tick - turret.startTick).toBe(TICKS_PER_SECOND);
+        expect(sim.projectiles.some((projectile) => projectile.kind === "cannonball")).toBe(true);
+        expect(sim.takeEvents()).toContainEqual({
+            type: "cannonFire",
+            x: turret.x,
+            y: turret.y,
+        });
+        expect(turret.endTick - turret.startTick).toBe(20 * (1 + duration) * TICKS_PER_SECOND);
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];

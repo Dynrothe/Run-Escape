@@ -38,7 +38,13 @@ import { applyCapeColours } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
-import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
+import {
+    CANNON_BUILD_SECONDS,
+    POWER_UPS,
+    THRALLS,
+    getPolymorphLooks,
+    getPowerUp,
+} from "../content/powerups";
 import { SLAYER_SPRITE_ID } from "../content/questIcons";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
@@ -89,7 +95,13 @@ import {
 } from "../content/types";
 import { WardrobeLook, applyBody, applyOutfit, wearsWardrobe } from "../content/wardrobe";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
-import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
+import {
+    BLOOD_FURY_SPOTANIM,
+    FREEZE_SPOTANIM,
+    NUKE_SPOTANIM,
+    Sim,
+    TICKS_PER_SECOND,
+} from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { getCinematicSeqs } from "./Cinematic";
@@ -170,9 +182,16 @@ export function getPickupModelKey(pickup: Pickup): string {
     return "pickup:" + pickup.kind;
 }
 
-// The dwarf multicannon, set up
-const CANNON_LOC = 6;
-export const CANNON_MODEL_KEY = "loc:" + CANNON_LOC;
+// The base, then the stand, barrels and furnace added in sequence
+const CANNON_LOCS = [7, 8, 9, 6];
+
+export function getCannonModelKey(ageTicks: number): string {
+    const stage = Math.min(
+        CANNON_LOCS.length - 1,
+        Math.max(0, Math.floor((ageTicks * 3) / (CANNON_BUILD_SECONDS * TICKS_PER_SECOND))),
+    );
+    return "loc:" + CANNON_LOCS[stage];
+}
 
 // Hitsplat sprites (RuneLite's SpriteID): the red damage splat, the green
 // poison one and the blue one for a hit that was blocked (a shield's)
@@ -1155,7 +1174,7 @@ export class GameAssets {
         const objIds = new Set(getThrownObjIds());
         // The Soulreaper axe's souls (GameView.drawSouls): soul runes
         objIds.add(566);
-        const locIds = new Set([CANNON_LOC]);
+        const locIds = new Set(CANNON_LOCS);
         const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
