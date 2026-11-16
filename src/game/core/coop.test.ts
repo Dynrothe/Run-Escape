@@ -109,6 +109,25 @@ function fingerprint(sim: Sim): string {
 describe("co-op", () => {
     afterEach(() => usePortableMath(false));
 
+    it("the Imbued heart boosts only its collector and follows that hero on screen", () => {
+        const sim = createParty(["wizard", "wizard"]);
+        const [a, b] = sim.heroes;
+        a.weapons = b.weapons = [];
+        b.player.x += 5;
+        sim.dropPowerUp("imbued_heart", b.player.x, b.player.y);
+        sim.step();
+        expect(a.stats.magicMight).toBe(0);
+        expect(a.buffs).toEqual([]);
+        expect(b.stats.magicMight).toBeCloseTo(0.2);
+        expect(b.buffs).toHaveLength(1);
+        expect(sim.effects).toContainEqual(expect.objectContaining({ spotAnim: 1316, hero: 1 }));
+        sim.tick = b.buffs[0].endTick - 1;
+        sim.step();
+        expect(a.stats.magicMight).toBe(0);
+        expect(b.stats.magicMight).toBe(0);
+        expect(b.buffs).toEqual([]);
+    });
+
     it("gives each hero the hard Thanksgiving victory trophy", () => {
         const sim = createParty(["warrior", "wizard"], 1, 0, true, { mapId: "thanksgiving" });
         const boss = sim.spawnEnemy(getEnemy("freaky_forester"), "finalBoss", {

@@ -9,6 +9,8 @@ the version in the corner).
 
 - Party stats in co-op's pause menu, by Deivid Smarzaro: every player's totals and combat so far,
   as the results show them.
+- Imbued heart power-up, by Deivid Smarzaro: its activation animation plays when picked up,
+  giving 20% bonus magic damage for 20 seconds.
 - A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
   blocked, your revives, and every monster you've killed, by its face. The results have it too.
 - Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got

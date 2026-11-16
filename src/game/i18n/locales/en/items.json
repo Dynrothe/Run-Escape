@@ -1103,6 +1103,8 @@
   "powerup.evil_bob.desc": "Evil Bob charges through the crowd three times, throwing it aside.",
   "powerup.fairy_ring.name": "Fairy ring",
   "powerup.fairy_ring.desc": "A ring opens at your feet for 12 seconds and warps away whatever comes near.",
+  "powerup.imbued_heart.name": "Imbued heart",
+  "powerup.imbued_heart.desc": "Gives you 20% bonus magic damage for 20 seconds.",
   "powerup.drill_demon.name": "Drill Demon",
   "powerup.drill_demon.desc": "For 9 seconds everything nearby runs laps around you and can't attack.",
   "powerup.drill_demon.shout": "Run laps, maggots!",

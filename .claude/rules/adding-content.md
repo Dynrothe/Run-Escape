@@ -141,6 +141,10 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
 - The cannon builds on its `startTick` over `CANNON_BUILD_SECONDS` before firing. Its base,
   stand, barrels and finished model are selected by `getCannonModelKey` and included in
   `GameAssets.getBaseRequests`, so the slim cache keeps every assembly stage.
+- A `buff` effect uses the hero's existing buff timer, not a second active power-up timer.
+  Its seconds are fixed (Effect duration doesn't stretch them), and another pickup refreshes
+  rather than stacks it. `spotAnimTicks` is the activation animation's full cache duration;
+  its effect follows the collecting hero on screen, including predicted movement.
 
 ## Random event
 

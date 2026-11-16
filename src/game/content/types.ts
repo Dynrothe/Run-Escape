@@ -4065,6 +4065,14 @@ export type PowerUpEffect =
     | { kind: "nuke"; bossDamage: number }
     // Pulls every drop on the ground to the player
     | { kind: "magnet" }
+    // A fixed-duration stat boost, with its activation spot animation on the player
+    | {
+          kind: "buff";
+          stats: Partial<Stats>;
+          seconds: number;
+          spotAnim: number;
+          spotAnimTicks: number;
+      }
     // Everything that isn't a boss stands still, and so does whatever turns up
     // meanwhile
     | { kind: "freeze"; seconds: number }

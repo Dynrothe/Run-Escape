@@ -205,6 +205,23 @@ export const POWER_UPS: PowerUpDef[] = [
         },
     },
     {
+        id: "imbued_heart",
+        name: "Imbued heart",
+        description: "Gives you 20% bonus magic damage for 20 seconds.",
+        objId: 20724,
+        weight: 2,
+        price: 50,
+        sound: -1,
+        effect: {
+            kind: "buff",
+            stats: { magicMight: 0.2 },
+            seconds: 20,
+            // imbued_heart_impact, with its full 80-tick animation
+            spotAnim: 1316,
+            spotAnimTicks: 80,
+        },
+    },
+    {
         id: "drill_demon",
         name: "Drill Demon",
         description: "For 9 seconds everything nearby runs laps around you and can't attack.",

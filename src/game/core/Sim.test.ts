@@ -967,6 +967,77 @@ describe("power-ups", () => {
         expect(used).toMatchObject({ id: "stopwatch", message: "Time stands still!" });
     });
 
+    describe("the Imbued heart", () => {
+        test("activates on pickup, shows one buff timer, and expires after exactly 20 seconds", () => {
+            const meta = emptyStats();
+            meta.magicMight = 0.1;
+            meta.duration = 2;
+            const sim = createSim("wizard", 1, "lumbridge", meta);
+            sim.weapons = [];
+            sim.dropPowerUp("imbued_heart", sim.player.x, sim.player.y);
+            sim.step(0, 0);
+            expect(sim.pickups.some((p) => p.powerUp === "imbued_heart")).toBe(false);
+            expect(sim.stats.magicMight).toBeCloseTo(0.3);
+            expect(sim.effects).toContainEqual(
+                expect.objectContaining({
+                    spotAnim: 1316,
+                    hero: 0,
+                    startTick: sim.tick,
+                    endTick: sim.tick + 80,
+                    once: true,
+                }),
+            );
+            expect(getBuffViews(sim)).toEqual([
+                expect.objectContaining({
+                    name: "Imbued heart",
+                    objId: 20724,
+                    secondsLeft: 20,
+                    description: "+20% magic damage",
+                }),
+            ]);
+            const endTick = sim.buffs[0].endTick;
+            expect(endTick - sim.tick).toBe(20 * TICKS_PER_SECOND);
+            sim.tick = endTick - 2;
+            sim.step(0, 0);
+            expect(sim.stats.magicMight).toBeCloseTo(0.3);
+            sim.step(0, 0);
+            expect(sim.stats.magicMight).toBeCloseTo(0.1);
+            expect(getBuffViews(sim)).toEqual([]);
+        });
+
+        test("another pickup refreshes the timer without stacking", () => {
+            const sim = createSim("wizard");
+            sim.weapons = [];
+            const heart = getPowerUp("imbued_heart");
+            sim.usePowerUp(heart);
+            runFor(sim, 10, "still");
+            sim.usePowerUp(heart);
+            expect(sim.stats.magicMight).toBeCloseTo(0.2);
+            expect(sim.buffs).toHaveLength(1);
+            expect(sim.buffs[0].endTick - sim.tick).toBe(20 * TICKS_PER_SECOND);
+            expect(getBuffViews(sim)).toHaveLength(1);
+        });
+
+        test.each([
+            ["fire_spells", 1.2],
+            ["shortbow", 1],
+            ["scimitar", 1],
+        ] as const)("changes %s damage by %sx", (weaponId, multiplier) => {
+            const hit = (boosted: boolean): number => {
+                const sim = armed(weaponId);
+                const enemy = dummy(sim, 1, 0);
+                if (boosted) {
+                    sim.usePowerUp(getPowerUp("imbued_heart"));
+                }
+                return hitsOn(attackOnce(sim, 0.5), enemy).reduce((sum, damage) => sum + damage, 0);
+            };
+            const normal = hit(false);
+            expect(normal).toBeGreaterThan(0);
+            // Hits are rounded to whole damage.
+            expect(hit(true)).toBeCloseTo(Math.round(normal * multiplier), 0);
+        });
+    });
+
     describe("the sled", () => {
         const SECONDS = 8;
         const TICKS = SECONDS * TICKS_PER_SECOND;
