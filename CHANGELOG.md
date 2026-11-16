@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Toktz-mej-tal's ground fire now lights its surroundings on dark maps for as long as it burns.
+
 ## 0.34.1 - 2026-11-16
 
 ### Changed
