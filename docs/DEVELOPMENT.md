@@ -2534,9 +2534,8 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
   `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the
   Pyromancer's phoenix) is used first, then the shop's Ring of life (its `objId`). The "saves you"
-  toast names the one used (`getUsedRevive`). The HUD's `ui-buff-revive-ring` optically centers
-  the ring's artwork within its box, compensating for its cache sprite's uneven transparent
-  margins without changing other item icons.
+  toast names the one used (`getUsedRevive`). The Ring of life's icon is nudged into the middle of
+  its box (`ui-buff-revive-ring`), as its sprite has more empty space on the right and bottom.
 - **The minimap** redraws 30 times a second at most, leaves out enemies off it, and draws its
   dots a colour at a time.
 - **The casket's rays** have their fade drawn into them (an SVG gradient), not a `mask-image`, which
