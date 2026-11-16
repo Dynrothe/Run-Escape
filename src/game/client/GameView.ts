@@ -526,7 +526,7 @@ export class GameView {
     private swings: SwingFx[] = [];
     private shouts: Shout[] = [];
     private escapees: EscapeeFx[] = [];
-    private alchs = new Map<number, number>();
+    private alchs = new Map<number, { start: number; gestureStart?: number }>();
     private flash?: FlashFx;
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
@@ -622,7 +622,19 @@ export class GameView {
                 case "alch":
                 case "equip":
                     if (event.type === "alch" || event.replacedId) {
-                        this.alchs.set(event.hero ?? sim.focus, now);
+                        const hero = event.hero ?? sim.focus;
+                        const previous = this.alchs.get(hero);
+                        const duration =
+                            this.assets.get("spot:" + HIGH_ALCH_SPOTANIM)?.anims[0].totalTicks ?? 0;
+                        if (
+                            previous &&
+                            ((now - previous.start) / 1000) * TICKS_PER_SECOND < duration
+                        ) {
+                            // Rapid Auto alch renews the glow, never the hand gesture.
+                            previous.start = now;
+                        } else {
+                            this.alchs.set(hero, { start: now, gestureStart: now });
+                        }
                     }
                     break;
                 case "petLeap":
@@ -2607,16 +2619,19 @@ export class GameView {
         const player = sim.heroes[hero].player;
         const tick = sim.tick;
         // Keep the cast and its sound together even while another casket holds the run.
-        const alchStart = this.alchs.get(hero);
+        const alchFx = this.alchs.get(hero);
         const alchTicks =
-            alchStart === undefined
+            alchFx === undefined
                 ? -1
-                : ((performance.now() - alchStart) / 1000) * TICKS_PER_SECOND;
+                : ((performance.now() - alchFx.start) / 1000) * TICKS_PER_SECOND;
         const alch = alchTicks >= 0 ? model.getAnim(PLAYER_SEQS.alch) : undefined;
         const alchEffect =
             alchTicks >= 0 ? this.assets.get("spot:" + HIGH_ALCH_SPOTANIM) : undefined;
         const alchEffectAnim = alchEffect?.anims[0];
-        if (alch && alchTicks >= Math.max(alch.totalTicks, alchEffectAnim?.totalTicks ?? 0)) {
+        if (
+            alchFx &&
+            alchTicks >= Math.max(alch?.totalTicks ?? 0, alchEffectAnim?.totalTicks ?? 0)
+        ) {
             this.alchs.delete(hero);
         }
         let anim: ActorAnim;
@@ -2631,6 +2646,32 @@ export class GameView {
             ? getRunPoseFrame(runPose, run, attackTicks, pose.moveTicks)
             : -1;
         const reviving = sim.heroes.find((downed) => downed.revive?.hero === hero)?.revive?.ticks;
+        const attacking =
+            attack &&
+            attack.seqId === player.attackSeq &&
+            !pose.moving &&
+            attackTicks >= 0 &&
+            attackTicks < attack.totalTicks;
+        if (
+            alchFx &&
+            (attacking ||
+                runPoseFrame !== -1 ||
+                player.deathTick !== -1 ||
+                reviving !== undefined ||
+                lookModel)
+        ) {
+            // A combat action cancels the gesture, rather than resuming it after the shot.
+            alchFx.gestureStart = undefined;
+        }
+        const gestureTicks =
+            alchFx?.gestureStart === undefined
+                ? -1
+                : ((performance.now() - alchFx.gestureStart) / 1000) * TICKS_PER_SECOND;
+        const castFrame = alch?.getFrame(gestureTicks, false) ?? 0;
+        const runningCast =
+            pose.moving && alch?.seqId === PLAYER_SEQS.alch
+                ? model.runCasts.get(PLAYER_SEQS.alch)?.[castFrame]
+                : undefined;
         if (look && lookModel) {
             anim = model.getAnim(pose.moving ? look.moveSeq : look.idleSeq);
             frame = anim.getFrame(pose.moveTicks);
@@ -2643,24 +2684,20 @@ export class GameView {
             // long as they stand there
             anim = model.getAnim(REVIVE_SEQ);
             frame = anim.getFrame(reviving);
-        } else if (alch?.seqId === PLAYER_SEQS.alch && alchTicks < alch.totalTicks) {
-            const castFrame = alch.getFrame(alchTicks, false);
-            const running = pose.moving
-                ? model.runCasts.get(PLAYER_SEQS.alch)?.[castFrame]
-                : undefined;
-            anim = running ?? alch;
-            frame = running ? running.getFrame(pose.moveTicks) : castFrame;
         } else if (runPose && runPoseFrame !== -1) {
             anim = runPose;
             frame = runPoseFrame;
-        } else if (
-            attack &&
-            attack.seqId === player.attackSeq &&
-            !pose.moving &&
-            attackTicks < attack.totalTicks
-        ) {
+        } else if (attacking) {
             anim = attack;
             frame = anim.getFrame(attackTicks, false);
+        } else if (
+            alch?.seqId === PLAYER_SEQS.alch &&
+            gestureTicks >= 0 &&
+            gestureTicks < alch.totalTicks &&
+            (!pose.moving || runningCast)
+        ) {
+            anim = runningCast ?? alch;
+            frame = runningCast ? runningCast.getFrame(pose.moveTicks) : castFrame;
         } else {
             anim = pose.moving ? run : model.getAnim(stance.idle);
             frame = anim.getFrame(pose.moveTicks);

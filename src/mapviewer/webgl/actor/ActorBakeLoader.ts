@@ -145,11 +145,12 @@ function getModelReach(model: Model): number {
     return Math.sqrt(reach);
 }
 
-function bakeAnim(
-    state: WorkerState,
+export function bakeAnim(
+    state: Pick<WorkerState, "seqTypeLoader">,
     frames: FrameAdder,
     getModel: ModelSource,
     seqId: number,
+    frameLimit = Infinity,
 ): { anim: BakedAnim; firstFrame: Model | undefined; reach: number } {
     const seqType = seqId !== -1 ? state.seqTypeLoader.load(seqId) : undefined;
 
@@ -164,7 +165,7 @@ function bakeAnim(
             frameCount = seqType.frameIds.length;
         }
     }
-    frameCount = Math.max(frameCount, 1);
+    frameCount = Math.max(Math.min(frameCount, frameLimit), 1);
 
     const ranges = new Int32Array(frameCount * 4);
     const frameSegments = new Uint16Array(frameCount);
@@ -273,12 +274,13 @@ export function bakeRunCast(
     getModel: (castFrame: number, runFrame: number) => Model | undefined,
     seqId: number,
     runSeqId: number,
+    frameLimit = Infinity,
 ): { anims: BakedAnim[]; reach: number } | undefined {
     const castType = state.seqTypeLoader.load(seqId);
     if (castType.isSkeletalSeq()) {
         return undefined;
     }
-    const count = castType.frameIds?.length ?? 0;
+    const count = Math.min(castType.frameIds?.length ?? 0, frameLimit);
     if (count === 0) {
         return undefined;
     }
@@ -308,13 +310,20 @@ function bakeSet(
     key: string,
     getModel: ModelSource,
     seqIds: number[],
+    frameLimits?: Record<number, number>,
 ): BakedSet {
     frames.beginSet();
     const anims: BakedAnim[] = [];
     let bounds = { height: 0, radius: 0 };
     let setReach = 0;
     for (const seqId of seqIds.length > 0 ? seqIds : [-1]) {
-        const { anim, firstFrame, reach } = bakeAnim(state, frames, getModel, seqId);
+        const { anim, firstFrame, reach } = bakeAnim(
+            state,
+            frames,
+            getModel,
+            seqId,
+            frameLimits?.[seqId],
+        );
         if (anims.length === 0 && firstFrame) {
             bounds = getModelBounds(firstFrame);
         }
@@ -474,7 +483,14 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const appearance = request.appearance;
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
-                    const set = bakeSet(state, frames, request.key, getModel, request.seqIds);
+                    const set = bakeSet(
+                        state,
+                        frames,
+                        request.key,
+                        getModel,
+                        request.seqIds,
+                        request.seqFrameLimits,
+                    );
                     set.layered = true;
                     const runPoses = request.runPoses;
                     // The groups the run keeps, without the order's end
@@ -499,6 +515,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                                     ),
                                 seqId,
                                 runPoses.runSeqId,
+                                request.seqFrameLimits?.[seqId],
                             );
                             if (baked) {
                                 set.anims.push(...baked.anims);

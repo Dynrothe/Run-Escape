@@ -399,6 +399,16 @@ describe("a run's enemies, baked and freed", () => {
 });
 
 describe("player bakes", () => {
+    test("never merges a short gesture with a full cast or a different running blend", () => {
+        const { request } = GameAssets.getLookRequest(getCharacterAppearance("wizard"), []);
+        const full = { ...request, key: "full", seqFrameLimits: undefined };
+        const noBlend = { ...request, key: "no-blend", runPoses: undefined };
+        const duplicate = { ...request, key: "duplicate" };
+        const { requests, aliases } = GameAssets.mergeRequests([request, full, noBlend, duplicate]);
+        expect(requests).toHaveLength(3);
+        expect([...aliases]).toEqual([["duplicate", request.key]]);
+    });
+
     test("keep the alchemy cast with every player look and its effect and sound for deployment", () => {
         for (const character of CHARACTERS.filter((character) => !character.npcLook)) {
             const { request } = GameAssets.getLookRequest(getCharacterAppearance(character.id), []);

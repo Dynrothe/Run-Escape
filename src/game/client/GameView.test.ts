@@ -55,8 +55,8 @@ describe("high alchemy", () => {
                 false,
             );
         const idle = animation(PLAYER_SEQS.idle, [20, 20]);
-        const cast = animation(PLAYER_SEQS.alch, [10, 10]);
-        const glow = animation(666, [15, 15]);
+        const cast = animation(PLAYER_SEQS.alch, [8, 8, 8]);
+        const glow = animation(666, [70, 70]);
         const player = new ActorModel({} as ActorPage, "player", 192, 1, 1, [idle, cast]);
         const effect = new ActorModel({} as ActorPage, "alch", 192, 1, 1, [glow]);
         const assets: GameAssets = Object.create(GameAssets.prototype);
@@ -107,6 +107,12 @@ describe("high alchemy", () => {
         now.mockReturnValue(1700);
         draw.mockClear();
         view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw).toHaveBeenCalledTimes(2);
+        expect(draw.mock.calls[0][1]).not.toBe(cast);
+        expect(draw.mock.lastCall![0]).toBe(effect);
+        now.mockReturnValue(3800);
+        draw.mockClear();
+        view["drawPlayer"](actors, sim, 1, 0);
         expect(draw).toHaveBeenCalledOnce();
         expect(draw.mock.calls[0][1]).not.toBe(cast);
         expect(sim.heroes.map((hero) => hero.player)).toEqual(before);
@@ -127,8 +133,9 @@ describe("high alchemy", () => {
             );
         const first = run(0);
         const second = run(1);
+        const third = run(2);
         const player = assets.getPlayer()!;
-        player.runCasts.set(PLAYER_SEQS.alch, [first, second]);
+        player.runCasts.set(PLAYER_SEQS.alch, [first, second, third]);
         const before = structuredClone(sim.heroes.map((hero) => hero.player));
         view.onEvents(sim, [{ type: "alch", hero: 1, itemId: "rune_boots", coins: 10 }]);
         view.localPlayerPose!.moveTicks = 4;
@@ -148,6 +155,92 @@ describe("high alchemy", () => {
         view["drawPlayer"](actors, sim, 1, 0);
         expect(draw.mock.calls[0].slice(1, 3)).toEqual([second, 0]);
         expect(sim.heroes.map((hero) => hero.player)).toEqual(before);
+    });
+
+    test.each([false, true])(
+        "lets attacks preempt the gesture without resuming it, moving=%s",
+        (moving) => {
+            const { sim, view, assets, actors, draw, cast, idle, effect, now } = setup(1);
+            view.localPlayerPose!.moving = moving;
+            const model = assets.getPlayer()!;
+            const shot = new ActorAnim(
+                4230,
+                new Int32Array(4),
+                new Uint16Array(1),
+                new Uint16Array([1]),
+                false,
+            );
+            model.animIndices.set(shot.seqId, model.anims.length);
+            model.anims.push(shot);
+            const aim = new ActorAnim(
+                shot.seqId,
+                new Int32Array(8),
+                new Uint16Array(2),
+                idle.frameLengths,
+                true,
+                true,
+            );
+            model.runPoses.set(shot.seqId, aim);
+            const hero = sim.heroes[1].player;
+            hero.attackSeq = shot.seqId;
+            hero.attackStart = sim.tick;
+            view.onEvents(sim, [{ type: "alch", hero: 1, itemId: "rune_boots", coins: 10 }]);
+            view["drawPlayer"](actors, sim, 1, 0);
+            expect(draw.mock.calls[0][1]).toBe(moving ? aim : shot);
+            expect(draw.mock.lastCall![0]).toBe(effect);
+
+            sim.tick += RUN_POSE_TICKS + 1;
+            now.mockReturnValue(1100);
+            draw.mockClear();
+            view["drawPlayer"](actors, sim, 1, 0);
+            expect(draw.mock.calls[0][1]).not.toBe(cast);
+            expect(draw.mock.lastCall![0]).toBe(effect);
+        },
+    );
+
+    test("rapid alchs refresh the full glow without restarting the hands", () => {
+        const { sim, view, actors, draw, cast, effect, now } = setup(1);
+        view.localPlayerPose!.moving = false;
+        const event: SimEvent = { type: "alch", hero: 1, itemId: "rune_boots", coins: 10 };
+        view.onEvents(sim, [event]);
+        now.mockReturnValue(1300);
+        view.onEvents(sim, [event]);
+        for (const time of [1480, 1700, 2000, 3500]) {
+            now.mockReturnValue(time);
+            view.onEvents(sim, [event]);
+            draw.mockClear();
+            view["drawPlayer"](actors, sim, 1, 0);
+            expect(draw.mock.calls[0][1]).not.toBe(cast);
+            expect(draw.mock.lastCall![0]).toBe(effect);
+        }
+        now.mockReturnValue(6299);
+        draw.mockClear();
+        view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw.mock.lastCall![0]).toBe(effect);
+        now.mockReturnValue(6300);
+        draw.mockClear();
+        view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw).toHaveBeenCalledOnce();
+        // Expiry also works if no frame was drawn during the gap between caskets.
+        now.mockReturnValue(7000);
+        view.onEvents(sim, [event]);
+        now.mockReturnValue(10000);
+        view.onEvents(sim, [event]);
+        draw.mockClear();
+        view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw.mock.calls[0][1]).toBe(cast);
+    });
+
+    test("keeps running instead of playing a full-body cast when a run blend is missing", () => {
+        const { sim, view, actors, draw, cast, idle, effect } = setup(1);
+        view.onEvents(sim, [{ type: "alch", hero: 1, itemId: "rune_boots", coins: 10 }]);
+        view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw.mock.calls[0][1]).toBe(idle);
+        expect(draw.mock.lastCall![0]).toBe(effect);
+        view.localPlayerPose!.moving = false;
+        draw.mockClear();
+        view["drawPlayer"](actors, sim, 1, 0);
+        expect(draw.mock.calls[0][1]).toBe(cast);
     });
 
     test("does not cast for an empty gear slot, and resets an active cast", () => {

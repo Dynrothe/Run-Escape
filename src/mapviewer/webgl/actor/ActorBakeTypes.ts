@@ -29,13 +29,15 @@ export type PlayerBakeRequest = {
     key: string;
     appearance: PlayerAppearance;
     seqIds: number[];
+    // Bake only this many leading frames of a short gesture, not the unused full action.
+    seqFrameLimits?: Record<number, number>;
     // Poses for while the player runs: each a frame of an attack on the upper
     // body over every frame of runSeqId on the legs, split where maskSeqId's
     // interleave order splits a body. Baked as anims with `runPose` set,
     // under the attack's seqId and timed as the run, after the rest.
     runPoses?: {
         poses: { seqId: number; frame: number }[];
-        // Full upper-body casts: each cast frame over every run frame.
+        // Upper-body casts over the run, bounded by seqFrameLimits too.
         casts?: number[];
         runSeqId: number;
         maskSeqId: number;
