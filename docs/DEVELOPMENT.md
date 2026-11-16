@@ -77,15 +77,11 @@ runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`
 file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
 version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
 be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
-reused cache still has its chunks' hashes checked and gets the current build. The release workflow
-restores `caches/slim/` separately from the full cache and saves it after a successful slim-cache
-run. Its CI key includes the runner OS, full cache name and commit, with a restore prefix for
-earlier commits on the same OS and full cache. The builder's fingerprints, not the CI key, decide
-which results can be reused; a cache miss still builds and checks everything. Changing the
-`slim-cache-v1-` prefix starts a fresh CI cache. Chunks are written under a temporary name and renamed into place (tried again
-for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
-chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
-`slim-cache-boot.mjs`, which registers it.
+reused cache still has its chunks' hashes checked and gets the current build, but it isn't loaded
+again, so a release never reuses one (below). Chunks are written under a temporary name and
+renamed into place (tried again for a few seconds while Windows holds the new file), so one that
+stopped partway leaves no broken chunk behind. tsx's loader doesn't reach worker threads by
+itself, so each starts from `slim-cache-boot.mjs`, which registers it.
 
 When something it's made from has changed, `caches/slim/units.json` still has what each unit read
 last time, fingerprinted with the unit's inputs and the workers' code, configuration and full
@@ -105,6 +101,12 @@ finds something missing, or a unit fails on it, and units were reused, it loads 
 from the full cache and checks once more, rather than stop. `units.json` is one file, written whole, with a checksum for
 each read list, and has only the current plan's units. A damaged entry, or file, is reported and
 loaded again.
+
+The release workflow keeps only `caches/slim/units.json` from one release to the next (in GitHub's
+cache, keyed by the full cache's name and the commit, restoring the newest earlier one), never the
+run's `slim.json`. So a release loads from the full cache only the units that changed, and never
+reuses a whole run: its slim cache is always loaded again and checked. The builder's fingerprints
+decide what's reused, not the key. A new `slim-units-v1-` in the key starts it afresh.
 
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.

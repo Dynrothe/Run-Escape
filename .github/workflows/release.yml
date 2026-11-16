@@ -124,24 +124,27 @@ jobs:
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
                   VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
 
-            # The builder checks fingerprints itself; older runs can still supply unchanged units.
-            - name: Restore checked slim cache
+            # What each unit read in the last release's checked run, so only the units whose
+            # inputs changed load from the full cache. Only units.json: without the run's slim.json,
+            # a release never reuses a whole run (which skips loading it again), so its slim cache
+            # is always checked. The builder's fingerprints decide what's reused, not this key.
+            - name: Restore the slim cache's unit reads
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              id: restore-slim-cache
+              id: restore-slim-units
               with:
-                  path: caches/slim
-                  key: slim-cache-v1-${{ runner.os }}-${{ steps.game-cache.outputs.name }}-${{ github.sha }}
+                  path: caches/slim/units.json
+                  key: slim-units-v1-${{ steps.game-cache.outputs.name }}-${{ github.sha }}
                   restore-keys: |
-                      slim-cache-v1-${{ runner.os }}-${{ steps.game-cache.outputs.name }}-
+                      slim-units-v1-${{ steps.game-cache.outputs.name }}-
 
             - run: bun run slim-cache
 
-            - name: Save checked slim cache
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              if: steps.restore-slim-cache.outputs.cache-hit != 'true'
+            # Only after a checked run: units.json is written only once the check has passed
+            - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              if: steps.restore-slim-units.outputs.cache-hit != 'true'
               with:
-                  path: caches/slim
-                  key: ${{ steps.restore-slim-cache.outputs.cache-primary-key }}
+                  path: caches/slim/units.json
+                  key: ${{ steps.restore-slim-units.outputs.cache-primary-key }}
 
             # GAME_SITE_URL is the website the app keeps to (https://example.com/game/): without it,
             # the app only takes these releases
