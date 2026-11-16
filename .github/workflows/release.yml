@@ -123,7 +123,26 @@ jobs:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
                   VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
+
+            # The builder checks fingerprints itself; older runs can still supply unchanged units.
+            - name: Restore checked slim cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              id: restore-slim-cache
+              with:
+                  path: caches/slim
+                  key: slim-cache-v1-${{ runner.os }}-${{ steps.game-cache.outputs.name }}-${{ github.sha }}
+                  restore-keys: |
+                      slim-cache-v1-${{ runner.os }}-${{ steps.game-cache.outputs.name }}-
+
             - run: bun run slim-cache
+
+            - name: Save checked slim cache
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              if: steps.restore-slim-cache.outputs.cache-hit != 'true'
+              with:
+                  path: caches/slim
+                  key: ${{ steps.restore-slim-cache.outputs.cache-primary-key }}
+
             # GAME_SITE_URL is the website the app keeps to (https://example.com/game/): without it,
             # the app only takes these releases
             - run: bun run desktop:dist
