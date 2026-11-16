@@ -34,7 +34,6 @@ the version in the corner).
   OSRS. A fifth hit takes the oldest one's place.
 - The Dwarf multicannon goes up a part at a time, by Deivid Smarzaro: its base, then the stand,
   barrels and furnace over a second, before it fires. It lasts as long as it did.
-- Setting up the game streams cache downloads and extraction to disk, using less server memory.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log

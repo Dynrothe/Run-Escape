@@ -49,15 +49,15 @@ part too. Once the whole file's in hand it's kept, and only then are the parts d
 reloaded while a phone's still writing it (or out of room) is put together from the parts: its
 resume asks past the end, and a 416 with the parts' length means every part was there.
 
-For preparing a server, `bun run download-caches` streams OpenRS2's ZIP to a unique temporary
-directory inside the destination cache folder. It uses backpressure for slow disks and extracts
-files sequentially with streaming decompression, rather than buffering the ZIP or its large
-data file in RAM. Leave enough disk space for the ZIP and extracted cache together. Temporary
-files are removed on success or a reported failure; retrying downloads the ZIP again, not a
-resume. `info.json` is written only after extraction and the keys download succeed. The
-`CACHE_DOWNLOAD_TIMEOUT_MS` inactivity limit counts waits for network data, not disk writes.
-This reduces setup memory, not the browser's runtime memory or the slim-cache builder's; on a
-small build machine use `SLIM_WORKERS=1`, or build elsewhere and host the finished `dist/`.
+`bun run download-caches` (`scripts/download-caches.cjs`) writes OpenRS2's ZIP to disk as it
+arrives, in a `.download-*` folder in the cache's own folder, and unzips the cache's files from
+there one at a time (`yauzl`), so neither the ZIP nor the cache's big data file has to fit in
+memory: it needs room for the ZIP beside the cache while it runs. The folder goes when it's done
+or fails, and one a stopped run left goes on the next. There's no resuming: a retry downloads the
+whole ZIP again. `info.json` is written last, so a cache folder without one isn't finished.
+`CACHE_DOWNLOAD_TIMEOUT_MS` times only the waits for the network, not for the disk. The slim
+cache's build still holds the full cache in each worker: on a small machine use `SLIM_WORKERS=1`,
+or build elsewhere and host the finished `dist/`.
 
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes, of item icons and of monster chatheads, and the textures, sounds and sprites. Worker threads, each holding the

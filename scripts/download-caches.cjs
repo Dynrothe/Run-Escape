@@ -244,19 +244,33 @@ async function downloadCache(cache, cacheDir, timeout) {
 
     console.log("Downloading cache to:", cacheDir);
 
-    const temporary = await fs.promises.mkdtemp(path.join(cacheDir, ".download-"));
+    // What a run that was stopped partway left: its whole ZIP, or part of it
+    for (const name of fs.readdirSync(cacheDir)) {
+        if (name.startsWith(TEMPORARY_PREFIX)) {
+            await removeTemporary(path.join(cacheDir, name));
+        }
+    }
+    const temporary = await fs.promises.mkdtemp(path.join(cacheDir, TEMPORARY_PREFIX));
     try {
         const archive = path.join(temporary, "disk.zip");
         await fetchCacheFiles(cache, timeout, archive);
         await extractCacheFiles(archive, cacheDir);
     } finally {
-        await fs.promises.rm(temporary, { recursive: true, force: true });
+        await removeTemporary(temporary);
     }
 
     const xteas = await fetchXteas(cache, timeout);
 
     fs.writeFileSync(cacheDir + "keys.json", JSON.stringify(xteas), "utf8");
     fs.writeFileSync(cacheDir + "info.json", JSON.stringify(cache), "utf8");
+}
+
+// The folder each download's ZIP goes into, in the cache's own folder
+const TEMPORARY_PREFIX = ".download-";
+
+// With retries, as Windows can still have the ZIP open a moment after yauzl's close
+function removeTemporary(folder) {
+    return fs.promises.rm(folder, { recursive: true, force: true, maxRetries: 5 });
 }
 
 function fetchCacheFiles(cache, timeout, destination) {

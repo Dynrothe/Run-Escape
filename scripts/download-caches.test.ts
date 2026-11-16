@@ -2,7 +2,7 @@ import AdmZip from "adm-zip";
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
 import { runInNewContext } from "node:vm";
 
@@ -37,9 +37,15 @@ async function runDownloader(
     env: Record<string, string> = {},
     writeErrorOn?: string,
     writeDelayMs = 0,
+    // Files there before the run, by their paths
+    before: Record<string, string> = {},
 ) {
     const directory = fs.mkdtempSync(join(tmpdir(), "cache-download-test-"));
     const local = (path: string) => join(directory, path);
+    for (const [path, content] of Object.entries(before)) {
+        fs.mkdirSync(dirname(local(path)), { recursive: true });
+        fs.writeFileSync(local(path), content);
+    }
     const files = new Map<string, string>([
         ["src/game/cache.ts", `export const GAME_CACHE_NAME = "${cacheName}";`],
     ]);
@@ -174,6 +180,22 @@ describe("cache download archive requests", () => {
         for (const [, options] of fetchMock.mock.calls) {
             expect(options.signal).toBeInstanceOf(AbortSignal);
         }
+    });
+
+    it("clears the ZIP a stopped run left behind", async () => {
+        const fetchMock = vi
+            .fn<ArchiveFetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+            .mockResolvedValueOnce(new Response(archiveBytes))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])));
+
+        const result = await runDownloader(fetchMock, {}, undefined, 0, {
+            [`caches/${cacheName}/.download-stopped/disk.zip`]: "half a zip",
+        });
+
+        expect(result.exitCode).toBe(0);
+        expect(result.files.get(`caches/${cacheName}/main_file_cache.dat2`)).toBe("cache data");
+        expect(result.remaining.some((name) => name.startsWith(".download-"))).toBe(false);
     });
 
     it("gives up on a request that never receives headers, and says how to wait longer", async () => {
