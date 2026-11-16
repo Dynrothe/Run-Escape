@@ -49,6 +49,8 @@ the version in the corner).
   attack.
 - Polymorph's odd sheep out turns up as often as the penguin, by GhostavoA, snores as it goes, and
   has a surprise inside.
+- Enemies warped by a fairy ring vanish in the fairy rings' own teleport, by Deivid Smarzaro, in
+  place of Teleother's.
 
 ### Fixed
 
@@ -58,8 +60,6 @@ the version in the corner).
 - The Drill Demon's dropped helmet turns on the spot, in the middle of its pickup. Fixed by Deivid
   Smarzaro.
 - Wolves die with a wolf's yelp, not a rat's squeak. Fixed by GhostavoA.
-- Enemies warped by a fairy ring now show the fairy teleport effect instead of Teleother,
-  starting as they disappear rather than after a delay. Fixed by Deivid Smarzaro.
 
 ## 0.33.2 - 2026-11-15
 

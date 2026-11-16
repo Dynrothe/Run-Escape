@@ -193,9 +193,12 @@ export const POWER_UPS: PowerUpDef[] = [
             kind: "ring",
             seconds: 12,
             radius: 2.5,
-            // The ring of mushrooms in the game, then fairy_flower_ring
+            // The ring of mushrooms in the game, then fairy_flower_ring, which is shrunk away for
+            // its first 55 ticks and its last 55 (of 210)
             locId: 12003,
             spotAnim: 569,
+            spotAnimFrom: 55,
+            spotAnimTicks: 100,
             scale: 5,
         },
     },

@@ -4098,13 +4098,16 @@ export type PowerUpEffect =
           scale: number;
       }
     // A ring (locId, drawn at scale) opens at the player's feet and warps
-    // whatever walks within radius far away, showing spotAnim where it was
+    // whatever walks within radius far away, showing spotAnim where it was: its frames from
+    // spotAnimFrom ticks in, for spotAnimTicks (the part of it that's seen)
     | {
           kind: "ring";
           seconds: number;
           radius: number;
           locId: number;
           spotAnim: number;
+          spotAnimFrom: number;
+          spotAnimTicks: number;
           scale: number;
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)

@@ -1141,17 +1141,50 @@ describe("power-ups", () => {
             const { x, y } = sim.player;
             const enemy = goblin(sim, x + 1, y);
             enemy.frozen = 10000;
+            const def = ring().effect;
+            if (def.kind !== "ring") {
+                throw new Error("the fairy ring isn't a ring");
+            }
             sim.usePowerUp(ring());
             sim.step(0, 0);
-            const effect = sim.effects.find((effect) => effect.spotAnim === 569);
+            const effect = sim.effects.find((effect) => effect.spotAnim === def.spotAnim);
             expect(effect).toMatchObject({ x: x + 1, y, enemyUid: 0 });
-            expect(sim.tick - effect!.startTick).toBeGreaterThanOrEqual(55);
-            expect(effect!.endTick - effect!.startTick).toBe(210);
+            // Its seen frames start as the enemy goes, and it's gone when they end
+            const shownFor = sim.tick - effect!.startTick;
+            expect(shownFor).toBeGreaterThanOrEqual(def.spotAnimFrom);
+            expect(shownFor).toBeLessThanOrEqual(def.spotAnimFrom + 1);
+            expect(effect!.endTick - effect!.startTick).toBe(def.spotAnimFrom + def.spotAnimTicks);
             expect(Math.hypot(enemy.x - x, enemy.y - y)).toBeGreaterThan(8);
-            runFor(sim, 1, "still");
+            while (sim.tick < effect!.endTick - 2) {
+                sim.step(0, 0);
+            }
             expect(sim.effects).toContain(effect);
-            runFor(sim, 3, "still");
+            runFor(sim, 0.2, "still");
             expect(sim.effects).not.toContain(effect);
+        });
+
+        test("shows only so many warps at once, under a crowd walking in", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const def = ring().effect;
+            sim.usePowerUp(ring());
+            let most = 0;
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                if (i % 5 === 0) {
+                    for (let j = 0; j < 12; j++) {
+                        goblin(sim, x + 1, y + (j % 3) * 0.3);
+                    }
+                }
+                sim.step(0, 0);
+                const shown = sim.effects.filter(
+                    (effect) => def.kind === "ring" && effect.spotAnim === def.spotAnim,
+                ).length;
+                most = Math.max(most, shown);
+            }
+            expect(most).toBeGreaterThan(30);
+            expect(most).toBeLessThanOrEqual(40);
         });
 
         test("warps away what walks into it, far from the player", () => {

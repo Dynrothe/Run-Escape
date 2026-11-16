@@ -936,7 +936,10 @@ export type FairyRing = {
     nextPulse: number;
     radius: number;
     locId: number;
+    // Shown where each warped enemy was: its frames from spotAnimFrom ticks in, for spotAnimTicks
     spotAnim: number;
+    spotAnimFrom: number;
+    spotAnimTicks: number;
     scale: number;
 };
 

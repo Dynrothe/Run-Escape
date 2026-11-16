@@ -455,12 +455,10 @@ export const RAMPAGE_FADE_TICKS = 25;
 // How far off the ring a Drill Demon's runner heads straight for it
 const LAP_PULL_TILES = 3;
 // A fairy ring looks for what's walked in this often, and shows the warp on
-// only so many at a time
+// only so many at a time: a pulse's, and all it has showing at once
 const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
-// fairy_flower_ring is shrunk away for its first 55 ticks, of 210 in all.
-const RING_EFFECT_START = 55;
-const RING_EFFECT_TICKS = 210;
+const MAX_LIVE_RING_EFFECTS = 40;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
@@ -24315,6 +24313,8 @@ export class Sim {
                     radius: effect.radius,
                     locId: effect.locId,
                     spotAnim: effect.spotAnim,
+                    spotAnimFrom: effect.spotAnimFrom,
+                    spotAnimTicks: effect.spotAnimTicks,
                     scale: effect.scale,
                 });
                 message = "A fairy ring opens at your feet!";
@@ -24814,18 +24814,32 @@ export class Sim {
                 caught.push(enemy);
             }
         });
+        // Each warp's effect lasts a while, so a crowd walking in mustn't take the place of every
+        // other effect (MAX_EFFECTS)
+        let room = 0;
+        if (caught.length > 0) {
+            let live = 0;
+            for (const effect of this.effects) {
+                if (effect.spotAnim === ring.spotAnim) {
+                    live++;
+                }
+            }
+            room = Math.min(MAX_RING_EFFECTS, MAX_LIVE_RING_EFFECTS - live);
+        }
         let effects = 0;
         for (const enemy of caught) {
-            if (effects < MAX_RING_EFFECTS) {
+            if (effects < room) {
+                // Started part way in, so what's seen of it starts as the enemy goes, and gone
+                // when that ends
                 const effect = this.addEffect(
                     ring.spotAnim,
                     enemy.x,
                     enemy.y,
                     0,
-                    RING_EFFECT_TICKS - RING_EFFECT_START,
+                    ring.spotAnimTicks,
                 );
                 if (effect) {
-                    effect.startTick -= RING_EFFECT_START;
+                    effect.startTick -= ring.spotAnimFrom;
                 }
                 effects++;
             }
