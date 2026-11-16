@@ -129,7 +129,7 @@ export const PICKUP_OBJS: Record<"food" | "casket", number> = {
 // coins through their stack sizes. Each look is from minValue up to the next.
 export type PileLook = { minValue: number; objId: number; count: number; scale: number };
 
-export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
+export const PILE_LOOKS: Record<"bones" | "ashes" | "coins", PileLook[]> = {
     bones: [
         // Bones, Big bones, Dragon bones, Wyvern bones, Lava dragon bones,
         // Superior dragon bones
@@ -140,6 +140,14 @@ export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
         { minValue: 1000, objId: 11943, count: 1, scale: 1.1 },
         { minValue: 3000, objId: 22124, count: 1, scale: 1.2 },
     ],
+    ashes: [
+        // Plain grey Ashes for the smallest pile, then Vile, Malicious, Abyssal and Infernal ashes
+        { minValue: 0, objId: 592, count: 1, scale: 0.75 },
+        { minValue: 20, objId: 25769, count: 1, scale: 0.85 },
+        { minValue: 100, objId: 25772, count: 1, scale: 0.95 },
+        { minValue: 300, objId: 25775, count: 1, scale: 1 },
+        { minValue: 1000, objId: 25778, count: 1, scale: 1.1 },
+    ],
     coins: [
         { minValue: 0, objId: 995, count: 25, scale: 0.85 },
         { minValue: 10, objId: 995, count: 100, scale: 0.95 },
@@ -149,7 +157,7 @@ export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
     ],
 };
 
-function getPileLookIndex(kind: "bones" | "coins", value: number): number {
+function getPileLookIndex(kind: keyof typeof PILE_LOOKS, value: number): number {
     const looks = PILE_LOOKS[kind];
     let index = 0;
     while (index + 1 < looks.length && value >= looks[index + 1].minValue) {
@@ -163,14 +171,16 @@ export function getPileLook(pickup: Pickup): PileLook | undefined {
     if (pickup.kind !== "bones" && pickup.kind !== "coins") {
         return undefined;
     }
-    return PILE_LOOKS[pickup.kind][getPileLookIndex(pickup.kind, pickup.value)];
+    const kind = pickup.kind === "bones" && pickup.ashes ? "ashes" : pickup.kind;
+    return PILE_LOOKS[kind][getPileLookIndex(kind, pickup.value)];
 }
 
 // Bones and coins are drawn as their pile, caskets as the reward casket of
 // their tier, power-ups as their item (or scenery)
 export function getPickupModelKey(pickup: Pickup): string {
     if (pickup.kind === "bones" || pickup.kind === "coins") {
-        return `pickup:${pickup.kind}_${getPileLookIndex(pickup.kind, pickup.value)}`;
+        const kind = pickup.kind === "bones" && pickup.ashes ? "ashes" : pickup.kind;
+        return `pickup:${kind}_${getPileLookIndex(kind, pickup.value)}`;
     }
     if (pickup.kind === "casket" && pickup.tier) {
         return "pickup:casket_" + pickup.tier;

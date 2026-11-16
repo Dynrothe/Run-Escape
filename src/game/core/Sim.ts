@@ -20835,7 +20835,9 @@ export class Sim {
         }
         // The realm's richer (RealmRuleDef.drops)
         const realm = this.realm?.drops;
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1), {
+            ...(enemy.def.ashes && { ashes: true }),
+        });
         if (!last) {
             return;
         }
@@ -23960,7 +23962,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts" | "ashes"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -23973,7 +23975,10 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                if (pickup.kind !== kind) {
+                if (
+                    pickup.kind !== kind ||
+                    (kind === "bones" && !!pickup.ashes !== !!extra.ashes)
+                ) {
                     continue;
                 }
                 count++;
@@ -24128,6 +24133,7 @@ export class Sim {
             hash.query(pile.x, pile.y, PILE_RADIUS, (other) => {
                 if (
                     other.kind === pile.kind &&
+                    !!other.ashes === !!pile.ashes &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
                     fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS

@@ -72,6 +72,7 @@ export const GHORROCK_ENEMIES: EnemyDef[] = [
     {
         id: "ghorrock_icefiend",
         name: "Icefiend",
+        ashes: true,
         npcId: 3140,
         idleSeq: 1578,
         walkSeq: 1579,
@@ -125,6 +126,7 @@ export const GHORROCK_ENEMIES: EnemyDef[] = [
     {
         id: "ghorrock_pyrefiend",
         name: "Pyrefiend",
+        ashes: true,
         npcId: 433,
         idleSeq: 1578,
         walkSeq: 1579,
@@ -142,6 +144,7 @@ export const GHORROCK_ENEMIES: EnemyDef[] = [
     {
         id: "flaming_pyrelord",
         name: "Flaming pyrelord",
+        ashes: true,
         npcId: 12453,
         idleSeq: 1578,
         walkSeq: 1579,
@@ -313,6 +316,7 @@ export const GHORROCK_ENEMIES: EnemyDef[] = [
     {
         id: "duke_sucellus",
         name: "Duke Sucellus",
+        ashes: true,
         npcId: 12195,
         idleSeq: 10175,
         walkSeq: 10175,

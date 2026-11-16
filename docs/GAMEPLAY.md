@@ -13,10 +13,13 @@ version and how to run it.
 - Your **revives** show beside your active effects, without a timer: a **Ring of life** from the
   shop, and the Pyromancer's own as a **Phoenix**. The phoenix is used first, and each icon goes
   once it's saved you. In co-op they're your own, not a teammate's.
-- Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
+- Enemies drop **bones**, or **ashes** for imps and demons; walk near them to collect their
+  experience, unchanged by the kind of remains. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
-  bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
-  into bigger stacks the same way. With too many piles of either lying around, the one furthest
+  bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Ashes grow
+  from plain grey Ashes to Vile, Malicious, Abyssal and Infernal ashes. Ashes only gather with ashes,
+  and bones only with bones; each has its own pile limit. Coins gather
+  into bigger stacks the same way. With too many piles of one kind lying around, the one furthest
   away comes to the newest drop, so nothing left far behind is lost. Levels follow the OSRS experience table (stretched for the
   later levels), and each one offers a choice of three: a new weapon, a weapon upgrade or a
   passive. **1-4** pick with the keyboard. **R** rerolls the offer (one reroll a run, more from

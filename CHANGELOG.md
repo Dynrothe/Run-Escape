@@ -53,6 +53,8 @@ the version in the corner).
   has a surprise inside.
 - Enemies warped by a fairy ring vanish in the fairy rings' own teleport, by Deivid Smarzaro, in
   place of Teleother's.
+- Imps and demons drop ashes instead of bones, by Deivid Smarzaro, for the same experience. Ashes
+  and bones gather into separate piles, with plain grey ashes for the smallest ash pile.
 
 ### Fixed
 

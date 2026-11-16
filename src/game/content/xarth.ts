@@ -267,6 +267,7 @@ export const XARTH_ENEMIES: EnemyDef[] = [
     {
         id: "xarth",
         name: "Xarth",
+        ashes: true,
         npcId: 16684,
         idleSeq: IDLE_SEQ,
         walkSeq: WALK_SEQ,

@@ -24,6 +24,7 @@ export const VARROCK_ENEMIES: EnemyDef[] = [
     {
         id: "greater_demon",
         name: "Greater demon",
+        ashes: true,
         npcId: 2025,
         idleSeq: DEMON_IDLE,
         walkSeq: DEMON_WALK,
@@ -42,6 +43,7 @@ export const VARROCK_ENEMIES: EnemyDef[] = [
     {
         id: "black_demon",
         name: "Black demon",
+        ashes: true,
         npcId: 240,
         idleSeq: DEMON_IDLE,
         walkSeq: DEMON_WALK,
@@ -59,6 +61,7 @@ export const VARROCK_ENEMIES: EnemyDef[] = [
     {
         id: "varrock_hellhound",
         name: "Hellhound",
+        ashes: true,
         npcId: 3133,
         idleSeq: 6580,
         walkSeq: 6582,
