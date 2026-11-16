@@ -85,7 +85,7 @@ export const COSMETICS: CosmeticDef[] = COSMETIC_ROWS.flatMap(([slot, rows]) => 
         rarity: RARITY_CODES[rarity] ?? "common",
     }));
     if (slot === EquipSlot.CAPE) {
-        const at = pieces.findIndex((c) => c.name.localeCompare(CUSTOM_CAPE.name) > 0);
+        const at = pieces.findIndex((c) => c.name.localeCompare(CUSTOM_CAPE.name, "en") > 0);
         pieces.splice(at < 0 ? pieces.length : at, 0, CUSTOM_CAPE);
     }
     return pieces;
