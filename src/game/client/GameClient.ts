@@ -5431,6 +5431,8 @@ export class GameClient implements GameFrameHandler {
             dps: this.shownDps,
             weaponDamage,
             otherDps: meter.otherPerSecond,
+            partyStats:
+                this.paused && sim.heroes.length > 1 ? getPlayerResultViews(sim) : undefined,
             buffs: getBuffViews(sim),
             boss,
             ability: this.getAbilityView(sim),

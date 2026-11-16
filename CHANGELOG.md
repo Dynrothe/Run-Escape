@@ -7,6 +7,7 @@ the version in the corner).
 
 ### Added
 
+- Live ally stats in the co-op menu's Party tab, by Deivid Smarzaro: browse every player's totals and combat breakdown as on the results screen.
 - A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
   blocked, your revives, and every monster you've killed, by its face. The results have it too.
 - Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got

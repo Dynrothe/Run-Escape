@@ -342,6 +342,8 @@ export type HudNumbers = {
     // that's evolved), and what isn't a weapon's (items, power-ups, recoil)
     weaponDamage: Record<string, { dps: number; damage: number }>;
     otherDps: number;
+    // End-screen-style player stats, only while browsing the co-op menu
+    partyStats?: PlayerResultView[];
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;

@@ -154,6 +154,7 @@ import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } 
 import { Coins } from "./Coins";
 import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
+import { CombatBreakdown } from "./CombatBreakdown";
 import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
@@ -179,6 +180,7 @@ import { PauseChat } from "./PauseChat";
 import { PauseLoadout, SlotIcon } from "./PauseLoadout";
 import { PauseQuests } from "./PauseQuests";
 import { Platinum } from "./Platinum";
+import { PlayerStatsNav, PlayerStatsTable } from "./PlayerStats";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
@@ -4930,6 +4932,37 @@ function formatQuestProgress(quest: QuestTrackView): string {
         : t("quest.progress", { done: fmtNum(quest.done), total: fmtNum(quest.of) });
 }
 
+function PartyStats({ client }: { client: GameClient }): JSX.Element | null {
+    const players = useHudNumber(client, (n) => n.partyStats);
+    const [selected, setSelected] = useState<number>();
+    if (!players?.length) return null;
+    const playerIndex =
+        selected ??
+        Math.max(
+            0,
+            players.findIndex((player) => player.isLocal),
+        );
+    const player = players[playerIndex];
+    return (
+        <>
+            <h3 className="ui-pause-heading">{t("pause.heading.party_stats")}</h3>
+            <PlayerStatsNav
+                players={players}
+                playerIndex={playerIndex}
+                changePlayer={(direction) =>
+                    setSelected((playerIndex + direction + players.length) % players.length)
+                }
+            />
+            <PlayerStatsTable player={player} />
+            <CombatBreakdown
+                kinds={player.kinds}
+                sources={player.damage}
+                kills={player.killsByEnemy}
+            />
+        </>
+    );
+}
+
 type PauseTab = "loadout" | "combat" | "quests" | "party" | "collection" | "settings";
 
 // The pages opened from a button along the bottom, not a tab along the top
@@ -4979,7 +5012,7 @@ function PauseModal({
                   },
               ]
             : []),
-        ...(kickable.length > 0
+        ...(coop
             ? [
                   {
                       id: "party" as const,
@@ -5126,7 +5159,12 @@ function PauseModal({
                         <PauseCombat client={client} live={coop} log={ui.toastLog} />
                     )}
                     {open === "quests" && <PauseQuests quests={quests} combatTasks={combatTasks} />}
-                    {open === "party" && <PauseParty kickable={kickable} client={client} />}
+                    {open === "party" && (
+                        <>
+                            <PartyStats client={client} />
+                            <PauseParty kickable={kickable} client={client} />
+                        </>
+                    )}
                     {open === "collection" && (
                         <CollectionLogScreen
                             save={ui.save}
