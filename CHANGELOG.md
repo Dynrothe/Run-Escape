@@ -36,6 +36,8 @@ the version in the corner).
 - The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
   Achievements earn them. Any you bought are refunded.
 - The Skip button shows the coins it takes, by Deivid Smarzaro: "Skip (-25 coins)".
+- Thrown axes fly on their side, by Jp66600, spinning flat so the whole blade shows from above
+  instead of a thin line. The Chain-hit axes' and the Dagannoth Supreme's too.
 
 ### Fixed
 

@@ -35,7 +35,7 @@ import {
     ZEBAK,
 } from "../content/tombs";
 import { EnemyDef, HeroNpcLookDef, MapPropDef, PolymorphKind } from "../content/types";
-import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
+import { PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
     Hero,
@@ -809,10 +809,15 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
+            const item =
+                projectile.attack.projectileObjId !== undefined
+                    ? this.assets.get("obj:" + projectile.attack.projectileObjId)
+                    : undefined;
             const model =
-                (projectile.attack.projectileObjId !== undefined &&
-                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
-                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
+                item || (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
+            // A thrown axe spins flat, as the player's do (PROJECTILE_SPOT_LOOKS)
+            const roll =
+                !item && spotAnim !== undefined ? PROJECTILE_SPOT_LOOKS[spotAnim]?.roll : undefined;
             if (!model || !hasGeometry(model)) {
                 // Drawn as a glow on the overlay instead
                 continue;
@@ -832,6 +837,7 @@ export class GameView {
                 ) * (projectile.attack.projectileScale ?? 1);
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
+                roll,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
                 unlit: 1,
             });
@@ -852,11 +858,15 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            const look = PROJECTILE_ITEM_LOOKS[projectile.objId];
+            const look =
+                projectile.objId !== -1
+                    ? PROJECTILE_ITEM_LOOKS[projectile.objId]
+                    : PROJECTILE_SPOT_LOOKS[projectile.spotAnim];
             const yaw = (projectile.yaw + (look?.yawOffset ?? 0)) & 2047;
             // Seen into the dark, where they carry on to what they hit
             actors.draw(model, anim, frame, x, height, y, yaw, {
                 scale: look?.scale ?? (projectile.kind === "rune" ? RUNE_SCALE : 1),
+                roll: look?.roll,
                 unlit: 1,
             });
         }

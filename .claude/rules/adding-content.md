@@ -71,6 +71,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
   fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
   ways: none of these pointed the way they fly as they come from the cache.
+  A spot animation gets the same help from `PROJECTILE_SPOT_LOOKS`, for enemies' shots too. The
+  thrownaxes spin upright, end over end, which from above is only their edge, so they're laid on
+  their side (`roll: 512`) to spin flat.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
