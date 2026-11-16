@@ -5,13 +5,18 @@ import { Scene } from "../../../rs/scene/Scene";
 import { getModelBounds } from "../buffer/CullGrid";
 import { ContourGroundType, SceneModel } from "../buffer/SceneBuffer";
 
-const BARRIER_PLANTS = new Set([
-    // Karamja's Jungle plants
-    1204, 1398, 1399, 1400, 1401, 1402,
-    // Barrows and the surrounding swamp's Plants
-    1391, 1393, 5331, 5332, 5333, 5334, 9604, 9605, 9606,
-]);
+// Karamja's Jungle plants, wherever they are
+const JUNGLE_PLANTS = new Set([1204, 1398, 1399, 1400, 1401, 1402]);
+// The Plants of the Barrows and the swamp around it. The same locs stand all over the world,
+// so only in the Barrows map's squares (54-56 x 50-52, its arena in content/maps.ts).
+const BARROWS_PLANTS = new Set([1391, 1393, 5331, 5332, 5333, 5334, 9604, 9605, 9606]);
+const BARROWS_SQUARES = { minX: 54, maxX: 56, minY: 50, maxY: 52 };
 const TREE_STUMP = 1354;
+
+function isBarrows(mapX: number, mapY: number): boolean {
+    const { minX, maxX, minY, maxY } = BARROWS_SQUARES;
+    return mapX >= minX && mapX <= maxX && mapY >= minY && mapY <= maxY;
+}
 
 // Only the render list gets bases: changing the cache models would also change collision.
 // Animated and transforming plants never reach it (getSceneLocs keeps them as entities). A base
@@ -21,12 +26,16 @@ export function addPlantBarrierBases(
     sceneModels: SceneModel[],
     scene: Pick<Scene, "tileHeights">,
     borderSize: number,
+    mapX: number,
+    mapY: number,
 ): void {
+    const barrows = isBarrows(mapX, mapY);
     const bases: SceneModel[] = [];
     const sizes = new Map<string, Model>();
     let stump: Model | undefined;
     for (const plant of sceneModels) {
-        if (!BARRIER_PLANTS.has(plant.interactId)) continue;
+        const id = plant.interactId;
+        if (!JUNGLE_PLANTS.has(id) && !(barrows && BARROWS_PLANTS.has(id))) continue;
         if (loader.locTypeLoader.load(plant.interactId).clipType === 0) continue;
 
         const bounds = getModelBounds(plant.model);
