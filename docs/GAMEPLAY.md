@@ -1159,8 +1159,8 @@ version and how to run it.
   **Woodcutting** adds melee knockback, and every other level of a melee weapon raises it too.
   **Firemaking** gives up to 3 banishes a run. Banish a new weapon or passive on a level up and
   its card greys out (pick another; the last one left can't be banished), and it's never offered
-  again that run; every level up after lists what's been banished, under its cards. Banish a casket's item and it's alched, and never comes again (a set's piece
-  banishes the whole set). Nothing you have can be banished: not what you're levelling, carrying
+  again that run; every level up after lists what's been banished, under its cards. Banish a
+  casket's item and it's alched, and never comes again (a set's piece banishes the whole set). Nothing you have can be banished: not what you're levelling, carrying
   or wearing, nor a piece of a set you're wearing.
   **Smithing** and **Crafting** are the dear ones: up to 2 more weapon slots and 2 more passive
   slots.
