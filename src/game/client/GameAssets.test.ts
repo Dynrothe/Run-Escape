@@ -57,8 +57,9 @@ import { getGameSoundIds } from "./GameSounds";
 
 describe("ash pickup models", () => {
     test.each([
-        [0, 25766],
-        [19, 25766],
+        [0, 592],
+        [7, 592],
+        [19, 592],
         [20, 25769],
         [99, 25769],
         [100, 25772],

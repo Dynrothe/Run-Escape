@@ -23671,7 +23671,10 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                if (pickup.kind !== kind) {
+                if (
+                    pickup.kind !== kind ||
+                    (kind === "bones" && !!pickup.ashes !== !!extra.ashes)
+                ) {
                     continue;
                 }
                 count++;
@@ -23690,7 +23693,6 @@ export class Sim {
                 pile.x = pile.prevX = x;
                 pile.y = pile.prevY = y;
                 pile.value += value;
-                pile.ashes = extra.ashes;
                 return;
             }
         }
@@ -23827,6 +23829,7 @@ export class Sim {
             hash.query(pile.x, pile.y, PILE_RADIUS, (other) => {
                 if (
                     other.kind === pile.kind &&
+                    !!other.ashes === !!pile.ashes &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
                     fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS

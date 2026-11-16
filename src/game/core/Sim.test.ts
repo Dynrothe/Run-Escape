@@ -160,13 +160,13 @@ describe("Sim", () => {
         },
     );
 
-    test("mixed remains merge and collect on the same schedule as bones", () => {
+    test("ash piles merge and collect on the same schedule as bone piles", () => {
         const run = (ashes: boolean) => {
             const sim = createSim();
             sim.weapons = [];
             const { x, y } = sim.player;
             sim.dropPickup("bones", x + 10, y, 30, { ashes });
-            sim.dropPickup("bones", x + 11, y, 10);
+            sim.dropPickup("bones", x + 11, y, 10, { ashes });
             runFor(sim, 1, "still");
             expect(sim.pickups).toEqual([
                 expect.objectContaining({ x: x + 10, y, value: 40, ashes }),
@@ -182,18 +182,41 @@ describe("Sim", () => {
         expect(run(true)).toEqual(run(false));
     });
 
-    test("the pile limit keeps the newest remains' appearance without losing XP", () => {
+    test.each([false, true])(
+        "nearby ashes and bones stay separate (ash pile first: %s)",
+        (ashes) => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.dropPickup("bones", x + 10, y, 30, { ashes });
+            sim.dropPickup("bones", x + 11, y, 10, { ashes: !ashes });
+            runFor(sim, 1, "still");
+            expect(sim.pickups).toEqual([
+                expect.objectContaining({ x: x + 10, y, value: 30, ashes, pileUid: 0 }),
+                expect.objectContaining({ x: x + 11, y, value: 10, ashes: !ashes, pileUid: 0 }),
+            ]);
+            const xp = sim.xp;
+            sim.pickups.forEach((pickup) => sim["collect"](pickup));
+            expect(sim.xp).toBeCloseTo(xp + 40 * (1 + sim.stats.growth));
+        },
+    );
+
+    test.each([false, true])("the pile limit never mixes remains (ashes: %s)", (ashes) => {
         const sim = createSim();
         const { x, y } = sim.player;
         for (let i = 0; i < 400; i++) {
-            sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1);
+            sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1, {
+                ashes,
+            });
         }
-        sim.dropPickup("bones", x + 2, y, 10, { ashes: true });
-        expect(sim.pickups).toHaveLength(400);
-        expect(sim.pickups[399]).toMatchObject({ ashes: true, value: 11, x: x + 2, y });
-        sim.dropPickup("bones", x + 1, y, 7);
+        sim.dropPickup("bones", x + 2, y, 10, { ashes: !ashes });
+        expect(sim.pickups).toHaveLength(401);
+        expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10, x: x + 2, y });
+        sim.dropPickup("bones", x + 1, y, 7, { ashes });
+        expect(sim.pickups).toHaveLength(401);
         const newest = sim.pickups.find((p) => p.x === x + 1 && p.y === y)!;
-        expect(newest.ashes).toBeUndefined();
+        expect(newest).toMatchObject({ ashes, value: 8 });
+        expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10 });
         expect(sim.pickups.reduce((total, p) => total + p.value, 0)).toBe(417);
     });
 

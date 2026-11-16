@@ -124,8 +124,8 @@ export const PILE_LOOKS: Record<"bones" | "ashes" | "coins", PileLook[]> = {
         { minValue: 3000, objId: 22124, count: 1, scale: 1.2 },
     ],
     ashes: [
-        // Fiendish, Vile, Malicious, Abyssal and Infernal ashes
-        { minValue: 0, objId: 25766, count: 1, scale: 0.75 },
+        // Plain grey Ashes for the smallest pile, then Vile, Malicious, Abyssal and Infernal ashes
+        { minValue: 0, objId: 592, count: 1, scale: 0.75 },
         { minValue: 20, objId: 25769, count: 1, scale: 0.85 },
         { minValue: 100, objId: 25772, count: 1, scale: 0.95 },
         { minValue: 300, objId: 25775, count: 1, scale: 1 },

@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Changed
 
-- Imps and demons drop ashes instead of bones, with the same experience.
+- Imps and demons drop ashes instead of bones, with the same experience. Ashes and bones
+  gather into separate piles, with plain grey ashes for the smallest ash pile.
 
 ## 0.33.2 - 2026-11-15
 

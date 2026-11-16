@@ -178,7 +178,8 @@ walk sequences.
 ## Enemy or boss
 
 Imps and demons use `EnemyDef.ashes` for ash remains. They still drop `kind: "bones"` XP pickups,
-with `Pickup.ashes` selecting the appearance; XP, magnets, relics and pile merging stay the same.
+with `Pickup.ashes` selecting the appearance; XP, magnets and relics stay the same. Piles merge
+and reuse their pile-limit slots only with the same remains: ashes never mix with bones.
 `GameAssets.PILE_LOOKS` supplies the ash models to baking and the slim cache too.
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,

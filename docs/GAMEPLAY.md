@@ -16,9 +16,9 @@ version and how to run it.
   experience, unchanged by the kind of remains. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Ashes grow
-  from Fiendish to Vile, Malicious, Abyssal and Infernal ashes. Bones and ashes can join the same
-  pile, keeping that pile's appearance. Coins gather
-  into bigger stacks the same way. With too many piles of either lying around, the one furthest
+  from plain grey Ashes to Vile, Malicious, Abyssal and Infernal ashes. Ashes only gather with ashes,
+  and bones only with bones; each has its own pile limit. Coins gather
+  into bigger stacks the same way. With too many piles of one kind lying around, the one furthest
   away comes to the newest drop, so nothing left far behind is lost. Levels follow the OSRS experience table (stretched for the
   later levels), and each one offers a choice of three: a new weapon, a weapon upgrade or a
   passive. **1-4** pick with the keyboard. **R** rerolls the offer (one reroll a run, more from
