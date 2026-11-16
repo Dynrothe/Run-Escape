@@ -946,8 +946,10 @@ describe("power-ups", () => {
             sim.pickups.length = 0;
         }
         expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
-        // All of them, bar what drops some other way (the pumpkin)
-        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0).length);
+        // All of them, bar what drops some other way (the pumpkin) and what's for another style (a
+        // warrior gets no Imbued heart)
+        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0 && !p.style).length);
+        expect(seen).not.toContain("imbued_heart");
     });
 
     test("are walked over to use them, and don't wait around", () => {
@@ -968,7 +970,7 @@ describe("power-ups", () => {
     });
 
     describe("the Imbued heart", () => {
-        test("activates on pickup, shows one buff timer, and expires after exactly 20 seconds", () => {
+        test("activates on pickup, shows one buff timer, and lasts 20 seconds stretched by Effect duration", () => {
             const meta = emptyStats();
             meta.magicMight = 0.1;
             meta.duration = 2;
@@ -991,12 +993,12 @@ describe("power-ups", () => {
                 expect.objectContaining({
                     name: "Imbued heart",
                     objId: 20724,
-                    secondsLeft: 20,
+                    secondsLeft: 60,
                     description: "+20% magic damage",
                 }),
             ]);
             const endTick = sim.buffs[0].endTick;
-            expect(endTick - sim.tick).toBe(20 * TICKS_PER_SECOND);
+            expect(endTick - sim.tick).toBe(60 * TICKS_PER_SECOND);
             sim.tick = endTick - 2;
             sim.step(0, 0);
             expect(sim.stats.magicMight).toBeCloseTo(0.3);
@@ -1016,6 +1018,24 @@ describe("power-ups", () => {
             expect(sim.buffs).toHaveLength(1);
             expect(sim.buffs[0].endTick - sim.tick).toBe(20 * TICKS_PER_SECOND);
             expect(getBuffViews(sim)).toHaveLength(1);
+        });
+
+        test("drops, is offered and is a quiz's prize for magic heroes alone", () => {
+            const hearts = (characterId: string): number => {
+                const sim = createSim(characterId);
+                const drops = Array.from({ length: 300 }, () => sim["rollPowerUpId"]());
+                const prizes = Array.from({ length: 300 }, () =>
+                    sim["rollPowerUpId"]([sim.heroes[0]]),
+                );
+                const offers = Array.from({ length: 300 }, () => sim["rollOldManOptions"]())
+                    .flat()
+                    .map((option) => (option.kind === "powerUp" ? option.powerUpId : option.kind));
+                return [...drops, ...prizes, ...offers].filter((id) => id === "imbued_heart")
+                    .length;
+            };
+            expect(hearts("wizard")).toBeGreaterThan(0);
+            expect(hearts("warrior")).toBe(0);
+            expect(hearts("ranger")).toBe(0);
         });
 
         test.each([

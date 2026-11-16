@@ -4218,6 +4218,9 @@ export type PowerUpDef = {
     centerGroundModel?: boolean;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
+    // Only for heroes of this style (the Imbued heart's magic): it drops only with one in the
+    // party, waits on the ground for one of them, and the Old Man and a quiz offer it only to them
+    style?: CombatStyle;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
     color?: string;
     // Coins the Mysterious Old Man wants for it, at the start of a run

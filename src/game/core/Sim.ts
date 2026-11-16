@@ -113,6 +113,7 @@ import {
     CANNON_BUILD_SECONDS,
     LANTERN_ID,
     POWER_UPS,
+    POWER_UP_BY_ID,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
     POWER_UP_MIN_GAP,
@@ -3873,15 +3874,9 @@ export class Sim {
         return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
     }
 
-    // A stat boost, refreshed rather than stacked. Potions last for buffTicks.
-    private addBuff(
-        itemId: string,
-        stats: Partial<Stats>,
-        seconds: number,
-        cures: boolean,
-        fixedDuration = false,
-    ): void {
-        const ticks = fixedDuration ? secondsToTicks(seconds) : this.buffTicks(seconds);
+    // A potion's or a power-up's boost, for buffTicks. Another dose or pickup starts the timer again.
+    private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
+        const ticks = this.buffTicks(seconds);
         this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
         this.buffs.push({
             itemId,
@@ -24055,12 +24050,23 @@ export class Sim {
                 const at = CASKET_TIERS.indexOf(pickup.tier);
                 pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
             }
-            // Whoever's nearest gets it
+            // Whoever's nearest gets it. A power-up for one style waits for a hero of it, and
+            // anyone else walks over it.
+            const def =
+                pickup.kind === "powerUp" ? POWER_UP_BY_ID.get(pickup.powerUp ?? "") : undefined;
+            const takes = def?.style
+                ? (hero: Hero) => this.isUp(hero) && this.powerUpFits(def, hero)
+                : undefined;
+            if (takes && !this.heroes.some(takes)) {
+                continue;
+            }
             const banked = pickup.kind === "coins" && bankers.length > 0;
             this.use(
                 banked
                     ? this.nearest(pickup.x, pickup.y, (hero) => bankers.includes(hero))
-                    : this.nearestUpHero(pickup.x, pickup.y),
+                    : takes
+                      ? this.nearest(pickup.x, pickup.y, takes)
+                      : this.nearestUpHero(pickup.x, pickup.y),
             );
             const player = this.player;
             const magnet = BASE_MAGNET * (1 + this.stats.magnet);
@@ -24208,15 +24214,26 @@ export class Sim {
         }
     }
 
-    private rollPowerUpId(): string {
+    // heroes: who might get it, the party for a drop and the hero for a quiz's prize
+    private rollPowerUpId(heroes: readonly Hero[] = this.heroes): string {
         // A lantern is the one power-up a map's own weight brings in (LightingDef)
         const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
             POWER_UPS.map((p) =>
-                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+                p.id === this.lastPowerUpId || !heroes.some((hero) => this.powerUpFits(p, hero))
+                    ? 0
+                    : p.id === LANTERN_ID
+                      ? lantern
+                      : p.weight,
             ),
         );
         return POWER_UPS[index].id;
+    }
+
+    // Whether a power-up is any use to this hero: one for a style (PowerUpDef.style) is only
+    // theirs
+    private powerUpFits(def: PowerUpDef, hero: Hero): boolean {
+        return !def.style || getCharacter(hero.characterId).style === def.style;
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
@@ -24278,7 +24295,7 @@ export class Sim {
                         : "Everything on the ground flies to you!";
                 break;
             case "buff": {
-                this.addBuff(def.id, effect.stats, effect.seconds, false, true);
+                this.addBuff(def.id, effect.stats, effect.seconds, false);
                 this.buffs[this.buffs.length - 1].look = {
                     name: def.name,
                     objId: def.objId,
@@ -25345,7 +25362,10 @@ export class Sim {
     // on offer less often too. In co-op, now and then one of them is an extra
     // revive instead.
     private rollOldManOptions(): EventOption[] {
-        const left = POWER_UPS.filter((powerUp) => powerUp.weight > 0);
+        // Only what's any use to whoever walked up
+        const left = POWER_UPS.filter(
+            (powerUp) => powerUp.weight > 0 && this.powerUpFits(powerUp, this.hero),
+        );
         const options: EventOption[] = [];
         if (this.heroes.length > 1 && this.eventRng.chance(OLD_MAN_REVIVE_CHANCE)) {
             options.push({
@@ -25480,7 +25500,7 @@ export class Sim {
                 true,
             );
             if (option.correct) {
-                this.usePowerUp(getPowerUp(this.rollPowerUpId()));
+                this.usePowerUp(getPowerUp(this.rollPowerUpId([this.hero])));
             }
         }
         this.leaveEvent();

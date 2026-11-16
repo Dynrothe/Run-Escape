@@ -210,6 +210,8 @@ export const POWER_UPS: PowerUpDef[] = [
         description: "Gives you 20% bonus magic damage for 20 seconds.",
         objId: 20724,
         weight: 2,
+        // A boost to magic alone, so it's no use to anyone else
+        style: "magic",
         price: 50,
         sound: -1,
         effect: {

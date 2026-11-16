@@ -128,6 +128,29 @@ describe("co-op", () => {
         expect(b.buffs).toEqual([]);
     });
 
+    it("the Imbued heart drops only with a mage in the party, and waits on the ground for one", () => {
+        const melee = createParty(["warrior", "ranger"]);
+        const meleeRolls = Array.from({ length: 300 }, () => melee["rollPowerUpId"]());
+        expect(meleeRolls).not.toContain("imbued_heart");
+
+        const sim = createParty(["warrior", "wizard"]);
+        const [warrior, wizard] = sim.heroes;
+        warrior.weapons = wizard.weapons = [];
+        expect(Array.from({ length: 300 }, () => sim["rollPowerUpId"]())).toContain("imbued_heart");
+        wizard.player.x += 5;
+        sim.dropPowerUp("imbued_heart", warrior.player.x, warrior.player.y);
+        const heart = sim.pickups.find((p) => p.powerUp === "imbued_heart")!;
+        sim.step();
+        expect(warrior.buffs).toEqual([]);
+        expect(sim.pickups).toContain(heart);
+        wizard.player.x = heart.x;
+        wizard.player.y = heart.y;
+        sim.step();
+        expect(sim.pickups).not.toContain(heart);
+        expect(wizard.stats.magicMight).toBeCloseTo(0.2);
+        expect(warrior.buffs).toEqual([]);
+    });
+
     it("gives each hero the hard Thanksgiving victory trophy", () => {
         const sim = createParty(["warrior", "wizard"], 1, 0, true, { mapId: "thanksgiving" });
         const boss = sim.spawnEnemy(getEnemy("freaky_forester"), "finalBoss", {
