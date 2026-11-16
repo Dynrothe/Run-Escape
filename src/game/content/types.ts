@@ -1859,13 +1859,17 @@ export type WeaponLevel = {
     name?: string;
 };
 
-// How an item is drawn in flight when its cache model needs help, whichever
-// weapon throws it (PROJECTILE_ITEM_LOOKS). Drawing only: hit sizes stay as they are.
-export type ProjectileItemLook = {
+// How an item or a spot animation is drawn in flight when its cache model needs help,
+// whoever throws it (PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS). Drawing only: hit sizes
+// stay as they are.
+export type ProjectileLook = {
     // Drawn this much bigger, for a model too small to see from the game's camera
     scale?: number;
     // Turned this far (2048 is a full turn), for a model that doesn't point the way it flies
     yawOffset?: number;
+    // Tipped over this far about the way it flies (512 lays it on its side), for a model that
+    // spins upright and so shows only its edge to the game's camera
+    roll?: number;
 };
 
 export type WeaponDef = {

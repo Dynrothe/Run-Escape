@@ -5,9 +5,15 @@ import {
     ActorPage,
     ActorRenderer,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { emptyStats } from "../content/types";
-import { PROJECTILE_ITEM_LOOKS, getProjectileObjId, getWeapon } from "../content/weapons";
+import {
+    PROJECTILE_ITEM_LOOKS,
+    PROJECTILE_SPOT_LOOKS,
+    getProjectileObjId,
+    getWeapon,
+} from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
@@ -243,14 +249,16 @@ test("Avian's birds follow the rendered hero and loop without changing the sim",
     expect(sim.heroes.map((hero) => hero.player)).toEqual(before);
 });
 
-// Bolts, knives and the atlatl's darts are items with a look, and the blowpipe's darts spot
-// animations without one
+// Bolts, knives and the atlatl's darts are items with a look, the thrownaxes spot animations
+// with one (laid on their side), and the blowpipe's darts spot animations without one
 test.each([
     "armadyl_crossbow",
     "dragon_hunter_crossbow",
     "eclipse_atlatl",
     "throwing_knives",
     "toxic_blowpipe",
+    "throwing_axes",
+    "chain_hit_axes",
 ])("%s draws every projectile tier without changing its movement or hit size", (weaponId) => {
     const sim = new Sim({
         grid: makeGrid(Array(8).fill("........")),
@@ -287,8 +295,12 @@ test.each([
             expect(assets.get).toHaveBeenLastCalledWith(
                 objId !== undefined ? "obj:" + objId : "spot:" + level.projectileSpotAnim,
             );
-            const look = objId !== undefined ? PROJECTILE_ITEM_LOOKS[objId] : undefined;
+            const look =
+                objId !== undefined
+                    ? PROJECTILE_ITEM_LOOKS[objId]
+                    : PROJECTILE_SPOT_LOOKS[projectile.spotAnim];
             expect(look === undefined).toBe(weaponId === "toxic_blowpipe");
+            expect(look?.roll).toBe(weaponId.endsWith("_axes") ? 512 : undefined);
             expect(draw).toHaveBeenLastCalledWith(
                 model,
                 anim,
@@ -298,12 +310,65 @@ test.each([
                 projectile.y,
                 (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
                 // Seen in the dark on a map with lighting (ActorDrawOptions.unlit)
-                { scale: look?.scale ?? 1, unlit: 1 },
+                { scale: look?.scale ?? 1, roll: look?.roll, unlit: 1 },
             );
             expect(projectile).toEqual(before);
             expect(projectile.radius).toBe(0.4);
         }
     }
+});
+
+// The Dagannoth Supreme throws the rune thrownaxe's spin, so his axes lie on their side as the
+// player's do
+test("an enemy's thrown axes are drawn on their side", () => {
+    const sim = new Sim({
+        grid: makeGrid(Array(8).fill("........")),
+        characterId: "ranger",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 103.5,
+        spawnY: 203.5,
+    });
+    const anim = new ActorAnim(
+        -1,
+        new Int32Array(4),
+        new Uint16Array(1),
+        new Uint16Array([1]),
+        false,
+    );
+    const model = { anims: [anim], radius: 20, height: 40 } as ActorModel;
+    const assets = {
+        get: vi.fn(() => model),
+        getPlayer: () => undefined,
+    } as unknown as GameAssets;
+    const view = new GameView(assets);
+    const draw = vi.fn<ActorRenderer["draw"]>();
+    const actors = { draw } as unknown as ActorRenderer;
+    const attack = getEnemy("dagannoth_supreme").boss!.attacks[0];
+    expect(attack.spotAnim).toBe(41);
+    sim.enemyProjectiles.push({
+        uid: 1,
+        enemyUid: 1,
+        enemyId: "dagannoth_supreme",
+        attack,
+        x: 105,
+        y: 203.5,
+        prevX: 105,
+        prevY: 203.5,
+        vx: 0,
+        vy: 0,
+        speed: 0,
+        homing: 0,
+        life: 10,
+        radius: 0.4,
+        damage: 3,
+        yaw: 512,
+        startTick: sim.tick,
+    });
+    view.submitActors(actors, sim, 1);
+    expect(assets.get).toHaveBeenCalledWith("spot:41");
+    const call = draw.mock.calls.find((c) => c[3] === 105 && c[5] === 203.5);
+    expect(call?.[7]).toMatchObject({ roll: 512, unlit: 1 });
 });
 
 describe("dropped power-up timers", () => {
