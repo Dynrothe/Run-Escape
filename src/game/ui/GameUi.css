@@ -2969,6 +2969,21 @@
     margin-top: 8px;
 }
 
+/* What's been banished this run, greyed out like a banished card */
+.ui-banished-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.ui-banished-slot .ui-icon {
+    filter: grayscale(1);
+    opacity: 0.6;
+}
+
 /* A casket's Reroll and Banish side by side */
 .ui-chest-rolls {
     display: flex;

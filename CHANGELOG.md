@@ -22,6 +22,8 @@ the version in the corner).
 - Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
   says what spoilt one. The pause menu's Quests tab shows how every task the run is following is
   going.
+- The level up lists the weapons and passives you've banished this run, so you know what won't
+  be offered again. Hover or hold one for what it was.
 
 ### Changed
 
