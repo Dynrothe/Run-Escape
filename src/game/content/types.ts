@@ -4140,7 +4140,8 @@ export type PowerUpEffect =
           seconds: number;
           speed: number;
           sheep: PolymorphLook[];
-          golden: PolymorphLook & { bossScale: number };
+          // attackShoutSeconds: how long its line is up when it says it with an attack
+          golden: PolymorphLook & { bossScale: number; attackShoutSeconds: number };
           penguin: PolymorphLook & { chance: number };
           rare: PolymorphLook & { chance: number };
           shout: string;

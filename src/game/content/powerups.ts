@@ -311,6 +311,8 @@ export const POWER_UPS: PowerUpDef[] = [
                 attackSeq: 5341,
                 scale: 1.3,
                 bossScale: 2.5,
+                // "Baa!" with every attack, up only a second as it comes so often
+                attackShoutSeconds: 1,
             },
             // One in 1000 is the penguin dressed as a sheep from Cold War, which doesn't quite
             // get the bleat right, and two KGP agents run out of it when it's killed

@@ -629,8 +629,6 @@ const POLYMORPH_TURN_SECONDS = [1, 2.5];
 const POLYMORPH_GRAZE_CHANCE = 0.25;
 // At most one of a polymorphed flock says its line this often, so a big one can't fill the screen
 const POLYMORPH_SHOUT_GAP = 0.4;
-// A golden sheep's "Baa!" with each attack is up only this long, as it comes so often
-const GOLDEN_SHEEP_SHOUT_SECONDS = 1;
 // What each of a polymorphed enemy's own rolls is for (Sim.polymorphRoll), so no two share one
 const POLYMORPH_ROLL = { look: 0, variant: 1, graze: 2, heading: 3, turn: 4, shout: 5, sound: 6 };
 // Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
@@ -24564,12 +24562,8 @@ export class Sim {
                 enemy.anim === "attack" &&
                 enemy.animStart === this.tick
             ) {
-                this.emitPolymorphShout(
-                    enemy,
-                    polymorph,
-                    getPolymorphEffect(polymorph.powerUpId),
-                    GOLDEN_SHEEP_SHOUT_SECONDS,
-                );
+                const effect = getPolymorphEffect(polymorph.powerUpId);
+                this.emitPolymorphShout(enemy, polymorph, effect, effect.golden.attackShoutSeconds);
             }
         }
     }

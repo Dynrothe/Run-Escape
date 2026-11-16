@@ -535,7 +535,8 @@ version and how to run it.
     - **Polymorph**: for 10 seconds everything on the map turns into a sheep (shorn, red, green,
       blue or yellow) that wanders about slowly, stopping now and then to graze, and can't hurt
       you. Sheep say "Baa!" now and then, and die as sheep if they're killed. Elites and bosses
-      turn into golden sheep (a boss a giant one) that still come at you and attack as usual. One
+      turn into golden sheep (a boss a giant one) that still come at you and attack as usual,
+      with a "Baa!" each time. One
       in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
       says "Beh?", and when it's killed two KGP agents run out of it and off the screen. Another
       one in 1000 is an odd one, asleep on its feet, that slowly wanders off the other way
