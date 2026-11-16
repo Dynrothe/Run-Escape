@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- The black void in the Lassar Undercity is no longer walkable or a place for monsters to spawn.
+  Fixed by Deivid Smarzaro.
+
 ## 0.34.0 - 2026-11-16
 
 ### Added

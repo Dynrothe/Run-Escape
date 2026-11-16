@@ -1,5 +1,5 @@
 import { Ground } from "../Ground";
-import { assertReachable, sealFrom } from "../collision";
+import { assertReachable, blockTile, getCollisionFlags, sealFrom } from "../collision";
 import {
     MAP_SQUARE_SIZE,
     type PlacedLoc,
@@ -8,6 +8,7 @@ import {
     type TileGrid,
 } from "../format";
 import type { ClosedRoad, GeneratedMap } from "../generator";
+import { findHiddenFloor } from "../hiddenFloor";
 import { cutPrefab } from "../prefab";
 import { skipBlocking } from "../prefabs";
 import type { BuildContext, MapPoint, MapRecipe } from "../recipe";
@@ -22,7 +23,7 @@ import type { BuildContext, MapPoint, MapRecipe } from "../recipe";
 //
 // In OSRS its streets are broken up by one-tile clutter (crates, barrels, rubble, the shelves of
 // its stalls) into a dozen pockets that don't join: off come the clutter and its doors, so the
-// city's one piece of street round the water, as big as the Stranglewood's. Its lamps and
+// city's streets have room for crowds. Its lamps and
 // braziers stay. Its middle is the drowned city, the water the cathedral stands in; the
 // cathedral's island is the Whisperer's, joined to the north streets by a causeway, and the run
 // starts on the forecourt at its top.
@@ -55,6 +56,8 @@ const WHISPERER_REAL = { x: 2655, y: 6369 };
 // What stays of the one-tile clutter that blocks the way: the city's lamps and braziers, and the
 // realm's (its own ids), which line its squares
 const KEPT_PROPS = new Set([48189, 47945, 47961]);
+// The cache's hidden overlay, as the map files store it: it draws no floor
+const HIDDEN = 42;
 
 const toGrid = (realX: number, realY: number) => ({
     x: realX - CITY_REAL.x,
@@ -72,8 +75,6 @@ const POINTS: MapPoint[] = [
     { name: "the cathedral", ...CATHEDRAL },
     // The north streets, over the causeway
     { name: "the north streets", ...toGrid(2600, 6440) },
-    // The plaza in the south-east, round the water
-    { name: "the south-east plaza", ...toGrid(2725, 6300) },
 ];
 
 // The city's bridges as they are in OSRS: some can't be walked end to end (ruined ends too steep to
@@ -222,6 +223,12 @@ function build(context: BuildContext, realm: boolean): GeneratedMap {
         }
     }
     blockHidden(ground.grid);
+    // The void can join the streets, so a flood alone would keep it playable. Seal it first,
+    // leaving bridges and floors drawn on top intact; isolated streets then become scenery.
+    const flags = getCollisionFlags(ground.grid, context.locs);
+    for (const i of findHiddenFloor(ground.grid, flags, (overlay) => overlay === HIDDEN).bare) {
+        blockTile(ground.grid, i);
+    }
     // The realm's collision is never used (the sim has the city's), so it's sealed as the
     // city's is only to be checked alike
     const arena = { x0: ARENA_0, y0: ARENA_0, x1: ARENA_1, y1: ARENA_1 };
