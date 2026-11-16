@@ -1859,9 +1859,9 @@ export type WeaponLevel = {
     name?: string;
 };
 
-// How an item or a spot animation is drawn in flight when its cache model needs help,
-// whoever throws it (PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS). Drawing only: hit sizes
-// stay as they are.
+// How an item or a spot animation is drawn in flight when its cache model needs help
+// (PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS). The player's shots take all of it; an
+// enemy's spot animation takes only its roll. Drawing only: hit sizes stay as they are.
 export type ProjectileLook = {
     // Drawn this much bigger, for a model too small to see from the game's camera
     scale?: number;
