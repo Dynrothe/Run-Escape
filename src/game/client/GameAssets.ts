@@ -183,12 +183,15 @@ export function getPickupModelKey(pickup: Pickup): string {
 }
 
 // The base, then the stand, barrels and furnace added in sequence
-const CANNON_LOCS = [7, 8, 9, 6];
+export const CANNON_LOCS = [7, 8, 9, 6];
 
+// A cannon ageTicks after it was put down: the base, a part more for each equal step of
+// CANNON_BUILD_SECONDS, then the whole cannon
 export function getCannonModelKey(ageTicks: number): string {
+    const steps = CANNON_LOCS.length - 1;
     const stage = Math.min(
-        CANNON_LOCS.length - 1,
-        Math.max(0, Math.floor((ageTicks * 3) / (CANNON_BUILD_SECONDS * TICKS_PER_SECOND))),
+        steps,
+        Math.max(0, Math.floor((ageTicks * steps) / (CANNON_BUILD_SECONDS * TICKS_PER_SECOND))),
     );
     return "loc:" + CANNON_LOCS[stage];
 }

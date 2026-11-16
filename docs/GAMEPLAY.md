@@ -511,8 +511,8 @@ version and how to run it.
   keeps up with the enemies' hitpoints, and the same one never drops twice in a row. The shop's
   Runecraft upgrade makes them drop 15% more often for each rank, up to three.
     - **Dwarf multicannon**: places its base by you, then adds the stand, barrels and furnace
-      in three steps over one second before shooting the nearest enemies. Its timer lasts 20 seconds,
-      including assembly.
+      in three steps over one second before shooting the nearest enemies. Its timer lasts 20
+      seconds, including the building.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
     - **Bot nuke**: everything on the map that isn't a boss dies (bosses lose a tenth of their

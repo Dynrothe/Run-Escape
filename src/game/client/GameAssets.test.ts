@@ -16,7 +16,7 @@ import { ALL_MAPS, getMap } from "../content/maps";
 import { CUSTOM_MAX_CAPE, DEFAULT_CAPE_COLOURS, getCapeRecolors } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES } from "../content/passives";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { CANNON_BUILD_SECONDS, POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { SOUNDS } from "../content/sounds";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
@@ -25,9 +25,10 @@ import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
 import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
+    CANNON_LOCS,
     GAME_VIEW_SPRITES,
     GameAssets,
     HINT_ARROW_SPRITE,
@@ -550,19 +551,18 @@ describe("player bakes", () => {
 });
 
 describe("power-ups in the cache", () => {
-    test("a cannon adds its three parts in order over one second, with every stage baked", () => {
+    test("a cannon adds its parts in order while it's built, with every stage baked", () => {
         const requests = GameAssets.getBaseRequests();
-        for (const [age, locId] of [
-            [0, 7],
-            [16, 7],
-            [17, 8],
-            [33, 8],
-            [34, 9],
-            [49, 9],
-            [50, 6],
-            [51, 6],
-            [1000, 6],
-        ]) {
+        const build = CANNON_BUILD_SECONDS * TICKS_PER_SECOND;
+        const steps = CANNON_LOCS.length - 1;
+        expect(CANNON_LOCS).toEqual([7, 8, 9, 6]);
+        const stages: [number, number][] = [[0, CANNON_LOCS[0]]];
+        for (let stage = 1; stage <= steps; stage++) {
+            const from = Math.ceil((build * stage) / steps);
+            stages.push([from - 1, CANNON_LOCS[stage - 1]], [from, CANNON_LOCS[stage]]);
+        }
+        stages.push([build * 20, CANNON_LOCS[steps]]);
+        for (const [age, locId] of stages) {
             const key = getCannonModelKey(age);
             expect(key).toBe("loc:" + locId);
             expect(requests).toContainEqual({ kind: "loc", key, locId });

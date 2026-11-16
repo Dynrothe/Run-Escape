@@ -30,7 +30,8 @@ the version in the corner).
 - Click or tap anywhere in the open DPS panel to close it, by Deivid Smarzaro.
 - Players and monsters show up to four hitsplats at once, by Deivid Smarzaro, spaced out as in
   OSRS. A fifth hit takes the oldest one's place.
-- The Dwarf multicannon, by braiansmarzaro: builds one part at a time in three steps over one second before firing.
+- The Dwarf multicannon goes up a part at a time, by Deivid Smarzaro: its base, then the stand,
+  barrels and furnace over a second, before it fires. It lasts as long as it did.
 - Casket gear lists its own stats again, by Deivid Smarzaro, then only the stats that differ from
   the piece it would replace, in green or red, in place of the Wearing/New table.
 - The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
