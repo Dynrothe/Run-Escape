@@ -55,8 +55,9 @@ the version in the corner).
   place of Teleother's.
 - Imps and demons drop ashes instead of bones, by Deivid Smarzaro, for the same experience. Ashes
   and bones gather into separate piles, with plain grey ashes for the smallest ash pile.
-- On mobile, Armoury and weapon/passive descriptions open with a shorter hold; consumables
-  keep the longer hold.
+- On a touch screen, descriptions open sooner, by Deivid Smarzaro, on what a tap does nothing on:
+  your weapons, passives, effects and quests on the HUD, and the Armoury's upgrades. What a tap
+  uses or selects keeps the longer hold.
 
 ### Fixed
 

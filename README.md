@@ -102,8 +102,8 @@ upgrades) to read their descriptions.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
-Weapons, passives and Armoury pieces need only a brief hold to inspect, without selecting or
-buying them; consumables keep the longer hold.
+Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
+What a tap does nothing on, like your weapons and passives on the HUD, needs only a brief hold.
 On small screens, tap Zoom beside the timer to show the camera zoom slider. The pause menu lists
 worn equipment and its descriptions, and with the Gear panel setting on, GEAR below DPS shows or
 hides it on the HUD too.

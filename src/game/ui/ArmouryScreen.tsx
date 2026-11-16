@@ -140,7 +140,6 @@ function ArmouryTile({
     const upgrades = save.armoury[itemId] ?? 0;
     return (
         <DescriptionButton
-            shortHold
             itemId={piece.id}
             className={
                 "ui-card ui-armoury-tile" +
@@ -319,7 +318,6 @@ function ArmouryDetails({
                             <Fragment key={id}>
                                 {i > 0 && <span className="ui-armoury-arrow">›</span>}
                                 <DescriptionButton
-                                    shortHold
                                     itemId={id}
                                     className={
                                         "ui-armoury-step" +

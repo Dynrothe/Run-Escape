@@ -3169,8 +3169,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
   keyboard or controller focus and holds across bag items, weapons, passives, HUD effects,
   worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
-  Holds take 500 ms by default; `shortHold` uses 200 ms for Armoury tiles and upgrade steps,
-  its Weapons and Passives catalogues, and HUD weapon/passive slots. Consumables keep 500 ms.
+  A hold describes after `HOLD_MS` on a button with `onUse` (a bag item, an Armoury tile, a
+  catalogue entry), and after the shorter `DESCRIBE_HOLD_MS` on one a tap does nothing on (the
+  HUD's slots, effects and gear, its quests, an upgrade step), where there's no tap to mistake a
+  short hold for.
   A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
   `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the

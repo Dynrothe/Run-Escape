@@ -76,7 +76,6 @@ export function LoadoutCatalogue({ kind, save }: { kind: Kind; save: SaveData })
                                 return (
                                     <DescriptionButton
                                         key={entry.id}
-                                        shortHold
                                         itemId={entry.id}
                                         className={
                                             "ui-card ui-armoury-tile" +
