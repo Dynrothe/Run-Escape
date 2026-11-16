@@ -204,34 +204,42 @@ export type FetchChunksOptions = {
     fetcher?: typeof fetch;
 };
 
-// Chunks downloaded at once
+// Chunks read, checked or downloaded at once
 const CONCURRENCY = 6;
 
 // The chunks' bytes, in the order given. The ones already in the Cache API are read from there
 // and the rest downloaded and checked against their names, then put there. Afterwards it drops
 // every stored chunk that isn't listed: what an update replaced. Progress counts only what's
-// downloaded.
+// downloaded, with reports held until all stored chunks have been checked so the total is exact.
 export async function fetchChunks(
     baseUrl: string,
     chunks: CacheChunk[],
     cache: Cache,
     { signal, onProgress, fetcher = fetch }: FetchChunksOptions = {},
 ): Promise<Uint8Array[]> {
-    const stored = await Promise.all(
-        chunks.map(async ({ file, size }) => {
-            const response = await cache.match(baseUrl + file);
-            const bytes = response && new Uint8Array(await response.arrayBuffer());
-            // Each one was checked before it was put, but a damaged copy would fail every load
-            // from then on, and hashing them all takes milliseconds
-            return bytes?.byteLength === size && (await isChunk(file, bytes)) ? bytes : undefined;
-        }),
-    );
     const result: Uint8Array[] = [];
-    const missing: number[] = [];
-    stored.forEach((bytes, i) => (bytes ? (result[i] = bytes) : missing.push(i)));
-
-    const total = missing.reduce((sum, i) => sum + chunks[i].size, 0);
+    let unchecked = chunks.length;
+    let total = 0;
     let current = 0;
+    const completed: number[] = [];
+    const checkAbort = () => {
+        if (signal?.aborted) {
+            throw (
+                signal.reason ?? new DOMException("The cache download was aborted.", "AbortError")
+            );
+        }
+    };
+    const reportProgress = () => {
+        if (unchecked !== 0) {
+            return;
+        }
+        for (const i of completed) {
+            const bytes = result[i];
+            current += bytes.byteLength;
+            onProgress?.({ total, current, part: bytes });
+        }
+        completed.length = 0;
+    };
     const download = async (i: number) => {
         const { file } = chunks[i];
         const url = baseUrl + file;
@@ -256,8 +264,8 @@ export async function fetchChunks(
             );
         }
         result[i] = bytes;
-        current += bytes.byteLength;
-        onProgress?.({ total, current, part: bytes });
+        completed.push(i);
+        reportProgress();
         await cache
             .put(
                 url,
@@ -271,16 +279,37 @@ export async function fetchChunks(
     let next = 0;
     let failed = false;
     const worker = async () => {
-        while (next < missing.length && !failed) {
+        while (next < chunks.length && !failed) {
             try {
-                await download(missing[next++]);
+                checkAbort();
+                const i = next++;
+                const { file, size } = chunks[i];
+                const response = await cache.match(baseUrl + file);
+                const bytes = response && new Uint8Array(await response.arrayBuffer());
+                // A damaged stored copy must be downloaded again, not reused on every load.
+                const valid = bytes?.byteLength === size && (await isChunk(file, bytes));
+                checkAbort();
+                if (failed) {
+                    return;
+                }
+                if (valid) {
+                    result[i] = bytes;
+                } else {
+                    total += size;
+                }
+                unchecked--;
+                reportProgress();
+                if (!valid) {
+                    await download(i);
+                }
             } catch (e) {
                 failed = true;
                 throw e;
             }
         }
     };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
+    checkAbort();
 
     // Every chunk's in the one Cache, under its file name
     const listed = new Set(chunks.map((chunk) => chunk.file));
