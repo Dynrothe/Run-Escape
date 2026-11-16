@@ -20,7 +20,7 @@ import {
 import { MAPS, getMap, hasPoison } from "../content/maps";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { SETS, getItemSet, getSetPieces } from "../content/sets";
-import { formatStats, statChanges } from "../content/stats";
+import { formatStats, pairStats } from "../content/stats";
 import { CasketTier, GearSlot } from "../content/types";
 import {
     SET_PIECE_CHANCE,
@@ -175,9 +175,9 @@ describe("items", () => {
             expect(shouldAutoEquip({ neck: worn.id }, {}, offered, 0)).toBe(expected);
         });
 
-        // The casket lists what a piece changes in green or red, so a piece it shows only gains
+        // The casket shows what a piece changes in green or red, so a piece it shows only gains
         // for is the one Auto equip takes, whatever's hidden in the rounding
-        test("takes what the casket lists only gains for, upgraded or not", () => {
+        test("takes what the casket shows only gains for, upgraded or not", () => {
             for (const worn of GEAR.filter((item) => !getItemSet(item))) {
                 for (const offered of GEAR.filter((item) => item.slot === worn.slot)) {
                     for (const [wornUpgrades, upgrades] of [
@@ -186,10 +186,10 @@ describe("items", () => {
                         [1, 0],
                         [1, 1],
                     ]) {
-                        const lines = statChanges(
+                        const lines = pairStats(
                             getGearStats(worn, wornUpgrades),
                             getGearStats(offered, upgrades),
-                        );
+                        ).filter((pair) => pair.change !== undefined);
                         expect(
                             shouldAutoEquip(
                                 { [worn.slot]: worn.id },

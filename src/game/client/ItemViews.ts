@@ -15,7 +15,7 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { StatText, formatStats, statChanges } from "../content/stats";
+import { StatText, formatStats, pairStats } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
@@ -121,7 +121,7 @@ export function getChestView(sim: Sim): ChestView | undefined {
                 // Its set as it's worn now
                 item: getRunItemView(sim, worn, wornUpgrades),
                 alchCoins: sim.alchValue(worn.id, wornUpgrades),
-                changes: statChanges(
+                stats: pairStats(
                     getGearStats(worn, wornUpgrades),
                     getGearStats(item, chest.upgrades),
                 ),

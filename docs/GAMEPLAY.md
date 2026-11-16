@@ -504,8 +504,9 @@ version and how to run it.
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
   edge of the screen points to ones out of view. Walk over one to open it: it rattles, bursts
   open and gives some coins and one item, which you equip, keep, use or high alch for coins.
-  Gear lists its stats, then only the differences from the piece it would replace, green for
-  gains and red for losses. Both pieces' set bonuses show too.
+  Gear is set beside the piece it would replace: for each stat, how much better (a green chevron)
+  or worse (a red one) the new piece is, then its value on both, and both pieces' set bonuses.
+  Beside the new piece's name, the icons of what it does better and worse sum it up.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
