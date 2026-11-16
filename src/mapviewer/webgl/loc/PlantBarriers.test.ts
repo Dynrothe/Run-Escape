@@ -18,6 +18,11 @@ const CACHE: CacheInfo = {
     size: 0,
 };
 const BORDER = 6;
+// Map squares: Karamja's jungle, the Barrows itself, and Slepe's swamp next to it (the Theatre of
+// Blood's map, with the same Plants)
+const KARAMJA = [44, 46] as const;
+const BARROWS = [55, 51] as const;
+const SLEPE = [57, 51] as const;
 
 function model(width = 200, depth = 200, height = 100): Model {
     const result = new Model();
@@ -73,15 +78,40 @@ describe("plant barrier bases", () => {
         const { loader, scene } = fixture();
         const ids = [1204, 1398, 1399, 1400, 1401, 1402, 1390, 1314, 9010];
         const models = ids.map((id) => plant(id));
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         expect(models.slice(ids.length).map((p) => p.interactId)).toEqual(ids.slice(0, 6));
     });
 
-    test("a nonblocking variant never gets a base", () => {
+    test("adds bases to Barrows swamp plants without decorating grass or other scenery", () => {
         const { loader, scene } = fixture();
-        loader.locTypeLoader.load(1399).clipType = 0;
-        const models = [plant()];
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        const ids = [1391, 1393, 5331, 5332, 5333, 5334, 9604, 9605, 9606];
+        const models = [...ids, 5335, 5336, 1390, 1314, 9010].map((id) => plant(id));
+        const originals = [...models];
+        addPlantBarrierBases(loader, models, scene, BORDER, ...BARROWS);
+        expect(models.slice(0, originals.length)).toEqual(originals);
+        expect(models.slice(originals.length).map((p) => p.interactId)).toEqual(ids);
+    });
+
+    // Lumbridge's square too
+    test.each([KARAMJA, SLEPE, [50, 50] as const])(
+        "Barrows' Plants get no bases in square %i,%i, outside its own",
+        (mapX, mapY) => {
+            const { loader, scene } = fixture();
+            const models = [1391, 1393, 5331, 5334, 9606].map((id) => plant(id));
+            addPlantBarrierBases(loader, models, scene, BORDER, mapX, mapY);
+            expect(models).toHaveLength(5);
+        },
+    );
+
+    test.each([
+        [1399, KARAMJA],
+        [5332, BARROWS],
+        [9606, BARROWS],
+    ] as const)("a nonblocking variant of loc %i never gets a base", (id, square) => {
+        const { loader, scene } = fixture();
+        loader.locTypeLoader.load(id).clipType = 0;
+        const models = [plant(id)];
+        addPlantBarrierBases(loader, models, scene, BORDER, square[0], square[1]);
         expect(models).toHaveLength(1);
         expect(loader.getModelAnimated).not.toHaveBeenCalled();
     });
@@ -89,7 +119,7 @@ describe("plant barrier bases", () => {
     test("a plant with no size to go by is skipped, and the rest still get bases", () => {
         const { loader, scene } = fixture();
         const models = [plant(1399, model(1, 200)), plant()];
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         expect(models).toHaveLength(3);
         expect(models[2].interactId).toBe(1399);
     });
@@ -99,7 +129,7 @@ describe("plant barrier bases", () => {
         const original = plant();
         const models = [original];
         const before = Array.from(stump.verticesX);
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         expect(models[0]).toBe(original);
         expect(models[1].model).not.toBe(stump);
         expect(Array.from(stump.verticesX)).toEqual(before);
@@ -111,7 +141,7 @@ describe("plant barrier bases", () => {
     test("reuses the same scaled mesh and loads the cache asset only once per square", () => {
         const { loader, scene } = fixture();
         const models = [plant(), plant()];
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         expect(models[2].model).toBe(models[3].model);
         expect(loader.getModelAnimated).toHaveBeenCalledExactlyOnceWith(
             expect.objectContaining({ id: 1354 }),
@@ -133,7 +163,7 @@ describe("plant barrier bases", () => {
         (width, depth, baseWidth, baseDepth) => {
             const { loader, scene } = fixture();
             const models = [plant(1398, model(width, depth))];
-            addPlantBarrierBases(loader, models, scene, BORDER);
+            addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
             const bounds = getModelBounds(models[1].model);
             expect(bounds.maxX - bounds.minX).toBe(baseWidth);
             expect(bounds.maxZ - bounds.minZ).toBe(baseDepth);
@@ -146,7 +176,7 @@ describe("plant barrier bases", () => {
         const { loader, scene } = fixture();
         const original = { ...plant(), lowDetail: true, level: 1, heightOffset: 3 };
         const models = [original];
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         expect(models[1]).toMatchObject({
             ...original,
             model: expect.any(Model),
@@ -161,7 +191,7 @@ describe("plant barrier bases", () => {
         }
         const heights = scene.tileHeights[0].map((row) => Array.from(row));
         const models = [{ ...plant(), sceneHeight: -136 }];
-        addPlantBarrierBases(loader, models, scene, BORDER);
+        addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
         const base = models[1].model;
         expect(base.contourVerticesY).toBeDefined();
         expect(base.contourVerticesY).not.toEqual(base.verticesY);
@@ -175,7 +205,7 @@ describe("plant barrier bases", () => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         try {
             const models = [plant(), plant()];
-            addPlantBarrierBases(loader, models, scene, BORDER);
+            addPlantBarrierBases(loader, models, scene, BORDER, ...KARAMJA);
             expect(models).toHaveLength(2);
             expect(error).toHaveBeenCalledOnce();
         } finally {

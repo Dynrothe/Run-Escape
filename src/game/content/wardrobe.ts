@@ -227,6 +227,13 @@ const FOUND_PIECE_TROPHIES: Record<string, number[]> = {
         2979, 2980, 2981, 2982, 2983, 2984, 2985, 2986, 2987, 2988, 2989, 2990, 2991, 2992, 2993,
         2994, 2995,
     ],
+    // Combat Achievements' tier rewards
+    ghommals_hilt_1: [],
+    ghommals_hilt_2: [],
+    ghommals_hilt_3: [],
+    ghommals_hilt_4: [],
+    ghommals_hilt_5: [],
+    ghommals_hilt_6: [],
 };
 
 const FOUND_PIECES = new Map<number, TrophyDef>(

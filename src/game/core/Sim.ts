@@ -7,7 +7,7 @@ import {
 } from "../content/TurkeyDay";
 import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
-import { WeaponDamageBalance } from "../content/balance";
+import { WEAPON_DAMAGE_BALANCE, WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
 import {
     PLATINUM_BOOST,
@@ -31,6 +31,7 @@ import {
     bossCopies,
     getPartyScale,
 } from "../content/coop";
+import { DamageKind } from "../content/damageKinds";
 import {
     LATER_ROUND_START,
     LATE_CASKET_CHANCE,
@@ -48,6 +49,7 @@ import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
     ANCIENT_FOCUS,
     BlessingId,
+    BLESSINGS as GAUNTLET_BLESSINGS,
     GauntletFightOptions,
     SARADOMIN_HP,
     SECOND_WIND_HP,
@@ -108,8 +110,10 @@ import {
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
+    CANNON_BUILD_SECONDS,
     LANTERN_ID,
     POWER_UPS,
+    POWER_UP_BY_ID,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
     POWER_UP_MIN_GAP,
@@ -154,6 +158,7 @@ import {
     GLOBETROTTER,
     LAST_RECALL,
     PRODUCTION_PRODIGY,
+    RELIC_BY_ID,
     RELOADED,
     SPECIALIST,
     TRICKSTER,
@@ -264,7 +269,7 @@ import {
 import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
-import { getWeaponDamageMultiplier } from "../content/weaponBalance";
+import { getWeaponDamageMultiplier, weaponDamageProfileScale } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
@@ -355,6 +360,7 @@ import {
     ProjectileKind,
     Rampage,
     SimEvent,
+    StatSource,
     SurgeLane,
     Thrall,
     Turret,
@@ -407,7 +413,7 @@ const DPS_WINDOW_TICKS = DPS_WINDOW_SECONDS * TICKS_PER_SECOND;
 // OSRS run speed: 2 tiles per 600ms tick
 export const PLAYER_SPEED = 2 / 0.6 / TICKS_PER_SECOND;
 const PLAYER_RADIUS = 0.35;
-const PLAYER_BASE_HP = 25;
+export const PLAYER_BASE_HP = 25;
 // A co-op party's others start this many tiles from the spawn
 const PARTY_SPREAD = 1.5;
 // Rerolls every run has, before the shop's
@@ -451,9 +457,10 @@ export const RAMPAGE_FADE_TICKS = 25;
 // How far off the ring a Drill Demon's runner heads straight for it
 const LAP_PULL_TILES = 3;
 // A fairy ring looks for what's walked in this often, and shows the warp on
-// only so many at a time
+// only so many at a time: a pulse's, and all it has showing at once
 const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
+const MAX_LIVE_RING_EFFECTS = 40;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
@@ -544,7 +551,7 @@ const DEATH_SINK_TICKS = 25;
 const MAX_DEATH_ANIM_TICKS = 60;
 // The most piles of bones, and of coins, lying around at once. Each kind
 // counts its own, so coins and food left behind don't keep new bones off the
-// ground.
+// ground. Ashes count as bones here, though they only gather with ashes.
 const MAX_PILES: Partial<Record<PickupKind, number>> = { bones: 400, coins: 100 };
 // Every so often bones lying this close to a bigger pile slide over and join
 // it, and coins do the same
@@ -716,7 +723,7 @@ export const NUKE_SPOTANIM = 157;
 // the player this much, with the Sanguinesti staff's glow on them. Only one hit
 // in so many ticks gets the roll, hit or miss, or weapons hitting thousands of
 // times a minute late in a run would heal all the time.
-const BLOOD_FURY_HEAL = 2;
+export const BLOOD_FURY_HEAL = 2;
 // What each upgrade adds to the Rubber chicken's heal, by its rarity
 const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
     common: { chance: 0.02, hp: 0.25 },
@@ -724,7 +731,7 @@ const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
     rare: { chance: 0.045, hp: 0.75 },
     veryRare: { chance: 0.07, hp: 1 },
 };
-const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
+export const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
 export const BLOOD_FURY_SPOTANIM = 1542;
 // The Twisted bow does half its most extra damage to a target with this many
 // hitpoints (a late goblin has a few hundred, a boss thousands)
@@ -1007,11 +1014,19 @@ export type RunResult = {
     stats: RunStats;
 };
 
+// What gives a part of the hero's stats (Sim.eachStatPart): a passive's own, to split by its picks
+type StatPartSource = Omit<StatSource, "value"> & { passive?: PassiveState };
+
 // The stats screen's numbers: damage and kills by what dealt them, most
 // damage first (seconds: how long a weapon was had, for its damage a second)
 export type RunStats = {
     sources: { source: DamageSource; damage: number; kills: number; seconds?: number }[];
+    // The same damage by its kind, and kills by enemy id
+    damageByKind: Partial<Record<DamageKind, number>>;
+    killsByEnemy: Record<string, number>;
     damageTaken: number;
+    // What armour and a pet's bubble stopped, for the pause menu's Combat tab
+    damageBlocked: number;
     healed: number;
     highestHit: number;
     rerollsUsed: number;
@@ -1142,14 +1157,30 @@ export type Hero = {
     // DPS_WINDOW_TICKS, each tick taking over the slot of the oldest
     recentDamage: Float64Array;
     killsBySource: Record<string, number>;
+    // The damage again by its kind, and kills by enemy id (a boss's copies once, as enemyKills)
+    damageByKind: Partial<Record<DamageKind, number>>;
+    killsByEnemy: Record<string, number>;
     casketsOpened: number;
     damageTaken: number;
+    // Damage armour and a pet's bubble stopped: only written, never read by play
+    damageBlocked: number;
+    // The lowest their hitpoints have gone, as a share of the most they had then: caught as each
+    // hit lands, before a heal or a revive in the same tick (Combat Achievements' hpAbove). Only
+    // written, never read by play.
+    lowestHpShare: number;
     // Of that, what each of a boss's attacks did, by name: for tuning a fight
     // (the balance bot prints it, and it's there in the console)
     damageByAttack: Record<string, number>;
     healed: number;
     highestHit: number;
     weaponSince: Record<string, number>;
+    // The rarity each level of each weapon and pick of each passive was taken at (the level up's
+    // offer), for the pause menu's tooltips. A weapon's is by level - 1; a level it came with
+    // (a starting weapon's) has none. Only written, never read by play: not in the hashes.
+    upgradeQualities: {
+        weapons: Record<string, (Rarity | undefined)[]>;
+        passives: Record<string, Rarity[]>;
+    };
     // Bumped whenever their look changes (new weapon tier, gear)
     appearanceVersion: number;
     // Enemies after this hero find their way to them with it
@@ -1220,6 +1251,8 @@ export type Hero = {
     down: boolean;
     left: boolean;
     outTick: number;
+    // Teammates this hero has revived, for the pause menu: never read by play
+    revivesGiven: number;
     // Co-op: how many times a teammate's brought them back this run, and the
     // revives found or bought on top of REVIVES_PER_PLAYER
     revived: number;
@@ -2259,6 +2292,9 @@ export class Sim {
     get weaponSince(): Record<string, number> {
         return this.hero.weaponSince;
     }
+    get upgradeQualities(): Hero["upgradeQualities"] {
+        return this.hero.upgradeQualities;
+    }
     get appearanceVersion(): number {
         return this.hero.appearanceVersion;
     }
@@ -2609,8 +2645,12 @@ export class Sim {
             damageBySource: {},
             recentDamage: new Float64Array(DPS_WINDOW_TICKS),
             killsBySource: {},
+            damageByKind: {},
+            killsByEnemy: {},
             casketsOpened: 0,
             damageTaken: 0,
+            damageBlocked: 0,
+            lowestHpShare: 1,
             damageByAttack: {},
             raidPoints: 0,
             raidDamageAtStart: 0,
@@ -2623,6 +2663,7 @@ export class Sim {
             healed: 0,
             highestHit: 0,
             weaponSince: {},
+            upgradeQualities: { weapons: {}, passives: {} },
             appearanceVersion: 0,
             flowField,
             flightField,
@@ -2651,6 +2692,7 @@ export class Sim {
             down: false,
             left: false,
             outTick: -1,
+            revivesGiven: 0,
             revived: 0,
             extraRevives: 0,
             immuneEndTick: 0,
@@ -3053,7 +3095,10 @@ export class Sim {
                     };
                 })
                 .sort((a, b) => b.damage - a.damage || b.kills - a.kills),
+            damageByKind: { ...this.hero.damageByKind },
+            killsByEnemy: { ...this.hero.killsByEnemy },
             damageTaken: this.damageTaken,
+            damageBlocked: this.hero.damageBlocked,
             healed: this.healed,
             highestHit: this.highestHit,
             rerollsUsed: Math.max(0, this.hero.rerollsAtStart - this.rerollsLeft),
@@ -3066,23 +3111,9 @@ export class Sim {
 
     updateStats(): void {
         const stats = emptyStats();
-        addStats(stats, getCharacter(this.characterId).bonus);
-        addStats(stats, this.metaStats);
-        // A boss fight's own (MapDef.fight.stats)
-        addStats(stats, this.map.fight?.stats ?? {});
-        for (const passive of this.passives) {
-            const def = getPassive(passive.id);
-            for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
-                stats[stat] += passive.value;
-            }
-        }
-        for (const [slot, itemId] of Object.entries(this.gear)) {
-            const upgrades = this.gearUpgrades[slot as GearSlot] ?? 0;
-            addStats(stats, getGearStats(getGear(itemId), upgrades));
-        }
+        this.eachStatPart((part) => addStats(stats, part));
         const sets = getActiveSets(this.gear);
         for (const set of sets) {
-            addStats(stats, set.stats ?? {});
             if (!this.activeSets.includes(set.id)) {
                 this.emit(
                     {
@@ -3094,32 +3125,6 @@ export class Sim {
             }
         }
         this.activeSets = sets.map((set) => set.id);
-        for (const buff of this.buffs) {
-            addStats(stats, buff.stats);
-        }
-        for (const debuff of this.debuffs) {
-            addStats(stats, debuff.stats);
-        }
-        // Relics that are stats (content/relics.ts)
-        if (this.hasRelic("fairys_flight")) {
-            stats.moveSpeed += FAIRYS_FLIGHT.moveSpeed;
-        }
-        if (this.hasRelic("globetrotter")) {
-            stats.powerUpRate += GLOBETROTTER.rate;
-        }
-        if (this.hasRelic("specialist")) {
-            stats.weaponSlots -= SPECIALIST.slots;
-            stats.might += SPECIALIST.might;
-        }
-        const blessings = this.map.blessings;
-        if (blessings) {
-            for (const { id, count } of this.blessings) {
-                const blessed = getBlessing(blessings, id).stats ?? {};
-                for (const [key, value] of Object.entries(blessed)) {
-                    stats[key as StatKey] += value * count;
-                }
-            }
-        }
         // Grows with every level gained (the Gauntlet runner starts weak), up
         // to about where a normal run ends, so it doesn't run away in endless
         stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
@@ -3136,7 +3141,148 @@ export class Sim {
             // Swapping off max hitpoints never kills
             player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
             player.maxHp = maxHp;
+            this.noteLowestHp();
         }
+    }
+
+    // Each part of the hero's stats, in the order updateStats adds them up, and what gives it
+    // (made only when asked: getStatSources, for the pause menu's tooltips). Both read this one
+    // list, so a tooltip can't leave out a part the stats have.
+    private eachStatPart(add: (stats: Partial<Stats>, source: () => StatPartSource) => void): void {
+        const character = getCharacter(this.characterId);
+        add(character.bonus, () => ({ kind: "adventurer", name: character.name }));
+        // The shop's upgrades have no icon of their own, so they wear the coins that pay for them
+        add(this.metaStats, () => ({ kind: "shop", name: "Shop upgrades", iconObjId: 995 }));
+        // A boss fight's own (MapDef.fight.stats)
+        add(this.map.fight?.stats ?? {}, () => ({ kind: "map", name: this.map.name }));
+        for (const passive of this.passives) {
+            const def = getPassive(passive.id);
+            const stats: Partial<Stats> = {};
+            for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
+                stats[stat] = passive.value;
+            }
+            add(stats, () => ({
+                kind: "passive",
+                name: def.name,
+                iconObjId: def.iconObjId,
+                iconSpriteId: def.iconSpriteId,
+                passive,
+            }));
+        }
+        for (const [slot, itemId] of Object.entries(this.gear)) {
+            const item = getGear(itemId);
+            add(getGearStats(item, this.gearUpgrades[slot as GearSlot] ?? 0), () => ({
+                kind: "gear",
+                name: item.name,
+                rarity: item.rarity,
+                iconObjId: item.objId,
+            }));
+        }
+        for (const set of getActiveSets(this.gear)) {
+            add(set.stats ?? {}, () => ({
+                kind: "set",
+                name: set.name,
+                iconObjId: this.setPieceObjId(set.id),
+            }));
+        }
+        for (const buff of this.buffs) {
+            add(buff.stats, () => {
+                const look = buff.look ?? getItem(buff.itemId);
+                return { kind: "buff", name: look.name, iconObjId: look.objId };
+            });
+        }
+        for (const debuff of this.debuffs) {
+            add(debuff.stats, () => ({
+                kind: "debuff",
+                name: debuff.name,
+                iconObjId: debuff.iconObjId,
+            }));
+        }
+        // Relics that are stats (content/relics.ts)
+        const relic = (id: string, stats: Partial<Stats>): void => {
+            if (this.hasRelic(id)) {
+                add(stats, () => {
+                    const def = RELIC_BY_ID.get(id);
+                    return { kind: "relic", name: def?.name ?? id, iconObjId: def?.iconObjId };
+                });
+            }
+        };
+        relic("fairys_flight", { moveSpeed: FAIRYS_FLIGHT.moveSpeed });
+        relic("globetrotter", { powerUpRate: GLOBETROTTER.rate });
+        relic("specialist", { weaponSlots: -SPECIALIST.slots, might: SPECIALIST.might });
+        const blessings = this.map.blessings;
+        if (blessings) {
+            for (const { id, count } of this.blessings) {
+                const blessing = getBlessing(blessings, id);
+                const stats: Partial<Stats> = {};
+                for (const [key, value] of Object.entries(blessing.stats ?? {})) {
+                    stats[key as StatKey] = value * count;
+                }
+                add(stats, () => ({
+                    kind: "blessing",
+                    name: blessing.name,
+                    iconObjId: blessing.iconObjId,
+                }));
+            }
+        }
+    }
+
+    // Where each stat's size comes from, as updateStats adds it up (eachStatPart), for the pause
+    // menu's tooltips. Only read for display: nothing in play uses it.
+    getStatSources(): Partial<Record<StatKey, StatSource[]>> {
+        const sources: Partial<Record<StatKey, StatSource[]>> = {};
+        const push = (key: StatKey, source: StatSource): void => {
+            (sources[key] ??= []).push(source);
+        };
+        this.eachStatPart((stats, describe) => {
+            const { passive, ...source } = describe();
+            // A passive's picks, each the size of the rarity it was taken at; what isn't recorded
+            // (picks the history missed) is one lump
+            const def = passive && getPassive(passive.id);
+            const picks = passive ? (this.upgradeQualities.passives[passive.id] ?? []) : [];
+            const known = passive !== undefined && picks.length === passive.level;
+            for (const [key, value] of Object.entries(stats) as [StatKey, number][]) {
+                if (!value) {
+                    continue;
+                }
+                if (def && known) {
+                    for (const quality of picks) {
+                        push(key, { ...source, quality, value: getPassiveGain(def, quality) });
+                    }
+                } else {
+                    push(key, { ...source, value });
+                }
+            }
+        });
+        if (this.invoked("run_glass_cannon")) {
+            const invocation = RUN_SET.byId.get("run_glass_cannon")!;
+            push("maxHp", {
+                kind: "invocation",
+                name: invocation.name,
+                value: GLASS_CANNON_HP - 1,
+                multiplier: true,
+                iconSpriteId: invocation.icon,
+            });
+        }
+        if (this.blessed("saradomin")) {
+            const blessing = GAUNTLET_BLESSINGS.find(({ id }) => id === "saradomin")!;
+            push("maxHp", {
+                kind: "blessing",
+                name: blessing.name,
+                value: SARADOMIN_HP,
+                multiplier: true,
+                iconObjId: blessing.iconObjId,
+            });
+        }
+        const levelMight = this.stats.levelMight;
+        if (levelMight) {
+            push("might", {
+                kind: "level",
+                name: "Level",
+                value: levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS),
+            });
+        }
+        return sources;
     }
 
     // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
@@ -3412,6 +3558,7 @@ export class Sim {
         switch (choice.kind) {
             case "newWeapon":
                 this.addWeapon(choice.weaponId, RARITIES[choice.quality].weaponBonus);
+                this.upgradeQualities.weapons[choice.weaponId] = [choice.quality];
                 break;
             case "weaponLevel": {
                 const weapon = this.weapons.find((w) => w.def.id === choice.weaponId);
@@ -3419,6 +3566,8 @@ export class Sim {
                     const last = weapon.def.levels.length;
                     // Endless runs level on past the last level, for damage
                     weapon.level = this.endless ? choice.level : Math.min(choice.level, last);
+                    const qualities = (this.upgradeQualities.weapons[choice.weaponId] ??= []);
+                    qualities[weapon.level - 1] = choice.quality;
                     if (choice.level > last) {
                         // Multiplies everything the weapon had
                         weapon.bonus = overlevelBonus(weapon.bonus, choice.quality);
@@ -3442,6 +3591,9 @@ export class Sim {
                 if (index !== -1) {
                     // Bonus damage from rare rolls carries over
                     this.weaponSince[choice.into] ??= this.tick;
+                    // It starts again at level 1, with no picks
+                    delete this.upgradeQualities.weapons[choice.weaponId];
+                    delete this.upgradeQualities.weapons[choice.into];
                     if (!this.evolutionsMade.includes(choice.into)) {
                         this.evolutionsMade.push(choice.into);
                     }
@@ -3483,6 +3635,7 @@ export class Sim {
                         level: 1,
                         value: getPassiveGain(def, choice.quality),
                     });
+                    this.upgradeQualities.passives[choice.passiveId] = [choice.quality];
                 }
                 this.updateStats();
                 this.appearanceVersion++;
@@ -3495,6 +3648,7 @@ export class Sim {
                     if (canLevelPassive(def, passive.level, this.endless)) {
                         passive.level++;
                         passive.value += getPassiveGain(def, choice.quality);
+                        (this.upgradeQualities.passives[passive.id] ??= []).push(choice.quality);
                     }
                 }
                 this.updateStats();
@@ -3720,7 +3874,7 @@ export class Sim {
         return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
     }
 
-    // A potion's effect, for buffTicks. Drinking another dose starts the timer again.
+    // A potion's or a power-up's boost, for buffTicks. Another dose or pickup starts the timer again.
     private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
         const ticks = this.buffTicks(seconds);
         this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
@@ -3996,6 +4150,7 @@ export class Sim {
         this.stepTethers();
         this.stepEnemyProjectiles();
         this.stepBossFight();
+        this.stepGoldenSheep();
         this.stepFloor();
         this.stepRule();
         this.stepRelics();
@@ -4119,7 +4274,9 @@ export class Sim {
         ) {
             const amount = player.poisonDamage;
             player.hp -= amount;
-            this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
+            this.noteLowestHp();
+            const taken = Math.min(amount, Math.max(0, player.hp + amount));
+            this.damageTaken += taken;
             this.emit({ type: "playerPoisoned", amount });
             if (player.hp <= 0) {
                 this.playerDied();
@@ -5590,7 +5747,17 @@ export class Sim {
 
     // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
     // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare. A
-    // map's MapDef.hits scales it and can put it through armour. Returns what it took.
+    // map's MapDef.hits scales it and can put it through armour. attack: the boss attack's name,
+    // for the event (Combat Achievements say what spoilt a task). Returns what it took.
+    // The current hero's hitpoints as they are now, for the lowest they've gone (lowestHpShare)
+    private noteLowestHp(): void {
+        const player = this.player;
+        const share = Math.max(0, player.hp) / player.maxHp;
+        if (share < this.hero.lowestHpShare) {
+            this.hero.lowestHpShare = share;
+        }
+    }
+
     private damagePlayer(
         damage: number,
         enemyId: string,
@@ -5599,6 +5766,7 @@ export class Sim {
         ignoreArmor = false,
         // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
         grace = true,
+        attack?: string,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -5628,7 +5796,15 @@ export class Sim {
             if (grace) {
                 player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
             }
-            this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+            this.emit({
+                type: "playerHit",
+                amount: 0,
+                enemyId,
+                elite,
+                sound,
+                attack,
+                missed: true,
+            });
             return 0;
         }
         // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
@@ -5661,14 +5837,27 @@ export class Sim {
         if (this.stepBetween(amount)) {
             return 0;
         }
+        // What it would have done without armour, for what armour stopped
+        const unarmoured = Math.round(damage * opened);
+        this.hero.damageBlocked += Math.max(0, unarmoured - amount);
         // Lil'viathan's bubble takes an enemy's hit, up to its share of their hitpoints, and pops
         if (this.hero.petBubble && ENEMY_BY_ID.has(enemyId)) {
+            const hit = amount;
             amount = this.popBubble(amount);
+            this.hero.damageBlocked += Math.max(0, hit - Math.max(0, amount));
             if (amount <= 0) {
                 if (grace) {
                     player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
                 }
-                this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+                this.emit({
+                    type: "playerHit",
+                    amount: 0,
+                    enemyId,
+                    elite,
+                    sound,
+                    attack,
+                    missed: true,
+                });
                 return 0;
             }
         }
@@ -5676,8 +5865,10 @@ export class Sim {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
         }
         player.hp -= amount;
+        this.noteLowestHp();
         // What was there to take: a fall into Ba-Ba's gap asks for a hundred bars
-        this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
+        const taken = Math.min(amount, Math.max(0, player.hp + amount));
+        this.damageTaken += taken;
         // A blood cloud's touch heals Zebak
         if (enemyId === "zebak_blood_cloud") {
             this.zebakCloudHit(amount);
@@ -5690,7 +5881,7 @@ export class Sim {
         if (grace) {
             player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
         }
-        this.emit({ type: "playerHit", amount, enemyId, elite, sound });
+        this.emit({ type: "playerHit", amount, enemyId, elite, sound, attack });
         if (player.hp <= 0) {
             this.playerDied();
         }
@@ -5962,6 +6153,7 @@ export class Sim {
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
         }
+        this.emit({ type: "enemyHealed", enemyId: target.def.id, healerId: enemy.def.id });
         if (heals.once) {
             this.vanish(enemy);
             if (target.def.boss?.siphon?.enemyId === enemy.def.id) {
@@ -10178,6 +10370,13 @@ export class Sim {
         };
     }
 
+    // A mistake in the path's puzzle room, for Combat Achievements: only said, nothing changes
+    private tombsMistake(): void {
+        if (this.tombsPath !== undefined) {
+            this.emit({ type: "tombsMistake", path: this.tombsPath });
+        }
+    }
+
     // A trap's hit on the current hero: hurt, their water spilt, weakened
     private crondisTrapHit(damage: number, message: string): void {
         if (this.damagePlayer(damage, "crondis_trap", false) === 0) {
@@ -10191,6 +10390,9 @@ export class Sim {
     private crondisSpill(message?: string): void {
         const crondis = this.tombsRoom?.crondis;
         const index = this.hero.index;
+        if (crondis) {
+            this.tombsMistake();
+        }
         if (!crondis || crondis.water[index] <= 0) {
             return;
         }
@@ -10629,6 +10831,7 @@ export class Sim {
         const player = this.player;
         const scabaras = this.tombsRoom!.scabaras!;
         const { x, y } = player;
+        this.tombsMistake();
         this.emit({ type: "notice", message });
         this.addEffect(
             SCABARAS.rockSpotAnim,
@@ -11147,12 +11350,15 @@ export class Sim {
         const scale = this.tombsRoomScale();
         this.forEachHeroInReach(() => {
             const player = this.player;
-            if (near(player.x, player.y, 0.5)) {
+            if (
+                near(player.x, player.y, 0.5) &&
                 this.damagePlayer(
                     HET.beamDamage * scale.damage * this.hardScale.damage,
                     "hets_seal",
                     false,
-                );
+                ) > 0
+            ) {
+                this.tombsMistake();
             }
         });
         this.damageSource = "other";
@@ -11453,7 +11659,9 @@ export class Sim {
                     fm.hypot(player.x - orb.x, player.y - orb.y) <= HET.orbRadius + player.radius
                 ) {
                     hit = true;
-                    this.damagePlayer(damage, "het_orb", false);
+                    if (this.damagePlayer(damage, "het_orb", false) > 0) {
+                        this.tombsMistake();
+                    }
                 }
             });
             const inside =
@@ -11533,6 +11741,7 @@ export class Sim {
             this.hardScale.damage *
             this.tombsRoomScale().damage;
         room.missed++;
+        this.tombsMistake();
         this.addEffect(
             at.kind === "pillar" ? APMEKEN_SPOTANIMS.pillarFalls : APMEKEN_SPOTANIMS.ventBursts,
             at.x,
@@ -12008,6 +12217,32 @@ export class Sim {
     }
     private styledSource = "";
     private styleOfSource: CombatStyle | undefined;
+    // While a weapon's burning ground hurts what's in it (stepFires), for its damage's kind
+    private burning = false;
+
+    // The kind of the hit being dealt now, from its source (venom's poison: damageEnemy's)
+    private damageKind(poison: boolean): DamageKind {
+        if (poison) {
+            return "poison";
+        }
+        if (this.burning) {
+            return "burn";
+        }
+        const source = this.damageSource;
+        if (source.startsWith("weapon:")) {
+            return this.sourceStyle ?? "other";
+        }
+        if (source.startsWith("powerUp:")) {
+            return "powerUp";
+        }
+        if (source.startsWith("item:")) {
+            return "item";
+        }
+        if (source.startsWith("ability:") || source === "court") {
+            return "arena";
+        }
+        return source === "recoil" ? "recoil" : "other";
+    }
 
     // Normal mode: the share a colour takes from another style's weapon (BossDef.colours.offStyle)
     private offColour(enemy: Enemy): number {
@@ -19645,6 +19880,8 @@ export class Sim {
             false,
             attack.hitSound,
             attack.ignoreArmor,
+            true,
+            attack.name,
         );
         if (amount > 0) {
             this.damageByAttack[attack.name] = (this.damageByAttack[attack.name] ?? 0) + amount;
@@ -19917,6 +20154,7 @@ export class Sim {
         const player = downed.player;
         const fraction = REVIVE_HP[Math.min(downed.revived, REVIVE_HP.length - 1)];
         downed.revived++;
+        by.revivesGiven++;
         downed.revive = undefined;
         downed.down = false;
         downed.outTick = -1;
@@ -20168,6 +20406,8 @@ export class Sim {
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + shown;
         this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += shown;
         this.highestHit = Math.max(this.highestHit, shown);
+        const kind = this.damageKind(poison);
+        this.hero.damageByKind[kind] = (this.hero.damageByKind[kind] ?? 0) + shown;
         this.emit({
             type: "damage",
             x: enemy.x,
@@ -20232,11 +20472,20 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
-        // A polymorphed penguin's cover is blown, and the agents inside make a run for it
-        if (polymorph?.look === "penguin") {
+        // A polymorphed penguin's cover is blown, and the agents inside make a run for it (or
+        // whatever else was inside an animal)
+        if (
+            polymorph &&
+            getPolymorphLook(
+                getPolymorphEffect(polymorph.powerUpId),
+                polymorph.look,
+                polymorph.variant,
+            ).escapees
+        ) {
             this.emit({
                 type: "polymorphEscape",
                 powerUpId: polymorph.powerUpId,
+                look: polymorph.look,
                 x: enemy.x,
                 y: enemy.y,
             });
@@ -20264,6 +20513,8 @@ export class Sim {
             this.countRelicKill();
             if (lastCopy) {
                 this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
+                const byHero = this.hero.killsByEnemy;
+                byHero[enemy.def.id] = (byHero[enemy.def.id] ?? 0) + 1;
             }
             const source = this.damageSource;
             this.killsBySource[source] = (this.killsBySource[source] ?? 0) + 1;
@@ -20581,7 +20832,9 @@ export class Sim {
         }
         // The realm's richer (RealmRuleDef.drops)
         const realm = this.realm?.drops;
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1), {
+            ...(enemy.def.ashes && { ashes: true }),
+        });
         if (!last) {
             return;
         }
@@ -20860,6 +21113,54 @@ export class Sim {
             return level;
         }
         return { ...level, damage: level.damage * damage, area: level.area * area };
+    }
+
+    // A worn piece of a set, for its icon
+    private setPieceObjId(setId: string): number | undefined {
+        return Object.values(this.gear)
+            .map((itemId) => getGear(itemId))
+            .find((item) => item.set === setId)?.objId;
+    }
+
+    // What multiplies a weapon's level damage into what one of its hits does, for the pause menu's
+    // tooltip on its Damage: the run's balance beyond the global tuning the stat already shows, its
+    // damage bonus, its style's bonus, the worn sets', the hero's damage bonus, and what a boss
+    // takes on top. Read only, in no hash: the same factors getEffectiveLevel and damageEnemy use.
+    weaponDamageFactors(weapon: WeaponState): {
+        balance: number;
+        bonus: number;
+        style: CombatStyle;
+        styleMight: number;
+        sets: number;
+        // The worn sets that give it, with a piece's icon each
+        setSources: { name: string; iconObjId?: number }[];
+        might: number;
+        bossMight: number;
+        bossBonus: number;
+    } {
+        const def = weapon.def;
+        const style = getWeaponStyle(def);
+        const global = weaponDamageProfileScale(WEAPON_DAMAGE_BALANCE.global, def);
+        const total = this.weaponDamageMultipliers[`weapon:${def.id}`] ?? 1;
+        return {
+            balance: global > 0 ? total / global : 1,
+            bonus: weapon.bonus,
+            style,
+            styleMight: this.styleMight(style),
+            sets: this.setBoosts(def).damage,
+            setSources: this.activeSets
+                .map((setId) => getSet(setId))
+                .filter(
+                    (set) =>
+                        set.weapons?.damage &&
+                        (set.weapons.kinds?.includes(def.kind) ||
+                            set.weapons.ids?.includes(def.id)),
+                )
+                .map((set) => ({ name: set.name, iconObjId: this.setPieceObjId(set.id) })),
+            might: this.stats.might,
+            bossMight: this.stats.bossMight,
+            bossBonus: def.bossDamage ?? 0,
+        };
     }
 
     // A weapon's own speed bonus, on top of the player's cooldown bonus: the worn sets'
@@ -22457,7 +22758,7 @@ export class Sim {
             yaw: player.yaw,
             startTick: this.tick,
             endTick: this.tick + this.powerUpTicks(effect.seconds),
-            nextShot: this.tick + 15,
+            nextShot: this.tick + CANNON_BUILD_SECONDS * TICKS_PER_SECOND,
             damage: effect.damage * this.powerUpDamageScale(),
             range: effect.range * (1 + this.stats.area),
             amount: effect.amount + this.stats.amount,
@@ -22704,11 +23005,13 @@ export class Sim {
             fire.nextTick += FIRE_INTERVAL;
             this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
+            this.burning = true;
             this.queryTouching(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
                 if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
             });
+            this.burning = false;
         }
     }
 
@@ -23656,7 +23959,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts" | "ashes"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -23672,10 +23975,11 @@ export class Sim {
                 if (pickup.kind !== kind) {
                     continue;
                 }
+                // Ashes and bones count as one towards the limit, but only gather with their own
                 count++;
                 // (one already flying to the player, or to another pile, stays
                 // where it is)
-                if (pickup.attracted || pickup.pileUid !== 0) {
+                if (pickup.attracted || pickup.pileUid !== 0 || !!pickup.ashes !== !!extra.ashes) {
                     continue;
                 }
                 const d = Math.abs(pickup.x - player.x) + Math.abs(pickup.y - player.y);
@@ -23746,12 +24050,23 @@ export class Sim {
                 const at = CASKET_TIERS.indexOf(pickup.tier);
                 pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
             }
-            // Whoever's nearest gets it
+            // Whoever's nearest gets it. A power-up for one style waits for a hero of it, and
+            // anyone else walks over it.
+            const def =
+                pickup.kind === "powerUp" ? POWER_UP_BY_ID.get(pickup.powerUp ?? "") : undefined;
+            const takes = def?.style
+                ? (hero: Hero) => this.isUp(hero) && this.powerUpFits(def, hero)
+                : undefined;
+            if (takes && !this.heroes.some(takes)) {
+                continue;
+            }
             const banked = pickup.kind === "coins" && bankers.length > 0;
             this.use(
                 banked
                     ? this.nearest(pickup.x, pickup.y, (hero) => bankers.includes(hero))
-                    : this.nearestUpHero(pickup.x, pickup.y),
+                    : takes
+                      ? this.nearest(pickup.x, pickup.y, takes)
+                      : this.nearestUpHero(pickup.x, pickup.y),
             );
             const player = this.player;
             const magnet = BASE_MAGNET * (1 + this.stats.magnet);
@@ -23824,6 +24139,7 @@ export class Sim {
             hash.query(pile.x, pile.y, PILE_RADIUS, (other) => {
                 if (
                     other.kind === pile.kind &&
+                    !!other.ashes === !!pile.ashes &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
                     fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
@@ -23898,15 +24214,26 @@ export class Sim {
         }
     }
 
-    private rollPowerUpId(): string {
+    // heroes: who might get it, the party for a drop and the hero for a quiz's prize
+    private rollPowerUpId(heroes: readonly Hero[] = this.heroes): string {
         // A lantern is the one power-up a map's own weight brings in (LightingDef)
         const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
             POWER_UPS.map((p) =>
-                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+                p.id === this.lastPowerUpId || !heroes.some((hero) => this.powerUpFits(p, hero))
+                    ? 0
+                    : p.id === LANTERN_ID
+                      ? lantern
+                      : p.weight,
             ),
         );
         return POWER_UPS[index].id;
+    }
+
+    // Whether a power-up is any use to this hero: one for a style (PowerUpDef.style) is only
+    // theirs
+    private powerUpFits(def: PowerUpDef, hero: Hero): boolean {
+        return !def.style || getCharacter(hero.characterId).style === def.style;
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
@@ -23967,6 +24294,26 @@ export class Sim {
                         ? "Everything on the ground flies to whoever's nearest!"
                         : "Everything on the ground flies to you!";
                 break;
+            case "buff": {
+                this.addBuff(def.id, effect.stats, effect.seconds, false);
+                this.buffs[this.buffs.length - 1].look = {
+                    name: def.name,
+                    objId: def.objId,
+                };
+                const activation = this.addEffect(
+                    effect.spotAnim,
+                    player.x,
+                    player.y,
+                    0,
+                    effect.spotAnimTicks,
+                );
+                if (activation) {
+                    activation.hero = this.hero.index;
+                    activation.once = true;
+                }
+                message = def.description;
+                break;
+            }
             case "freeze":
                 endTick = Math.max(
                     this.freezeEndTick,
@@ -24010,6 +24357,8 @@ export class Sim {
                     radius: effect.radius,
                     locId: effect.locId,
                     spotAnim: effect.spotAnim,
+                    spotAnimFrom: effect.spotAnimFrom,
+                    spotAnimTicks: effect.spotAnimTicks,
                     scale: effect.scale,
                 });
                 message = "A fairy ring opens at your feet!";
@@ -24167,7 +24516,8 @@ export class Sim {
         enemy.anim = "walk";
         const player = this.player;
         const grid = this.getMoveGrid(enemy.def);
-        const speed = enemy.speed * effect.speed;
+        const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
+        const speed = enemy.speed * effect.speed * (look.pace ?? 1);
         const fromX = enemy.x;
         const fromY = enemy.y;
         // Knockback still throws it about, frozen or not, as it does the rest
@@ -24243,6 +24593,34 @@ export class Sim {
             return;
         }
         this.nextPolymorphShout = this.tick + secondsToTicks(POLYMORPH_SHOUT_GAP);
+        this.emitPolymorphShout(enemy, polymorph, effect);
+    }
+
+    // A golden sheep says its line with every attack it starts, whatever the flock's gap
+    private stepGoldenSheep(): void {
+        const polymorphing = this.polymorphing;
+        if (!polymorphing || this.tick >= polymorphing.endTick) {
+            return;
+        }
+        for (const enemy of this.enemies) {
+            const polymorph = this.polymorphOf(enemy);
+            if (
+                polymorph?.look === "golden" &&
+                enemy.anim === "attack" &&
+                enemy.animStart === this.tick
+            ) {
+                const effect = getPolymorphEffect(polymorph.powerUpId);
+                this.emitPolymorphShout(enemy, polymorph, effect, effect.golden.attackShoutSeconds);
+            }
+        }
+    }
+
+    private emitPolymorphShout(
+        enemy: Enemy,
+        polymorph: EnemyPolymorph,
+        effect: PolymorphEffect,
+        seconds?: number,
+    ): void {
         const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
         const sounds = look.shoutSounds ?? effect.shoutSounds;
         this.emit({
@@ -24254,6 +24632,7 @@ export class Sim {
             ],
             x: enemy.x,
             y: enemy.y,
+            seconds,
         });
     }
 
@@ -24479,10 +24858,33 @@ export class Sim {
                 caught.push(enemy);
             }
         });
+        // Each warp's effect lasts a while, so a crowd walking in mustn't take the place of every
+        // other effect (MAX_EFFECTS)
+        let room = 0;
+        if (caught.length > 0) {
+            let live = 0;
+            for (const effect of this.effects) {
+                if (effect.spotAnim === ring.spotAnim) {
+                    live++;
+                }
+            }
+            room = Math.min(MAX_RING_EFFECTS, MAX_LIVE_RING_EFFECTS - live);
+        }
         let effects = 0;
         for (const enemy of caught) {
-            if (effects < MAX_RING_EFFECTS) {
-                this.addEffect(ring.spotAnim, enemy.x, enemy.y, 0, 40);
+            if (effects < room) {
+                // Started part way in, so what's seen of it starts as the enemy goes, and gone
+                // when that ends
+                const effect = this.addEffect(
+                    ring.spotAnim,
+                    enemy.x,
+                    enemy.y,
+                    0,
+                    ring.spotAnimTicks,
+                );
+                if (effect) {
+                    effect.startTick -= ring.spotAnimFrom;
+                }
                 effects++;
             }
             this.relocate(enemy, true);
@@ -24960,7 +25362,10 @@ export class Sim {
     // on offer less often too. In co-op, now and then one of them is an extra
     // revive instead.
     private rollOldManOptions(): EventOption[] {
-        const left = POWER_UPS.filter((powerUp) => powerUp.weight > 0);
+        // Only what's any use to whoever walked up
+        const left = POWER_UPS.filter(
+            (powerUp) => powerUp.weight > 0 && this.powerUpFits(powerUp, this.hero),
+        );
         const options: EventOption[] = [];
         if (this.heroes.length > 1 && this.eventRng.chance(OLD_MAN_REVIVE_CHANCE)) {
             options.push({
@@ -25095,7 +25500,7 @@ export class Sim {
                 true,
             );
             if (option.correct) {
-                this.usePowerUp(getPowerUp(this.rollPowerUpId()));
+                this.usePowerUp(getPowerUp(this.rollPowerUpId([this.hero])));
             }
         }
         this.leaveEvent();

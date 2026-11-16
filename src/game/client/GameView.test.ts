@@ -5,11 +5,17 @@ import {
     ActorPage,
     ActorRenderer,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getEnemy } from "../content/enemies";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { emptyStats } from "../content/types";
-import { PROJECTILE_ITEM_LOOKS, getProjectileObjId, getWeapon } from "../content/weapons";
+import {
+    PROJECTILE_ITEM_LOOKS,
+    PROJECTILE_SPOT_LOOKS,
+    getProjectileObjId,
+    getWeapon,
+} from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { Pickup } from "../core/entities";
+import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
 import type { GameAssets } from "./GameAssets";
 import { GameView, RUN_POSE_TICKS, getRunPoseFrame } from "./GameView";
@@ -17,6 +23,164 @@ import type { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
+});
+
+describe("hitsplat groups", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function setup() {
+        let now = 100;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        vi.spyOn(Math, "random").mockReturnValue(0);
+        const sim = new Sim({
+            grid: makeGrid(Array(8).fill("........")),
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: 103.5,
+            spawnY: 203.5,
+            party: ["warrior", "ranger"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        const assets = {
+            get: () => undefined,
+            getPlayer: () => undefined,
+            getSprite: () => undefined,
+        } as unknown as GameAssets;
+        const view = new GameView(assets);
+        const enemyHit: SimEvent = {
+            type: "damage",
+            enemyUid: 1,
+            enemyId: "goblin",
+            amount: 18,
+            x: 104.5,
+            y: 203.5,
+        };
+        const playerHit: SimEvent = {
+            type: "playerHit",
+            amount: 10,
+            enemyId: "goblin",
+            elite: false,
+            hero: 0,
+        };
+        const emit = (...events: SimEvent[]) => view.onEvents(sim, events);
+        return { sim, view, enemyHit, playerHit, emit, setNow: (value: number) => (now = value) };
+    }
+
+    test("reserves four slots per enemy and per co-op hero, including poison and blocks", () => {
+        const { view, enemyHit, playerHit, emit } = setup();
+        emit(enemyHit, { ...enemyHit, poison: true }, { ...enemyHit, blocked: true }, enemyHit);
+        emit(
+            playerHit,
+            { type: "playerPoisoned", amount: 3 },
+            { ...playerHit, missed: true },
+            playerHit,
+        );
+        expect(view["hitsplats"]).toHaveLength(8);
+        expect(view["hitsplats"].map((hit) => hit.slot)).toEqual([0, 1, 2, 3, 0, 1, 2, 3]);
+        expect(view["hitsplats"].map((hit) => hit.kind)).toEqual([
+            "damage",
+            "poison",
+            "block",
+            "damage",
+            "damage",
+            "poison",
+            "block",
+            "damage",
+        ]);
+        emit({ ...enemyHit, enemyUid: 2 }, { ...playerHit, hero: 1 });
+        expect(view["hitsplats"].slice(-2).map((hit) => hit.slot)).toEqual([0, 0]);
+    });
+
+    test("reuses expired slots without moving active hits, and clears reservations on reset", () => {
+        const { view, enemyHit, emit, setNow } = setup();
+        emit(enemyHit);
+        setNow(200);
+        emit(enemyHit, enemyHit, enemyHit);
+        setNow(1000);
+        emit({ ...enemyHit, amount: 36 });
+        expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 36, slot: 0 });
+        expect(view["hitsplats"].slice(1, 4).map((hit) => hit.slot)).toEqual([1, 2, 3]);
+        view.reset();
+        emit(enemyHit);
+        expect(view["hitsplats"]).toHaveLength(1);
+        expect(view["hitsplats"][0].slot).toBe(0);
+    });
+
+    test.each(["enemy", "player"] as const)(
+        "replaces the oldest %s hit in its slot without disturbing other targets",
+        (target) => {
+            const { view, enemyHit, playerHit, emit, setNow } = setup();
+            const hit = target === "enemy" ? enemyHit : playerHit;
+            const other = target === "enemy" ? playerHit : enemyHit;
+            emit(other);
+            for (let amount = 1; amount <= 4; amount++) {
+                setNow(100 + amount * 10);
+                emit({ ...hit, amount });
+            }
+            const untouched = view["hitsplats"].slice(0, 1).concat(view["hitsplats"].slice(2));
+            setNow(150);
+            emit({ ...hit, amount: 5 });
+            expect(view["hitsplats"]).toHaveLength(5);
+            expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 5, slot: 0, start: 150 });
+            expect(view["hitsplats"].slice(0, 4)).toEqual(untouched);
+            emit({ ...hit, amount: 6 });
+            expect(view["hitsplats"].map((active) => active.amount)).toEqual([
+                other.amount,
+                3,
+                4,
+                5,
+                6,
+            ]);
+            expect(view["hitsplats"].at(-1)).toMatchObject({ amount: 6, slot: 1 });
+        },
+    );
+
+    test.each(["enemy", "player"] as const)(
+        "draws %s hits in four scaled screen positions",
+        (target) => {
+            const { sim, view, enemyHit, playerHit, emit } = setup();
+            const hit = target === "enemy" ? enemyHit : playerHit;
+            emit(hit, hit, hit, hit);
+            const ctx = {
+                measureText: () => ({
+                    actualBoundingBoxLeft: 4,
+                    actualBoundingBoxRight: 4,
+                    actualBoundingBoxAscent: 4,
+                    actualBoundingBoxDescent: 4,
+                }),
+                fillText: vi.fn(),
+                beginPath() {},
+                moveTo() {},
+                lineTo() {},
+                closePath() {},
+                fill() {},
+                stroke() {},
+            };
+            const overlay = {
+                ctx,
+                project: () => ({ x: 100, y: 100, visible: true }),
+            } as unknown as Overlay;
+            for (const scale of [1, 2]) {
+                ctx.fillText.mockClear();
+                view["drawHitsplats"](overlay, sim, 1, 100, scale);
+                const textPositions = ctx.fillText.mock.calls.filter((_, i) => i % 2 === 1);
+                expect(textPositions.map(([, x, y]) => [x, y])).toEqual([
+                    [100, 100],
+                    [100, 100 - 20 * scale],
+                    [100 - 15 * scale, 100 - 10 * scale],
+                    [100 + 15 * scale, 100 - 10 * scale],
+                ]);
+            }
+            view["drawHitsplats"](overlay, sim, 1, 1000, 1);
+            expect(view["hitsplats"]).toHaveLength(0);
+        },
+    );
 });
 
 test("Avian's birds follow the rendered hero and loop without changing the sim", () => {
@@ -85,14 +249,16 @@ test("Avian's birds follow the rendered hero and loop without changing the sim",
     expect(sim.heroes.map((hero) => hero.player)).toEqual(before);
 });
 
-// Bolts, knives and the atlatl's darts are items with a look, and the blowpipe's darts spot
-// animations without one
+// Bolts, knives and the atlatl's darts are items with a look, the thrownaxes spot animations
+// with one (laid on their side), and the blowpipe's darts spot animations without one
 test.each([
     "armadyl_crossbow",
     "dragon_hunter_crossbow",
     "eclipse_atlatl",
     "throwing_knives",
     "toxic_blowpipe",
+    "throwing_axes",
+    "chain_hit_axes",
 ])("%s draws every projectile tier without changing its movement or hit size", (weaponId) => {
     const sim = new Sim({
         grid: makeGrid(Array(8).fill("........")),
@@ -129,8 +295,12 @@ test.each([
             expect(assets.get).toHaveBeenLastCalledWith(
                 objId !== undefined ? "obj:" + objId : "spot:" + level.projectileSpotAnim,
             );
-            const look = objId !== undefined ? PROJECTILE_ITEM_LOOKS[objId] : undefined;
+            const look =
+                objId !== undefined
+                    ? PROJECTILE_ITEM_LOOKS[objId]
+                    : PROJECTILE_SPOT_LOOKS[projectile.spotAnim];
             expect(look === undefined).toBe(weaponId === "toxic_blowpipe");
+            expect(look?.roll).toBe(weaponId.endsWith("_axes") ? 512 : undefined);
             expect(draw).toHaveBeenLastCalledWith(
                 model,
                 anim,
@@ -140,12 +310,65 @@ test.each([
                 projectile.y,
                 (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
                 // Seen in the dark on a map with lighting (ActorDrawOptions.unlit)
-                { scale: look?.scale ?? 1, unlit: 1 },
+                { scale: look?.scale ?? 1, roll: look?.roll, unlit: 1 },
             );
             expect(projectile).toEqual(before);
             expect(projectile.radius).toBe(0.4);
         }
     }
+});
+
+// The Dagannoth Supreme throws the rune thrownaxe's spin, so his axes lie on their side as the
+// player's do
+test("an enemy's thrown axes are drawn on their side", () => {
+    const sim = new Sim({
+        grid: makeGrid(Array(8).fill("........")),
+        characterId: "ranger",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 103.5,
+        spawnY: 203.5,
+    });
+    const anim = new ActorAnim(
+        -1,
+        new Int32Array(4),
+        new Uint16Array(1),
+        new Uint16Array([1]),
+        false,
+    );
+    const model = { anims: [anim], radius: 20, height: 40 } as ActorModel;
+    const assets = {
+        get: vi.fn(() => model),
+        getPlayer: () => undefined,
+    } as unknown as GameAssets;
+    const view = new GameView(assets);
+    const draw = vi.fn<ActorRenderer["draw"]>();
+    const actors = { draw } as unknown as ActorRenderer;
+    const attack = getEnemy("dagannoth_supreme").boss!.attacks[0];
+    expect(attack.spotAnim).toBe(41);
+    sim.enemyProjectiles.push({
+        uid: 1,
+        enemyUid: 1,
+        enemyId: "dagannoth_supreme",
+        attack,
+        x: 105,
+        y: 203.5,
+        prevX: 105,
+        prevY: 203.5,
+        vx: 0,
+        vy: 0,
+        speed: 0,
+        homing: 0,
+        life: 10,
+        radius: 0.4,
+        damage: 3,
+        yaw: 512,
+        startTick: sim.tick,
+    });
+    view.submitActors(actors, sim, 1);
+    expect(assets.get).toHaveBeenCalledWith("spot:41");
+    const call = draw.mock.calls.find((c) => c[3] === 105 && c[5] === 203.5);
+    expect(call?.[7]).toMatchObject({ roll: 512, unlit: 1 });
 });
 
 describe("dropped power-up timers", () => {
@@ -154,7 +377,14 @@ describe("dropped power-up timers", () => {
     });
 
     // An item's model, in model units (1/128 tile)
-    const model = { key: "obj:1", height: 32, radius: 0 };
+    const model = {
+        key: "obj:1",
+        height: 32,
+        radius: 0,
+        anims: [
+            new ActorAnim(-1, new Int32Array(4), new Uint16Array(1), new Uint16Array([1]), false),
+        ],
+    };
 
     function setup() {
         const sim = new Sim({
@@ -181,7 +411,10 @@ describe("dropped power-up timers", () => {
         };
         sim.pickups = [pickup];
         sim.tick = pickup.spawnTick;
-        const assets = { get: vi.fn((): typeof model | undefined => model) };
+        const assets = {
+            get: vi.fn((): typeof model | undefined => model),
+            getPlayer: () => undefined,
+        };
         const view = new GameView(assets as unknown as GameAssets);
         const ctx = {
             beginPath: vi.fn(),
@@ -301,6 +534,35 @@ describe("dropped power-up timers", () => {
         draw();
         expect(flat - ctx.arc.mock.lastCall![1]).toBeGreaterThanOrEqual(16);
     });
+
+    test.each(["giant_essence", "drill_demon"])(
+        "%s is drawn bigger, and its timer rises with it",
+        (powerUp) => {
+            const { sim, pickup, assets, view, ctx, project, draw } = setup();
+            assets.get.mockReturnValue({ ...model, radius: 64 });
+            project.mockImplementation((x, height) => ({
+                x: 100 + (x - pickup.x) * 32,
+                y: 100 + height * 32,
+                visible: true,
+            }));
+            const actorDraw = vi.fn<ActorRenderer["draw"]>();
+            const actors = { draw: actorDraw } as unknown as ActorRenderer;
+            view.submitActors(actors, sim, 1);
+            const normalScale = actorDraw.mock.lastCall![7]!.scale!;
+            draw();
+            const normalTimerY = ctx.arc.mock.lastCall![1];
+
+            pickup.powerUp = powerUp;
+            view.submitActors(actors, sim, 1);
+            const enlarged = actorDraw.mock.lastCall!;
+            const enlargedScale = enlarged[7]!.scale!;
+            expect(enlargedScale).toBeGreaterThan(normalScale);
+            expect(enlargedScale).toBeLessThanOrEqual(normalScale * 2);
+            expect(enlarged[7]!.unlit).toBe(1);
+            draw();
+            expect(ctx.arc.mock.lastCall![1]).toBeLessThan(normalTimerY);
+        },
+    );
 
     test("scales on small screens and stays visible during the final blinking seconds", () => {
         const { sim, pickup, ctx, draw } = setup();

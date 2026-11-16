@@ -34,8 +34,14 @@ import {
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, HeroNpcLookDef, MapPropDef, PolymorphKind } from "../content/types";
-import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
+import {
+    EnemyDef,
+    HeroNpcLookDef,
+    MapPropDef,
+    PolymorphEscapees,
+    PolymorphKind,
+} from "../content/types";
+import { PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
     Hero,
@@ -72,10 +78,10 @@ import { CinematicPlayer } from "./Cinematic";
 import { CinematicLight, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
 import {
-    CANNON_MODEL_KEY,
     GameAssets,
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
+    getCannonModelKey,
     getEnemyModelKey,
     getLairSealKey,
     getPickupModelKey,
@@ -218,6 +224,12 @@ const FLUNG_ARC_HEIGHT = 3;
 
 const HITSPLAT_MS = 900;
 const MAX_HITSPLATS = 120;
+const HITSPLAT_OFFSETS = [
+    [0, 0],
+    [0, -20],
+    [-15, -10],
+    [15, -10],
+] as const;
 // Each kind of swoosh, aura and blast is pruned as it's drawn, but a co-op
 // tab that's hidden keeps stepping without drawing, so they're capped too
 const MAX_EFFECTS = 200;
@@ -387,6 +399,7 @@ type Hitsplat = {
     y: number;
     amount: number;
     start: number;
+    slot: number;
     // Follows this enemy, or this hero (Sim.heroes, -1 for none)
     enemyUid: number;
     hero: number;
@@ -419,11 +432,15 @@ type SwingFx = {
 };
 // enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1), or
 // VISITOR_SHOUT for a random event's visitor
-type Shout = { enemyUid: number; text: string; start: number };
+// ms: how long it's up, if not SHOUT_MS
+type Shout = { enemyUid: number; text: string; start: number; ms?: number };
 const VISITOR_SHOUT = -1000;
-// One of a polymorphed penguin's escapees running off from (x, y) along dirX, dirY since startTick
+// One of a polymorphed animal's escapees (the penguin's) running off from (x, y) along dirX, dirY
+// since startTick
 type EscapeeFx = {
     powerUpId: string;
+    look: PolymorphKind;
+    escapees: PolymorphEscapees;
     x: number;
     y: number;
     dirX: number;
@@ -558,11 +575,34 @@ export class GameView {
         this.flash = undefined;
     }
 
-    private addHitsplat(hitsplat: Omit<Hitsplat, "start">): void {
+    private addHitsplat(hitsplat: Omit<Hitsplat, "start" | "slot">, now: number): void {
+        let occupied = 0;
+        let oldest = -1;
+        for (let i = 0; i < this.hitsplats.length; i++) {
+            const active = this.hitsplats[i];
+            if (
+                active.hero === hitsplat.hero &&
+                active.enemyUid === hitsplat.enemyUid &&
+                active.start + HITSPLAT_MS > now
+            ) {
+                occupied |= 1 << active.slot;
+                if (oldest === -1) {
+                    oldest = i;
+                }
+            }
+        }
+        let slot = 0;
+        while (occupied & (1 << slot)) {
+            slot++;
+        }
+        if (slot >= HITSPLAT_OFFSETS.length) {
+            slot = this.hitsplats[oldest].slot;
+            this.hitsplats.splice(oldest, 1);
+        }
         if (this.hitsplats.length >= MAX_HITSPLATS) {
             this.hitsplats.shift();
         }
-        this.hitsplats.push({ ...hitsplat, start: performance.now() + this.rngDelay() });
+        this.hitsplats.push({ ...hitsplat, slot, start: now + this.rngDelay() });
     }
 
     // Where hitsplats on a hero go, in tiles above the ground
@@ -583,35 +623,41 @@ export class GameView {
                     const model =
                         enemy && this.assets.get(getEnemyModelKey(enemy.def, enemy.variant));
                     const height = model ? (model.height * enemy.scale) / 128 : 1;
-                    this.addHitsplat({
-                        kind: event.blocked ? "block" : event.poison ? "poison" : "damage",
-                        x: event.x,
-                        y: event.y,
-                        amount: event.amount,
-                        enemyUid: event.enemyUid,
-                        hero: -1,
-                        height: height * 0.6,
-                    });
+                    this.addHitsplat(
+                        {
+                            kind: event.blocked ? "block" : event.poison ? "poison" : "damage",
+                            x: event.x,
+                            y: event.y,
+                            amount: event.amount,
+                            enemyUid: event.enemyUid,
+                            hero: -1,
+                            height: height * 0.6,
+                        },
+                        now,
+                    );
                     break;
                 }
                 case "playerHit":
                 case "playerPoisoned": {
                     const hero = event.hero ?? sim.focus;
                     const player = sim.heroes[hero].player;
-                    this.addHitsplat({
-                        kind:
-                            event.type === "playerHit"
-                                ? event.missed
-                                    ? "block"
-                                    : "damage"
-                                : "poison",
-                        x: player.x,
-                        y: player.y,
-                        amount: event.amount,
-                        enemyUid: 0,
-                        hero,
-                        height: this.playerHitsplatHeight(hero),
-                    });
+                    this.addHitsplat(
+                        {
+                            kind:
+                                event.type === "playerHit"
+                                    ? event.missed
+                                        ? "block"
+                                        : "damage"
+                                    : "poison",
+                            x: player.x,
+                            y: player.y,
+                            amount: event.amount,
+                            enemyUid: 0,
+                            hero,
+                            height: this.playerHitsplatHeight(hero),
+                        },
+                        now,
+                    );
                     break;
                 }
                 case "bossImpact":
@@ -635,7 +681,15 @@ export class GameView {
                 case "enemyShout":
                     // A new line replaces what it was saying
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
-                    this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
+                    this.shouts.push({
+                        enemyUid: event.enemyUid,
+                        text: event.text,
+                        start: now,
+                        ms:
+                            event.type === "enemyShout" && event.seconds !== undefined
+                                ? event.seconds * 1000
+                                : undefined,
+                    });
                     break;
                 case "playerShout": {
                     const key = -(event.hero ?? sim.focus);
@@ -647,12 +701,22 @@ export class GameView {
                     // Away from whoever the camera's on, so they're off the screen
                     const player = sim.heroes[this.viewHero]?.player ?? sim.player;
                     const away = Math.atan2(event.y - player.y, event.x - player.x);
-                    const count = getPolymorphEffect(event.powerUpId).penguin.escapees.count;
+                    const escapees = getPolymorphLook(
+                        getPolymorphEffect(event.powerUpId),
+                        event.look,
+                        0,
+                    ).escapees;
+                    if (!escapees) {
+                        break;
+                    }
+                    const count = escapees.count;
                     for (let i = 0; i < count; i++) {
                         const angle =
                             away + (count > 1 ? (i / (count - 1) - 0.5) * ESCAPEE_SPREAD : 0);
                         this.escapees.push({
                             powerUpId: event.powerUpId,
+                            look: event.look,
+                            escapees,
                             x: event.x,
                             y: event.y,
                             dirX: Math.cos(angle),
@@ -784,7 +848,7 @@ export class GameView {
         this.drawTombsSpirit(actors, sim);
 
         for (const turret of sim.turrets) {
-            const model = this.assets.get(CANNON_MODEL_KEY);
+            const model = this.assets.get(getCannonModelKey(sim.tick - turret.startTick));
             if (model) {
                 const anim = model.anims[0];
                 // The real cannon takes up 3x3 tiles; smaller reads better next to the player
@@ -809,10 +873,15 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
+            const item =
+                projectile.attack.projectileObjId !== undefined
+                    ? this.assets.get("obj:" + projectile.attack.projectileObjId)
+                    : undefined;
             const model =
-                (projectile.attack.projectileObjId !== undefined &&
-                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
-                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
+                item || (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
+            // A thrown axe spins flat, as the player's do (PROJECTILE_SPOT_LOOKS)
+            const roll =
+                !item && spotAnim !== undefined ? PROJECTILE_SPOT_LOOKS[spotAnim]?.roll : undefined;
             if (!model || !hasGeometry(model)) {
                 // Drawn as a glow on the overlay instead
                 continue;
@@ -832,6 +901,7 @@ export class GameView {
                 ) * (projectile.attack.projectileScale ?? 1);
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
+                roll,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
                 unlit: 1,
             });
@@ -852,11 +922,15 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            const look = PROJECTILE_ITEM_LOOKS[projectile.objId];
+            const look =
+                projectile.objId !== -1
+                    ? PROJECTILE_ITEM_LOOKS[projectile.objId]
+                    : PROJECTILE_SPOT_LOOKS[projectile.spotAnim];
             const yaw = (projectile.yaw + (look?.yawOffset ?? 0)) & 2047;
             // Seen into the dark, where they carry on to what they hit
             actors.draw(model, anim, frame, x, height, y, yaw, {
                 scale: look?.scale ?? (projectile.kind === "rune" ? RUNE_SCALE : 1),
+                roll: look?.roll,
                 unlit: 1,
             });
         }
@@ -1003,15 +1077,19 @@ export class GameView {
                 continue;
             }
             const frame = anim.getFrame(tick - effect.startTick, effect.loop ?? false);
-            const height = this.ground(sim, effect.x, effect.y) - effect.height;
+            const pose =
+                effect.hero !== undefined
+                    ? getPlayerPose(sim, effect.hero, alpha, this.localPlayerPose)
+                    : effect;
+            const height = this.ground(sim, pose.x, pose.y) - effect.height;
             const fit = effect.fitRadius;
             actors.draw(
                 model,
                 anim,
                 frame,
-                effect.x,
+                pose.x,
                 height,
-                effect.y,
+                pose.y,
                 effect.yaw ?? 0,
                 // Spells' impacts and bosses' warnings, seen in the dark
                 fit !== undefined
@@ -2755,19 +2833,18 @@ export class GameView {
         });
     }
 
-    // A polymorphed penguin's escapees, running off fast till they're well off the screen (pruned
-    // in place, as keepWhile does)
+    // A polymorphed animal's escapees (the penguin's), running off fast till they're well off the
+    // screen (pruned in place, as keepWhile does)
     private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
         let kept = 0;
         for (const escapee of this.escapees) {
-            const { speed, seconds, walkSeq, scale } = getPolymorphEffect(escapee.powerUpId).penguin
-                .escapees;
+            const { speed, seconds, walkSeq, scale } = escapee.escapees;
             const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
             if (t > seconds) {
                 continue;
             }
             this.escapees[kept++] = escapee;
-            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId));
+            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId, escapee.look));
             if (!model) {
                 continue;
             }
@@ -3110,7 +3187,14 @@ export class GameView {
         scale: number,
     ): void {
         const ctx = overlay.ctx;
-        keepWhile(this.shouts, now, SHOUT_MS);
+        // (in place, as keepWhile does, each shout for its own time)
+        let kept = 0;
+        for (const shout of this.shouts) {
+            if (now - shout.start < (shout.ms ?? SHOUT_MS)) {
+                this.shouts[kept++] = shout;
+            }
+        }
+        this.shouts.length = kept;
         const pixel = Math.max(1, Math.round(scale));
         ctx.font = `${16 * pixel}px "OSRS Bold", sans-serif`;
         ctx.textAlign = "center";
@@ -3199,17 +3283,21 @@ export class GameView {
             if (!p.visible) {
                 continue;
             }
+            // Indexed, not destructured: this runs for every hitsplat every frame
+            const offset = HITSPLAT_OFFSETS[hitsplat.slot];
+            const x = p.x + offset[0] * pixel;
+            const y = p.y + offset[1] * pixel;
             ctx.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
             const sprite = this.assets.getSprite(HITSPLAT_SPRITES[hitsplat.kind]);
             if (sprite && cache) {
                 const image = this.hitsplatImages.get(sprite, font, pixel, hitsplat);
                 ctx.drawImage(
                     image.canvas,
-                    Math.round(p.x - image.inkWidth / 2) + image.left,
-                    Math.round(p.y - image.inkHeight / 2) + image.top,
+                    Math.round(x - image.inkWidth / 2) + image.left,
+                    Math.round(y - image.inkHeight / 2) + image.top,
                 );
             } else {
-                drawHitsplat(ctx, sprite, p.x, p.y, pixel, hitsplat.amount, hitsplat.kind);
+                drawHitsplat(ctx, sprite, x, y, pixel, hitsplat.amount, hitsplat.kind);
             }
         }
         ctx.globalAlpha = 1;
@@ -4562,11 +4650,6 @@ function getPowerUpBob(pickup: Pickup, tick: number): number {
 function withAlpha(hex: string, alpha: number): string {
     const value = parseInt(hex.slice(1), 16);
     return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
-}
-
-export function formatTime(seconds: number): string {
-    const s = Math.floor(seconds);
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export { TICKS_PER_SECOND };

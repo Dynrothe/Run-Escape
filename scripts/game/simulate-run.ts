@@ -39,6 +39,9 @@
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
+//   CA=1 ...         # Combat Achievements, on a save with none done: which tasks each run did and
+//                    # what spoilt the rest, each boss's time from its arrival to its kill (for
+//                    # speed tasks' times), and how often each task was done over all the runs
 //   REACT=0.25 ...   # moves as a person reacts: each step it decides is taken this many seconds
 //                    # later (by default the tick a boss's windup starts)
 //   FROM=101 ...     # the first seed (1 by default), to split a long sweep across processes
@@ -51,6 +54,7 @@
 //                    # EMPOWERED=1 as if its rival were beaten first (LairDef.empowered)
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS, getCharacter } from "../../src/game/content/characters";
+import { COMBAT_TASKS, describeCombatReason } from "../../src/game/content/combatTasks";
 import { getEnemy } from "../../src/game/content/enemies";
 import {
     BLESSINGS,
@@ -66,6 +70,7 @@ import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { HeroAbilityDef, emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
+import { CombatTracker } from "../../src/game/core/CombatTracker";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
@@ -87,6 +92,7 @@ import {
 import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
+import { createSave } from "../../src/game/core/save";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -316,6 +322,10 @@ function choiceScore(choice: UpgradeChoice): number {
 const setsStarted = new Map<string, number>();
 const setsFinished = new Map<string, number>();
 let runs = 0;
+// CA=1: each task's runs that followed it and did it, and each boss's arrival-to-kill seconds
+const combatReport = process.env.CA === "1";
+const combatRuns = new Map<string, { followed: number; done: number }>();
+const bossSeconds = new Map<string, number[]>();
 
 // Steers away from nearby enemies (closer counts more) and towards the nearest
 // bones by the walk there when nothing is close; slides along walls by trying a
@@ -1865,6 +1875,10 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     const maxTicks =
         (minutesArg ? parseFloat(minutesArg) * 60 : endless ? 90 * 60 : runSeconds()) *
         TICKS_PER_SECOND;
+    // On a save with nothing done, so it follows every task the run can do
+    const combat = combatReport ? CombatTracker.forRun(sim, createSave()) : undefined;
+    const bossArrived = new Map<string, number>();
+    const bossTimes: string[] = [];
     // A raid's rooms: when each boss turned up and went down
     let raidStage = sim.raidStage;
     let bossTick = 0;
@@ -2102,7 +2116,9 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
                 reachTicks[at] = (reachTicks[at] ?? 0) + 1;
             }
         }
-        for (const event of sim.takeEvents()) {
+        const events = sim.takeEvents();
+        combat?.observe(sim, events);
+        for (const event of events) {
             // An invader's coming and going (INVADE)
             if (event.type === "bossSpawned" && event.enemyId.startsWith("invading_")) {
                 invasionLog.from = sim.seconds;
@@ -2113,6 +2129,18 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
                 recentHits.push({ tick: sim.tick, event });
             } else if (event.type === "powerUp") {
                 powerUps++;
+            } else if (combat && event.type === "bossSpawned") {
+                bossArrived.set(event.enemyId, sim.tick);
+            } else if (combat && event.type === "kill" && event.boss) {
+                const at = bossArrived.get(event.enemyId);
+                if (at !== undefined) {
+                    const seconds = Math.round((sim.tick - at) / TICKS_PER_SECOND);
+                    bossTimes.push(`${event.enemyId} ${seconds}s`);
+                    bossSeconds.set(event.enemyId, [
+                        ...(bossSeconds.get(event.enemyId) ?? []),
+                        seconds,
+                    ]);
+                }
             } else if (event.type === "frozenSolid") {
                 freezes++;
             } else if (event.type === "worldTurned") {
@@ -2255,6 +2283,24 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             console.log(
                 "  boss attacks that hit: " + byAttack.map(([k, v]) => `${k} ${v}`).join(", "),
             );
+        }
+    }
+    if (combat) {
+        const statuses = combat.statuses(sim);
+        for (const { task, state } of statuses) {
+            const counts = combatRuns.get(task.id) ?? { followed: 0, done: 0 };
+            counts.followed++;
+            counts.done += state === "done" ? 1 : 0;
+            combatRuns.set(task.id, counts);
+        }
+        const done = statuses.filter((s) => s.state === "done").map((s) => s.task.id);
+        const failed = statuses
+            .filter((s) => s.state === "failed")
+            .map((s) => `${s.task.id} (${s.reason ? describeCombatReason(s.reason) : ""})`);
+        console.log(`  combat tasks done: ${done.join(", ") || "none"}`);
+        console.log(`  combat tasks failed: ${failed.join(", ") || "none"}`);
+        if (bossTimes.length > 0) {
+            console.log(`  boss times: ${bossTimes.join(", ")}`);
         }
     }
     if (lair && lairWoken) {
@@ -2546,6 +2592,24 @@ if (setsStarted.size > 0) {
         `\nSets started in ${runs} runs: ${total(setsStarted)}, finished: ${total(setsFinished)} ` +
             `(${[...setsStarted].map(([set, n]) => `${set} ${setsFinished.get(set) ?? 0}/${n}`).join(", ")})`,
     );
+}
+
+if (combatRuns.size > 0) {
+    console.log(`\nCombat tasks done in ${runs} runs (done / followed):`);
+    for (const task of COMBAT_TASKS) {
+        const counts = combatRuns.get(task.id);
+        if (counts) {
+            console.log(`  ${task.id} (${task.tier}): ${counts.done} / ${counts.followed}`);
+        }
+    }
+    if (bossSeconds.size > 0) {
+        console.log("Boss times, arrival to kill (fastest, median, slowest):");
+        for (const [id, times] of bossSeconds) {
+            const sorted = [...times].sort((a, b) => a - b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            console.log(`  ${id}: ${sorted[0]}s, ${median}s, ${sorted[sorted.length - 1]}s`);
+        }
+    }
 }
 
 function formatClock(seconds: number): string {

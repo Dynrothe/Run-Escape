@@ -1,0 +1,70 @@
+/* The pause menu's recent messages as the client's chat box: a dark translucent ground, a line to
+   each message with its clock in grey, who said it in a colour of its own, and the words in white.
+   The newest is at the bottom; a long list scrolls inside it. */
+.ui-chat {
+    max-height: 168px;
+    overflow-y: auto;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.38);
+    border: 1px solid rgba(107, 94, 74, 0.5);
+    scrollbar-width: thin;
+    scrollbar-color: #8a7a5c rgba(0, 0, 0, 0.35);
+}
+
+/* A message runs on in the line as in the client's chat, wrapping under its clock and name */
+.ui-chat-line {
+    padding: 1px 0;
+    line-height: 1.2;
+}
+
+.ui-chat-line > span + span {
+    margin-left: 6px;
+}
+
+.ui-chat-line:nth-child(even) {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.ui-chat-time {
+    color: #8a8a7a;
+}
+
+.ui-chat-source {
+    color: var(--ui-orange);
+}
+
+.ui-chat-text {
+    color: var(--ui-white);
+}
+
+/* Each kind of speaker in a colour: the game's own in orange, a boss's in red, and so on */
+.ui-chat-source-boss {
+    color: #ff5a4c;
+}
+
+.ui-chat-source-loot,
+.ui-chat-source-thief {
+    color: #ffd24a;
+}
+
+.ui-chat-source-revive {
+    color: #ff8aa0;
+}
+
+.ui-chat-source-powerup,
+.ui-chat-source-visitor,
+.ui-chat-source-notice {
+    color: #6fd0ff;
+}
+
+.ui-chat-source-endless,
+.ui-chat-source-realm,
+.ui-chat-source-cold,
+.ui-chat-source-souls {
+    color: #b98cff;
+}
+
+/* A teammate, as a player's name in the chat: green */
+.ui-chat-source-player {
+    color: #5ee05e;
+}

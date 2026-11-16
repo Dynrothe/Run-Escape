@@ -772,7 +772,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             getLocLeftOut(hiddenLocs, baseX, baseY),
         );
         const sceneModels = sceneLocs.locs;
-        addPlantBarrierBases(locModelLoader, sceneModels, scene, borderSize);
+        addPlantBarrierBases(locModelLoader, sceneModels, scene, borderSize, mapX, mapY);
 
         // Create loc animated groups and add transformed locs
         const locAnimatedGroups = addLocEntities(

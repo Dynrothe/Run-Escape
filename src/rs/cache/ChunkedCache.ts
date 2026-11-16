@@ -204,34 +204,35 @@ export type FetchChunksOptions = {
     fetcher?: typeof fetch;
 };
 
-// Chunks downloaded at once
+// Stored chunks read and checked at once, and, apart from those, chunks downloaded at once
 const CONCURRENCY = 6;
 
 // The chunks' bytes, in the order given. The ones already in the Cache API are read from there
 // and the rest downloaded and checked against their names, then put there. Afterwards it drops
 // every stored chunk that isn't listed: what an update replaced. Progress counts only what's
-// downloaded.
+// downloaded, so it starts once every stored chunk's been checked and the total's known.
 export async function fetchChunks(
     baseUrl: string,
     chunks: CacheChunk[],
     cache: Cache,
     { signal, onProgress, fetcher = fetch }: FetchChunksOptions = {},
 ): Promise<Uint8Array[]> {
-    const stored = await Promise.all(
-        chunks.map(async ({ file, size }) => {
-            const response = await cache.match(baseUrl + file);
-            const bytes = response && new Uint8Array(await response.arrayBuffer());
-            // Each one was checked before it was put, but a damaged copy would fail every load
-            // from then on, and hashing them all takes milliseconds
-            return bytes?.byteLength === size && (await isChunk(file, bytes)) ? bytes : undefined;
-        }),
-    );
     const result: Uint8Array[] = [];
-    const missing: number[] = [];
-    stored.forEach((bytes, i) => (bytes ? (result[i] = bytes) : missing.push(i)));
-
-    const total = missing.reduce((sum, i) => sum + chunks[i].size, 0);
+    let total = 0;
     let current = 0;
+    // Downloads that landed while the stored chunks were still being checked, before the total
+    let held: Uint8Array[] | undefined = [];
+    const report = (bytes: Uint8Array) => {
+        current += bytes.byteLength;
+        onProgress?.({ total, current, part: bytes });
+    };
+    const checkAbort = () => {
+        if (signal?.aborted) {
+            throw (
+                signal.reason ?? new DOMException("The cache download was aborted.", "AbortError")
+            );
+        }
+    };
     const download = async (i: number) => {
         const { file } = chunks[i];
         const url = baseUrl + file;
@@ -256,8 +257,11 @@ export async function fetchChunks(
             );
         }
         result[i] = bytes;
-        current += bytes.byteLength;
-        onProgress?.({ total, current, part: bytes });
+        if (held) {
+            held.push(bytes);
+        } else {
+            report(bytes);
+        }
         await cache
             .put(
                 url,
@@ -268,19 +272,69 @@ export async function fetchChunks(
             )
             .catch((e) => console.warn(`Couldn't keep ${file}`, e));
     };
+
+    // Readers check the stored chunks and hand the missing or damaged ones to downloaders, which
+    // start on them at once. A download never holds up the checks, and with them the total
+    const missing: number[] = [];
     let next = 0;
+    let checking = true;
     let failed = false;
-    const worker = async () => {
-        while (next < missing.length && !failed) {
-            try {
-                await download(missing[next++]);
-            } catch (e) {
-                failed = true;
-                throw e;
+    const waiting: (() => void)[] = [];
+    const wake = () => waiting.splice(0).forEach((resolve) => resolve());
+    const reader = async () => {
+        while (next < chunks.length && !failed) {
+            checkAbort();
+            const i = next++;
+            const { file, size } = chunks[i];
+            const response = await cache.match(baseUrl + file);
+            const bytes = response && new Uint8Array(await response.arrayBuffer());
+            // Each one was checked before it was put, but a damaged copy would fail every load
+            // from then on, and hashing them all takes milliseconds
+            const valid = bytes?.byteLength === size && (await isChunk(file, bytes));
+            checkAbort();
+            if (valid) {
+                result[i] = bytes;
+            } else {
+                total += size;
+                missing.push(i);
+                wake();
             }
         }
     };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+    const downloader = async () => {
+        while (!failed) {
+            const i = missing.shift();
+            if (i !== undefined) {
+                checkAbort();
+                await download(i);
+            } else if (checking) {
+                await new Promise<void>((resolve) => waiting.push(resolve));
+            } else {
+                return;
+            }
+        }
+    };
+    const run = async (worker: () => Promise<void>) => {
+        try {
+            await worker();
+        } catch (e) {
+            failed = true;
+            wake();
+            throw e;
+        }
+    };
+    const workers = (worker: () => Promise<void>, count: number) =>
+        Array.from({ length: count }, () => run(worker));
+    const checked = Promise.all(workers(reader, Math.min(CONCURRENCY, chunks.length))).then(() => {
+        checking = false;
+        if (!failed) {
+            held!.forEach(report);
+        }
+        held = undefined;
+        wake();
+    });
+    await Promise.all([checked, ...workers(downloader, CONCURRENCY)]);
+    checkAbort();
 
     // Every chunk's in the one Cache, under its file name
     const listed = new Set(chunks.map((chunk) => chunk.file));

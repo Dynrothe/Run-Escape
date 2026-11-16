@@ -305,6 +305,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "imp",
         name: "Imp",
+        ashes: true,
         npcId: 5007,
         idleSeq: 171,
         walkSeq: 168,
@@ -649,6 +650,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "revenant_imp",
         name: "Revenant imp",
+        ashes: true,
         tags: ["undead"],
         npcId: 7881,
         idleSeq: 171,
@@ -712,6 +714,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "revenant_pyrefiend",
         name: "Revenant pyrefiend",
+        ashes: true,
         tags: ["undead"],
         npcId: 7932,
         idleSeq: 1578,
@@ -803,6 +806,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "revenant_demon",
         name: "Revenant demon",
+        ashes: true,
         tags: ["undead"],
         npcId: 7936,
         idleSeq: 66,
@@ -2415,8 +2419,8 @@ export const ENEMIES: EnemyDef[] = [
         speed: 2.6,
         radius: 0.35,
         xp: 8,
-        // A rat's
-        sounds: { attack: 710, hit: 713, death: 711 },
+        // A rat's, but its own death
+        sounds: { attack: 710, hit: 713, death: 911 },
         scale: 0.8,
     },
     {
@@ -3065,6 +3069,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "lesser_demon",
         name: "Lesser demon",
+        ashes: true,
         npcId: 2005,
         idleSeq: 66,
         walkSeq: 63,
@@ -3227,6 +3232,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "nezikchened",
         name: "Nezikchened",
+        ashes: true,
         npcId: 3962,
         idleSeq: 66,
         walkSeq: 63,
@@ -3585,6 +3591,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "bloodveld",
         name: "Bloodveld",
+        ashes: true,
         npcId: 484,
         idleSeq: 1551,
         walkSeq: 1549,
@@ -3715,6 +3722,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "reanimated_demon",
         name: "Reanimated demon spawn",
+        ashes: true,
         tags: ["undead"],
         npcId: 7287,
         idleSeq: 66,
@@ -3901,6 +3909,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "skotizo",
         name: "Skotizo",
+        ashes: true,
         npcId: 7286,
         idleSeq: 4675,
         walkSeq: 4674,
@@ -4758,6 +4767,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "mutated_bloodveld",
         name: "Mutated bloodveld",
+        ashes: true,
         npcId: 7276,
         idleSeq: 1551,
         walkSeq: 1549,
@@ -6345,6 +6355,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "gwd_imp",
         name: "Imp",
+        ashes: true,
         faction: "zamorak",
         npcId: 3134,
         idleSeq: 171,
@@ -6361,6 +6372,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "icefiend",
         name: "Icefiend",
+        ashes: true,
         faction: "zamorak",
         npcId: 3140,
         idleSeq: 1578,
@@ -6377,6 +6389,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "pyrefiend",
         name: "Pyrefiend",
+        ashes: true,
         faction: "zamorak",
         npcId: 3139,
         idleSeq: 1578,
@@ -6511,6 +6524,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "hellhound",
         name: "Hellhound",
+        ashes: true,
         faction: "zamorak",
         npcId: 3133,
         idleSeq: 6580,
@@ -6547,6 +6561,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "gwd_bloodveld",
         name: "Bloodveld",
+        ashes: true,
         faction: "zamorak",
         npcId: 3138,
         idleSeq: 1551,
@@ -6835,6 +6850,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "tstanon_karlak",
         name: "Tstanon Karlak",
+        ashes: true,
         faction: "zamorak",
         npcId: 3130,
         idleSeq: 66,
@@ -6854,6 +6870,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "zakln_gritch",
         name: "Zakl'n Gritch",
+        ashes: true,
         faction: "zamorak",
         npcId: 3131,
         idleSeq: 66,
@@ -6872,6 +6889,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "balfrug_kreeyath",
         name: "Balfrug Kreeyath",
+        ashes: true,
         faction: "zamorak",
         npcId: 3132,
         idleSeq: 66,
@@ -7181,6 +7199,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kril_tsutsaroth",
         name: "K'ril Tsutsaroth",
+        ashes: true,
         faction: "zamorak",
         npcId: 3129,
         idleSeq: 6935,

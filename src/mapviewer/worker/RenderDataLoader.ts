@@ -3,6 +3,7 @@ import { SerializerImplementation } from "threads";
 import { ActorBakeLoader } from "../webgl/actor/ActorBakeLoader";
 import { SdMapDataLoader } from "../webgl/loader/SdMapDataLoader";
 import { ItemIconLoader } from "./ItemIconLoader";
+import { NpcHeadLoader } from "./NpcHeadLoader";
 import { RegionDataLoader } from "./RegionDataLoader";
 import { WorkerState } from "./RenderDataWorker";
 import { SoundLoader } from "./SoundLoader";
@@ -29,6 +30,7 @@ const loaders = {
     actorBakeLoader: new ActorBakeLoader(),
     regionDataLoader: new RegionDataLoader(),
     itemIconLoader: new ItemIconLoader(),
+    npcHeadLoader: new NpcHeadLoader(),
     soundLoader: new SoundLoader(),
     spriteDataLoader: new SpriteDataLoader(),
 };

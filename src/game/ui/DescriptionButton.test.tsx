@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { DescriptionButton, zoomedRects } from "./DescriptionButton";
+import { DESCRIBE_HOLD_MS, DescriptionButton, HOLD_MS, zoomedRects } from "./DescriptionButton";
 
 function pointer(button: HTMLElement, type: string, x = 20, pointerType = "touch") {
     const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x });
@@ -12,10 +12,15 @@ function pointer(button: HTMLElement, type: string, x = 20, pointerType = "touch
     fireEvent(button, event);
 }
 
-function renderButton() {
+// usable: whether a tap does something (selects a tile), or the button only describes
+function renderButton(usable = true) {
     const onUse = vi.fn();
     const view = render(
-        <DescriptionButton itemId="gear" description="Gear stats" onUse={onUse}>
+        <DescriptionButton
+            itemId="gear"
+            description="Gear stats"
+            onUse={usable ? onUse : undefined}
+        >
             Gear
         </DescriptionButton>,
     );
@@ -35,7 +40,7 @@ afterEach(() => {
 test("a hold reads a tile without selecting it; a later tap still selects once", () => {
     const { button, onUse } = renderButton();
     pointer(button, "pointerdown");
-    act(() => vi.advanceTimersByTime(499));
+    act(() => vi.advanceTimersByTime(HOLD_MS - 1));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Gear stats");
@@ -49,10 +54,26 @@ test("a hold reads a tile without selecting it; a later tap still selects once",
     expect(onUse).toHaveBeenCalledTimes(1);
 });
 
+test("a button a tap does nothing on describes after a shorter hold", () => {
+    expect(DESCRIBE_HOLD_MS).toBeLessThan(HOLD_MS);
+    const { button } = renderButton(false);
+    pointer(button, "pointerdown");
+    pointer(button, "pointerup");
+    act(() => vi.advanceTimersByTime(HOLD_MS));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    pointer(button, "pointerdown");
+    act(() => vi.advanceTimersByTime(DESCRIBE_HOLD_MS - 1));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Gear stats");
+    pointer(button, "pointerup");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+});
+
 test.each(["scroll", "blur", "Escape"])("%s dismisses and cancels a held tile", (event) => {
     const { button, onUse } = renderButton();
     pointer(button, "pointerdown");
-    act(() => vi.advanceTimersByTime(500));
+    act(() => vi.advanceTimersByTime(HOLD_MS));
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     if (event === "Escape") {
         fireEvent.keyDown(window, { key: event });
@@ -65,11 +86,11 @@ test.each(["scroll", "blur", "Escape"])("%s dismisses and cancels a held tile", 
     expect(onUse).not.toHaveBeenCalled();
 });
 
-test("dragging a tile before the hold cancels selection and its description", () => {
-    const { button, onUse } = renderButton();
+test.each([true, false])("dragging before the hold cancels it (a tap selects: %s)", (usable) => {
+    const { button, onUse } = renderButton(usable);
     pointer(button, "pointerdown");
     pointer(button, "pointermove", 40);
-    act(() => vi.advanceTimersByTime(500));
+    act(() => vi.advanceTimersByTime(HOLD_MS));
     pointer(button, "pointerup", 40);
     fireEvent.click(button);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();

@@ -5,9 +5,74 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Party stats in co-op's pause menu, by Deivid Smarzaro: every player's totals and combat so far,
+  as the results show them.
+- The Imbued heart, a power-up for magic adventurers, by Deivid Smarzaro: 20% more magic damage
+  for 20 seconds, with its activation animation on you.
+- A Combat tab in the pause menu, by Iakee: your damage by type and by what dealt it, what armour
+  blocked, your revives, and every monster you've killed, by its face. The results have it too.
+- Tooltips on every number in the pause menu's Loadout, by Iakee: what it means and how it got
+  its size, each level up in the colour of the rarity it was taken at.
+- Restart, by Iakee: Give up in the pause menu can start the run again from the beginning. What
+  you'd found is kept, as Give up keeps it.
+- Combat Achievements, on the title screen: challenges for solo runs in six tiers, from Easy to
+  Grandmaster. Each pays coins once, and their points earn Ghommal's hilts for the Collection log.
+  Your kill counts, wins and endless rounds so far already count, without the coins.
+- Combat Achievements reach Act II's maps, the Awakened fights, Beneath Cursed Sands and the Tombs
+  of Amascut (raid levels, no deaths, a perfect run of each puzzle room), along with remixes,
+  invocations, invaders and an awakened final boss.
+- Pin up to five Combat Achievements. In a run, the pinned ones show under the quests, and a toast
+  says what spoilt one. The pause menu's Quests tab shows how every task the run is following is
+  going.
+
+### Changed
+
+- Click or tap anywhere in the open DPS panel to close it, by Deivid Smarzaro.
+- Players and monsters show up to four hitsplats at once, by Deivid Smarzaro, spaced out as in
+  OSRS. A fifth hit takes the oldest one's place.
+- The Dwarf multicannon goes up a part at a time, by Deivid Smarzaro: its base, then the stand,
+  barrels and furnace over a second, before it fires. It lasts as long as it did.
+- Casket gear against what you're wearing, by Jp66600: each stat's difference comes first, with the
+  game's green or red arrow, then what's worn and what's new, and what gets better and worse shows
+  beside the item's name.
+- The pause menu is in tabs, by Iakee: Loadout, Combat, Quests and Party, with the Collection log
+  and Settings as pages of it. It opens on the tab you left it on.
+- Settings are in sections with the game's own icons, by Iakee, a card for each setting. The
+  language shows its flag, and Shift on the volume moves it a tenth of a percent at a time.
+- The invocations, the Tombs of Amascut's HUD and results board, and the explore maps' labels can
+  be translated, by Iakee.
+- The Wardrobe doesn't sell Ghommal's hilts any more: they're yours to wear once Combat
+  Achievements earn them. Any you bought are refunded.
+- The Skip button shows the coins it takes, by Deivid Smarzaro: "Skip (-25 coins)".
+- Thrown axes fly on their side, by Jp66600, spinning flat so the whole blade shows from above
+  instead of a thin line. The Chain-hit axes' and the Dagannoth Supreme's too.
+- Giant rune essence and the Drill Demon's helmet are bigger on the ground, by Deivid Smarzaro, so
+  they're easier to spot.
+- Polymorph's sheep baa a little louder, by GhostavoA, and a golden sheep says "Baa!" with every
+  attack.
+- Polymorph's odd sheep out turns up as often as the penguin, by GhostavoA, snores as it goes, and
+  has a surprise inside.
+- Enemies warped by a fairy ring vanish in the fairy rings' own teleport, by Deivid Smarzaro, in
+  place of Teleother's.
+- Imps and demons drop ashes instead of bones, by Deivid Smarzaro, for the same experience. Ashes
+  and bones gather into separate piles, with plain grey ashes for the smallest ash pile.
+- On a touch screen, descriptions open sooner, by Deivid Smarzaro, on what a tap does nothing on:
+  your weapons, passives, effects and quests on the HUD, and the Armoury's upgrades. What a tap
+  uses or selects keeps the longer hold.
+
 ### Fixed
 
-- Mountains and steep slopes in the Stranglewood no longer let you walk through them.
+- Mountains and steep slopes in the Stranglewood no longer let you walk through them. Fixed by Deivid Smarzaro.
+- Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
+  lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
+- The Ring of life showing your revive sits in the middle of its box. Fixed by Deivid Smarzaro.
+- The Drill Demon's dropped helmet turns on the spot, in the middle of its pickup. Fixed by Deivid
+  Smarzaro.
+- Wolves die with a wolf's yelp, not a rat's squeak. Fixed by GhostavoA.
+- The Barrows' plants you can't walk through stand on low wooden bases, as Karamja's do, so you
+  can tell them from the ones you can. Fixed by Deivid Smarzaro.
 
 ## 0.33.2 - 2026-11-15
 

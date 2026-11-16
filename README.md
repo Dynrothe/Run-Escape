@@ -38,14 +38,16 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
   and passive effects, levels and unlocks.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
-  adventurer, shared levels, and the run going on while anyone's standing.
+  adventurer, shared levels, live party stats in the menu, and the run going on while anyone's
+  standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
 - **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark
   that's his weapon: read its statues, its floor and its fire, with Saradomin Strike, which only
   reaches him from close by.
 - **Endless mode** and **hard mode** for every map you've beaten, **skills** to train with the coins
-  you bank on independent Melee, Ranged and Magic pages, and **quests** that pay out over many runs.
+  you bank on independent Melee, Ranged and Magic pages, **quests** that pay out over many runs,
+  and **Combat Achievements**, challenges for solo runs in six tiers.
 
 [docs/GAMEPLAY.md](docs/GAMEPLAY.md) goes through all of it, map by map. [CHANGELOG.md](CHANGELOG.md)
 has what changed in each version.
@@ -79,7 +81,8 @@ and open http://localhost:5173.
 
 `bun run download-caches` fetches the game's cache (see [Cache version](#cache-version)) from the
 [OpenRS2 Archive](https://archive.openrs2.org/) into `caches/`; you can also copy a `caches/` folder
-over from another checkout. The download gives up when nothing has arrived for a minute; on a
+over from another checkout. It needs room on disk for the download's ZIP beside the cache while
+it unzips, but little memory. The download gives up when nothing has arrived for a minute; on a
 connection that drops out for longer, set `CACHE_DOWNLOAD_TIMEOUT_MS` to a longer wait in
 milliseconds. The first load copies the 227 MB cache into the browser's cache storage, so later
 loads are quick.
@@ -88,10 +91,11 @@ loads are quick.
 
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
-hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
-the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
-**Space** uses it; on a controller it's A (cross), and on a touch screen the round button. In the
-menus, **Esc** goes back and **Enter** starts the run, or plays again from the results.
+hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage; click anywhere in
+the open panel to close it. **M** mutes and the mouse wheel zooms. In a boss fight with its own
+button (Justiciar Zachariah's Smite), **Space** uses it; on a controller it's A (cross), and on a
+touch screen the round button. In the menus, **Esc** goes back and **Enter** starts the run, or
+plays again from the results.
 
 Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
 upgrades) to read their descriptions.
@@ -99,6 +103,7 @@ upgrades) to read their descriptions.
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
 Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
+What a tap does nothing on, like your weapons and passives on the HUD, needs only a brief hold.
 On small screens, tap Zoom beside the timer to show the camera zoom slider. The pause menu lists
 worn equipment and its descriptions, and with the Gear panel setting on, GEAR below DPS shows or
 hides it on the HUD too.

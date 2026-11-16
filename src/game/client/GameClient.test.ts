@@ -3,6 +3,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
+import { GAUNTLET_FIGHTS } from "../content/gauntlet";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
 import { Rarity } from "../content/rarity";
@@ -10,6 +11,7 @@ import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { encodeCardCaps } from "../core/cardRuns";
+import { GauntletRun, loseGauntletFight, startGauntlet } from "../core/gauntlet";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -409,6 +411,32 @@ describe("co-op without render frames", () => {
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
+
+    test.each([0, 1])("reads every player's stats for co-op's Party stats (focus %s)", (focus) => {
+        const sim = createSim(focus);
+        const { client } = createClient(sim, false);
+        const wizardSource = `weapon:${sim.heroes[1].weapons[0].def.id}` as const;
+        sim.heroes[0].damageBySource["weapon:scimitar"] = 100;
+        sim.heroes[1].damageBySource[wizardSource] = 250;
+        sim.heroes[0].down = true;
+        sim.heroes[0].left = true;
+        const before = sim.getResult();
+        const players = client.getPartyStats()!;
+        expect(players.map((player) => player.damageDealt)).toEqual([100, 250]);
+        expect(players.map((player) => player.isLocal)).toEqual([focus === 0, focus === 1]);
+        expect(players[0]).toMatchObject({ down: true, left: true });
+        // Reading them changes nothing in the run
+        expect(sim.getResult()).toEqual(before);
+        expect(sim.player).toBe(sim.heroes[focus].player);
+        sim.heroes[1].damageBySource[wizardSource] = 500;
+        expect(client.getPartyStats()![1].damageDealt).toBe(500);
+        expect(players[1].damageDealt).toBe(250);
+    });
+
+    test("has no party stats in a solo run", () => {
+        const { client } = createClient(createSim(), false);
+        expect(client.getPartyStats()).toBeUndefined();
+    });
 
     test.each([undefined, 0, 1])(
         "shows only the focused hero's unspent ring of life (focus %s)",
@@ -1211,9 +1239,9 @@ describe("a co-op run that breaks", () => {
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
 
-    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+    it("walks on under co-op's menu, whichever of its pages is open", () => {
         const setMove = vi.fn();
-        const { client, store, update } = coopClient({ setMove });
+        const { client, update } = coopClient({ setMove });
         Object.assign(client, {
             input: {
                 getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
@@ -1222,13 +1250,9 @@ describe("a co-op run that breaks", () => {
         client.pause();
         update();
         expect(setMove).toHaveBeenLastCalledWith(1, 0);
-        client.openRunLog();
-        expect(store.getSnapshot().runLog).toBe(true);
-        update();
-        expect(setMove).toHaveBeenLastCalledWith(0, 0);
     });
 
-    it("uses items and the hero's button under co-op's menu, not under the Collection log over it", () => {
+    it("uses items and the hero's button under co-op's menu", () => {
         const { client } = coopClient({});
         const useItem = vi.fn();
         const useAbility = vi.fn();
@@ -1240,15 +1264,6 @@ describe("a co-op run that breaks", () => {
         press("Digit1");
         expect(useAbility).toHaveBeenCalledOnce();
         expect(useItem).toHaveBeenCalledWith(0);
-        client.openRunLog();
-        press("Space");
-        press("Digit2");
-        expect(useAbility).toHaveBeenCalledOnce();
-        expect(useItem).toHaveBeenCalledOnce();
-        // Back on the menu, in reach again
-        press("Escape");
-        press("Digit3");
-        expect(useItem).toHaveBeenLastCalledWith(2);
     });
 
     it("sends the host's frames even when something after a step throws", () => {
@@ -2721,53 +2736,34 @@ describe("boss attacks' instructions", () => {
     });
 });
 
-describe("the Collection log over the pause menu", () => {
-    test("opens only on the pause menu, and Escape or P goes back to the menu before resuming", () => {
-        const { client, store } = createClient(createSim(), false);
-        const press = (code: string) =>
-            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
-        const snapshot = () => store.getSnapshot();
-        client.openRunLog();
-        expect(snapshot().runLog).toBeFalsy();
-        press("Escape");
-        expect(snapshot().overlay).toBe("paused");
-        for (const code of ["Escape", "KeyP"]) {
-            client.openRunLog();
-            expect(snapshot().runLog).toBe(true);
-            press(code);
-            expect(snapshot().runLog).toBe(false);
-            expect(snapshot().overlay).toBe("paused");
-        }
-        press("Escape");
-        expect(snapshot().overlay).toBe("none");
-    });
-
-    test("shuts with the menu however the run leaves it, so the next pause opens on the menu", () => {
-        const { client, store } = createClient(createSim(), false);
-        Object.assign(client, { updateHud() {} });
-        client.pause();
-        client.openRunLog();
-        expect(store.getSnapshot().runLog).toBe(true);
-        // As starting a run and leaving one do (leavePauseMenu)
-        client.quitRun();
-        expect(store.getSnapshot().runLog).toBe(false);
-    });
-
-    test("leaves Escape and P to the panel saying nothing's being saved, over the menu or the log", () => {
+describe("the pause menu's Collection log", () => {
+    test("Escape dismisses a tooltip before it resumes the run", () => {
         const { client, store } = createClient(createSim(), false);
         const press = (code: string) =>
             (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
         client.pause();
-        client.openRunLog();
+        const tip = document.createElement("div");
+        tip.className = "ui-description-tip";
+        document.body.appendChild(tip);
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("paused");
+        tip.remove();
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("none");
+    });
+
+    test("leaves Escape and P to the panel saying nothing's being saved, over the menu", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        client.pause();
         store.set({ saveBlock: { kind: "otherTab" } });
         for (const code of ["Escape", "KeyP"]) {
             press(code);
-            expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: true });
+            expect(store.getSnapshot().overlay).toBe("paused");
         }
-        // Played on without saving: the keys are the log's and the menu's again
+        // Played on without saving: the keys are the menu's again
         store.set({ saveBlockClosed: true });
-        press("Escape");
-        expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: false });
         press("Escape");
         expect(store.getSnapshot().overlay).toBe("none");
     });
@@ -2795,6 +2791,62 @@ describe("the Collection log over the pause menu", () => {
         sim.trophies.add(TROPHIES[0].id);
         Object.assign(sim, { coins: NaN });
         expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
+    });
+});
+
+describe("the pause menu's run actions", () => {
+    test("Restart banks the run as Give up does, then starts it from the beginning, not at its lair", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const calls: string[] = [];
+        const finishRun = vi.fn(() => calls.push("finish"));
+        const leaveRun = vi.fn(() => calls.push("leave"));
+        const startRun = vi.fn(async () => {
+            calls.push("start");
+        });
+        Object.assign(client, { finishRun, leaveRun, startRun });
+        client.pause();
+        client.restartRun();
+        // Given up and banked (its coins, drops and quests) before it starts again
+        expect(sim.runOver).toBe(true);
+        expect(finishRun).toHaveBeenCalledWith(expect.any(String), "abandoned");
+        expect(calls).toEqual(["finish", "leave", "start"]);
+        expect(startRun).toHaveBeenCalledWith(sim.map.id, false, undefined, undefined);
+    });
+
+    test("Restart in a fight of the Forgotten Four's is its Retry this fight, counted as a try", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const gauntlet = client as unknown as { gauntletRun: GauntletRun | undefined };
+        gauntlet.gauntletRun = startGauntlet(GAUNTLET_FIGHTS, false);
+        // As finishRun's finishGauntletFight leaves a lost fight
+        const finishRun = vi.fn(() => {
+            gauntlet.gauntletRun = loseGauntletFight(gauntlet.gauntletRun!);
+        });
+        const startGauntletFight = vi.fn(async () => {});
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, { finishRun, leaveRun: vi.fn(), startGauntletFight, startRun });
+        client.pause();
+        client.restartRun();
+        expect(gauntlet.gauntletRun?.phase).toBe("fight");
+        expect(gauntlet.gauntletRun?.tries).toBe(1);
+        expect(startGauntletFight).toHaveBeenCalledOnce();
+        expect(startRun).not.toHaveBeenCalled();
+    });
+
+    test("Give up ends a solo run on its results", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const finishRun = vi.fn();
+        const leaveRun = vi.fn();
+        const syncOverlay = vi.fn();
+        Object.assign(client, { finishRun, leaveRun, syncOverlay });
+        client.pause();
+        client.quitRun();
+        expect(finishRun).toHaveBeenCalledWith(expect.any(String), "abandoned");
+        // Not left: the results come up over it
+        expect(leaveRun).not.toHaveBeenCalled();
+        expect(syncOverlay).toHaveBeenCalled();
     });
 });
 

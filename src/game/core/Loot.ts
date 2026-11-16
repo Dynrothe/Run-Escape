@@ -12,7 +12,7 @@ import {
 } from "../content/items";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
-import { StatText, formatStats } from "../content/stats";
+import { StatText, compareStatValues, formatStats } from "../content/stats";
 import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
@@ -118,13 +118,8 @@ export function isBetterGear(
     return gearWorth(item, upgrades) > gearWorth(than, thanUpgrades);
 }
 
-// How far apart two stats have to be to count as different: an upgrade's
-// stats are multiplied out (0.1 upgraded once is 0.15000000000000002), so
-// equal pieces can differ in the last digit
-const STAT_TOLERANCE = 1e-9;
-
 // Unlike the rarity-based recommendation, automatic swaps must lose no
-// stats, and even an incomplete worn set stays the player's decision.
+// shown stats, and even an incomplete worn set stays the player's decision.
 export function shouldAutoEquip(
     gear: Partial<Record<GearSlot, string>>,
     gearUpgrades: Partial<Record<GearSlot, number>>,
@@ -148,10 +143,11 @@ export function shouldAutoEquip(
     for (const key of Object.keys({ ...wornStats, ...offeredStats }) as StatKey[]) {
         const offered = offeredStats[key] ?? 0;
         const current = wornStats[key] ?? 0;
-        if (offered < current - STAT_TOLERANCE) {
+        const change = compareStatValues(key, current, offered);
+        if (change < 0) {
             return false;
         }
-        better ||= offered > current + STAT_TOLERANCE;
+        better ||= change > 0;
     }
     return better;
 }

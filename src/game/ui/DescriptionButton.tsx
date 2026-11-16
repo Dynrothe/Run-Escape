@@ -17,7 +17,10 @@ import { DURATION_ICON } from "../content/statIcons";
 import { tl, tp } from "../i18n";
 import { StatLine } from "./StatLine";
 
-const LONG_PRESS_MS = 500;
+// How long a touch is held before it describes: sooner where a tap does nothing, as there's no tap
+// to mistake a short hold for, than where a tap uses or selects
+export const HOLD_MS = 500;
+export const DESCRIBE_HOLD_MS = 200;
 // Ignore the browser's and SharedTaps' clicks after handling a touch on release.
 const PRESS_CLICK_MS = 400;
 
@@ -173,12 +176,15 @@ export function DescriptionButton({
                     held: false,
                     cancelled: false,
                 };
-                timer.current = setTimeout(() => {
-                    if (press.current) {
-                        press.current.held = true;
-                        setHeld(true);
-                    }
-                }, LONG_PRESS_MS);
+                timer.current = setTimeout(
+                    () => {
+                        if (press.current) {
+                            press.current.held = true;
+                            setHeld(true);
+                        }
+                    },
+                    onUse ? HOLD_MS : DESCRIBE_HOLD_MS,
+                );
             }}
             onPointerMove={(e) => {
                 const start = press.current;
@@ -232,13 +238,15 @@ export function DescriptionButton({
     );
 }
 
-function DescriptionTip({
+// The tooltip itself, placed beside what it describes: also used by tooltips on things that aren't
+// buttons (the pause menu's stat breakdowns)
+export function DescriptionTip({
     id,
     anchor,
     children,
 }: {
     id: string;
-    anchor: RefObject<HTMLButtonElement | null>;
+    anchor: RefObject<HTMLElement | null>;
     children: ReactNode;
 }): JSX.Element {
     const tip = useRef<HTMLDivElement>(null);

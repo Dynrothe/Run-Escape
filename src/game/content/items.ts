@@ -41,6 +41,13 @@ export const GEAR_SLOTS: {
     { id: "ring", name: "Ring", iconSpriteId: 160 },
 ];
 
+// The equipment screen's other two squares, which Run Escape never fills (a weapon is carried in
+// the weapon slots, and nothing fires ammo): the Loadout draws them locked
+export const LOCKED_GEAR_SLOTS: { id: "weapon" | "ammo"; name: string; iconSpriteId: number }[] = [
+    { id: "weapon", name: "Weapon", iconSpriteId: 159 },
+    { id: "ammo", name: "Ammo", iconSpriteId: 166 },
+];
+
 export const GEAR_SLOT_BY_ID: Map<GearSlot, (typeof GEAR_SLOTS)[number]> = new Map(
     GEAR_SLOTS.map((s) => [s.id, s]),
 );

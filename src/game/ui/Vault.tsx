@@ -1,8 +1,8 @@
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
-import { formatTime } from "../client/GameView";
 import { characterName, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { formatTime } from "../content/format";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { RUN_SET, invocationName } from "../content/invocations";
 import { getMap, mapName } from "../content/maps";

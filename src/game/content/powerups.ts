@@ -20,6 +20,8 @@ export const POWER_UP_BLINK = 5;
 export const POWER_UP_COLOR = "#46f0dc";
 // A lantern, on a map with lighting (LightingDef.lanternWeight)
 export const LANTERN_ID = "lantern";
+// Three assembly steps after placing the base, unaffected by duration bonuses
+export const CANNON_BUILD_SECONDS = 1;
 
 export const POWER_UPS: PowerUpDef[] = [
     {
@@ -136,6 +138,7 @@ export const POWER_UPS: PowerUpDef[] = [
         description:
             "A huge rock falls on the thickest crowd nearby. Bosses lose 8% of their hitpoints.",
         objId: 1436,
+        scale: 1.5,
         weight: 2,
         price: 60,
         // star_meteor_landing, toa_human_boulder_impact_01
@@ -192,10 +195,32 @@ export const POWER_UPS: PowerUpDef[] = [
             kind: "ring",
             seconds: 12,
             radius: 2.5,
-            // The ring of mushrooms in the game, then teleport_other_impact
+            // The ring of mushrooms in the game, then fairy_flower_ring, which is shrunk away for
+            // its first 55 ticks and its last 55 (of 210)
             locId: 12003,
-            spotAnim: 342,
+            spotAnim: 569,
+            spotAnimFrom: 55,
+            spotAnimTicks: 100,
             scale: 5,
+        },
+    },
+    {
+        id: "imbued_heart",
+        name: "Imbued heart",
+        description: "Gives you 20% bonus magic damage for 20 seconds.",
+        objId: 20724,
+        weight: 2,
+        // A boost to magic alone, so it's no use to anyone else
+        style: "magic",
+        price: 50,
+        sound: -1,
+        effect: {
+            kind: "buff",
+            stats: { magicMight: 0.2 },
+            seconds: 20,
+            // imbued_heart_impact, with its full 80-tick animation
+            spotAnim: 1316,
+            spotAnimTicks: 80,
         },
     },
     {
@@ -204,6 +229,8 @@ export const POWER_UPS: PowerUpDef[] = [
         description: "For 9 seconds everything nearby runs laps around you and can't attack.",
         // Camo helmet, from Sergeant Damien's random event
         objId: 6656,
+        scale: 2,
+        centerGroundModel: true,
         weight: 2,
         price: 50,
         // whistle
@@ -308,6 +335,8 @@ export const POWER_UPS: PowerUpDef[] = [
                 attackSeq: 5341,
                 scale: 1.3,
                 bossScale: 2.5,
+                // "Baa!" with every attack, up only a second as it comes so often
+                attackShoutSeconds: 1,
             },
             // One in 1000 is the penguin dressed as a sheep from Cold War, which doesn't quite
             // get the bleat right, and two KGP agents run out of it when it's killed
@@ -322,14 +351,28 @@ export const POWER_UPS: PowerUpDef[] = [
                 shoutSounds: [1855],
                 escapees: { npcId: 842, walkSeq: 5666, count: 2, speed: 4.5, seconds: 5, scale: 1 },
             },
-            // One in 3000 wanders off the other way
+            // One in 1000 is asleep on its feet and wanders off the other way, snoring, and a
+            // monkey child runs out of it when it's killed
             rare: {
                 npcId: 10594,
                 idleSeq: 232,
                 walkSeq: 233,
                 deathSeq: -1,
                 scale: 1,
-                chance: 1 / 3000,
+                // Half asleep, so half as quick
+                pace: 0.5,
+                chance: 1 / 1000,
+                shout: "ZzZ...",
+                // Troll snoring
+                shoutSounds: [869],
+                escapees: {
+                    npcId: 5268,
+                    walkSeq: 1380,
+                    count: 1,
+                    speed: 4.5,
+                    seconds: 5,
+                    scale: 1,
+                },
             },
             shout: "Baa!",
             shoutSeconds: 8,

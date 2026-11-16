@@ -1,5 +1,6 @@
 import { tr } from "../i18n";
-import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
+import { DamageKind } from "./damageKinds";
+import { CombatStyle, ProjectileLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
 // changes, so each level only states its differences.
@@ -35,8 +36,8 @@ const ATLATL_DART = 28991;
 // Items whose models need help in flight. Bolts and knives point back the way they
 // fly, and the atlatl's dart lies at a slant in its model; bolts are a few pixels
 // across from the game's camera too.
-const BOLT_LOOK: ProjectileItemLook = { scale: 3, yawOffset: 1024 };
-export const PROJECTILE_ITEM_LOOKS: Partial<Record<number, ProjectileItemLook>> = {
+const BOLT_LOOK: ProjectileLook = { scale: 3, yawOffset: 1024 };
+export const PROJECTILE_ITEM_LOOKS: Partial<Record<number, ProjectileLook>> = {
     ...Object.fromEntries(Object.values(BOLT_PROJECTILES).map((objId) => [objId, BOLT_LOOK])),
     ...Object.fromEntries(KNIVES.map((objId) => [objId, { yawOffset: 1024 }])),
     [ATLATL_DART]: { yawOffset: 812 },
@@ -55,6 +56,17 @@ const THROWNAXE_PROJECTILES = {
     rune: 41,
     dragon: 1319,
 };
+// Morrigan's throwing axe in flight, spinning (the Chain-hit axes')
+const MORRIGANS_AXE_PROJECTILE = 1623;
+
+// Spot animations whose models need help in flight, whoever throws them (the
+// Dagannoth Supreme throws the rune one). The thrownaxes spin end over end, upright,
+// which from the game's camera is only their edge: laid on their side, they spin flat
+// and show the whole blade.
+const AXE_LOOK: ProjectileLook = { roll: 512 };
+export const PROJECTILE_SPOT_LOOKS: Partial<Record<number, ProjectileLook>> = Object.fromEntries(
+    [...Object.values(THROWNAXE_PROJECTILES), MORRIGANS_AXE_PROJECTILE].map((id) => [id, AXE_LOOK]),
+);
 // Air, water, earth and fire, then mind, chaos, death and blood (for extra
 // projectiles)
 const RUNES = [556, 555, 557, 554, 558, 562, 560, 565];
@@ -1310,8 +1322,7 @@ export const WEAPONS: WeaponDef[] = [
             duration: 0,
             knockback: 0.3,
             objId: 22634,
-            // Morrigan's throwing axe, spinning
-            projectileSpotAnim: 1623,
+            projectileSpotAnim: MORRIGANS_AXE_PROJECTILE,
             description: "Evolved from dragon thrownaxes with the Tome of fire.",
         }),
     },
@@ -3042,4 +3053,17 @@ export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): s
     return description === ""
         ? description
         : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
+}
+
+// The kinds of damage a weapon deals, for the loadout: its style first, then the venom it
+// poisons with and the ground it burns, as the sim files them (Sim.damageKind)
+export function getWeaponDamageKinds(weapon: WeaponDef): DamageKind[] {
+    const kinds: DamageKind[] = [getWeaponStyle(weapon)];
+    if (weapon.levels.some((level) => level.venom !== undefined && level.venom > 0)) {
+        kinds.push("poison");
+    }
+    if (weapon.burns) {
+        kinds.push("burn");
+    }
+    return kinds;
 }

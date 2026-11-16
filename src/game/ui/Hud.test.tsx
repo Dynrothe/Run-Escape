@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { GameClient } from "../client/GameClient";
 import {
     ChestView,
+    CombatTrackView,
     EventView,
     GameStore,
     HudNumbers,
     HudView,
+    PlayerResultView,
     SlotView,
     UiSnapshot,
 } from "../client/GameStore";
@@ -58,6 +60,7 @@ function hud(weapons: SlotView[]): HudView {
         weapons,
         passives: [],
         stats: [],
+        statRows: [],
         gear: [],
         inventory: [null, null, null, null],
         rerolls: 0,
@@ -81,6 +84,7 @@ function numbers(changes: Partial<HudNumbers> = {}): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
         ...changes,
     };
 }
@@ -106,6 +110,90 @@ function renderHud(methods: Record<string, unknown> = {}, devTools = false) {
     const view = render(<GameUi store={store} client={client} />);
     return { store, view, setCameraZoom, client };
 }
+
+test.each([false, true])("co-op menu browses live player stats (touch %s)", (coarse) => {
+    device.coarse = coarse;
+    vi.useFakeTimers();
+    try {
+        const players: PlayerResultView[] = ["Alice", "Bob", "Charlie"].map((name, index) => ({
+            name,
+            characterName: "Warrior",
+            isLocal: index === 1,
+            down: index === 0,
+            left: index === 2,
+            kills: index + 1,
+            damageDealt: (index + 1) * 100,
+            caskets: index,
+            highestHit: 30 + index,
+            damageTaken: 10 + index,
+            healed: 20 + index,
+            rerollsUsed: 0,
+            skips: 0,
+            kinds: [],
+            killsByEnemy: [],
+            damage: [{ name: `${name}'s weapon`, damage: 100, kills: index + 1, perSecond: 5 }],
+        }));
+        let current = players;
+        const getPartyStats = vi.fn(() => current);
+        const { store } = renderHud({ getPartyStats });
+        act(() =>
+            store.set({
+                overlay: "paused",
+                party: players
+                    .filter((player) => !player.isLocal)
+                    .map((player) => ({
+                        name: player.name,
+                        characterId: "warrior",
+                        hp: 10,
+                        maxHp: 20,
+                        down: player.down,
+                        left: player.left,
+                        revivable: false,
+                        reviveProgress: 0,
+                        immune: false,
+                    })),
+            }),
+        );
+        fireEvent.click(screen.getByRole("tab", { name: "Party" }));
+        expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+        const next = () => screen.getByRole("button", { name: "Next player's stats" });
+        // The arrow keys only change player on the results, so the tooltip saying so isn't here
+        expect(next()).not.toHaveAttribute("title");
+        fireEvent.click(next());
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        const individual = () => screen.getByRole("table", { name: "Individual stats" });
+        expect(individual()).toHaveTextContent("300");
+        expect(screen.getByRole("table", { name: "Damage by source" })).toHaveTextContent(
+            "Charlie's weapon",
+        );
+        // Read again a second later, as the run goes on behind the menu
+        current = players.map((player) =>
+            player.name === "Charlie" ? { ...player, damageDealt: 450 } : player,
+        );
+        const reads = getPartyStats.mock.calls.length;
+        act(() => vi.advanceTimersByTime(1000));
+        expect(getPartyStats.mock.calls.length).toBe(reads + 1);
+        expect(individual()).toHaveTextContent("450");
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        fireEvent.click(next());
+        expect(screen.getByText("Player 1 of 3 · Down")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Previous player's stats" }));
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        act(() => store.set({ overlay: "none" }));
+        expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
+        // Closed, it reads no more
+        const closed = getPartyStats.mock.calls.length;
+        act(() => vi.advanceTimersByTime(3000));
+        expect(getPartyStats.mock.calls.length).toBe(closed);
+        act(() => store.set({ overlay: "paused" }));
+        expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("tab", { name: "Loadout" }));
+    } finally {
+        vi.useRealTimers();
+        cleanup();
+        device.coarse = false;
+    }
+});
 
 afterEach(() => {
     cleanup();
@@ -331,10 +419,12 @@ describe("the run's HUD", () => {
             ),
         );
         const ring = view.getByRole("button", { name: "Ring of life" });
+        expect(ring).toHaveClass("ui-buff-revive-ring");
         expect(ring.querySelector(".ui-icon")).not.toBeNull();
         expect(ring).not.toHaveTextContent(/\ds/);
         expect(ring.querySelector(".ui-buff-bar")).toBeNull();
         const timed = view.getByRole("button", { name: "Potion" });
+        expect(timed).not.toHaveClass("ui-buff-revive-ring");
         expect(timed).toHaveTextContent("30s");
         expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
         fireEvent.focus(timed);
@@ -437,6 +527,43 @@ describe("the run's HUD", () => {
         expect(levels()).toEqual(["2", "1"]);
     });
 
+    test.each([false, true])("the DPS and open panel toggle once (touch: %s)", (coarse) => {
+        device.coarse = coarse;
+        const toggleDamagePanel = vi.fn(() =>
+            store.set({
+                display: {
+                    ...store.getSnapshot().display,
+                    damagePanel: !store.getSnapshot().display.damagePanel,
+                },
+            }),
+        );
+        const { store, view } = renderHud({ toggleDamagePanel });
+        act(() =>
+            store.set({
+                display: { ...store.getSnapshot().display, damagePanel: false },
+            }),
+        );
+        const toggle = view.container.querySelector(".ui-damage > .ui-dps")!;
+        const panel = () => view.container.querySelector(".ui-damage-panel");
+        expect(panel()).toBeNull();
+
+        for (const selector of [null, ".ui-damage-name", ".ui-damage-dps", ".ui-damage-bar"]) {
+            toggleDamagePanel.mockClear();
+            fireEvent.click(toggle);
+            expect(toggleDamagePanel).toHaveBeenCalledTimes(1);
+            expect(store.getSnapshot().display.damagePanel).toBe(true);
+            expect(panel()).not.toBeNull();
+            toggleDamagePanel.mockClear();
+            fireEvent.click(selector ? panel()!.querySelector(selector)! : panel()!);
+            expect(toggleDamagePanel).toHaveBeenCalledTimes(1);
+            expect(panel()).toBeNull();
+        }
+
+        fireEvent.click(toggle);
+        fireEvent.click(toggle);
+        expect(panel()).toBeNull();
+    });
+
     test("the DPS keeps out of the way of a fight button over the items, and only that", () => {
         const { store, view } = renderHud();
         const damage = () => view.container.querySelector(".ui-damage")!;
@@ -463,6 +590,45 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")).toBeNull();
         act(() => store.setNumbers(numbers({ bossIn: 42 })));
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
+    });
+
+    test("the pinned combat tasks the run follows, and how each is going", () => {
+        const { store, view } = renderHud();
+        const task = (id: string, changes: Partial<CombatTrackView>): CombatTrackView => ({
+            id,
+            name: id,
+            description: "",
+            tier: "Easy",
+            coins: 100,
+            state: "on",
+            pinned: true,
+            ...changes,
+        });
+        const rows = () =>
+            [...view.container.querySelectorAll(".ui-combat-tracker .ui-quest-track")].map(
+                (row) => [row.className.split(" ")[1], row.textContent],
+            );
+        expect(view.container.querySelector(".ui-combat-tracker")).toBeNull();
+        act(() =>
+            store.setNumbers(
+                numbers({
+                    combatTasks: [
+                        task("Bite-Proof", { state: "failed", reason: "hit by Count Draynor" }),
+                        task("Recurring", { progress: { done: 2, of: 5 } }),
+                        task("Wise Guy", { state: "done" }),
+                        task("Purist", {}),
+                        // Not pinned: in the pause menu only
+                        task("Hidden", { pinned: false }),
+                    ],
+                }),
+            ),
+        );
+        expect(rows()).toEqual([
+            ["ui-combat-failed", "Bite-ProofFailed"],
+            ["ui-quest-started", "Recurring2 / 5"],
+            ["ui-quest-done", "Wise GuyDone"],
+            ["ui-combat-on", "Purist"],
+        ]);
     });
 
     test("a map's objective shows while no boss is out, with how many of it are done", () => {
@@ -519,7 +685,15 @@ describe("the run's HUD", () => {
             ...slot("bow", 8),
             stats: [{ text: "Damage: 20" }, { text: "Cooldown: 1s" }],
             detail: { text: "Shoots an arrow." },
-            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+            evolution: {
+                passive: "Piety",
+                passiveIconObjId: 1,
+                into: "Dragon bow",
+                intoIconObjId: 2,
+                maxed: true,
+                hasPassive: false,
+                ready: false,
+            },
         };
         const passive: SlotView = { ...slot("Piety", 2), detail: { text: "+10% damage" } };
         act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));

@@ -132,6 +132,138 @@ async function served(groups: CacheGroup[]) {
 }
 
 describe("fetchChunks", () => {
+    test("downloads a missing chunk while another stored read is pending, with exact progress", async () => {
+        const cache = new FakeCache();
+        const site = await served(sampleGroups());
+        for (let i = 1; i < site.list.length; i++) {
+            cache.entries.set(BASE + site.list[i].file, site.chunks[i]);
+        }
+        let release!: () => void;
+        const blocked = new Promise<void>((resolve) => (release = resolve));
+        const match = cache.match.bind(cache);
+        vi.spyOn(cache, "match").mockImplementation(async (request) => {
+            if (request === BASE + site.list.at(-1)!.file) {
+                await blocked;
+            }
+            return match(request);
+        });
+        const onProgress = vi.fn();
+        const loading = fetchChunks(BASE, site.list, cache as unknown as Cache, {
+            fetcher: site.fetcher,
+            onProgress,
+        });
+        try {
+            await vi.waitFor(() => {
+                expect(cache.entries.get(BASE + site.list[0].file)).toEqual(site.chunks[0]);
+            });
+            expect(site.requested).toEqual([BASE + site.list[0].file]);
+            expect(onProgress).not.toHaveBeenCalled();
+        } finally {
+            release();
+        }
+        expect(await loading).toEqual(site.chunks);
+        expect(onProgress).toHaveBeenCalledExactlyOnceWith({
+            total: site.chunks[0].byteLength,
+            current: site.chunks[0].byteLength,
+            part: site.chunks[0],
+        });
+    });
+
+    test("checks and downloads a few at a time each, and reports a download as it lands", async () => {
+        const cache = new FakeCache();
+        // Nothing stored: a first load
+        const site = await served(
+            Array.from({ length: 14 }, (_, i) => group(7, i * getChunkSpan(7), 10)),
+        );
+        let releaseReads!: () => void;
+        const reads = new Promise<void>((resolve) => (releaseReads = resolve));
+        let reading = 0;
+        let mostReading = 0;
+        const match = cache.match.bind(cache);
+        const read = vi.spyOn(cache, "match").mockImplementation(async (request) => {
+            mostReading = Math.max(mostReading, ++reading);
+            await reads;
+            reading--;
+            return match(request);
+        });
+        // Each download held until it's let go, or none once they're open
+        const gates = new Map<string, () => void>();
+        let open = false;
+        let downloading = 0;
+        let mostDownloading = 0;
+        const fetcher = vi.fn(async (url: RequestInfo | URL) => {
+            mostDownloading = Math.max(mostDownloading, ++downloading);
+            if (!open) {
+                await new Promise<void>((resolve) => gates.set(String(url), resolve));
+            }
+            downloading--;
+            return site.fetcher(url);
+        });
+        const onProgress = vi.fn();
+        const loading = fetchChunks(BASE, site.list, cache as unknown as Cache, {
+            fetcher,
+            onProgress,
+        });
+        const total = site.chunks.reduce((sum, bytes) => sum + bytes.byteLength, 0);
+        try {
+            await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(6));
+            expect(fetcher).not.toHaveBeenCalled();
+            releaseReads();
+            // Every check finishes with the downloads held, so the total's known
+            await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(site.list.length));
+            await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(6));
+            // and the first to land counts at once, while the rest are still coming
+            gates.get(BASE + site.list[0].file)!();
+            await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
+            expect(onProgress).toHaveBeenCalledWith({
+                total,
+                current: site.chunks[0].byteLength,
+                part: site.chunks[0],
+            });
+        } finally {
+            releaseReads();
+            open = true;
+            gates.forEach((release) => release());
+        }
+        expect(await loading).toEqual(site.chunks);
+        expect(mostReading).toBe(6);
+        expect(mostDownloading).toBe(6);
+        expect(onProgress).toHaveBeenCalledTimes(site.list.length);
+        let current = 0;
+        for (const [progress] of onProgress.mock.calls) {
+            current += progress.part.byteLength;
+            expect(progress).toEqual({ total, current, part: progress.part });
+        }
+        expect(current).toBe(total);
+    });
+
+    test("does not start downloads or prune stored chunks when aborted during local reads", async () => {
+        const cache = new FakeCache();
+        const site = await served(sampleGroups());
+        cache.entries.set(BASE + "old.bin", new Uint8Array([1]));
+        let release!: () => void;
+        const blocked = new Promise<void>((resolve) => (release = resolve));
+        const read = vi.spyOn(cache, "match").mockImplementation(async () => {
+            await blocked;
+            return undefined;
+        });
+        const controller = new AbortController();
+        const loading = fetchChunks(BASE, site.list, cache as unknown as Cache, {
+            fetcher: site.fetcher,
+            signal: controller.signal,
+        });
+        const rejected = expect(loading).rejects.toThrow("abort");
+        try {
+            await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(6));
+            controller.abort();
+        } finally {
+            release();
+        }
+        await rejected;
+        expect(site.requested).toEqual([]);
+        expect(cache.entries.has(BASE + "old.bin")).toBe(true);
+    });
+
     test("downloads what it doesn't have, keeps it, and drops chunks no longer listed", async () => {
         const cache = new FakeCache();
         const old = await served(sampleGroups());

@@ -1,7 +1,18 @@
-import { readFileSync } from "node:fs";
+import AdmZip from "adm-zip";
+import * as fs from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { Writable } from "node:stream";
 import { runInNewContext } from "node:vm";
 
-const source = readFileSync(new URL("./download-caches.cjs", import.meta.url), "utf8");
+const require = createRequire(import.meta.url);
+const source = fs.readFileSync(new URL("./download-caches.cjs", import.meta.url), "utf8");
+const zip = new AdmZip();
+zip.addFile("cache/main_file_cache.dat2", Buffer.from("cache data"));
+zip.addFile("cache/main_file_cache.idx255", Buffer.from("index"));
+zip.addFile("outside.txt", Buffer.from("not a cache file"));
+const archiveBytes = new Uint8Array(zip.toBuffer());
 const cacheName = "osrs-241_2026-09-30";
 const cacheInfo = {
     id: 2727,
@@ -21,16 +32,33 @@ const retryHint = expect.stringContaining("CACHE_DOWNLOAD_TIMEOUT_MS");
 
 type ArchiveFetch = (url: string, options: { signal: AbortSignal }) => Promise<Partial<Response>>;
 
-async function runDownloader(fetchMock: ArchiveFetch, env: Record<string, string> = {}) {
+async function runDownloader(
+    fetchMock: ArchiveFetch,
+    env: Record<string, string> = {},
+    writeErrorOn?: string,
+    writeDelayMs = 0,
+    // Files there before the run, by their paths
+    before: Record<string, string> = {},
+) {
+    const directory = fs.mkdtempSync(join(tmpdir(), "cache-download-test-"));
+    const local = (path: string) => join(directory, path);
+    for (const [path, content] of Object.entries(before)) {
+        fs.mkdirSync(dirname(local(path)), { recursive: true });
+        fs.writeFileSync(local(path), content);
+    }
     const files = new Map<string, string>([
         ["src/game/cache.ts", `export const GAME_CACHE_NAME = "${cacheName}";`],
     ]);
     const error = vi.fn();
     const extract = vi.fn();
-    const writeFile = vi.fn((path: string, content: string) => files.set(path, content));
+    const concatenate = vi.fn((parts: Uint8Array[]) => Buffer.concat(parts));
+    const writeFile = vi.fn((path: string, content: string) => {
+        fs.writeFileSync(local(path), content);
+        files.set(path, content);
+    });
     const finished = new Promise<number>((resolve) => {
         runInNewContext(source, {
-            Buffer,
+            Buffer: { concat: concatenate },
             AbortController,
             setTimeout,
             clearTimeout,
@@ -46,27 +74,76 @@ async function runDownloader(fetchMock: ArchiveFetch, env: Record<string, string
             require: (name: string) => {
                 if (name === "fs") {
                     return {
-                        readFileSync: (path: string) => files.get(path),
-                        existsSync: (path: string) => path.endsWith("/") || files.has(path),
-                        mkdirSync: vi.fn(),
-                        readdirSync: () => [cacheName],
-                        lstatSync: () => ({ isDirectory: () => true }),
+                        readFileSync: (path: string) =>
+                            files.get(path) ?? fs.readFileSync(local(path)),
+                        existsSync: (path: string) => fs.existsSync(local(path)),
+                        mkdirSync: (path: string) => fs.mkdirSync(local(path), { recursive: true }),
+                        readdirSync: (path: string) => fs.readdirSync(local(path)),
+                        lstatSync: (path: string) => fs.lstatSync(local(path)),
                         writeFileSync: writeFile,
+                        createWriteStream: (
+                            path: string,
+                            options?: Parameters<typeof fs.createWriteStream>[1],
+                        ) => {
+                            if (path.endsWith(writeErrorOn ?? "\0")) {
+                                return new Writable({
+                                    write(_chunk, _encoding, callback) {
+                                        callback(new Error("ENOSPC: disk full"));
+                                    },
+                                });
+                            }
+                            if (writeDelayMs && path.endsWith("disk.zip")) {
+                                return new Writable({
+                                    highWaterMark: 1,
+                                    write(chunk, _encoding, callback) {
+                                        setTimeout(
+                                            () => fs.appendFile(local(path), chunk, callback),
+                                            writeDelayMs,
+                                        );
+                                    },
+                                });
+                            }
+                            return fs.createWriteStream(local(path), options);
+                        },
+                        promises: {
+                            mkdtemp: async (prefix: string) => {
+                                const temporary = await fs.promises.mkdtemp(local(prefix));
+                                return temporary.slice(directory.length + 1);
+                            },
+                            rm: (path: string, options: fs.RmOptions) =>
+                                fs.promises.rm(local(path), options),
+                        },
                     };
                 }
-                if (name === "adm-zip") {
-                    return class {
-                        extractEntryTo = extract;
+                if (name === "yauzl") {
+                    return {
+                        open: (path: string, ...args: unknown[]) => {
+                            extract(path);
+                            require("yauzl").open(local(path), ...args);
+                        },
                     };
                 }
                 if (name === "readline") {
                     return { createInterface: () => ({ question: vi.fn() }) };
                 }
-                throw new Error(`Unexpected dependency: ${name}`);
+                return require(name);
             },
         });
     });
-    return { exitCode: await finished, files, error, extract, writeFile };
+    try {
+        const exitCode = await finished;
+        const cachePath = local(`caches/${cacheName}`);
+        const remaining = fs.existsSync(cachePath) ? fs.readdirSync(cachePath) : [];
+        for (const name of remaining) {
+            const file = join(cachePath, name);
+            if (fs.statSync(file).isFile()) {
+                files.set(`caches/${cacheName}/${name}`, fs.readFileSync(file, "utf8"));
+            }
+        }
+        return { exitCode, files, error, extract, writeFile, remaining, concatenate };
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
 }
 
 function waitForAbort(signal: AbortSignal): Promise<never> {
@@ -75,41 +152,24 @@ function waitForAbort(signal: AbortSignal): Promise<never> {
     });
 }
 
-// A body that sends a byte every `every` ms, `chunks` times, then ends
-function trickle(chunks: number, every: number): Response {
-    let sent = 0;
-    return new Response(
-        new ReadableStream<Uint8Array>({
-            pull(controller) {
-                return new Promise((resolve) =>
-                    setTimeout(() => {
-                        if (sent++ < chunks) {
-                            controller.enqueue(new Uint8Array([1]));
-                        } else {
-                            controller.close();
-                        }
-                        resolve();
-                    }, every),
-                );
-            },
-        }),
-    );
-}
-
 describe("cache download archive requests", () => {
     it("downloads the supported cache and writes its manifest without changing the revision", async () => {
         expect.hasAssertions();
         const fetchMock = vi
             .fn<ArchiveFetch>()
             .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
-            .mockResolvedValueOnce(new Response("zip"))
+            .mockResolvedValueOnce(new Response(archiveBytes))
             .mockResolvedValueOnce(new Response(JSON.stringify([{ group: 1, key: [1, 2, 3, 4] }])));
 
         const result = await runDownloader(fetchMock);
 
         expect(result.exitCode).toBe(0);
         expect(result.error).not.toHaveBeenCalled();
-        expect(result.extract).toHaveBeenCalledWith("cache/", `caches/${cacheName}/`, false, true);
+        expect(result.extract).toHaveBeenCalledTimes(1);
+        expect(result.files.get(`caches/${cacheName}/main_file_cache.dat2`)).toBe("cache data");
+        expect(result.files.get(`caches/${cacheName}/main_file_cache.idx255`)).toBe("index");
+        expect(result.remaining).not.toContain("outside.txt");
+        expect(result.remaining.some((name) => name.startsWith(".download-"))).toBe(false);
         expect(JSON.parse(result.files.get("caches/caches.json")!)).toEqual([
             expect.objectContaining({ name: cacheName, revision: 241 }),
         ]);
@@ -120,6 +180,22 @@ describe("cache download archive requests", () => {
         for (const [, options] of fetchMock.mock.calls) {
             expect(options.signal).toBeInstanceOf(AbortSignal);
         }
+    });
+
+    it("clears the ZIP a stopped run left behind", async () => {
+        const fetchMock = vi
+            .fn<ArchiveFetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+            .mockResolvedValueOnce(new Response(archiveBytes))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])));
+
+        const result = await runDownloader(fetchMock, {}, undefined, 0, {
+            [`caches/${cacheName}/.download-stopped/disk.zip`]: "half a zip",
+        });
+
+        expect(result.exitCode).toBe(0);
+        expect(result.files.get(`caches/${cacheName}/main_file_cache.dat2`)).toBe("cache data");
+        expect(result.remaining.some((name) => name.startsWith(".download-"))).toBe(false);
     });
 
     it("gives up on a request that never receives headers, and says how to wait longer", async () => {
@@ -160,15 +236,29 @@ describe("cache download archive requests", () => {
         );
         expect(result.extract).not.toHaveBeenCalled();
         expect(result.writeFile).not.toHaveBeenCalled();
+        expect(result.remaining).toEqual([]);
     });
 
     it("keeps a slow download going for as long as data arrives", async () => {
         expect.hasAssertions();
-        // Eight chunks 10 ms apart take longer than the 40 ms timeout, but no gap does
+        let offset = 0;
+        const slowArchive = new Response(
+            new ReadableStream<Uint8Array>({
+                async pull(controller) {
+                    await new Promise((resolve) => setTimeout(resolve, 10));
+                    if (offset < archiveBytes.length) {
+                        controller.enqueue(archiveBytes.slice(offset, offset + 32));
+                        offset += 32;
+                    } else {
+                        controller.close();
+                    }
+                },
+            }),
+        );
         const fetchMock = vi
             .fn<ArchiveFetch>()
             .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
-            .mockResolvedValueOnce(trickle(8, 10))
+            .mockResolvedValueOnce(slowArchive)
             .mockResolvedValueOnce(new Response(JSON.stringify([])));
 
         const result = await runDownloader(fetchMock, { CACHE_DOWNLOAD_TIMEOUT_MS: "40" });
@@ -241,7 +331,7 @@ describe("cache download archive requests", () => {
         const fetchMock = vi
             .fn<ArchiveFetch>()
             .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
-            .mockResolvedValueOnce(new Response("zip"))
+            .mockResolvedValueOnce(new Response(archiveBytes))
             .mockResolvedValueOnce(new Response(JSON.stringify([])));
 
         const result = await runDownloader(fetchMock, { CACHE_DOWNLOAD_TIMEOUT_MS: " " });
@@ -249,6 +339,85 @@ describe("cache download archive requests", () => {
         expect(result.exitCode).toBe(0);
         expect(result.error).not.toHaveBeenCalled();
     });
+
+    it("does not treat slow disk writes as network inactivity", async () => {
+        expect.hasAssertions();
+        const fetchMock = vi
+            .fn<ArchiveFetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+            .mockResolvedValueOnce(new Response(archiveBytes))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])));
+
+        const result = await runDownloader(
+            fetchMock,
+            { CACHE_DOWNLOAD_TIMEOUT_MS: "40" },
+            undefined,
+            120,
+        );
+
+        expect(result.exitCode).toBe(0);
+        expect(result.error).not.toHaveBeenCalled();
+        expect(result.files.get(`caches/${cacheName}/main_file_cache.dat2`)).toBe("cache data");
+    });
+
+    it("streams a large data entry without concatenating the ZIP in memory", async () => {
+        expect.hasAssertions();
+        const largeZip = new AdmZip();
+        const size = 16 * 1024 * 1024;
+        largeZip.addFile("cache/main_file_cache.dat2", Buffer.alloc(size, 7));
+        const fetchMock = vi
+            .fn<ArchiveFetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+            .mockResolvedValueOnce(new Response(new Uint8Array(largeZip.toBuffer())))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])));
+
+        const result = await runDownloader(fetchMock);
+
+        expect(result.exitCode).toBe(0);
+        const data = result.files.get(`caches/${cacheName}/main_file_cache.dat2`);
+        expect(data?.length).toBe(size);
+        expect(data?.charCodeAt(0)).toBe(7);
+        expect(data?.charCodeAt(size - 1)).toBe(7);
+        // Only caches.json and keys.json use Buffer.concat.
+        expect(result.concatenate).toHaveBeenCalledTimes(2);
+        expect(result.remaining).toEqual(["info.json", "keys.json", "main_file_cache.dat2"]);
+    }, 30_000);
+
+    it("cleans up a corrupt ZIP without marking the cache complete", async () => {
+        expect.hasAssertions();
+        const fetchMock = vi
+            .fn<ArchiveFetch>()
+            .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+            .mockResolvedValueOnce(new Response("not a zip"));
+
+        const result = await runDownloader(fetchMock);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.error).toHaveBeenCalledTimes(1);
+        expect(result.writeFile).not.toHaveBeenCalled();
+        expect(result.remaining).toEqual([]);
+    });
+
+    it.each(["disk.zip", "main_file_cache.dat2"])(
+        "reports disk failure writing %s and cleans up without metadata",
+        async (writeErrorOn) => {
+            expect.hasAssertions();
+            const fetchMock = vi
+                .fn<ArchiveFetch>()
+                .mockResolvedValueOnce(new Response(JSON.stringify([cacheInfo])))
+                .mockResolvedValueOnce(new Response(archiveBytes));
+
+            const result = await runDownloader(fetchMock, {}, writeErrorOn);
+
+            expect(result.exitCode).toBe(1);
+            expect(result.error).toHaveBeenCalledWith(
+                "Cache download failed:",
+                "ENOSPC: disk full",
+            );
+            expect(result.writeFile).not.toHaveBeenCalled();
+            expect(result.remaining.some((name) => name.startsWith(".download-"))).toBe(false);
+        },
+    );
 
     it.each(["0", "-1", "NaN", "1.5", "2147483648"])(
         "rejects invalid timeout %s before touching the archive, without a retry hint",

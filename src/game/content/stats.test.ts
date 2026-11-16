@@ -1,4 +1,4 @@
-import { compareStats, pairStats } from "./stats";
+import { compareStats, formatStat, formatStatValue, pairStats } from "./stats";
 
 describe("stats", () => {
     it("compares a piece's stats before and after an upgrade", () => {
@@ -38,6 +38,14 @@ describe("stats", () => {
         ]);
     });
 
+    it("shows a rounded-zero penalty as neutral, without a minus sign", () => {
+        expect(formatStat("might", -0.0002)).toBe("+0% damage");
+        expect(formatStatValue("might", -0.0002)).toBe("+0%");
+        // Nothing either piece shows, so no row
+        expect(pairStats({}, { might: -0.0002 })).toEqual([]);
+        expect(formatStatValue("might", -0.005)).toBe("-1%");
+    });
+
     it("pairs a worn piece's stats with a found one's, each that either has", () => {
         expect(
             pairStats(
@@ -62,6 +70,14 @@ describe("stats", () => {
                 change: "-15%",
                 better: false,
             },
+        ]);
+    });
+
+    it("finds nothing changed between pieces that read the same", () => {
+        const pairs = pairStats({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 });
+        expect(pairs.map((pair) => [pair.worn, pair.found, pair.change])).toEqual([
+            ["+10%", "+10%", undefined],
+            ["+2", "+2", undefined],
         ]);
     });
 });
