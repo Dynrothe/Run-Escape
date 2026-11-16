@@ -94,7 +94,6 @@ async function fetchArchiveJson(url, timeout) {
 // caches/<onlyName>/
 async function downloadCaches(count, onlyName) {
     const timeout = getTimeout();
-    require("./shared-cache.cjs").ensureSharedCache();
 
     // renameCacheDirs();
     if (!fs.existsSync("caches/")) {

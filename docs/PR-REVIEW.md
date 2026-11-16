@@ -43,8 +43,8 @@ All of these are in `CLAUDE.md`'s "After every change":
 ## What not to commit or change
 
 - **The cache, or anything exported from it** (PNGs, WAVs, dumps). It belongs to Jagex and stays
-  out of the repository. Stage files by name rather than with `git add -A`: `.gitignore`
-  ignores cache directories and the root `caches` link, not exports saved elsewhere.
+  out of the repository. Stage files by name rather than with `git add -A`: `.gitignore`'s
+  `caches/` only matches a folder, so a `caches` symlink would be committed.
 - **Release and identity values**: the version in `package.json` (a new version reaching `main`
   starts a release build), `LAUNCHER_VERSION` and `minLauncher`, the `rune-survivors-*` storage
   keys, the save lock's name, and the desktop app's `GAME_ORIGIN`, `GAME_PARTITION` and data

@@ -40,7 +40,6 @@ the version in the corner).
 
 ### Fixed
 
-- Running the game from a worktree can reuse the main checkout's downloaded cache.
 - Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
   lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
 

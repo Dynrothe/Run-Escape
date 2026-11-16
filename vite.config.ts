@@ -2,7 +2,6 @@ import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
-import { createRequire } from "node:module";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream";
 import { normalizePath } from "vite";
@@ -15,11 +14,7 @@ import { LAUNCHER_VERSION, MIN_ANDROID_APP } from "./desktop/version";
 import { isTrailerFile, trailerServerPlugin } from "./scripts/dev/trailer-server";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
-// Keep the CommonJS helper out of Vite's ESM config bundle.
-const { ensureSharedCache }: typeof import("./scripts/shared-cache.cjs") = createRequire(
-    import.meta.url,
-)(resolve(process.cwd(), "scripts/shared-cache.cjs"));
-const CACHES_ROOT = ensureSharedCache();
+const CACHES_ROOT = resolve(process.cwd(), "caches");
 
 // Claude Code keeps its worktrees in .claude/worktrees, whole checkouts inside
 // this one. Watching them all held up the first load after every start. Taken
