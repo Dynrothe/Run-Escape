@@ -77,10 +77,20 @@ describe("plant barrier bases", () => {
         expect(models.slice(ids.length).map((p) => p.interactId)).toEqual(ids.slice(0, 6));
     });
 
-    test("a nonblocking variant never gets a base", () => {
+    test("adds bases to Barrows swamp plants without decorating grass or other scenery", () => {
         const { loader, scene } = fixture();
-        loader.locTypeLoader.load(1399).clipType = 0;
-        const models = [plant()];
+        const ids = [1391, 1393, 5331, 5332, 5333, 5334, 9604, 9605, 9606];
+        const models = [...ids, 5335, 5336, 1390, 1314, 9010].map((id) => plant(id));
+        const originals = [...models];
+        addPlantBarrierBases(loader, models, scene, BORDER);
+        expect(models.slice(0, originals.length)).toEqual(originals);
+        expect(models.slice(originals.length).map((p) => p.interactId)).toEqual(ids);
+    });
+
+    test.each([1399, 5332, 9606])("a nonblocking variant of loc %i never gets a base", (id) => {
+        const { loader, scene } = fixture();
+        loader.locTypeLoader.load(id).clipType = 0;
+        const models = [plant(id)];
         addPlantBarrierBases(loader, models, scene, BORDER);
         expect(models).toHaveLength(1);
         expect(loader.getModelAnimated).not.toHaveBeenCalled();

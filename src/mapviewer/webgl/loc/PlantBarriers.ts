@@ -5,7 +5,12 @@ import { Scene } from "../../../rs/scene/Scene";
 import { getModelBounds } from "../buffer/CullGrid";
 import { ContourGroundType, SceneModel } from "../buffer/SceneBuffer";
 
-const JUNGLE_PLANTS = new Set([1204, 1398, 1399, 1400, 1401, 1402]);
+const BARRIER_PLANTS = new Set([
+    // Karamja's Jungle plants
+    1204, 1398, 1399, 1400, 1401, 1402,
+    // Barrows and the surrounding swamp's Plants
+    1391, 1393, 5331, 5332, 5333, 5334, 9604, 9605, 9606,
+]);
 const TREE_STUMP = 1354;
 
 // Only the render list gets bases: changing the cache models would also change collision.
@@ -21,7 +26,7 @@ export function addPlantBarrierBases(
     const sizes = new Map<string, Model>();
     let stump: Model | undefined;
     for (const plant of sceneModels) {
-        if (!JUNGLE_PLANTS.has(plant.interactId)) continue;
+        if (!BARRIER_PLANTS.has(plant.interactId)) continue;
         if (loader.locTypeLoader.load(plant.interactId).clipType === 0) continue;
 
         const bounds = getModelBounds(plant.model);
