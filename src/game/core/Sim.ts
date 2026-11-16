@@ -3720,9 +3720,15 @@ export class Sim {
         return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
     }
 
-    // A potion's effect, for buffTicks. Drinking another dose starts the timer again.
-    private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
-        const ticks = this.buffTicks(seconds);
+    // A stat boost, refreshed rather than stacked. Potions last for buffTicks.
+    private addBuff(
+        itemId: string,
+        stats: Partial<Stats>,
+        seconds: number,
+        cures: boolean,
+        fixedDuration = false,
+    ): void {
+        const ticks = fixedDuration ? secondsToTicks(seconds) : this.buffTicks(seconds);
         this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
         this.buffs.push({
             itemId,
@@ -23967,6 +23973,26 @@ export class Sim {
                         ? "Everything on the ground flies to whoever's nearest!"
                         : "Everything on the ground flies to you!";
                 break;
+            case "buff": {
+                this.addBuff(def.id, effect.stats, effect.seconds, false, true);
+                this.buffs[this.buffs.length - 1].look = {
+                    name: def.name,
+                    objId: def.objId,
+                };
+                const activation = this.addEffect(
+                    effect.spotAnim,
+                    player.x,
+                    player.y,
+                    0,
+                    effect.spotAnimTicks,
+                );
+                if (activation) {
+                    activation.hero = this.hero.index;
+                    activation.once = true;
+                }
+                message = def.description;
+                break;
+            }
             case "freeze":
                 endTick = Math.max(
                     this.freezeEndTick,

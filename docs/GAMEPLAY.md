@@ -527,6 +527,9 @@ version and how to run it.
     - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
       within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
       opened, and shots still come through.
+    - **Imbued heart**: plays its activation animation on you and gives 20% bonus magic damage
+      for 20 seconds. Picking up another refreshes the timer, without stacking the bonus.
+      Effect duration doesn't stretch it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.

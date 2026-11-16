@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Imbued heart power-up: its activation animation plays when picked up, giving 20% bonus magic
+  damage for 20 seconds.
+
 ## 0.33.2 - 2026-11-15
 
 ### Changed

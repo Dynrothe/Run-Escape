@@ -827,6 +827,8 @@ export type Effect = {
     endTick: number;
     // Follows this enemy until it's gone, 0 for none
     enemyUid: number;
+    // Drawn on this hero instead of at x/y (a pickup's activation)
+    hero?: number;
     // Plays over and over until endTick (a shield), rather than once
     loop?: boolean;
     // Scaled so the model's radius is this many tiles (a claw's hands, as

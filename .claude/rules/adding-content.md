@@ -134,6 +134,10 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
   `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
   boss hits and poison through near the end.
 - Give it a `price`, what the Mysterious Old Man charges before the run's time and the map's coins.
+- A `buff` effect uses the hero's existing buff timer, not a second active power-up timer.
+  Its seconds are fixed (Effect duration doesn't stretch them), and another pickup refreshes
+  rather than stacks it. `spotAnimTicks` is the activation animation's full cache duration;
+  its effect follows the collecting hero on screen, including predicted movement.
 
 ## Random event
 

@@ -1003,15 +1003,19 @@ export class GameView {
                 continue;
             }
             const frame = anim.getFrame(tick - effect.startTick, effect.loop ?? false);
-            const height = this.ground(sim, effect.x, effect.y) - effect.height;
+            const pose =
+                effect.hero !== undefined
+                    ? getPlayerPose(sim, effect.hero, alpha, this.localPlayerPose)
+                    : effect;
+            const height = this.ground(sim, pose.x, pose.y) - effect.height;
             const fit = effect.fitRadius;
             actors.draw(
                 model,
                 anim,
                 frame,
-                effect.x,
+                pose.x,
                 height,
-                effect.y,
+                pose.y,
                 effect.yaw ?? 0,
                 // Spells' impacts and bosses' warnings, seen in the dark
                 fit !== undefined
