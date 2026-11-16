@@ -5392,9 +5392,7 @@ export class GameClient implements GameFrameHandler {
             weaponDamage,
             otherDps: meter.otherPerSecond,
             partyStats:
-                this.paused && sim.heroes.length > 1
-                    ? getPlayerResultViews(sim)
-                    : undefined,
+                this.paused && sim.heroes.length > 1 ? getPlayerResultViews(sim) : undefined,
             buffs: getBuffViews(sim),
             boss,
             ability: this.getAbilityView(sim),
