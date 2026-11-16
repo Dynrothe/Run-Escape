@@ -21,6 +21,7 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
+import { DAMAGE_KIND_SPRITE_IDS } from "../content/damageKinds";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { BLOOD_SOULREAPER_AXE_OBJ, SOULREAPER_AXE_OBJ } from "../content/gauntlet";
@@ -30,25 +31,36 @@ import {
     RAID_BAND_SPRITES,
     RUN_INVOCATIONS,
 } from "../content/invocations";
-import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, LOCKED_GEAR_SLOTS, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { applyCapeColours } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
-import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
+import {
+    CANNON_BUILD_SECONDS,
+    POWER_UPS,
+    THRALLS,
+    getPolymorphLooks,
+    getPowerUp,
+} from "../content/powerups";
+import { SLAYER_SPRITE_ID } from "../content/questIcons";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
+    CHANGE_SPRITES,
     CHECKBOX_SPRITES,
     CLOSE_SPRITES,
     CLOUD_SAVE_SPRITES,
+    PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
+    SETTINGS_SECTION_SPRITES,
     SOUND_ORB_SPRITES,
+    STONE_SLOT_SPRITE,
     TITLE_TAB_SPRITES,
 } from "../content/titleIcons";
 import {
@@ -84,7 +96,13 @@ import {
 } from "../content/types";
 import { WardrobeLook, applyBody, applyOutfit, wearsWardrobe } from "../content/wardrobe";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
-import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
+import {
+    BLOOD_FURY_SPOTANIM,
+    FREEZE_SPOTANIM,
+    NUKE_SPOTANIM,
+    Sim,
+    TICKS_PER_SECOND,
+} from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { getCinematicSeqs } from "./Cinematic";
@@ -112,7 +130,7 @@ export const PICKUP_OBJS: Record<"food" | "casket", number> = {
 // coins through their stack sizes. Each look is from minValue up to the next.
 export type PileLook = { minValue: number; objId: number; count: number; scale: number };
 
-export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
+export const PILE_LOOKS: Record<"bones" | "ashes" | "coins", PileLook[]> = {
     bones: [
         // Bones, Big bones, Dragon bones, Wyvern bones, Lava dragon bones,
         // Superior dragon bones
@@ -123,6 +141,14 @@ export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
         { minValue: 1000, objId: 11943, count: 1, scale: 1.1 },
         { minValue: 3000, objId: 22124, count: 1, scale: 1.2 },
     ],
+    ashes: [
+        // Plain grey Ashes for the smallest pile, then Vile, Malicious, Abyssal and Infernal ashes
+        { minValue: 0, objId: 592, count: 1, scale: 0.75 },
+        { minValue: 20, objId: 25769, count: 1, scale: 0.85 },
+        { minValue: 100, objId: 25772, count: 1, scale: 0.95 },
+        { minValue: 300, objId: 25775, count: 1, scale: 1 },
+        { minValue: 1000, objId: 25778, count: 1, scale: 1.1 },
+    ],
     coins: [
         { minValue: 0, objId: 995, count: 25, scale: 0.85 },
         { minValue: 10, objId: 995, count: 100, scale: 0.95 },
@@ -132,7 +158,7 @@ export const PILE_LOOKS: Record<"bones" | "coins", PileLook[]> = {
     ],
 };
 
-function getPileLookIndex(kind: "bones" | "coins", value: number): number {
+function getPileLookIndex(kind: keyof typeof PILE_LOOKS, value: number): number {
     const looks = PILE_LOOKS[kind];
     let index = 0;
     while (index + 1 < looks.length && value >= looks[index + 1].minValue) {
@@ -146,14 +172,16 @@ export function getPileLook(pickup: Pickup): PileLook | undefined {
     if (pickup.kind !== "bones" && pickup.kind !== "coins") {
         return undefined;
     }
-    return PILE_LOOKS[pickup.kind][getPileLookIndex(pickup.kind, pickup.value)];
+    const kind = pickup.kind === "bones" && pickup.ashes ? "ashes" : pickup.kind;
+    return PILE_LOOKS[kind][getPileLookIndex(kind, pickup.value)];
 }
 
 // Bones and coins are drawn as their pile, caskets as the reward casket of
 // their tier, power-ups as their item (or scenery)
 export function getPickupModelKey(pickup: Pickup): string {
     if (pickup.kind === "bones" || pickup.kind === "coins") {
-        return `pickup:${pickup.kind}_${getPileLookIndex(pickup.kind, pickup.value)}`;
+        const kind = pickup.kind === "bones" && pickup.ashes ? "ashes" : pickup.kind;
+        return `pickup:${kind}_${getPileLookIndex(kind, pickup.value)}`;
     }
     if (pickup.kind === "casket" && pickup.tier) {
         return "pickup:casket_" + pickup.tier;
@@ -165,9 +193,19 @@ export function getPickupModelKey(pickup: Pickup): string {
     return "pickup:" + pickup.kind;
 }
 
-// The dwarf multicannon, set up
-const CANNON_LOC = 6;
-export const CANNON_MODEL_KEY = "loc:" + CANNON_LOC;
+// The base, then the stand, barrels and furnace added in sequence
+export const CANNON_LOCS = [7, 8, 9, 6];
+
+// A cannon ageTicks after it was put down: the base, a part more for each equal step of
+// CANNON_BUILD_SECONDS, then the whole cannon
+export function getCannonModelKey(ageTicks: number): string {
+    const steps = CANNON_LOCS.length - 1;
+    const stage = Math.min(
+        steps,
+        Math.max(0, Math.floor((ageTicks * steps) / (CANNON_BUILD_SECONDS * TICKS_PER_SECOND))),
+    );
+    return "loc:" + CANNON_LOCS[stage];
+}
 
 // Hitsplat sprites (RuneLite's SpriteID): the red damage splat, the green
 // poison one and the blue one for a hit that was blocked (a shield's)
@@ -200,8 +238,8 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
     HINT_ARROW_SPRITE,
 ];
 
-// Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
-// save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
+// Every interface sprite the game shows: the game view's, the title screen's tabs, the pause
+// menu's settings sections and cloud save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
 // button, co-op's flags and the overhead prayers (every frame comes with the first) and the
 // passives with a sprite for an icon. The slim cache keeps these and no others, so a sprite the
 // game shows has to be in here.
@@ -210,12 +248,19 @@ export function getGameSpriteIds(): number[] {
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(PAUSE_TAB_SPRITES),
+        ...Object.values(SETTINGS_SECTION_SPRITES),
+        ...DAMAGE_KIND_SPRITE_IDS,
+        SLAYER_SPRITE_ID,
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
         ...Object.values(CHECKBOX_SPRITES),
         ...Object.values(CLOSE_SPRITES),
+        ...Object.values(CHANGE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
+        ...LOCKED_GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
+        STONE_SLOT_SPRITE,
         FLAG_SPRITE,
         ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
@@ -654,9 +699,9 @@ export function getPolymorphKey(powerUpId: string, look: PolymorphKind, variant:
     return `polymorph:${powerUpId}:${look}:${variant}`;
 }
 
-// What runs out of a polymorph's penguin (PolymorphEscapees)
-export function getPolymorphEscapeeKey(powerUpId: string): string {
-    return `polymorph:${powerUpId}:escapee`;
+// What runs out of a polymorph's animal, the penguin say (PolymorphLook.escapees)
+export function getPolymorphEscapeeKey(powerUpId: string, look: PolymorphKind): string {
+    return `polymorph:${powerUpId}:${look}:escapee`;
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -779,7 +824,7 @@ function getRequestBody(request: BakeRequest): string {
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
-            return `obj:${request.objId}:${request.count}`;
+            return `obj:${request.objId}:${request.count}:${request.center ? 1 : 0}`;
         case "model":
             return request.key;
         case "loc":
@@ -1124,14 +1169,15 @@ export class GameAssets {
                             def.attackSeq ?? -1,
                         ].filter((s) => s !== -1),
                     });
+                    if (def.escapees) {
+                        requests.push({
+                            kind: "npc",
+                            key: getPolymorphEscapeeKey(id, look),
+                            npcId: def.escapees.npcId,
+                            seqIds: [def.escapees.walkSeq],
+                        });
+                    }
                 }
-                const { npcId, walkSeq } = effect.penguin.escapees;
-                requests.push({
-                    kind: "npc",
-                    key: getPolymorphEscapeeKey(id),
-                    npcId,
-                    seqIds: [walkSeq],
-                });
             }
         }
         // The visitors, and the Tombs' Helpful Spirit drawn as one
@@ -1143,7 +1189,7 @@ export class GameAssets {
         const objIds = new Set(getThrownObjIds());
         // The Soulreaper axe's souls (GameView.drawSouls): soul runes
         objIds.add(566);
-        const locIds = new Set([CANNON_LOC]);
+        const locIds = new Set(CANNON_LOCS);
         const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
@@ -1200,7 +1246,16 @@ export class GameAssets {
         locIds.add(HET.barrierLoc);
         locIds.add(HET.wornLoc);
         for (const objId of objIds) {
-            requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
+            const center = POWER_UPS.some(
+                (powerUp) => powerUp.objId === objId && powerUp.centerGroundModel,
+            );
+            requests.push({
+                kind: "obj",
+                key: "obj:" + objId,
+                objId,
+                count: 1,
+                ...(center ? { center: true } : {}),
+            });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });

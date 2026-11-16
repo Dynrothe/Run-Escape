@@ -104,6 +104,131 @@ function runFor(sim: Sim, seconds: number, move: "circle" | "still" = "circle"):
 }
 
 describe("Sim", () => {
+    test.each([
+        "imp",
+        "gwd_imp",
+        "revenant_imp",
+        "scarred_imp",
+        "lesser_demon",
+        "greater_demon",
+        "black_demon",
+        "revenant_demon",
+        "reanimated_demon",
+        "scarred_black_demon",
+    ])("%s drops ashes without changing its XP", (id) => {
+        const sim = createSim();
+        sim.weapons = [];
+        const { x, y } = sim.player;
+        const enemy = sim.spawnEnemy(getEnemy(id), "normal", { x: x + 5, y })!;
+        enemy.bonesOnly = true;
+        sim.damageEnemy(enemy, 1e9, 0, x, y);
+        const [pickup] = sim.pickups;
+        expect(pickup).toMatchObject({ kind: "bones", ashes: true, value: enemy.xp });
+        const xp = sim.xp;
+        sim["collect"](pickup);
+        expect(sim.xp).toBeCloseTo(xp + enemy.xp * (1 + sim.stats.growth));
+    });
+
+    test.each(["normal", "hard", "endless"] as const)(
+        "ash drops preserve all enemies' XP and other loot in %s runs",
+        (mode) => {
+            for (const def of ENEMIES.filter((enemy) => enemy.ashes)) {
+                const drops = (ashes: boolean) => {
+                    const sim = createSim(
+                        "wizard",
+                        3,
+                        "lumbridge",
+                        emptyStats(),
+                        mode === "endless",
+                        mode === "hard",
+                    );
+                    const enemy = sim.spawnEnemy({ ...def, ashes }, "normal", {
+                        x: sim.player.x + 5,
+                        y: sim.player.y,
+                    })!;
+                    sim["dropLoot"](enemy);
+                    for (const pickup of sim.pickups.filter((p) => p.kind === "bones")) {
+                        sim["collect"](pickup);
+                    }
+                    return {
+                        xp: sim.xp,
+                        pickups: sim.pickups.map(({ ashes: _ashes, ...pickup }) => pickup),
+                    };
+                };
+                expect(drops(true), def.id).toEqual(drops(false));
+            }
+        },
+        // Two sims for every enemy that drops ashes
+        60_000,
+    );
+
+    test("ash piles merge and collect on the same schedule as bone piles", () => {
+        const run = (ashes: boolean) => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.dropPickup("bones", x + 10, y, 30, { ashes });
+            sim.dropPickup("bones", x + 11, y, 10, { ashes });
+            runFor(sim, 1, "still");
+            expect(sim.pickups).toEqual([
+                expect.objectContaining({ x: x + 10, y, value: 40, ashes }),
+            ]);
+            sim.pickups[0].attracted = true;
+            const xp: number[] = [];
+            for (let i = 0; i < 60; i++) {
+                sim.step(0, 0);
+                xp.push(sim.xp);
+            }
+            return xp;
+        };
+        expect(run(true)).toEqual(run(false));
+    });
+
+    test.each([false, true])(
+        "nearby ashes and bones stay separate (ash pile first: %s)",
+        (ashes) => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.dropPickup("bones", x + 10, y, 30, { ashes });
+            sim.dropPickup("bones", x + 11, y, 10, { ashes: !ashes });
+            runFor(sim, 1, "still");
+            expect(sim.pickups).toEqual([
+                expect.objectContaining({ x: x + 10, y, value: 30, ashes, pileUid: 0 }),
+                expect.objectContaining({ x: x + 11, y, value: 10, ashes: !ashes, pileUid: 0 }),
+            ]);
+            const xp = sim.xp;
+            sim.pickups.forEach((pickup) => sim["collect"](pickup));
+            expect(sim.xp).toBeCloseTo(xp + 40 * (1 + sim.stats.growth));
+        },
+    );
+
+    test.each([false, true])(
+        "the pile limit counts both remains but never mixes them (ashes: %s)",
+        (ashes) => {
+            const sim = createSim();
+            const { x, y } = sim.player;
+            for (let i = 0; i < 400; i++) {
+                sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1, {
+                    ashes,
+                });
+            }
+            sim.dropPickup("bones", x + 2, y, 10, { ashes: !ashes });
+            expect(sim.pickups).toHaveLength(401);
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10, x: x + 2, y });
+            sim.dropPickup("bones", x + 1, y, 7, { ashes });
+            expect(sim.pickups).toHaveLength(401);
+            const newest = sim.pickups.find((p) => p.x === x + 1 && p.y === y)!;
+            expect(newest).toMatchObject({ ashes, value: 8 });
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10 });
+            // The other remains are over the limit too: they come to their own pile, not a new one
+            sim.dropPickup("bones", x + 3, y, 5, { ashes: !ashes });
+            expect(sim.pickups).toHaveLength(401);
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 15, x: x + 3, y });
+            expect(sim.pickups.reduce((total, p) => total + p.value, 0)).toBe(422);
+        },
+    );
+
     test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
         expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
         const peck = getEnemy("evil_chicken").boss!.attacks[0];
@@ -821,8 +946,10 @@ describe("power-ups", () => {
             sim.pickups.length = 0;
         }
         expect(seen.some((id, i) => i > 0 && id === seen[i - 1])).toBe(false);
-        // All of them, bar what drops some other way (the pumpkin)
-        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0).length);
+        // All of them, bar what drops some other way (the pumpkin) and what's for another style (a
+        // warrior gets no Imbued heart)
+        expect(new Set(seen).size).toBe(POWER_UPS.filter((p) => p.weight > 0 && !p.style).length);
+        expect(seen).not.toContain("imbued_heart");
     });
 
     test("are walked over to use them, and don't wait around", () => {
@@ -840,6 +967,95 @@ describe("power-ups", () => {
         expect(sim.powerUps.map((p) => p.id)).toEqual(["stopwatch"]);
         const used = sim.takeEvents().find((e) => e.type === "powerUp");
         expect(used).toMatchObject({ id: "stopwatch", message: "Time stands still!" });
+    });
+
+    describe("the Imbued heart", () => {
+        test("activates on pickup, shows one buff timer, and lasts 20 seconds stretched by Effect duration", () => {
+            const meta = emptyStats();
+            meta.magicMight = 0.1;
+            meta.duration = 2;
+            const sim = createSim("wizard", 1, "lumbridge", meta);
+            sim.weapons = [];
+            sim.dropPowerUp("imbued_heart", sim.player.x, sim.player.y);
+            sim.step(0, 0);
+            expect(sim.pickups.some((p) => p.powerUp === "imbued_heart")).toBe(false);
+            expect(sim.stats.magicMight).toBeCloseTo(0.3);
+            expect(sim.effects).toContainEqual(
+                expect.objectContaining({
+                    spotAnim: 1316,
+                    hero: 0,
+                    startTick: sim.tick,
+                    endTick: sim.tick + 80,
+                    once: true,
+                }),
+            );
+            expect(getBuffViews(sim)).toEqual([
+                expect.objectContaining({
+                    name: "Imbued heart",
+                    objId: 20724,
+                    secondsLeft: 60,
+                    description: "+20% magic damage",
+                }),
+            ]);
+            const endTick = sim.buffs[0].endTick;
+            expect(endTick - sim.tick).toBe(60 * TICKS_PER_SECOND);
+            sim.tick = endTick - 2;
+            sim.step(0, 0);
+            expect(sim.stats.magicMight).toBeCloseTo(0.3);
+            sim.step(0, 0);
+            expect(sim.stats.magicMight).toBeCloseTo(0.1);
+            expect(getBuffViews(sim)).toEqual([]);
+        });
+
+        test("another pickup refreshes the timer without stacking", () => {
+            const sim = createSim("wizard");
+            sim.weapons = [];
+            const heart = getPowerUp("imbued_heart");
+            sim.usePowerUp(heart);
+            runFor(sim, 10, "still");
+            sim.usePowerUp(heart);
+            expect(sim.stats.magicMight).toBeCloseTo(0.2);
+            expect(sim.buffs).toHaveLength(1);
+            expect(sim.buffs[0].endTick - sim.tick).toBe(20 * TICKS_PER_SECOND);
+            expect(getBuffViews(sim)).toHaveLength(1);
+        });
+
+        test("drops, is offered and is a quiz's prize for magic heroes alone", () => {
+            const hearts = (characterId: string): number => {
+                const sim = createSim(characterId);
+                const drops = Array.from({ length: 300 }, () => sim["rollPowerUpId"]());
+                const prizes = Array.from({ length: 300 }, () =>
+                    sim["rollPowerUpId"]([sim.heroes[0]]),
+                );
+                const offers = Array.from({ length: 300 }, () => sim["rollOldManOptions"]())
+                    .flat()
+                    .map((option) => (option.kind === "powerUp" ? option.powerUpId : option.kind));
+                return [...drops, ...prizes, ...offers].filter((id) => id === "imbued_heart")
+                    .length;
+            };
+            expect(hearts("wizard")).toBeGreaterThan(0);
+            expect(hearts("warrior")).toBe(0);
+            expect(hearts("ranger")).toBe(0);
+        });
+
+        test.each([
+            ["fire_spells", 1.2],
+            ["shortbow", 1],
+            ["scimitar", 1],
+        ] as const)("changes %s damage by %sx", (weaponId, multiplier) => {
+            const hit = (boosted: boolean): number => {
+                const sim = armed(weaponId);
+                const enemy = dummy(sim, 1, 0);
+                if (boosted) {
+                    sim.usePowerUp(getPowerUp("imbued_heart"));
+                }
+                return hitsOn(attackOnce(sim, 0.5), enemy).reduce((sum, damage) => sum + damage, 0);
+            };
+            const normal = hit(false);
+            expect(normal).toBeGreaterThan(0);
+            // Hits are rounded to whole damage.
+            expect(hit(true)).toBeCloseTo(Math.round(normal * multiplier), 0);
+        });
     });
 
     describe("the sled", () => {
@@ -1134,6 +1350,59 @@ describe("power-ups", () => {
     describe("the fairy ring", () => {
         const ring = () => getPowerUp("fairy_ring");
 
+        test("starts the fairy teleport's visible frames as the enemy is warped away", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const enemy = goblin(sim, x + 1, y);
+            enemy.frozen = 10000;
+            const def = ring().effect;
+            if (def.kind !== "ring") {
+                throw new Error("the fairy ring isn't a ring");
+            }
+            sim.usePowerUp(ring());
+            sim.step(0, 0);
+            const effect = sim.effects.find((effect) => effect.spotAnim === def.spotAnim);
+            expect(effect).toMatchObject({ x: x + 1, y, enemyUid: 0 });
+            // Its seen frames start as the enemy goes, and it's gone when they end
+            const shownFor = sim.tick - effect!.startTick;
+            expect(shownFor).toBeGreaterThanOrEqual(def.spotAnimFrom);
+            expect(shownFor).toBeLessThanOrEqual(def.spotAnimFrom + 1);
+            expect(effect!.endTick - effect!.startTick).toBe(def.spotAnimFrom + def.spotAnimTicks);
+            expect(Math.hypot(enemy.x - x, enemy.y - y)).toBeGreaterThan(8);
+            while (sim.tick < effect!.endTick - 2) {
+                sim.step(0, 0);
+            }
+            expect(sim.effects).toContain(effect);
+            runFor(sim, 0.2, "still");
+            expect(sim.effects).not.toContain(effect);
+        });
+
+        test("shows only so many warps at once, under a crowd walking in", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const def = ring().effect;
+            sim.usePowerUp(ring());
+            let most = 0;
+            for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+                if (i % 5 === 0) {
+                    for (let j = 0; j < 12; j++) {
+                        goblin(sim, x + 1, y + (j % 3) * 0.3);
+                    }
+                }
+                sim.step(0, 0);
+                const shown = sim.effects.filter(
+                    (effect) => def.kind === "ring" && effect.spotAnim === def.spotAnim,
+                ).length;
+                most = Math.max(most, shown);
+            }
+            expect(most).toBeGreaterThan(30);
+            expect(most).toBeLessThanOrEqual(40);
+        });
+
         test("warps away what walks into it, far from the player", () => {
             const sim = createSim();
             sim.weapons = [];
@@ -1398,14 +1667,34 @@ describe("power-ups", () => {
             expect(variants.size).toBeGreaterThan(3);
         });
 
-        test("the rare one wanders off away from the player", () => {
-            const sim = createSim();
-            sim.weapons = [];
-            const odd = goblin(sim, sim.player.x + 3, sim.player.y);
-            sim.usePowerUp(always("rare"));
-            expect(odd.polymorph?.look).toBe("rare");
-            runFor(sim, 3, "still");
-            expect(Math.hypot(odd.x - sim.player.x, odd.y - sim.player.y)).toBeGreaterThan(4);
+        test("the rare one wanders off away from the player, at half a sheep's pace", () => {
+            // How far it's gone in 3 seconds
+            const gone = () => {
+                const sim = createSim();
+                sim.weapons = [];
+                const odd = goblin(sim, sim.player.x + 3, sim.player.y);
+                sim.usePowerUp(always("rare"));
+                expect(odd.polymorph?.look).toBe("rare");
+                runFor(sim, 3, "still");
+                return Math.hypot(odd.x - sim.player.x, odd.y - sim.player.y) - 3;
+            };
+            const slow = gone();
+            // The sim reads the power-up's own def by its id, so a whole pace goes on that
+            const def = polymorph();
+            if (def.effect.kind !== "polymorph") {
+                throw new Error("not a polymorph");
+            }
+            const rare = def.effect.rare;
+            const pace = rare.pace;
+            rare.pace = 1;
+            let whole: number;
+            try {
+                whole = gone();
+            } finally {
+                rare.pace = pace;
+            }
+            expect(slow).toBeGreaterThan(0.5);
+            expect(slow / whole).toBeCloseTo(0.5, 1);
         });
 
         test("the penguin wanders like a sheep, but says Beh?", () => {
@@ -1443,7 +1732,50 @@ describe("power-ups", () => {
                 escape = sim.takeEvents().find((e) => e.type === "polymorphEscape");
             }
             expect(spy.dead).toBe(true);
-            expect(escape).toMatchObject({ powerUpId: "polymorph", x: spy.x, y: spy.y });
+            expect(escape).toMatchObject({
+                powerUpId: "polymorph",
+                look: "penguin",
+                x: spy.x,
+                y: spy.y,
+            });
+        });
+
+        test("the rare one snores ZzZ... as it goes", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            for (let i = 0; i < 5; i++) {
+                goblin(sim, sim.player.x + 3 + i, sim.player.y);
+            }
+            sim.usePowerUp(always("rare"));
+            sim.takeEvents();
+            const shouts = [];
+            for (let i = 0; i < 9 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                shouts.push(...sim.takeEvents().filter((e) => e.type === "enemyShout"));
+            }
+            expect(shouts.length).toBeGreaterThan(0);
+            for (const shout of shouts) {
+                expect(shout).toMatchObject({ text: "ZzZ...", sound: 869 });
+            }
+        });
+
+        test("killing the rare one lets a monkey child out", () => {
+            const sim = createSim();
+            const odd = goblin(sim, sim.player.x + 1, sim.player.y, 1);
+            sim.usePowerUp(always("rare"));
+            sim.takeEvents();
+            let escape;
+            for (let i = 0; i < 6 * TICKS_PER_SECOND && !escape; i++) {
+                sim.step(0, 0);
+                escape = sim.takeEvents().find((e) => e.type === "polymorphEscape");
+            }
+            expect(odd.dead).toBe(true);
+            expect(escape).toMatchObject({
+                powerUpId: "polymorph",
+                look: "rare",
+                x: odd.x,
+                y: odd.y,
+            });
         });
 
         test("a sheep killed lets nothing out", () => {
@@ -1709,12 +2041,77 @@ describe("power-ups", () => {
             expect(boss.polymorph).toBeUndefined();
         });
 
+        test("a golden sheep baas with every attack it starts", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", {
+                x: player.x - 3,
+                y: player.y,
+            })!;
+            sim.usePowerUp(polymorph());
+            player.hp = player.maxHp = 1e6;
+            let attacks = 0;
+            let baasOnAttack = 0;
+            for (let i = 0; i < 9 * TICKS_PER_SECOND && !sim.runOver; i++) {
+                sim.step(0, 0);
+                const events = sim.takeEvents();
+                if (boss.anim === "attack" && boss.animStart === sim.tick) {
+                    attacks++;
+                    if (
+                        events.some(
+                            (e) =>
+                                e.type === "enemyShout" &&
+                                e.enemyUid === boss.uid &&
+                                e.text === "Baa!" &&
+                                e.seconds === 1,
+                        )
+                    ) {
+                        baasOnAttack++;
+                    }
+                }
+            }
+            expect(attacks).toBeGreaterThan(0);
+            expect(baasOnAttack).toBe(attacks);
+        });
+
         test("with no one about, it still lasts, for whatever turns up", () => {
             const sim = createSim();
             sim.enemies = [];
             sim.usePowerUp(polymorph());
             expect(sim.powerUps.map((p) => p.id)).toEqual(["polymorph"]);
         });
+    });
+
+    test.each([0, 1])("a cannon waits one second to fire with duration bonus %s", (duration) => {
+        const stats = emptyStats();
+        stats.duration = duration;
+        stats.cooldown = 0.5;
+        const sim = createSim("warrior", 1, "lumbridge", stats);
+        sim.weapons = [];
+        sim.player.invulnerable = 10000;
+        sim.tick = 3 * TICKS_PER_SECOND;
+        sim.usePowerUp(getPowerUp("cannon"));
+        const turret = sim.turrets[0];
+        const target = goblin(sim, turret.x + 3, turret.y);
+        target.frozen = 1000;
+        sim.takeEvents();
+
+        for (let i = 0; i < TICKS_PER_SECOND - 1; i++) {
+            sim.step(0, 0);
+        }
+        expect(sim.projectiles).toHaveLength(0);
+        expect(sim.takeEvents().some((event) => event.type === "cannonFire")).toBe(false);
+
+        sim.step(0, 0);
+        expect(sim.tick - turret.startTick).toBe(TICKS_PER_SECOND);
+        expect(sim.projectiles.some((projectile) => projectile.kind === "cannonball")).toBe(true);
+        expect(sim.takeEvents()).toContainEqual({
+            type: "cannonFire",
+            x: turret.x,
+            y: turret.y,
+        });
+        expect(turret.endTick - turret.startTick).toBe(20 * (1 + duration) * TICKS_PER_SECOND);
     });
 
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
@@ -6324,6 +6721,26 @@ describe("the power-up rate", () => {
         const ratio = dropsOver(rate) / dropsOver(0);
         expect(ratio).toBeGreaterThan((1 + rate) * 0.9);
         expect(ratio).toBeLessThan((1 + rate) * 1.1);
+    });
+});
+
+describe("damage blocked", () => {
+    test("counts what armour stopped of each hit, and nothing on a hit that went through", () => {
+        const sim = createSim();
+        sim.stats.armor = 3;
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](10, "goblin", false);
+        // 10 would have been 10; armour took 3 of it
+        expect(sim.getRunStats().damageBlocked).toBe(3);
+        expect(sim.getRunStats().damageTaken).toBe(7);
+        // Armour bigger than the hit still lets 1 through: it stopped the rest
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](2, "goblin", false);
+        expect(sim.getRunStats().damageBlocked).toBe(3 + 1);
+        // A hit that ignores armour has nothing stopped
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](5, "goblin", false, undefined, true);
+        expect(sim.getRunStats().damageBlocked).toBe(4);
     });
 });
 

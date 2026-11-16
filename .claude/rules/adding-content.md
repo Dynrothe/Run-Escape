@@ -71,6 +71,10 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
   fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
   ways: none of these pointed the way they fly as they come from the cache.
+  A spot animation gets the same help from `PROJECTILE_SPOT_LOOKS` (an enemy's shot only takes
+  its `roll`, so give the enemies' loop in `GameView` the rest before relying on it). The
+  thrownaxes spin upright, end over end, which from above is only their edge, so they're laid on
+  their side (`roll: 512`) to spin flat.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
@@ -134,6 +138,16 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
   `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
   boss hits and poison through near the end.
 - Give it a `price`, what the Mysterious Old Man charges before the run's time and the map's coins.
+- The cannon builds on its `startTick` over `CANNON_BUILD_SECONDS` before firing. Its base,
+  stand, barrels and finished model are selected by `getCannonModelKey` and included in
+  `GameAssets.getBaseRequests`, so the slim cache keeps every assembly stage.
+- A `buff` effect uses the hero's buff timer, as a potion does (Effect duration stretches it), not
+  a second power-up timer, and another pickup starts it again rather than stacking.
+  `spotAnimTicks` is the activation animation's full cache duration; its effect follows the
+  collecting hero on screen, including predicted movement.
+- A power-up that's no use to the other styles (a `buff` of one style's damage) gets a `style`:
+  it then drops only with a hero of that style in the party, only they pick it up, and the Old Man
+  and a quiz offer it only to them (`Sim.powerUpFits`).
 
 ## Random event
 
@@ -176,6 +190,11 @@ stable. A pet in `PETS` shares its trophy id and uses the cache's follower NPC w
 walk sequences.
 
 ## Enemy or boss
+
+Imps and demons use `EnemyDef.ashes` for ash remains. They still drop `kind: "bones"` XP pickups,
+with `Pickup.ashes` selecting the appearance; XP, magnets and relics stay the same. Piles merge
+and reuse their pile-limit slots only with the same remains: ashes never mix with bones.
+`GameAssets.PILE_LOOKS` supplies the ash models to baking and the slim cache too.
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
 animations, sounds and stats. Tests check that every enemy a map or boss refers to exists, and
@@ -445,4 +464,75 @@ in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`.
 
 ## Quest
 
-Add it to `quests.ts`. Tests check every quest can be done, so its enemy ids must exist.
+Add it to `quests.ts`, and its icon (an item the OSRS quest is known by) to `questIcons.ts`. Tests
+check every quest can be done, so its enemy ids must exist, and that it has an icon.
+
+## Combat task
+
+Add it to `COMBAT_TASKS` in `combatTasks.ts`, with a `goal` from `CombatGoal` in `types.ts`. Its id
+goes in saves, so never rename one. Its name mustn't be a quest's (two Inferno quests already have
+OSRS combat achievements' names). `combatTasks.test.ts` checks its enemy and map ids, and that every
+attack a task avoids is one its boss (or what it summons) has by that name and one that does
+damage, so renaming a boss's attack fails it rather than making the task impossible, and a summon's
+name (the Forester's Feathered Apocalypse, which only brings his chickens) can't make it a gift.
+Its coins and points come from its tier, and the tiers' reward
+thresholds move with the tasks. Speed tasks' times are in `COMBAT_SPEED_SECONDS`. Its name and
+description are English in `COMBAT_TASKS`: `bun run tsx scripts/i18n/extract.ts` puts them in
+`locales/en/gen.json` (`combat.task.<id>.name` and `.desc`), and the screens read them through
+`combatTaskName` and `combatTaskDescription`.
+
+- Goals that need nothing new from the sim are checked in `core/CombatTracker.ts`, which only reads
+  the sim and its events. A goal that can't be seen from those needs a new event: an `emit` that
+  only reads state is hash-neutral, and `runHash.test.ts` must stay as it is. What can come and
+  go within a tick needs the sim to keep it: `hpAbove` reads the hero's `lowestHpShare`, written
+  as each hit lands, as a heal or a revive in the same tick would hide the dip. Such a field is
+  only written, never read by play, and stays out of `syncHash`.
+- A goal that can be spoilt sets the watch's `reason` as it's spoilt, a `CombatReason`
+  (`{ kind: "hitBy", attack: "Lunge", ... }`, which reads "hit by Lunge"): the HUD's pinned rows,
+  the pause menu and a pinned task's toast show it. A new kind of reason needs its English in
+  `COMBAT_MESSAGES` and a case in `describeCombatReason`. A hit with `missed` set (a Trickster's
+  bubble) did no harm, and spoils nothing. A boss's attacks name themselves
+  on `playerHit` (`attack`); a crowd's hit, a stomp or a pool doesn't, and says who landed it.
+  A new goal that counts its way there gives its progress in `progressOf`.
+- `allOf` is several tasks' goals met in the same run, whether they were done before or not
+  (Theatre Perfectionist), on its parts' map. `beatWithEach` counts over runs, one style at a time,
+  through `RunSummary.combatProgress`, the keys the tracker saw a run earn. A `killCount` with
+  `each` wants one of each enemy, banked as `task:enemy` keys. An invader (`content/invaders.ts`)
+  isn't one of its map's own enemies, so `canTrackOn` follows a kill count of them on every map
+  that takes invasions.
+- An avoided attack (`without: [{ attacks }]`) is summed by name from `damageByAttack`, over every
+  boss on the map, while its window's open: pick a name only that boss has there. Dart, Claw, Grasp
+  and Shadow burst belong to more than one.
+- A `win` can ask what the run's set up with: an awakened final boss, remixes, invocation points
+  or the Tombs' raid level. The tracker leaves it out of a run that isn't, as it does a hard-mode
+  task on normal.
+- The Tombs of Amascut: `clearPath`, and `perfectRoom` for a puzzle room with no mistake. A wipe
+  sends the party back to start the room over, and a mistake spoils only the attempt it's in. Each
+  room's mistakes emit `tombsMistake` (`Sim.tombsMistake`): an Apmeken issue left too long, a
+  Crondis spill, a wrong Scabaras step, Het's beam or an orb landing. The room's hits can't tell
+  them apart, since the Scabaras room's scarabs shoot under the puzzle's id. `noDeaths` counts
+  `sim.tombsDeaths`. `noSupplies` is the Theatre's raid points spent at its chest, and the Helpful
+  Spirit's supplies used: the Tombs' rooms add points never counted as earned
+  (`raidPointsEarned` is the Theatre's), so its points aren't compared. The Wardens arrive
+  without `bossSpawned`, so a `kill` of them would need its window opened another way.
+- `abilityHits` counts only the button's landings on the boss: an `ability` event whose `enemyId`
+  is `""` (a Kindle that caught no one) doesn't count.
+- `CA=1` on `scripts/game/simulate-run.ts` reports which tasks the bot's runs did, what spoilt the
+  rest, and each boss's time from its arrival to its kill. The bot can't dodge, so go by those times
+  for a speed task, not by whether it did the perfect ones.
+- Only kill counts (one of each too), map wins and endless rounds are retroactive:
+  `applyRetroCombatTasks` in `save.ts` gives old saves those once, at the version 12 migration,
+  without coins.
+- Co-op runs never count, so there's no party field and no co-op task. Nor do the Forgotten
+  Four's gauntlet fights, which bank no run of their own.
+- **Every task has to be doable every run, by playing well, not by luck.** A task that avoids
+  damage leaves out what no one can dodge, in its goal's `except`: a mark lands wherever the player
+  is (a curse, Phosani's parasites bursting), the sleepwalkers' blast lands even with none let
+  through, and a hit always costs at least 1, armour or not. Don't spoil a task on something the
+  boss picks at random (being cursed at all): spoil it on what the player could have stopped (hurt
+  while cursed, a parasite reaching her). `healers` narrows `heals` to the heals the player could
+  have stopped: Parasite-Free counts her eggs' parasites, not one that bursts out of the player
+  beside her (her leash keeps her close). A homing shot has to be dodgeable at the player's own
+  speed; Jad's Magic needs about +25% move speed, or a long head start. Probe a new one in a
+  throwaway test before relying on it.
+- A new boss fight should come with its tasks.

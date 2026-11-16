@@ -184,7 +184,7 @@ export class GameSounds {
                 case "enemyShout":
                     // A flock baas all the time, so not over and over at once
                     audio.playAt(event.sound, event.x, event.y, px, py, {
-                        volume: 0.5,
+                        volume: 0.75,
                         minGap: 150,
                     });
                     break;

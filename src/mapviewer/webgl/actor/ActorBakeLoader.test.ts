@@ -3,7 +3,26 @@ import { describe, expect, test } from "vitest";
 import type { SeqType } from "../../../rs/config/seqtype/SeqType";
 import type { Model } from "../../../rs/model/Model";
 import type { FrameAdder } from "./ActorBakeFrames";
-import { bakeRunPose, getMovementGroups } from "./ActorBakeLoader";
+import { bakeRunPose, centerGroundModel, getMovementGroups } from "./ActorBakeLoader";
+
+test("centres offset ground models without changing their cached vertices or height", () => {
+    const model = {
+        verticesCount: 3,
+        verticesX: new Int32Array([10, 30, 20]),
+        verticesY: new Int32Array([-8, -4, 0]),
+        verticesZ: new Int32Array([-30, -10, -20]),
+        invalidateBounds: () => {},
+    } as Model;
+    const centered = centerGroundModel(model);
+    expect([...centered.verticesX]).toEqual([-10, 10, 0]);
+    expect([...centered.verticesZ]).toEqual([-10, 10, 0]);
+    expect(centered.verticesY).toBe(model.verticesY);
+    expect([...model.verticesX]).toEqual([10, 30, 20]);
+    expect([...model.verticesZ]).toEqual([-30, -10, -20]);
+    const again = centerGroundModel(centered);
+    expect(again.verticesX).toEqual(centered.verticesX);
+    expect(again.verticesZ).toEqual(centered.verticesZ);
+});
 
 describe("a weapon's run pose", () => {
     // A run of three frames, the last with no length of its own

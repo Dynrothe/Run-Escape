@@ -107,8 +107,11 @@ export type EnemyDef = {
     // Collision radius in tiles (kept under half a tile so everything fits
     // through doors)
     radius: number;
-    // XP of the bones it drops
+    // XP of the remains it drops
     xp: number;
+    // Drops ashes instead of bones (imps and demons), for the same XP. They're picked up as
+    // bones are, but gather into piles of their own
+    ashes?: boolean;
     // 0 = full knockback, 1 = immune
     knockbackResist?: number;
     // Render scale on top of the NPC's own
@@ -1859,13 +1862,17 @@ export type WeaponLevel = {
     name?: string;
 };
 
-// How an item is drawn in flight when its cache model needs help, whichever
-// weapon throws it (PROJECTILE_ITEM_LOOKS). Drawing only: hit sizes stay as they are.
-export type ProjectileItemLook = {
+// How an item or a spot animation is drawn in flight when its cache model needs help
+// (PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS). The player's shots take all of it; an
+// enemy's spot animation takes only its roll. Drawing only: hit sizes stay as they are.
+export type ProjectileLook = {
     // Drawn this much bigger, for a model too small to see from the game's camera
     scale?: number;
     // Turned this far (2048 is a full turn), for a model that doesn't point the way it flies
     yawOffset?: number;
+    // Tipped over this far about the way it flies (512 lays it on its side), for a model that
+    // spins upright and so shows only its edge to the game's camera
+    roll?: number;
 };
 
 export type WeaponDef = {
@@ -2136,6 +2143,152 @@ export type QuestDef = {
     objective: QuestObjective;
     // Paid out once, when the run that finishes it ends
     coins: number;
+};
+
+// Combat Achievements (combatTasks.ts): challenges done in solo runs, by tier
+export type CombatTier = "easy" | "medium" | "hard" | "elite" | "master" | "grandmaster";
+export type CombatTaskType =
+    | "killCount"
+    | "speed"
+    | "perfection"
+    | "restriction"
+    | "mechanical"
+    | "stamina";
+
+// What a kill has to be without, from its boss's arrival to its kill: hits from the boss,
+// damage from these attacks by name, any damage at all, a hit while cursed, a sleepwalker
+// reaching it, or a healer (Phosani's parasites) healing it. Damage and hits while cursed let
+// through the goal's except.
+export type CombatAvoid =
+    | "hits"
+    | "damage"
+    | "hurtCursed"
+    | "sleepwalkers"
+    | "heals"
+    | { attacks: string[] };
+
+// What a run has to keep to while it beats its map
+export type CombatRules = {
+    // One weapon at most (evolutions replace it in place)
+    oneWeapon?: boolean;
+    // No rerolls, skips or banishes
+    noTakeBacks?: boolean;
+    noPassives?: boolean;
+    // No casket gear put on
+    noGear?: boolean;
+    // No Skills upgrades on the adventurer's page, and nothing in the Armoury
+    noUpgrades?: boolean;
+    // A raid: no teleporter used; no raid points spent at the supply chest, and no supply used
+    // (the Tombs of Amascut's, from the Helpful Spirit)
+    noTeleports?: boolean;
+    noSupplies?: boolean;
+    // No sleepwalker reaching its boss
+    noSleepwalkers?: boolean;
+    // The Tombs of Amascut: no death (each one a room started over)
+    noDeaths?: boolean;
+    // Under the cold (ColdRuleDef): never frozen solid
+    noFreezing?: boolean;
+};
+
+export type CombatGoal =
+    // Over every solo run (and old saves' runs, at migration). maps: these, the campaign's, or
+    // any that can be won; all: every one of them, rather than one
+    | {
+          kind: "beatMap";
+          maps: string[] | "campaign" | "any";
+          all?: boolean;
+          hard?: boolean;
+          expert?: boolean;
+      }
+    // Over every solo run: a map of these beaten with an adventurer of each of these styles
+    | {
+          kind: "beatWithEach";
+          maps: string[] | "campaign" | { campaignFrom: string };
+          styles: CombatStyle[];
+      }
+    // Over every solo run: count of these killed in all; each: one of each of them (count is then
+    // their number)
+    | { kind: "killCount"; enemyIds: string[]; count: number; each?: boolean }
+    | { kind: "endlessRound"; round: number; hard?: boolean }
+    // In one run: a phased boss reaching this phase (counted from 1)
+    | { kind: "reachPhase"; bossId: string; phase: number }
+    // Kill a boss (bossIds: all its forms, the first the one that arrives) without any of
+    // these, within this many seconds of its arrival if set. from: "finale" times it from its
+    // last stand rather than its arrival. except: attacks whose damage doesn't count, as
+    // nothing the player does can stop it (a mark, the sleepwalkers' blast). healers: only heals
+    // by these count against "heals" (Phosani's egg-hatched parasites, not one that bursts out of
+    // the player beside her)
+    | {
+          kind: "kill";
+          bossIds: string[];
+          without?: CombatAvoid[];
+          within?: number;
+          from?: "finale";
+          except?: string[];
+          healers?: string[];
+      }
+    // Each of these bosses killed within this many seconds of its own arrival
+    | { kind: "killEachWithin"; bossIds: string[]; seconds: number }
+    // Each of the map's bosses killed before the next one's due (its events), up to the last
+    | { kind: "killBeforeNext"; mapId: string }
+    // count of this boss killed within this many seconds, first to last
+    | { kind: "killTogether"; bossId: string; count: number; seconds: number }
+    // Beat the map (maps: these, the campaign's from this one on, or any), keeping to these. hard:
+    // on hard mode; within: seconds; damage: taken at most, leaving out except's attacks (as a
+    // kill's); hpAbove: never below this fraction. What the run's set up with, as it starts:
+    // awakened, its final boss by an Awakener's orb; remixes, at least this many on; points, at
+    // least this many invocation points (hard mode's among them); raidLevel, the Tombs of
+    // Amascut's at least this.
+    | {
+          kind: "win";
+          maps: string[] | "any" | { campaignFrom: string };
+          hard?: boolean;
+          within?: number;
+          damage?: number;
+          except?: string[];
+          hpAbove?: number;
+          rules?: CombatRules;
+          awakened?: boolean;
+          remixes?: number;
+          points?: number;
+          raidLevel?: number;
+      }
+    // Evolve this many weapons in one run
+    | { kind: "evolve"; count: number }
+    // Clear a raid's room (counted from 0)
+    | { kind: "clearRoom"; room: number }
+    // Kill this enemy before it gets away with the coins it stole
+    | { kind: "coinsBack"; enemyId: string }
+    // From a boss's arrival to its kill, never out of the fight's strike reach for longer than
+    // this many seconds at a time (not while it kneels or leaps)
+    | { kind: "stayInReach"; bossId: string; seconds: number }
+    // In one run, a boss's guard dropped (BossDef.guard) count times by any of these causes (its
+    // own attacks' names that missed, its arena's that caught it, or "Pillar"); stunned: only
+    // the times it was stunned
+    | { kind: "guardDown"; bossId: string; causes: string[]; count: number; stunned?: boolean }
+    // In one run, the fight's button (MapDef.fight.ability) landed on its boss count times;
+    // opened: only while the boss's guard was down (BossDef.guard)
+    | { kind: "abilityHits"; abilityId: string; count: number; opened?: boolean }
+    // The Tombs of Amascut: this path cleared, its room and its boss (any of them, without one)
+    | { kind: "clearPath"; path?: string }
+    // The Tombs of Amascut: this path's puzzle room beaten without a mistake in it (Sim's
+    // tombsMistake: a pillar or vent left, a spill, a wrong step, a beam or orb)
+    | { kind: "perfectRoom"; path: string }
+    // In one run, each of these tasks' goals met, whether they were done before or not (none of
+    // them another allOf); win: and the map beaten
+    | { kind: "allOf"; taskIds: string[]; win?: boolean };
+
+export type CombatTaskDef = {
+    // Never renamed: it's in saves
+    id: string;
+    name: string;
+    description: string;
+    tier: CombatTier;
+    type: CombatTaskType;
+    // The map it's done on: which runs track it, and the list's groups. None for the ones done
+    // all over.
+    mapId?: string;
+    goal: CombatGoal;
 };
 
 export type CharacterDef = {
@@ -3912,6 +4065,14 @@ export type PowerUpEffect =
     | { kind: "nuke"; bossDamage: number }
     // Pulls every drop on the ground to the player
     | { kind: "magnet" }
+    // A fixed-duration stat boost, with its activation spot animation on the player
+    | {
+          kind: "buff";
+          stats: Partial<Stats>;
+          seconds: number;
+          spotAnim: number;
+          spotAnimTicks: number;
+      }
     // Everything that isn't a boss stands still, and so does whatever turns up
     // meanwhile
     | { kind: "freeze"; seconds: number }
@@ -3948,13 +4109,16 @@ export type PowerUpEffect =
           scale: number;
       }
     // A ring (locId, drawn at scale) opens at the player's feet and warps
-    // whatever walks within radius far away, showing spotAnim where it was
+    // whatever walks within radius far away, showing spotAnim where it was: its frames from
+    // spotAnimFrom ticks in, for spotAnimTicks (the part of it that's seen)
     | {
           kind: "ring";
           seconds: number;
           radius: number;
           locId: number;
           spotAnim: number;
+          spotAnimFrom: number;
+          spotAnimTicks: number;
           scale: number;
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)
@@ -3980,9 +4144,9 @@ export type PowerUpEffect =
     // stretches it), one of sheep at random, wandering about at speed times its own pace and
     // stopping to graze, unable to hurt anyone; it dies as one too. Elites and bosses turn into
     // golden, drawn at its bossScale for a boss. Now and then an ordinary enemy turns into the
-    // penguin instead (penguin.chance), which lets its escapees out when it's killed, or the rare
-    // one (rare.chance), which wanders off away from the player. Every so often one of them says
-    // shout (each about every shoutSeconds), with one of shoutSounds, unless its look has its
+    // penguin instead (penguin.chance), or the rare one (rare.chance), which wanders off away
+    // from the player; either lets its escapees out when it's killed. Every so often one of them
+    // says shout (each about every shoutSeconds), with one of shoutSounds, unless its look has its
     // own. Whatever turns up while it lasts is turned too, till the end. What can't be hit, and
     // ordinary enemies that can't move or carry a flag, stay as they are (Sim.canPolymorph).
     | {
@@ -3990,8 +4154,9 @@ export type PowerUpEffect =
           seconds: number;
           speed: number;
           sheep: PolymorphLook[];
-          golden: PolymorphLook & { bossScale: number };
-          penguin: PolymorphLook & { chance: number; escapees: PolymorphEscapees };
+          // attackShoutSeconds: how long its line is up when it says it with an attack
+          golden: PolymorphLook & { bossScale: number; attackShoutSeconds: number };
+          penguin: PolymorphLook & { chance: number };
           rare: PolymorphLook & { chance: number };
           shout: string;
           shoutSeconds: number;
@@ -4000,7 +4165,7 @@ export type PowerUpEffect =
 
 export type PolymorphEffect = Extract<PowerUpEffect, { kind: "polymorph" }>;
 
-// What runs out of a polymorphed penguin when it's killed: count NPCs, off away from the player at
+// What runs out of a polymorphed animal when it's killed: count NPCs, off away from the player at
 // speed tiles a second for seconds, drawn at scale. Looks only: they're not in the sim.
 export type PolymorphEscapees = {
     npcId: number;
@@ -4017,7 +4182,8 @@ export type PolymorphKind = "sheep" | "golden" | "penguin" | "rare";
 // What a polymorphed enemy is drawn as: an NPC, at scale whatever size the enemy itself was (a
 // boss at the golden look's bossScale). deathSeq -1 sinks it, as an enemy with no death animation
 // does. attackSeq plays while one that fights on (a golden sheep) attacks. shout and shoutSounds
-// stand in for the polymorph's own.
+// stand in for the polymorph's own. escapees run out of it when it's killed (the penguin's agents).
+// pace is what the polymorph's speed is multiplied by for it (1 unless set).
 export type PolymorphLook = {
     npcId: number;
     idleSeq: number;
@@ -4025,8 +4191,10 @@ export type PolymorphLook = {
     deathSeq: number;
     attackSeq?: number;
     scale: number;
+    pace?: number;
     shout?: string;
     shoutSounds?: number[];
+    escapees?: PolymorphEscapees;
 };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
@@ -4045,8 +4213,14 @@ export type PowerUpDef = {
     locId?: number;
     // Drawn this many times bigger on the ground than other power-ups
     scale?: number;
+    // Centre an offset item model on the pickup before it rotates. It's baked once by its obj id,
+    // so every other use of that item gets the centred model too
+    centerGroundModel?: boolean;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
+    // Only for heroes of this style (the Imbued heart's magic): it drops only with one in the
+    // party, waits on the ground for one of them, and the Old Man and a quiz offer it only to them
+    style?: CombatStyle;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
     color?: string;
     // Coins the Mysterious Old Man wants for it, at the start of a run

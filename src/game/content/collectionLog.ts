@@ -3,6 +3,7 @@ import { SaveData } from "../core/save";
 import { fmtNum, list, t, tp, tr } from "../i18n";
 import { isMapOut } from "./acts";
 import { CARDS, CARD_KINDS, CardDef, PACK_BY_ID, packCards } from "./cards";
+import { getCombatPoints } from "./combatTasks";
 import { EVOLUTIONS, EvolutionDef } from "./evolutions";
 import { INVADERS } from "./invaders";
 import { invaderName } from "./invasions";
@@ -35,12 +36,17 @@ export const LOG_MESSAGES: Record<string, string> = {
 
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
 
+// The entry for Combat Achievements' tier rewards (Ghommal's hilts), under Other, in place of a
+// map's
+export const COMBAT_ENTRY = "combat_achievements";
+
 // The map a trophy's from: a pumpkin's are the Hallowed Night's, a turkey's Thanksgiving, the
-// Tombs' chest the raid.
+// Tombs' chest the raid. A Combat Achievements tier's reward has COMBAT_ENTRY, as it's no map's.
 export function getTrophyMap(trophy: TrophyDef): string {
     if (trophy.from.kind === "pumpkin") return "halloween";
     if (trophy.from.kind === "turkey") return "thanksgiving";
     if (trophy.from.kind === "tombs") return "tombs_of_amascut";
+    if (trophy.from.kind === "combatTier") return COMBAT_ENTRY;
     return trophy.from.mapId;
 }
 
@@ -60,10 +66,11 @@ export const REWARD_MAPS: string[] = [
     ]),
 ].filter((mapId) => {
     const map = MAP_BY_ID.get(mapId);
-    return !map || isMapOut(map);
+    return mapId !== COMBAT_ENTRY && (!map || isMapOut(map));
 });
 
-// A map's rewards: the weapons it brings in (its boss's drops, its chest's), then its trophies
+// A map's rewards: the weapons it brings in (its boss's drops, its chest's), then its trophies.
+// COMBAT_ENTRY's are the tiers' rewards.
 export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
     // (not one that's its trophy: the rapier's is the Ghrazi rapier, and says it brings it in)
     const weapons = WEAPONS.filter((weapon) => {
@@ -228,7 +235,18 @@ export function getLogEntries(save: SaveData): LogEntry[] {
             evolution,
         })),
     };
-    const entries = [...maps, ...clues, evolutions, ...getCardEntries(save)];
+    // Combat Achievements' tier rewards, with the points had towards them
+    const combat: LogEntry = {
+        id: COMBAT_ENTRY,
+        tab: "other",
+        name: t("collection.combat_achievements"),
+        items: getRewards(save, COMBAT_ENTRY).map((reward) => ({
+            key: `${COMBAT_ENTRY}:${reward.id}`,
+            ...reward,
+        })),
+        tally: { key: "collection.combat_points", n: getCombatPoints(save.combatTasks) },
+    };
+    const entries = [...maps, ...clues, evolutions, combat, ...getCardEntries(save)];
     return LOG_TABS.flatMap((tab) => entries.filter((entry) => entry.tab === tab));
 }
 

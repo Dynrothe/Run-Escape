@@ -42,12 +42,14 @@ describe("getChestView", () => {
         expect(chest.item.set!.text).toContain("1/3");
         expect(worn.alchCoins).toBe(sim.alchValue("crystal_body", 0));
         // Crystal body: damage, projectile speed, movement speed. Torva: armour, hitpoints.
-        expect(worn.stats.map((pair) => [pair.key, pair.worn, pair.found])).toEqual([
-            ["might", "+5%", undefined],
-            ["armor", undefined, "+1.5"],
-            ["maxHp", undefined, "+10%"],
-            ["speed", "+15%", undefined],
-            ["moveSpeed", "+3%", undefined],
+        expect(
+            worn.stats.map((pair) => [pair.key, pair.worn, pair.found, pair.change, pair.better]),
+        ).toEqual([
+            ["might", "+5%", undefined, "-5%", false],
+            ["armor", undefined, "+1.5", "+1.5", true],
+            ["maxHp", undefined, "+10%", "+10%", true],
+            ["speed", "+15%", undefined, "-15%", false],
+            ["moveSpeed", "+3%", undefined, "-3%", false],
         ]);
     });
 
