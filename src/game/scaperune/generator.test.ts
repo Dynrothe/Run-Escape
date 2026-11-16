@@ -428,13 +428,15 @@ describe.skipIf(!mapChecks || !hasCache)("generated maps", () => {
     // Node itself, as Windows has no plain `npx` to start
     const tsx = (script: string) => ["--import", "tsx", script];
 
+    // Five to six minutes on the release workflow's runner, and one runner can be a third slower
+    // than the next, so it gets twice that
     it("reach everywhere with the game's own collision", async () => {
         const { stdout } = await run(process.execPath, tsx("scripts/scaperune/check-maps.ts"), {
             encoding: "utf8",
-            timeout: 400000,
+            timeout: 900000,
         });
         expect(stdout).toContain("All open tiles reach the spawn");
-    }, 410000);
+    }, 910000);
 
     // A shipped map changes only on purpose: update its hash in grid-hash.ts when it's meant to
     it("leave every shipped map as it was", async () => {

@@ -309,7 +309,10 @@ desktop build.
 
 - **It runs everything, on a busy machine.** It has the game's cache and sets `MAP_CHECKS=1`, so
   `generator.test.ts` runs its long map checks too. A test that takes a few seconds on your machine can pass the 5 second limit
-  there, so give a long one its own timeout.
+  there, so give a long one its own timeout. Runners differ too, one a third slower than the next,
+  so give a long one about twice what the release log says it takes
+  (`gh run view <id> --log | grep "<test name>"`). 0.34.1's first build failed on a map check that
+  had always taken most of its limit.
 - **"Exit code 1" with no failed test named** means an error with no stack in our code, which
   vitest's annotations leave out. `Timeout calling "onTaskUpdate"` is one: a worker went a minute
   without a turn of the event loop. `src/setupTests.ts` yields between tests so that a long file
