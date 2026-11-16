@@ -89,5 +89,9 @@ export const CLOSE_SPRITES = { off: 535, hover: 536 } as const;
 // cache by scripts/cache/slim-cache.ts.
 export const REFUND_SPRITE = 1021;
 
+// The client's green and red chevrons: what a casket's gear does better and worse than the worn
+// piece
+export const CHANGE_SPRITES = { better: 6866, worse: 6872 } as const;
+
 // The Wardrobe's tile: a red partyhat, from its store (so the slim cache has its icon)
 export const WARDROBE_ICON_OBJ = 1038;

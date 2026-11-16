@@ -116,7 +116,8 @@ describe("seeded runs", () => {
     afterEach(() => usePortableMath(false));
 
     test("a wizard in Lumbridge, their spells chasing targets", () => {
-        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x8d27c304);
+        // A magic hero's power-ups include the Imbued heart, so it changes this
+        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0xd5d2991b);
     }, 60000);
 
     test("a ranger in the Inferno on hard mode", () => {
@@ -136,7 +137,8 @@ describe("seeded runs", () => {
     test("a party of four in the God Wars, armies fighting each other", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
-        // Every weapon can come up, so a new one (the Nightmare staff) changes it
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x5d5cb1d6);
+        // Every weapon can come up, so a new one (the Nightmare staff) changes it, as does who
+        // drops ashes (they gather apart from bones), and a power-up for the wizard's magic
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0xba201ada);
     }, 60000);
 });

@@ -154,7 +154,7 @@ import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } 
 import { Coins } from "./Coins";
 import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
-import { CombatReport } from "./CombatBreakdown";
+import { CombatBreakdown, CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
@@ -179,6 +179,7 @@ import { PauseChat } from "./PauseChat";
 import { PauseLoadout, SlotIcon } from "./PauseLoadout";
 import { PauseQuests } from "./PauseQuests";
 import { Platinum } from "./Platinum";
+import { PlayerStatsNav, PlayerStatsTable } from "./PlayerStats";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
@@ -3748,7 +3749,8 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                     className={
                         "ui-buff" +
                         (buff.harmful ? " ui-buff-harmful" : "") +
-                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "") +
+                        (buff.id === "ring_of_life" ? " ui-buff-revive-ring" : "")
                     }
                     aria-label={tl(buff.name)}
                     description={
@@ -4723,8 +4725,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
 }
 
 // The HUD's DPS, and under it each weapon's: click the DPS (or press Tab) to
-// open or shut it. Each weapon's damage a second just now, most first, its
-// share of all of it (a bar and a percentage), and its damage this run.
+// open or shut it, or click anywhere in the open panel to shut it.
+// Each weapon's damage a second just now, most first, its share of all of it
+// (a bar and a percentage), and its damage this run.
 // Numbers are short (9.5K, 1.2B), as endless runs reach billions; pointing
 // at one gives it in full.
 function DamagePanel({
@@ -4757,19 +4760,29 @@ function DamagePanel({
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
             {open && (
-                <div className="ui-damage-panel">
-                    <div className="ui-damage-head">
+                <button
+                    type="button"
+                    className="ui-damage-panel"
+                    aria-label={t("ui.damage.toggle_tooltip")}
+                    onClick={() => client.toggleDamagePanel()}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.stopPropagation();
+                        }
+                    }}
+                >
+                    <span className="ui-damage-head">
                         <span />
                         <span />
                         <span>{t("ui.damage.share")}</span>
                         <span>{t("ui.damage.dps")}</span>
                         <span>{t("ui.damage.total")}</span>
-                    </div>
+                    </span>
                     {rows.map((slot) => {
                         const dps = damageOf(slot)?.dps ?? 0;
                         const damage = damageOf(slot)?.damage ?? 0;
                         return (
-                            <div key={slot.id} className="ui-damage-row">
+                            <span key={slot.id} className="ui-damage-row">
                                 <ItemIcon
                                     objId={slot.iconObjId}
                                     spriteId={slot.iconSpriteId}
@@ -4797,11 +4810,11 @@ function DamagePanel({
                                 <span className="ui-damage-total" title={exact(damage)}>
                                     {formatCompact(damage)}
                                 </span>
-                            </div>
+                            </span>
                         );
                     })}
                     {otherDps >= 0.05 && (
-                        <div className="ui-damage-row ui-damage-other">
+                        <span className="ui-damage-row ui-damage-other">
                             <span />
                             <span className="ui-damage-weapon" title={t("ui.damage.other_tooltip")}>
                                 {t("ui.damage.other")}
@@ -4811,9 +4824,9 @@ function DamagePanel({
                                 {formatCompact(otherDps)}
                             </span>
                             <span />
-                        </div>
+                        </span>
                     )}
-                </div>
+                </button>
             )}
         </div>
     );
@@ -4887,6 +4900,42 @@ function formatQuestProgress(quest: QuestTrackView): string {
         : t("quest.progress", { done: fmtNum(quest.done), total: fmtNum(quest.of) });
 }
 
+// Read once a second, as the Combat tab is: the run goes on behind a co-op pause menu
+function PartyStats({ client }: { client: GameClient }): JSX.Element | null {
+    const [players, setPlayers] = useState(() => client.getPartyStats());
+    const [selected, setSelected] = useState<number>();
+    useEffect(() => {
+        const timer = window.setInterval(() => setPlayers(client.getPartyStats()), 1000);
+        return () => window.clearInterval(timer);
+    }, [client]);
+    if (!players?.length) return null;
+    const playerIndex =
+        selected ??
+        Math.max(
+            0,
+            players.findIndex((player) => player.isLocal),
+        );
+    const player = players[playerIndex];
+    return (
+        <>
+            <h3 className="ui-pause-heading">{t("pause.heading.party_stats")}</h3>
+            <PlayerStatsNav
+                players={players}
+                playerIndex={playerIndex}
+                changePlayer={(direction) =>
+                    setSelected((playerIndex + direction + players.length) % players.length)
+                }
+            />
+            <PlayerStatsTable player={player} />
+            <CombatBreakdown
+                kinds={player.kinds}
+                sources={player.damage}
+                kills={player.killsByEnemy}
+            />
+        </>
+    );
+}
+
 type PauseTab = "loadout" | "combat" | "quests" | "party" | "collection" | "settings";
 
 // The pages opened from a button along the bottom, not a tab along the top
@@ -4936,7 +4985,7 @@ function PauseModal({
                   },
               ]
             : []),
-        ...(kickable.length > 0
+        ...(coop
             ? [
                   {
                       id: "party" as const,
@@ -5083,7 +5132,14 @@ function PauseModal({
                         <PauseCombat client={client} live={coop} log={ui.toastLog} />
                     )}
                     {open === "quests" && <PauseQuests quests={quests} combatTasks={combatTasks} />}
-                    {open === "party" && <PauseParty kickable={kickable} client={client} />}
+                    {open === "party" && (
+                        <>
+                            {kickable.length > 0 && (
+                                <PauseParty kickable={kickable} client={client} />
+                            )}
+                            <PartyStats client={client} />
+                        </>
+                    )}
                     {open === "collection" && (
                         <CollectionLogScreen
                             save={ui.save}

@@ -5,18 +5,23 @@ version and how to run it.
 
 - **WASD** or the arrow keys to move. Weapons fire on their own. **1-4** use your utility items.
   **Esc** pauses. **Q** shows or hides the quest tracker. **Tab**, or clicking the DPS under the
-  minimap, shows each weapon's damage a second and its total for the run. The mouse wheel zooms.
+  minimap, shows each weapon's damage a second and its total for the run. Click or tap anywhere in
+  the open panel to close it. The mouse wheel zooms.
 - On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
   screen to pause and use items, with the thumb still on the stick if you like. Tap the DPS for each
   weapon's damage. Phones play sideways, with gear and quests in the pause menu.
 - Your **revives** show beside your active effects, without a timer: a **Ring of life** from the
   shop, and the Pyromancer's own as a **Phoenix**. The phoenix is used first, and each icon goes
   once it's saved you. In co-op they're your own, not a teammate's.
-- Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
+- Enemies drop **bones**, or **ashes** for imps and demons, worth the same; walk near them to
+  collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
-  bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
-  into bigger stacks the same way. With too many piles of either lying around, the one furthest
-  away comes to the newest drop, so nothing left far behind is lost. Levels follow the OSRS experience table (stretched for the
+  bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Ashes grow
+  from plain grey Ashes to Vile, Malicious, Abyssal and Infernal ashes, and only gather with
+  ashes. Coins gather
+  into bigger stacks the same way. With too many piles lying around (bones and ashes count
+  together, coins on their own), the one furthest away of the newest drop's kind comes to it, so
+  nothing left far behind is lost. Levels follow the OSRS experience table (stretched for the
   later levels), and each one offers a choice of three: a new weapon, a weapon upgrade or a
   passive. **1-4** pick with the keyboard. **R** rerolls the offer (one reroll a run, more from
   the Pirate and the shop), and **X** skips it for coins from the run: 25 the first time, then
@@ -499,8 +504,9 @@ version and how to run it.
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
   edge of the screen points to ones out of view. Walk over one to open it: it rattles, bursts
   open and gives some coins and one item, which you equip, keep, use or high alch for coins.
-  Gear lists its stats, then only the differences from the piece it would replace, green for
-  gains and red for losses. Both pieces' set bonuses show too.
+  Gear is set beside the piece it would replace: for each stat, how much better (a green chevron)
+  or worse (a red one) the new piece is, then its value on both, and both pieces' set bonuses.
+  Beside the new piece's name, the icons of what it does better and worse sum it up.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
@@ -509,7 +515,9 @@ version and how to run it.
   menu). Once a Magnet pulls one towards you it can't run out, and its circle goes. Their damage
   keeps up with the enemies' hitpoints, and the same one never drops twice in a row. The shop's
   Runecraft upgrade makes them drop 15% more often for each rank, up to three.
-    - **Dwarf multicannon**: sets up by you and shoots the nearest enemies for 20 seconds.
+    - **Dwarf multicannon**: places its base by you, then adds the stand, barrels and furnace
+      in three steps over one second before shooting the nearest enemies. Its timer lasts 20
+      seconds, including the building.
     - **Book of the Dead**: raises a Greater Ghost, Skeleton or Zombie thrall to fight beside you
       for 30 seconds. The ghost and skeleton shoot from your side; the zombie goes after things.
     - **Bot nuke**: everything on the map that isn't a boss dies (bosses lose a tenth of their
@@ -527,21 +535,27 @@ version and how to run it.
       all. Everything in his way is hit once a pass and thrown aside.
     - **Fairy ring**: a ring opens at your feet for 12 seconds. Anything that isn't a boss and comes
       within 2.5 tiles is warped far away, behind you if you're on the move. It stays where it
-      opened, and shots still come through.
+      opened, and shots still come through. The fairy teleport effect appears as enemies warp away.
+    - **Imbued heart**, for magic adventurers only: plays its activation animation on you and gives
+      20% bonus magic damage for 20 seconds. Picking up another starts the timer again, without
+      stacking the bonus. It drops only with a magic adventurer in the run, the Old Man and the
+      odd one out offer it only to them, and in co-op the others walk over it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
     - **Polymorph**: for 10 seconds everything on the map turns into a sheep (shorn, red, green,
       blue or yellow) that wanders about slowly, stopping now and then to graze, and can't hurt
       you. Sheep say "Baa!" now and then, and die as sheep if they're killed. Elites and bosses
-      turn into golden sheep (a boss a giant one) that still come at you and attack as usual. One
+      turn into golden sheep (a boss a giant one) that still come at you and attack as usual,
+      with a "Baa!" each time. One
       in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
-      says "Beh?", and when it's killed two KGP agents run out of it and off the screen. One in
-      3000 is an odd one that wanders off the other way. Whatever turns up while it lasts is a
-      sheep too, till the rest turn back, and picked up again it's the same flock for longer. A
-      frozen sheep stays put. What can't be hit stays as it is, and so do ordinary enemies that
-      can't move or carry a flag, and anything busy with its part in a fight (a boss's totem, a
-      rolling boulder, one walking off the map).
+      says "Beh?", and when it's killed two KGP agents run out of it and off the screen. Another
+      one in 1000 is an odd one, asleep on its feet, that slowly wanders off the other way
+      snoring "ZzZ...", and a monkey child runs out of it when it's killed. Whatever turns up
+      while it lasts is a sheep too, till the rest turn back, and picked up again it's the same
+      flock for longer. A frozen sheep stays put. What can't be hit stays as it is, and so do
+      ordinary enemies that can't move or carry a flag, and anything busy with its part in a fight
+      (a boss's totem, a rolling boulder, one walking off the map).
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
@@ -1265,7 +1279,9 @@ version and how to run it.
       while they were down are theirs to choose once they're back, but a casket picked up
       meanwhile has no item for them.
     - The pause menu doesn't stop a co-op run. Leaving it takes you out of the party; the host
-      leaving ends it for everyone.
+      leaving ends it for everyone. **Party stats** shows each player's live kills, damage,
+      healing and caskets, with their weapons' damage, kills and average DPS as on the results
+      screen. Use the arrows to browse everyone, including downed players and those who left.
     - Teammates show with their names in green, an arrow at the edge of the screen when they're out
       of view, green dots on the minimap and their hitpoints down the left of the screen.
     - **Movement prediction** (on by default, in Settings and the pause menu): a player who

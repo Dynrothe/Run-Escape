@@ -756,6 +756,9 @@ export type Pickup = {
     spawnTick: number;
     // Bones and coins sliding over to join a bigger pile: its uid, 0 for none
     pileUid: number;
+    // An imp's or demon's remains: still kind "bones", collected the same way, but drawn as ashes
+    // and gathering only with other ashes (and bones only with bones)
+    ashes?: boolean;
     // Caskets only
     tier?: CasketTier;
     // Dug up a tier better (the Treasure hunter's trait, CharacterTraitDef dig)
@@ -828,6 +831,8 @@ export type Effect = {
     endTick: number;
     // Follows this enemy until it's gone, 0 for none
     enemyUid: number;
+    // Drawn on this hero instead of at x/y (a pickup's activation)
+    hero?: number;
     // Plays over and over until endTick (a shield), rather than once
     loop?: boolean;
     // Scaled so the model's radius is this many tiles (a claw's hands, as
@@ -936,7 +941,10 @@ export type FairyRing = {
     nextPulse: number;
     radius: number;
     locId: number;
+    // Shown where each warped enemy was: its frames from spotAnimFrom ticks in, for spotAnimTicks
     spotAnim: number;
+    spotAnimFrom: number;
+    spotAnimTicks: number;
     scale: number;
 };
 
@@ -1297,10 +1305,20 @@ type SimEventBody =
       }
     // A boss said something over its head
     | { type: "bossShout"; enemyUid: number; text: string }
-    // Any enemy said something over its head, with a sound (a polymorphed sheep's "Baa!")
-    | { type: "enemyShout"; enemyUid: number; text: string; sound: number; x: number; y: number }
-    // A polymorphed penguin was killed, and its escapees run off from where it fell
-    | { type: "polymorphEscape"; powerUpId: string; x: number; y: number }
+    // Any enemy said something over its head, with a sound (a polymorphed sheep's "Baa!"), up for
+    // seconds if it's not as long as overhead chat
+    | {
+          type: "enemyShout";
+          enemyUid: number;
+          text: string;
+          sound: number;
+          x: number;
+          y: number;
+          seconds?: number;
+      }
+    // A polymorphed animal with escapees (the penguin) was killed, and they run off from where it
+    // fell
+    | { type: "polymorphEscape"; powerUpId: string; look: PolymorphKind; x: number; y: number }
     // Said over the player's head (Durial321's lines in Falador)
     | { type: "playerShout"; text: string }
     // A boss got back up when it should have died

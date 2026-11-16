@@ -2,9 +2,12 @@ import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { ChestView, ItemView } from "../client/GameStore";
+import { StatPair } from "../content/stats";
+import { CHANGE_SPRITES } from "../content/titleIcons";
 import { ChestAction } from "../core/Loot";
-import { fmtNum, t, tl, tp } from "../i18n";
+import { fmtNum, list, t, tl, tp } from "../i18n";
 import { BanishButton } from "./BanishButton";
+import { CentredIcon, StatGlyph } from "./CentredIcon";
 import "./ChestModal.css";
 import { Coins } from "./Coins";
 import { ItemLines } from "./DescriptionButton";
@@ -13,6 +16,7 @@ import { KeyHint } from "./PadHint";
 import { RerollButton } from "./RerollButton";
 import { StatLine } from "./StatLine";
 import { useDialog } from "./useDialog";
+import { useSpriteFrame } from "./useSpriteFrame";
 
 // Opening a reward casket: it drops in, rattles harder and harder while it
 // glows its tier's colour, then bursts open in the item's rarity colour (rays,
@@ -359,8 +363,12 @@ function ChestCard({
                 <div className="ui-chest-card-head">
                     <ItemIcon objId={item.objId} size={40} />
                     <div className="ui-card-body">
-                        <div className="ui-card-title" style={{ color: item.rarity.color }}>
-                            {tl(item.name)}
+                        <div
+                            className="ui-card-title ui-chest-title"
+                            style={{ color: item.rarity.color }}
+                        >
+                            <span>{tl(item.name)}</span>
+                            {replaces && <ChangeSummary stats={replaces.stats} />}
                         </div>
                         <div className="ui-chest-kind">
                             {t("chest.kind", {
@@ -378,11 +386,14 @@ function ChestCard({
                         {t("chest.found")} <Coins amount={chest.coins} />
                     </div>
                 </div>
-                <ul className="ui-chest-lines">
-                    <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
-                </ul>
+                {/* Against a worn piece its stats are in the table */}
+                {!replaces && (
+                    <ul className="ui-chest-lines">
+                        <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
+                    </ul>
+                )}
                 <SetLine item={item} />
-                {replaces && <GearCompare replaces={replaces} />}
+                {replaces && <GearCompare chest={chest} replaces={replaces} />}
                 {chest.isGear && !replaces && (
                     <div className="ui-chest-compare">
                         {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
@@ -444,9 +455,17 @@ function SetLine({ item }: { item: ItemView }): JSX.Element | null {
     ) : null;
 }
 
-// The piece it would replace, its set, and only the stats that would change,
-// green for better and red for worse
-function GearCompare({ replaces }: { replaces: NonNullable<ChestView["replaces"]> }): JSX.Element {
+// Gear against the piece it would replace: that piece, its set, and a row for each stat either
+// has. The difference comes first, with a chevron and coloured by whether it's better, then the
+// stat, then what's worn and what's new, each under its piece's icon. The rows are in bands, so
+// the eye follows one across.
+function GearCompare({
+    chest,
+    replaces,
+}: {
+    chest: ChestView;
+    replaces: NonNullable<ChestView["replaces"]>;
+}): JSX.Element {
     const worn = replaces.item;
     return (
         <div className="ui-chest-compare">
@@ -458,18 +477,101 @@ function GearCompare({ replaces }: { replaces: NonNullable<ChestView["replaces"]
                 {t("chest.alched_for", { coins: fmtNum(replaces.alchCoins) })}
             </div>
             <SetLine item={worn} />
-            {replaces.changes.length > 0 && (
-                <div className="ui-chest-changes">
-                    {replaces.changes.map((change) => (
-                        <StatLine
-                            key={change.key}
-                            text={change.text}
-                            statKey={change.key}
-                            className={change.better ? "ui-good" : "ui-bad"}
-                        />
-                    ))}
-                </div>
-            )}
+            <table className="ui-chest-diff">
+                <thead>
+                    <tr>
+                        <td />
+                        {/* Named for screen readers; the chevrons and colours say it on screen */}
+                        <th scope="col" aria-label={t("chest.difference")} />
+                        <td colSpan={2} />
+                        <th scope="col" className="ui-chest-diff-was">
+                            <CentredIcon icon={{ objId: worn.objId }} box={18} />
+                            <span className="ui-chest-diff-label">{t("chest.wearing")}</span>
+                        </th>
+                        <th scope="col" className="ui-chest-diff-now">
+                            <CentredIcon icon={{ objId: chest.item.objId }} box={18} />
+                            <span className="ui-chest-diff-label">{t("chest.new")}</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {replaces.stats.map((pair) => {
+                        const changed = pair.change !== undefined;
+                        const tone = !changed
+                            ? "ui-chest-same"
+                            : pair.better
+                              ? "ui-good"
+                              : "ui-bad";
+                        return (
+                            <tr key={pair.key}>
+                                <td className="ui-chest-diff-arrow">
+                                    {changed && <Chevron better={pair.better} />}
+                                </td>
+                                <td className={"ui-chest-diff-change " + tone}>
+                                    {pair.change ?? "="}
+                                </td>
+                                <td className="ui-chest-diff-glyph">
+                                    <StatGlyph statKey={pair.key} />
+                                </td>
+                                <th scope="row" className="ui-chest-diff-name">
+                                    {pair.label}
+                                </th>
+                                <td className="ui-chest-diff-was">{pair.worn ?? "—"}</td>
+                                <td className="ui-chest-diff-now">{pair.found ?? "—"}</td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
         </div>
+    );
+}
+
+// The client's chevron, green up or red down, at its own size
+function Chevron({ better }: { better: boolean }): JSX.Element {
+    const url = useSpriteFrame(better ? CHANGE_SPRITES.better : CHANGE_SPRITES.worse, 0);
+    return url ? (
+        <img className="ui-chest-chevron" src={url} width={16} height={16} alt="" />
+    ) : (
+        <span className="ui-chest-chevron" aria-hidden="true" />
+    );
+}
+
+// Better and worse, each a group of what changes
+function changeGroups(stats: StatPair[]): { better: boolean; pairs: StatPair[] }[] {
+    return [true, false]
+        .map((better) => ({
+            better,
+            pairs: stats.filter((pair) => pair.change !== undefined && pair.better === better),
+        }))
+        .filter((group) => group.pairs.length > 0);
+}
+
+// Beside the found piece's name, against a worn one: a chevron and the icon of each stat it
+// does better, then worse
+function ChangeSummary({ stats }: { stats: StatPair[] }): JSX.Element | null {
+    const groups = changeGroups(stats);
+    if (groups.length === 0) {
+        return null;
+    }
+    // What the icons say, for a tooltip and screen readers
+    const said = groups
+        .map((group) =>
+            t(group.better ? "chest.better" : "chest.worse", {
+                list: list(group.pairs.map((pair) => pair.label)),
+            }),
+        )
+        .join(". ");
+    return (
+        <span className="ui-chest-summary" title={said} aria-label={said}>
+            {groups.map((group) => (
+                <span key={String(group.better)} className="ui-chest-summary-group">
+                    <Chevron better={group.better} />
+                    {group.pairs.map((pair) => (
+                        <StatGlyph key={pair.key} statKey={pair.key} />
+                    ))}
+                </span>
+            ))}
+        </span>
     );
 }

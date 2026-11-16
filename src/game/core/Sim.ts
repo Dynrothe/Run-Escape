@@ -110,8 +110,10 @@ import {
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
+    CANNON_BUILD_SECONDS,
     LANTERN_ID,
     POWER_UPS,
+    POWER_UP_BY_ID,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
     POWER_UP_MIN_GAP,
@@ -455,9 +457,10 @@ export const RAMPAGE_FADE_TICKS = 25;
 // How far off the ring a Drill Demon's runner heads straight for it
 const LAP_PULL_TILES = 3;
 // A fairy ring looks for what's walked in this often, and shows the warp on
-// only so many at a time
+// only so many at a time: a pulse's, and all it has showing at once
 const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
+const MAX_LIVE_RING_EFFECTS = 40;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
@@ -548,7 +551,7 @@ const DEATH_SINK_TICKS = 25;
 const MAX_DEATH_ANIM_TICKS = 60;
 // The most piles of bones, and of coins, lying around at once. Each kind
 // counts its own, so coins and food left behind don't keep new bones off the
-// ground.
+// ground. Ashes count as bones here, though they only gather with ashes.
 const MAX_PILES: Partial<Record<PickupKind, number>> = { bones: 400, coins: 100 };
 // Every so often bones lying this close to a bigger pile slide over and join
 // it, and coins do the same
@@ -3871,7 +3874,7 @@ export class Sim {
         return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
     }
 
-    // A potion's effect, for buffTicks. Drinking another dose starts the timer again.
+    // A potion's or a power-up's boost, for buffTicks. Another dose or pickup starts the timer again.
     private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
         const ticks = this.buffTicks(seconds);
         this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
@@ -4147,6 +4150,7 @@ export class Sim {
         this.stepTethers();
         this.stepEnemyProjectiles();
         this.stepBossFight();
+        this.stepGoldenSheep();
         this.stepFloor();
         this.stepRule();
         this.stepRelics();
@@ -20468,11 +20472,20 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
-        // A polymorphed penguin's cover is blown, and the agents inside make a run for it
-        if (polymorph?.look === "penguin") {
+        // A polymorphed penguin's cover is blown, and the agents inside make a run for it (or
+        // whatever else was inside an animal)
+        if (
+            polymorph &&
+            getPolymorphLook(
+                getPolymorphEffect(polymorph.powerUpId),
+                polymorph.look,
+                polymorph.variant,
+            ).escapees
+        ) {
             this.emit({
                 type: "polymorphEscape",
                 powerUpId: polymorph.powerUpId,
+                look: polymorph.look,
                 x: enemy.x,
                 y: enemy.y,
             });
@@ -20819,7 +20832,9 @@ export class Sim {
         }
         // The realm's richer (RealmRuleDef.drops)
         const realm = this.realm?.drops;
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1), {
+            ...(enemy.def.ashes && { ashes: true }),
+        });
         if (!last) {
             return;
         }
@@ -22743,7 +22758,7 @@ export class Sim {
             yaw: player.yaw,
             startTick: this.tick,
             endTick: this.tick + this.powerUpTicks(effect.seconds),
-            nextShot: this.tick + 15,
+            nextShot: this.tick + CANNON_BUILD_SECONDS * TICKS_PER_SECOND,
             damage: effect.damage * this.powerUpDamageScale(),
             range: effect.range * (1 + this.stats.area),
             amount: effect.amount + this.stats.amount,
@@ -23944,7 +23959,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts" | "ashes"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -23960,10 +23975,11 @@ export class Sim {
                 if (pickup.kind !== kind) {
                     continue;
                 }
+                // Ashes and bones count as one towards the limit, but only gather with their own
                 count++;
                 // (one already flying to the player, or to another pile, stays
                 // where it is)
-                if (pickup.attracted || pickup.pileUid !== 0) {
+                if (pickup.attracted || pickup.pileUid !== 0 || !!pickup.ashes !== !!extra.ashes) {
                     continue;
                 }
                 const d = Math.abs(pickup.x - player.x) + Math.abs(pickup.y - player.y);
@@ -24034,12 +24050,23 @@ export class Sim {
                 const at = CASKET_TIERS.indexOf(pickup.tier);
                 pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
             }
-            // Whoever's nearest gets it
+            // Whoever's nearest gets it. A power-up for one style waits for a hero of it, and
+            // anyone else walks over it.
+            const def =
+                pickup.kind === "powerUp" ? POWER_UP_BY_ID.get(pickup.powerUp ?? "") : undefined;
+            const takes = def?.style
+                ? (hero: Hero) => this.isUp(hero) && this.powerUpFits(def, hero)
+                : undefined;
+            if (takes && !this.heroes.some(takes)) {
+                continue;
+            }
             const banked = pickup.kind === "coins" && bankers.length > 0;
             this.use(
                 banked
                     ? this.nearest(pickup.x, pickup.y, (hero) => bankers.includes(hero))
-                    : this.nearestUpHero(pickup.x, pickup.y),
+                    : takes
+                      ? this.nearest(pickup.x, pickup.y, takes)
+                      : this.nearestUpHero(pickup.x, pickup.y),
             );
             const player = this.player;
             const magnet = BASE_MAGNET * (1 + this.stats.magnet);
@@ -24112,6 +24139,7 @@ export class Sim {
             hash.query(pile.x, pile.y, PILE_RADIUS, (other) => {
                 if (
                     other.kind === pile.kind &&
+                    !!other.ashes === !!pile.ashes &&
                     !placed.has(other) &&
                     away(other) >= pileAway &&
                     fm.hypot(other.x - pile.x, other.y - pile.y) <= PILE_RADIUS
@@ -24186,15 +24214,26 @@ export class Sim {
         }
     }
 
-    private rollPowerUpId(): string {
+    // heroes: who might get it, the party for a drop and the hero for a quiz's prize
+    private rollPowerUpId(heroes: readonly Hero[] = this.heroes): string {
         // A lantern is the one power-up a map's own weight brings in (LightingDef)
         const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
             POWER_UPS.map((p) =>
-                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+                p.id === this.lastPowerUpId || !heroes.some((hero) => this.powerUpFits(p, hero))
+                    ? 0
+                    : p.id === LANTERN_ID
+                      ? lantern
+                      : p.weight,
             ),
         );
         return POWER_UPS[index].id;
+    }
+
+    // Whether a power-up is any use to this hero: one for a style (PowerUpDef.style) is only
+    // theirs
+    private powerUpFits(def: PowerUpDef, hero: Hero): boolean {
+        return !def.style || getCharacter(hero.characterId).style === def.style;
     }
 
     dropPowerUp(id: string, x: number, y: number): void {
@@ -24255,6 +24294,26 @@ export class Sim {
                         ? "Everything on the ground flies to whoever's nearest!"
                         : "Everything on the ground flies to you!";
                 break;
+            case "buff": {
+                this.addBuff(def.id, effect.stats, effect.seconds, false);
+                this.buffs[this.buffs.length - 1].look = {
+                    name: def.name,
+                    objId: def.objId,
+                };
+                const activation = this.addEffect(
+                    effect.spotAnim,
+                    player.x,
+                    player.y,
+                    0,
+                    effect.spotAnimTicks,
+                );
+                if (activation) {
+                    activation.hero = this.hero.index;
+                    activation.once = true;
+                }
+                message = def.description;
+                break;
+            }
             case "freeze":
                 endTick = Math.max(
                     this.freezeEndTick,
@@ -24298,6 +24357,8 @@ export class Sim {
                     radius: effect.radius,
                     locId: effect.locId,
                     spotAnim: effect.spotAnim,
+                    spotAnimFrom: effect.spotAnimFrom,
+                    spotAnimTicks: effect.spotAnimTicks,
                     scale: effect.scale,
                 });
                 message = "A fairy ring opens at your feet!";
@@ -24455,7 +24516,8 @@ export class Sim {
         enemy.anim = "walk";
         const player = this.player;
         const grid = this.getMoveGrid(enemy.def);
-        const speed = enemy.speed * effect.speed;
+        const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
+        const speed = enemy.speed * effect.speed * (look.pace ?? 1);
         const fromX = enemy.x;
         const fromY = enemy.y;
         // Knockback still throws it about, frozen or not, as it does the rest
@@ -24531,6 +24593,34 @@ export class Sim {
             return;
         }
         this.nextPolymorphShout = this.tick + secondsToTicks(POLYMORPH_SHOUT_GAP);
+        this.emitPolymorphShout(enemy, polymorph, effect);
+    }
+
+    // A golden sheep says its line with every attack it starts, whatever the flock's gap
+    private stepGoldenSheep(): void {
+        const polymorphing = this.polymorphing;
+        if (!polymorphing || this.tick >= polymorphing.endTick) {
+            return;
+        }
+        for (const enemy of this.enemies) {
+            const polymorph = this.polymorphOf(enemy);
+            if (
+                polymorph?.look === "golden" &&
+                enemy.anim === "attack" &&
+                enemy.animStart === this.tick
+            ) {
+                const effect = getPolymorphEffect(polymorph.powerUpId);
+                this.emitPolymorphShout(enemy, polymorph, effect, effect.golden.attackShoutSeconds);
+            }
+        }
+    }
+
+    private emitPolymorphShout(
+        enemy: Enemy,
+        polymorph: EnemyPolymorph,
+        effect: PolymorphEffect,
+        seconds?: number,
+    ): void {
         const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
         const sounds = look.shoutSounds ?? effect.shoutSounds;
         this.emit({
@@ -24542,6 +24632,7 @@ export class Sim {
             ],
             x: enemy.x,
             y: enemy.y,
+            seconds,
         });
     }
 
@@ -24767,10 +24858,33 @@ export class Sim {
                 caught.push(enemy);
             }
         });
+        // Each warp's effect lasts a while, so a crowd walking in mustn't take the place of every
+        // other effect (MAX_EFFECTS)
+        let room = 0;
+        if (caught.length > 0) {
+            let live = 0;
+            for (const effect of this.effects) {
+                if (effect.spotAnim === ring.spotAnim) {
+                    live++;
+                }
+            }
+            room = Math.min(MAX_RING_EFFECTS, MAX_LIVE_RING_EFFECTS - live);
+        }
         let effects = 0;
         for (const enemy of caught) {
-            if (effects < MAX_RING_EFFECTS) {
-                this.addEffect(ring.spotAnim, enemy.x, enemy.y, 0, 40);
+            if (effects < room) {
+                // Started part way in, so what's seen of it starts as the enemy goes, and gone
+                // when that ends
+                const effect = this.addEffect(
+                    ring.spotAnim,
+                    enemy.x,
+                    enemy.y,
+                    0,
+                    ring.spotAnimTicks,
+                );
+                if (effect) {
+                    effect.startTick -= ring.spotAnimFrom;
+                }
                 effects++;
             }
             this.relocate(enemy, true);
@@ -25248,7 +25362,10 @@ export class Sim {
     // on offer less often too. In co-op, now and then one of them is an extra
     // revive instead.
     private rollOldManOptions(): EventOption[] {
-        const left = POWER_UPS.filter((powerUp) => powerUp.weight > 0);
+        // Only what's any use to whoever walked up
+        const left = POWER_UPS.filter(
+            (powerUp) => powerUp.weight > 0 && this.powerUpFits(powerUp, this.hero),
+        );
         const options: EventOption[] = [];
         if (this.heroes.length > 1 && this.eventRng.chance(OLD_MAN_REVIVE_CHANCE)) {
             options.push({
@@ -25383,7 +25500,7 @@ export class Sim {
                 true,
             );
             if (option.correct) {
-                this.usePowerUp(getPowerUp(this.rollPowerUpId()));
+                this.usePowerUp(getPowerUp(this.rollPowerUpId([this.hero])));
             }
         }
         this.leaveEvent();

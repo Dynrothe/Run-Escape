@@ -1949,8 +1949,8 @@
 }
 
 /* The damage meter, under the quest tracker, and each weapon's under it */
-/* Only the DPS takes clicks: the panel under it lets them through to the
-   game, the mouse wheel's zoom included */
+/* The DPS and its open panel take clicks (a click on the panel shuts it), so the mouse wheel
+   doesn't zoom over the open panel; the rest lets them through to the game */
 .ui-damage {
     display: flex;
     flex-direction: column;
@@ -1975,6 +1975,12 @@
 }
 
 .ui-damage-panel {
+    pointer-events: auto;
+    cursor: pointer;
+    box-sizing: content-box;
+    font: inherit;
+    color: inherit;
+    text-align: left;
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
     align-items: center;
@@ -2348,6 +2354,15 @@
     flex-shrink: 0;
 }
 
+/* An icon cut down to what's drawn, in the middle of its square (CentredIcon) */
+.ui-centred-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
 /* Buffs, inventory and hitpoints, bottom middle */
 
 .ui-hud-bottom {
@@ -2403,6 +2418,11 @@
 /* A revive: the icon alone, with no room kept for seconds or a bar */
 .ui-buff-untimed {
     padding: 1px 3px;
+}
+
+/* The ring's cache sprite has extra transparent space on its right and bottom. */
+.ui-buff-revive-ring > .ui-icon {
+    transform: translate(1.5px, 0.75px);
 }
 
 .ui-inventory {

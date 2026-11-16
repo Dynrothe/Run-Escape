@@ -107,8 +107,11 @@ export type EnemyDef = {
     // Collision radius in tiles (kept under half a tile so everything fits
     // through doors)
     radius: number;
-    // XP of the bones it drops
+    // XP of the remains it drops
     xp: number;
+    // Drops ashes instead of bones (imps and demons), for the same XP. They're picked up as
+    // bones are, but gather into piles of their own
+    ashes?: boolean;
     // 0 = full knockback, 1 = immune
     knockbackResist?: number;
     // Render scale on top of the NPC's own
@@ -1859,13 +1862,17 @@ export type WeaponLevel = {
     name?: string;
 };
 
-// How an item is drawn in flight when its cache model needs help, whichever
-// weapon throws it (PROJECTILE_ITEM_LOOKS). Drawing only: hit sizes stay as they are.
-export type ProjectileItemLook = {
+// How an item or a spot animation is drawn in flight when its cache model needs help
+// (PROJECTILE_ITEM_LOOKS, PROJECTILE_SPOT_LOOKS). The player's shots take all of it; an
+// enemy's spot animation takes only its roll. Drawing only: hit sizes stay as they are.
+export type ProjectileLook = {
     // Drawn this much bigger, for a model too small to see from the game's camera
     scale?: number;
     // Turned this far (2048 is a full turn), for a model that doesn't point the way it flies
     yawOffset?: number;
+    // Tipped over this far about the way it flies (512 lays it on its side), for a model that
+    // spins upright and so shows only its edge to the game's camera
+    roll?: number;
 };
 
 export type WeaponDef = {
@@ -4058,6 +4065,14 @@ export type PowerUpEffect =
     | { kind: "nuke"; bossDamage: number }
     // Pulls every drop on the ground to the player
     | { kind: "magnet" }
+    // A fixed-duration stat boost, with its activation spot animation on the player
+    | {
+          kind: "buff";
+          stats: Partial<Stats>;
+          seconds: number;
+          spotAnim: number;
+          spotAnimTicks: number;
+      }
     // Everything that isn't a boss stands still, and so does whatever turns up
     // meanwhile
     | { kind: "freeze"; seconds: number }
@@ -4094,13 +4109,16 @@ export type PowerUpEffect =
           scale: number;
       }
     // A ring (locId, drawn at scale) opens at the player's feet and warps
-    // whatever walks within radius far away, showing spotAnim where it was
+    // whatever walks within radius far away, showing spotAnim where it was: its frames from
+    // spotAnimFrom ticks in, for spotAnimTicks (the part of it that's seen)
     | {
           kind: "ring";
           seconds: number;
           radius: number;
           locId: number;
           spotAnim: number;
+          spotAnimFrom: number;
+          spotAnimTicks: number;
           scale: number;
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)
@@ -4126,9 +4144,9 @@ export type PowerUpEffect =
     // stretches it), one of sheep at random, wandering about at speed times its own pace and
     // stopping to graze, unable to hurt anyone; it dies as one too. Elites and bosses turn into
     // golden, drawn at its bossScale for a boss. Now and then an ordinary enemy turns into the
-    // penguin instead (penguin.chance), which lets its escapees out when it's killed, or the rare
-    // one (rare.chance), which wanders off away from the player. Every so often one of them says
-    // shout (each about every shoutSeconds), with one of shoutSounds, unless its look has its
+    // penguin instead (penguin.chance), or the rare one (rare.chance), which wanders off away
+    // from the player; either lets its escapees out when it's killed. Every so often one of them
+    // says shout (each about every shoutSeconds), with one of shoutSounds, unless its look has its
     // own. Whatever turns up while it lasts is turned too, till the end. What can't be hit, and
     // ordinary enemies that can't move or carry a flag, stay as they are (Sim.canPolymorph).
     | {
@@ -4136,8 +4154,9 @@ export type PowerUpEffect =
           seconds: number;
           speed: number;
           sheep: PolymorphLook[];
-          golden: PolymorphLook & { bossScale: number };
-          penguin: PolymorphLook & { chance: number; escapees: PolymorphEscapees };
+          // attackShoutSeconds: how long its line is up when it says it with an attack
+          golden: PolymorphLook & { bossScale: number; attackShoutSeconds: number };
+          penguin: PolymorphLook & { chance: number };
           rare: PolymorphLook & { chance: number };
           shout: string;
           shoutSeconds: number;
@@ -4146,7 +4165,7 @@ export type PowerUpEffect =
 
 export type PolymorphEffect = Extract<PowerUpEffect, { kind: "polymorph" }>;
 
-// What runs out of a polymorphed penguin when it's killed: count NPCs, off away from the player at
+// What runs out of a polymorphed animal when it's killed: count NPCs, off away from the player at
 // speed tiles a second for seconds, drawn at scale. Looks only: they're not in the sim.
 export type PolymorphEscapees = {
     npcId: number;
@@ -4163,7 +4182,8 @@ export type PolymorphKind = "sheep" | "golden" | "penguin" | "rare";
 // What a polymorphed enemy is drawn as: an NPC, at scale whatever size the enemy itself was (a
 // boss at the golden look's bossScale). deathSeq -1 sinks it, as an enemy with no death animation
 // does. attackSeq plays while one that fights on (a golden sheep) attacks. shout and shoutSounds
-// stand in for the polymorph's own.
+// stand in for the polymorph's own. escapees run out of it when it's killed (the penguin's agents).
+// pace is what the polymorph's speed is multiplied by for it (1 unless set).
 export type PolymorphLook = {
     npcId: number;
     idleSeq: number;
@@ -4171,8 +4191,10 @@ export type PolymorphLook = {
     deathSeq: number;
     attackSeq?: number;
     scale: number;
+    pace?: number;
     shout?: string;
     shoutSounds?: number[];
+    escapees?: PolymorphEscapees;
 };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
@@ -4191,8 +4213,14 @@ export type PowerUpDef = {
     locId?: number;
     // Drawn this many times bigger on the ground than other power-ups
     scale?: number;
+    // Centre an offset item model on the pickup before it rotates. It's baked once by its obj id,
+    // so every other use of that item gets the centred model too
+    centerGroundModel?: boolean;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
+    // Only for heroes of this style (the Imbued heart's magic): it drops only with one in the
+    // party, waits on the ground for one of them, and the Old Man and a quiz offer it only to them
+    style?: CombatStyle;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR
     color?: string;
     // Coins the Mysterious Old Man wants for it, at the start of a run

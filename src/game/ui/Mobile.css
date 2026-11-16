@@ -1420,6 +1420,11 @@
         margin-top: 4px;
     }
 
+    /* Room for Reroll, Skip (one it's short for too) and Reloaded's two on a 667px phone */
+    .ui-levelup-actions {
+        gap: 6px;
+    }
+
     /* The casket's card beside the casket once it's open */
 
     .ui-chest-scene {
@@ -1482,9 +1487,39 @@
         padding-top: 4px;
     }
 
-    .ui-chest-changes {
+    .ui-chest-diff {
         margin-top: 2px;
-        gap: 0 12px;
+    }
+
+    .ui-chest-diff th,
+    .ui-chest-diff td {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    /* Wearing and New beside their pieces' icons rather than under them, a line less, so a
+       667x375 phone shows every row */
+    .ui-chest-diff thead th {
+        padding-bottom: 1px;
+    }
+
+    .ui-chest-diff-label {
+        display: inline;
+        margin: 0 0 0 3px;
+        vertical-align: middle;
+    }
+
+    /* And each row a little lower, its stat's icon in 18px rather than 20 */
+    .ui-chest-diff .ui-chest-diff-glyph .ui-centred-icon {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    .ui-chest-diff .ui-chest-diff-glyph img {
+        width: auto;
+        height: auto;
+        max-width: 18px;
+        max-height: 18px;
     }
 
     /* Pause and results: their columns scroll under the buttons */

@@ -49,6 +49,16 @@ part too. Once the whole file's in hand it's kept, and only then are the parts d
 reloaded while a phone's still writing it (or out of room) is put together from the parts: its
 resume asks past the end, and a 416 with the parts' length means every part was there.
 
+`bun run download-caches` (`scripts/download-caches.cjs`) writes OpenRS2's ZIP to disk as it
+arrives, in a `.download-*` folder in the cache's own folder, and unzips the cache's files from
+there one at a time (`yauzl`), so neither the ZIP nor the cache's big data file has to fit in
+memory: it needs room for the ZIP beside the cache while it runs. The folder goes when it's done
+or fails, and one a stopped run left goes on the next. There's no resuming: a retry downloads the
+whole ZIP again. `info.json` is written last, so a cache folder without one isn't finished.
+`CACHE_DOWNLOAD_TIMEOUT_MS` times only the waits for the network, not for the disk. The slim
+cache's build still holds the full cache in each worker: on a small machine use `SLIM_WORKERS=1`,
+or build elsewhere and host the finished `dist/`.
+
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes, of item icons and of monster chatheads, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
@@ -67,11 +77,11 @@ runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`
 file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
 version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
 be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
-reused cache still has its chunks' hashes checked and gets the current build. `caches/slim/` isn't
-kept between CI jobs. Chunks are written under a temporary name and renamed into place (tried again
-for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
-chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
-`slim-cache-boot.mjs`, which registers it.
+reused cache still has its chunks' hashes checked and gets the current build, but it isn't loaded
+again, so a release never reuses one (below). Chunks are written under a temporary name and
+renamed into place (tried again for a few seconds while Windows holds the new file), so one that
+stopped partway leaves no broken chunk behind. tsx's loader doesn't reach worker threads by
+itself, so each starts from `slim-cache-boot.mjs`, which registers it.
 
 When something it's made from has changed, `caches/slim/units.json` still has what each unit read
 last time, fingerprinted with the unit's inputs and the workers' code, configuration and full
@@ -92,6 +102,12 @@ from the full cache and checks once more, rather than stop. `units.json` is one 
 each read list, and has only the current plan's units. A damaged entry, or file, is reported and
 loaded again.
 
+The release workflow keeps only `caches/slim/units.json` from one release to the next (in GitHub's
+cache, keyed by the full cache's name and the commit, restoring the newest earlier one), never the
+run's `slim.json`. So a release loads from the full cache only the units that changed, and never
+reuses a whole run: its slim cache is always loaded again and checked. The builder's fingerprints
+decide what's reused, not the key. A new `slim-units-v1-` in the key starts it afresh.
+
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.
 - `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
@@ -103,9 +119,12 @@ loaded again.
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
   a change to a group renames only its own chunk, and a player who's played before downloads only
   that one. Changing a span renames that index's chunks.
-- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses. It
-  checks each one it downloads against its name, and after loading drops the ones `caches.json`
-  doesn't list.
+- **The browser** keeps the chunks in the Cache API, in `cache-chunks`, under their addresses.
+  `fetchChunks` reads and checks the stored ones six at a time and hands each missing or damaged
+  one straight to its downloads, six at a time apart from the checks, so a download never holds
+  them up. It checks each download against its name, and after loading drops the ones
+  `caches.json` doesn't list. Progress counts only what's downloaded, so it starts once every
+  stored chunk's been checked and the total's known.
 - **A cache made for another build** would stop partway through loading, on a group it hasn't
   got, so the game checks `caches.json`'s build against its own before it starts. On a mismatch it
   reloads the page once, as the page may be an old copy, and then says what's wrong rather than
@@ -828,7 +847,7 @@ src/game/
                       for flow fields and straight walks). Sim makes the FlightGrid with the
                       map when anything on it flies (`hasFliers` in content/maps.ts), since
                       making it takes a while
-    SpatialHash.ts    enemies (and piles of bones) by cell, for what's near: flat arrays over
+    SpatialHash.ts    enemies (and piles of remains) by cell, for what's near: flat arrays over
                       the arena, kept from tick to tick. It goes by middles, so an attack
                       that hits what it touches uses Sim's queryTouching, which also looks
                       at the few big enemies (radius over 1) out of the cells it searched
@@ -856,7 +875,9 @@ src/game/
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
-            above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
+            above), useSpriteFrame (a sprite's frame at its own size), CentredIcon (an icon cut
+            down to what's drawn and set in the middle of a square, so a column of different
+            icons lines up: the casket's comparison), DescriptionButton
             (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
             off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
@@ -887,7 +908,12 @@ The classic screen has two tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player
 run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the player
 whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
 laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
-`CombatView`.
+`CombatView`. Co-op's pause menu has a Party tab: the host's kick buttons, then Party stats, each
+player's results so far behind the results' arrows (`PlayerStatsNav` and `PlayerStatsTable` in
+`ui/PlayerStats.tsx`, shared with `ClassicResults`) over their `CombatBreakdown`. It reads
+`GameClient.getPartyStats` once a second while it's open, as the Combat tab reads its view, not
+through the HUD's numbers. Its DPS is the results' average over each source's active time, not the
+damage meter's recent window.
 The monsters killed are shown as their chatheads: `EnemyHead` (`ui/EnemyHead.tsx`) gives
 `NpcHead` (`ui/ItemIcon.tsx`) the monster's NPC and its framing, `iconCache` asks for it, and
 `NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC with none),
@@ -903,7 +929,7 @@ zooming never moves the picture, pitched or not. They were set by eye with the e
 `feat/portrait-editor` branch (`?portraits` there). A framing that picks a body, a model or a
 sequence uses more of the cache, so deploy it with a new slim cache.
 
-The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
+The pause menu's tabs are Loadout, Combat, then Quests when there are any and Party in co-op
 (`PauseModal`; Quests has the Combat Achievements a solo run follows under its quests, in
 `PauseQuests`), and its Collection log and settings are buttons at the bottom, beside Give up and
 Resume, each one's page replacing the open tab (`PAUSE_BUTTON_PAGES`; the button goes back to the
@@ -1062,9 +1088,13 @@ gives a ScapeRune map a loc a different model or size, and two bugs were fixed (
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 
-Karamja's blocking Jungle plants (the ids in `JUNGLE_PLANTS`) have low wooden bases, made from the
-cache's Tree stump (loc 1354, model 1635), because loc 1398's model also stands there as a "Plant"
-(loc 1390) you can walk through. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
+Karamja's blocking Jungle plants (`JUNGLE_PLANTS`) and the Barrows' swamp Plants (`BARROWS_PLANTS`)
+have low wooden bases, made from the cache's Tree stump (loc 1354, model 1635), to tell them from
+passable foliage: Karamja's loc 1398 even shares its model with a "Plant" (loc 1390) you can walk
+through. The Jungle plants get one wherever they stand. The Barrows' Plants are generic, standing
+all over the world (Kourend, Varlamore, Lumbridge, Slepe beside it on the Theatre of Blood's map),
+so they only get one in the Barrows map's squares (`BARROWS_SQUARES`, its arena), which
+`SdMapDataLoader` passes it. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
 render list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and
 the minimap stay unchanged. It copies the model, scales it to sit under the plant's leaves, keeps
 one copy for each size in a map square, and fits each to the terrain. A plant still blocks out to
@@ -2385,6 +2415,10 @@ The overlay draws each hitsplat (its kind, number and size) once and copies it a
 projectile glows likewise: text and gradients are the slowest things on a 2D canvas, and a big
 fight has a hundred splats. The effects it prunes each frame are pruned in place, and the enemies
 reuse one options object, to keep a phone's garbage collector quiet.
+Each hero and enemy has four hitsplat slots, laid out in screen pixels like OSRS and scaled with
+the overlay. Slots stay fixed until their splats expire; when all four are occupied, a new hit
+replaces the oldest hit on that target in its existing slot. This is display-only, in `GameView`,
+not the sim.
 
 Power-ups on the ground have a countdown pie over them, like RuneLite's
 (`GameView.drawPickupTimers`): it drains clockwise, from green to orange at half the power-up's
@@ -2394,6 +2428,13 @@ flat item reaches further up the screen than its height does, so the pie sits ov
 the item reaches as it turns, not over its top. The Power-up timers setting
 (`DisplaySettings.pickupTimers`, in Settings and the pause menu, on by default) turns it off;
 `GameClient` hands it to the view each frame.
+
+`PowerUpDef.scale` draws a dropped item bigger, for one that's hard to spot, and its timer rises
+with it. Its pickup range and effect stay as they are.
+
+`PowerUpDef.centerGroundModel` bakes an item whose model sits off its own middle centred, so it
+turns on the spot rather than circling its pickup (the Drill Demon's helmet). It goes by the obj
+id (`obj:<id>`), so anything else drawing that item gets the centred model too.
 
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
@@ -2543,7 +2584,8 @@ when starting or stopping during the cast.
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
   `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the
   Pyromancer's phoenix) is used first, then the shop's Ring of life (its `objId`). The "saves you"
-  toast names the one used (`getUsedRevive`).
+  toast names the one used (`getUsedRevive`). The Ring of life's icon is nudged into the middle of
+  its box (`ui-buff-revive-ring`), as its sprite has more empty space on the right and bottom.
 - **The minimap** redraws 30 times a second at most, leaves out enemies off it, and draws its
   dots a colour at a time.
 - **The casket's rays** have their fade drawn into them (an SVG gradient), not a `mask-image`, which
@@ -2730,10 +2772,10 @@ Auto alch and Auto equip are local `DisplaySettings`, off by default, so never a
 `GameClient.autoAnswerChest` sends the casket's usual action through `act`, as a click would, and
 Auto alch comes first. Auto equip goes by `Loot.shouldAutoEquip`, as Production Prodigy does in
 the sim: the stats as upgraded and rounded as the casket shows them (`stats.compareStatValues`,
-which its lines use too), none lower and at least one higher. So it takes what the casket lists
-only in green, though a stat can be lower by less than a shown step (2.5% and 3% both show +3%).
-It's not the rarity-based `shouldWear`, and it never
-replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
+which its Wearing and New table uses too, through `stats.pairStats`), none lower and at least one
+higher. So it takes what the table's Difference shows only in green, though a stat can be lower
+by less than a shown step (2.5% and 3% both show +3%). It's not the rarity-based `shouldWear`, and
+it never replaces a worn set piece. Only an automatic answer gets a line saying what it did (`autoChest`
 remembers which casket it was). In co-op the casket stays hidden, though the menu still opens,
 until the host's frame brings the answer back. One that's lost or turned away would leave nothing
 to click, so `resendAutoChest` offers it to `CoopRun.act` each update that brought frames, which
@@ -3140,8 +3182,12 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects,
+  keyboard or controller focus and holds across bag items, weapons, passives, HUD effects,
   worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  A hold describes after `HOLD_MS` on a button with `onUse` (a bag item, an Armoury tile, a
+  catalogue entry), and after the shorter `DESCRIBE_HOLD_MS` on one a tap does nothing on (the
+  HUD's slots, effects and gear, its quests, an upgrade step), where there's no tap to mistake a
+  short hold for.
   A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
   `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the

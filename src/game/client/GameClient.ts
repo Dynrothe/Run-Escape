@@ -221,6 +221,7 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    PlayerResultView,
     QuestTrackView,
     ReviveView,
     SaveBlock,
@@ -2141,6 +2142,12 @@ export class GameClient implements GameFrameHandler {
     getCombatView(): CombatView | undefined {
         const sim = this.sim;
         return sim ? sim.as(sim.focus, () => getCombatView(sim)) : undefined;
+    }
+
+    // The pause menu's Party stats in co-op: every player's totals so far, as the results show them
+    getPartyStats(): PlayerResultView[] | undefined {
+        const sim = this.sim;
+        return sim && sim.heroes.length > 1 ? getPlayerResultViews(sim) : undefined;
     }
 
     toggleDamagePanel(): void {

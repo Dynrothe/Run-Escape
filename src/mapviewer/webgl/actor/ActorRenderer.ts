@@ -616,6 +616,10 @@ export class ActorRenderer {
         const edge = options?.edge ?? 0;
         const edgeWidth = options?.edgeWidth ?? 0;
         const edgeColor = options?.edgeColor ?? NO_TINT;
+        // The silhouette, outline and glow turn with the model, or a rolled thrownaxe's outline
+        // stands upright behind it
+        const pitch = options?.pitch ?? 0;
+        const roll = options?.roll ?? 0;
         const segment = model.page.segments[anim.segments[frame]];
         const positionStart = anim.positionStarts[frame];
         (options?.early ? segment.early : segment.instances).push(
@@ -635,8 +639,8 @@ export class ActorRenderer {
             edgeColor,
             stretchX,
             stretchZ,
-            options?.pitch ?? 0,
-            options?.roll ?? 0,
+            pitch,
+            roll,
             Math.max(options?.unlit ?? 0, this.unlitAtLeast),
             model.layered ? LAYER_DEPTH : 0,
         );
@@ -658,8 +662,8 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
-                0,
-                0,
+                pitch,
+                roll,
                 0,
             );
         }
@@ -682,8 +686,8 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
-                0,
-                0,
+                pitch,
+                roll,
                 0,
             );
         }
@@ -709,8 +713,8 @@ export class ActorRenderer {
                     0,
                     1,
                     1,
-                    0,
-                    0,
+                    pitch,
+                    roll,
                     0,
                 );
             }

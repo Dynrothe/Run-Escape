@@ -8,6 +8,7 @@ import { list, t, tl } from "../../i18n";
 import { Coins } from "../Coins";
 import { CombatBreakdown } from "../CombatBreakdown";
 import { Platinum } from "../Platinum";
+import { PlayerStatsNav, PlayerStatsTable } from "../PlayerStats";
 import { TabBar } from "../TabBar";
 import { useMenuKeys } from "../menuKeys";
 import { useDialog } from "../useDialog";
@@ -82,45 +83,12 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                 </h2>
                 <ResultNotices ui={ui} />
                 {multiplayer && player && (
-                    <div
-                        className="ui-result-player-nav"
-                        role="group"
-                        aria-label={t("ui.result.player_nav_aria")}
-                    >
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.prev_player_aria")}
-                            title={t("ui.result.prev_player_title")}
-                            onClick={() => changePlayer(-1)}
-                        >
-                            <span className="ui-result-arrow-left" aria-hidden="true" />
-                        </button>
-                        <div className="ui-result-player" aria-live="polite" aria-atomic="true">
-                            <div className="ui-result-player-name">
-                                {player.name}
-                                {player.isLocal && t("ui.result.you")}
-                            </div>
-                            <div className="ui-result-player-detail">
-                                {t("ui.result.player_index", {
-                                    current: playerIndex + 1,
-                                    total: players.length,
-                                })}
-                                {player.left
-                                    ? t("ui.result.left_run")
-                                    : player.down
-                                      ? t("ui.result.down")
-                                      : ""}
-                            </div>
-                        </div>
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.next_player_aria")}
-                            title={t("ui.result.next_player_title")}
-                            onClick={() => changePlayer(1)}
-                        >
-                            <span className="ui-result-arrow-right" aria-hidden="true" />
-                        </button>
-                    </div>
+                    <PlayerStatsNav
+                        players={players}
+                        playerIndex={playerIndex}
+                        changePlayer={changePlayer}
+                        keys
+                    />
                 )}
                 {result && player && (
                     <>
@@ -156,59 +124,7 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                                                 {t("ui.result.individual_stats")}
                                             </h3>
                                         )}
-                                        <table
-                                            className="ui-result-table"
-                                            aria-label={t("ui.result.individual_stats")}
-                                        >
-                                            <tbody>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.adventurer")}</td>
-                                                    <td>{tl(player.characterName)}</td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.kills")}</td>
-                                                    <td>
-                                                        <Big value={player.kills} />
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.damage_dealt")}</td>
-                                                    <td>
-                                                        <Big value={player.damageDealt} />
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.biggest_hit")}</td>
-                                                    <td>
-                                                        <Big value={player.highestHit} />
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.damage_taken")}</td>
-                                                    <td>
-                                                        <Big value={player.damageTaken} />
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.healed")}</td>
-                                                    <td>
-                                                        <Big value={player.healed} />
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>{t("ui.result.stat.caskets")}</td>
-                                                    <td>{player.caskets}</td>
-                                                </tr>
-                                                {(player.rerollsUsed > 0 || player.skips > 0) && (
-                                                    <tr>
-                                                        <td>{t("ui.result.stat.rerolls_skips")}</td>
-                                                        <td>
-                                                            {player.rerollsUsed} / {player.skips}
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
+                                        <PlayerStatsTable player={player} />
                                     </div>
                                     <div className="ui-result-column">
                                         <h3 className="ui-pause-heading">

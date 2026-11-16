@@ -22,7 +22,6 @@ export function SkipButton({
                 // It has its own sound
                 data-silent
                 disabled={!affordable}
-                title={affordable ? undefined : t("canvas.skip_cost", { cost: fmtNum(cost) })}
                 onClick={(e) => {
                     onSkip();
                     // Give the number keys back

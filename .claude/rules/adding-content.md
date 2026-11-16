@@ -71,6 +71,10 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
   fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
   ways: none of these pointed the way they fly as they come from the cache.
+  A spot animation gets the same help from `PROJECTILE_SPOT_LOOKS` (an enemy's shot only takes
+  its `roll`, so give the enemies' loop in `GameView` the rest before relying on it). The
+  thrownaxes spin upright, end over end, which from above is only their edge, so they're laid on
+  their side (`roll: 512`) to spin flat.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
@@ -134,6 +138,16 @@ Add it to `POWER_UPS` in `powerups.ts`, with a `PowerUpEffect` kind in `types.ts
   `HIT_INVULNERABLE_TICKS` every tick, as the sled does in `stepPlayer`. A timer running down lets
   boss hits and poison through near the end.
 - Give it a `price`, what the Mysterious Old Man charges before the run's time and the map's coins.
+- The cannon builds on its `startTick` over `CANNON_BUILD_SECONDS` before firing. Its base,
+  stand, barrels and finished model are selected by `getCannonModelKey` and included in
+  `GameAssets.getBaseRequests`, so the slim cache keeps every assembly stage.
+- A `buff` effect uses the hero's buff timer, as a potion does (Effect duration stretches it), not
+  a second power-up timer, and another pickup starts it again rather than stacking.
+  `spotAnimTicks` is the activation animation's full cache duration; its effect follows the
+  collecting hero on screen, including predicted movement.
+- A power-up that's no use to the other styles (a `buff` of one style's damage) gets a `style`:
+  it then drops only with a hero of that style in the party, only they pick it up, and the Old Man
+  and a quiz offer it only to them (`Sim.powerUpFits`).
 
 ## Random event
 
@@ -176,6 +190,11 @@ stable. A pet in `PETS` shares its trophy id and uses the cache's follower NPC w
 walk sequences.
 
 ## Enemy or boss
+
+Imps and demons use `EnemyDef.ashes` for ash remains. They still drop `kind: "bones"` XP pickups,
+with `Pickup.ashes` selecting the appearance; XP, magnets and relics stay the same. Piles merge
+and reuse their pile-limit slots only with the same remains: ashes never mix with bones.
+`GameAssets.PILE_LOOKS` supplies the ash models to baking and the slim cache too.
 
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
 animations, sounds and stats. Tests check that every enemy a map or boss refers to exists, and

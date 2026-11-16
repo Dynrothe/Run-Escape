@@ -16,7 +16,7 @@ import { ALL_MAPS, getMap } from "../content/maps";
 import { CUSTOM_MAX_CAPE, DEFAULT_CAPE_COLOURS, getCapeRecolors } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES } from "../content/passives";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { CANNON_BUILD_SECONDS, POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { SOUNDS } from "../content/sounds";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
@@ -25,9 +25,10 @@ import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
 import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
 import {
+    CANNON_LOCS,
     GAME_VIEW_SPRITES,
     GameAssets,
     HIGH_ALCH_SPOTANIM,
@@ -35,6 +36,7 @@ import {
     PLAYER_SEQS,
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
+    getCannonModelKey,
     getCharacterAppearance,
     getCharacterAttackSeqs,
     getEnemyModelKey,
@@ -42,6 +44,8 @@ import {
     getHeldRunPoses,
     getLookKey,
     getOfferedAttackSeqs,
+    getPickupModelKey,
+    getPileLook,
     getPlayerAttackSeqs,
     getPoolKey,
     getPowerUpLookRequests,
@@ -54,6 +58,44 @@ import {
     lookHas,
 } from "./GameAssets";
 import { getGameSoundIds } from "./GameSounds";
+
+describe("ash pickup models", () => {
+    test.each([
+        [0, 592],
+        [7, 592],
+        [19, 592],
+        [20, 25769],
+        [99, 25769],
+        [100, 25772],
+        [299, 25772],
+        [300, 25775],
+        [999, 25775],
+        [1000, 25778],
+        [3000, 25778],
+    ])("bakes the ash model for a pile worth %s XP", (value, objId) => {
+        const sim = new Sim({
+            grid: makeGrid([".....", ".....", "....."]),
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 2.5,
+            spawnY: 1.5,
+        });
+        sim.dropPickup("bones", 1, 1, value, { ashes: true });
+        const pickup = sim.pickups[0];
+        const key = getPickupModelKey(pickup);
+        expect(key).toMatch(/^pickup:ashes_/);
+        expect(getPileLook(pickup)?.objId).toBe(objId);
+        expect(GameAssets.getBaseRequests().find((request) => request.key === key)).toMatchObject({
+            kind: "obj",
+            objId,
+            count: 1,
+        });
+        pickup.ashes = undefined;
+        expect(getPickupModelKey(pickup)).toMatch(/^pickup:bones_/);
+        expect(getPileLook(pickup)?.objId).not.toBe(objId);
+    });
+});
 
 describe("enemy bakes", () => {
     test("bake an arena fight's statues and jets with every animation its attacks play", () => {
@@ -199,6 +241,20 @@ describe("merged enemy bakes", () => {
         const copy = structuredClone(requests);
         GameAssets.mergeRequests(requests);
         expect(requests).toEqual(copy);
+    });
+
+    test("keeps centred ground items separate from their original models", () => {
+        const helmet = GameAssets.getBaseRequests().find((r) => r.key === "obj:6656")!;
+        expect(helmet).toMatchObject({ kind: "obj", center: true });
+        const original = {
+            kind: "obj" as const,
+            key: "original-helmet",
+            objId: 6656,
+            count: 1,
+        };
+        const { requests, aliases } = GameAssets.mergeRequests([helmet, original]);
+        expect(requests).toHaveLength(2);
+        expect(aliases.size).toBe(0);
     });
 
     test("bake Nex once for her four phases", () => {
@@ -550,6 +606,24 @@ describe("player bakes", () => {
 });
 
 describe("power-ups in the cache", () => {
+    test("a cannon adds its parts in order while it's built, with every stage baked", () => {
+        const requests = GameAssets.getBaseRequests();
+        const build = CANNON_BUILD_SECONDS * TICKS_PER_SECOND;
+        const steps = CANNON_LOCS.length - 1;
+        expect(CANNON_LOCS).toEqual([7, 8, 9, 6]);
+        const stages: [number, number][] = [[0, CANNON_LOCS[0]]];
+        for (let stage = 1; stage <= steps; stage++) {
+            const from = Math.ceil((build * stage) / steps);
+            stages.push([from - 1, CANNON_LOCS[stage - 1]], [from, CANNON_LOCS[stage]]);
+        }
+        stages.push([build * 20, CANNON_LOCS[steps]]);
+        for (const [age, locId] of stages) {
+            const key = getCannonModelKey(age);
+            expect(key).toBe("loc:" + locId);
+            expect(requests).toContainEqual({ kind: "loc", key, locId });
+        }
+    });
+
     test("a look puts its item in hand, takes the shield off and leaves the rest", () => {
         const appearance = createAppearance({
             [EquipSlot.WEAPON]: 1277,

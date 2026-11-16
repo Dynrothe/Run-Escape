@@ -71,6 +71,7 @@ export const SCAR_ENEMIES: EnemyDef[] = [
     {
         id: SCAR_IMP_ID,
         name: "Scarred imp",
+        ashes: true,
         npcId: 12377,
         idleSeq: 171,
         walkSeq: 10107,
@@ -162,6 +163,7 @@ export const SCAR_ENEMIES: EnemyDef[] = [
     {
         id: "scarred_lesser_demon",
         name: "Scarred lesser demon",
+        ashes: true,
         npcId: 12360,
         idleSeq: 66,
         walkSeq: 63,
@@ -181,6 +183,7 @@ export const SCAR_ENEMIES: EnemyDef[] = [
     {
         id: "scarred_hellhound",
         name: "Scarred hellhound",
+        ashes: true,
         npcId: 12374,
         idleSeq: 6561,
         walkSeq: 6583,
@@ -198,6 +201,7 @@ export const SCAR_ENEMIES: EnemyDef[] = [
     {
         id: "scarred_greater_demon",
         name: "Scarred greater demon",
+        ashes: true,
         npcId: 12373,
         idleSeq: 66,
         walkSeq: 63,
@@ -240,6 +244,7 @@ export const SCAR_ENEMIES: EnemyDef[] = [
     {
         id: "scarred_black_demon",
         name: "Scarred black demon",
+        ashes: true,
         npcId: 12386,
         idleSeq: 66,
         walkSeq: 63,
