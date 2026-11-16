@@ -136,6 +136,7 @@ export const POWER_UPS: PowerUpDef[] = [
         description:
             "A huge rock falls on the thickest crowd nearby. Bosses lose 8% of their hitpoints.",
         objId: 1436,
+        scale: 1.5,
         weight: 2,
         price: 60,
         // star_meteor_landing, toa_human_boulder_impact_01
@@ -204,6 +205,8 @@ export const POWER_UPS: PowerUpDef[] = [
         description: "For 9 seconds everything nearby runs laps around you and can't attack.",
         // Camo helmet, from Sergeant Damien's random event
         objId: 6656,
+        scale: 2,
+        centerGroundModel: true,
         weight: 2,
         price: 50,
         // whistle

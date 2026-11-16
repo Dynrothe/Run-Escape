@@ -790,7 +790,7 @@ function getRequestBody(request: BakeRequest): string {
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
-            return `obj:${request.objId}:${request.count}`;
+            return `obj:${request.objId}:${request.count}:${request.center ? 1 : 0}`;
         case "model":
             return request.key;
         case "loc":
@@ -1211,7 +1211,16 @@ export class GameAssets {
         locIds.add(HET.barrierLoc);
         locIds.add(HET.wornLoc);
         for (const objId of objIds) {
-            requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
+            const center = POWER_UPS.some(
+                (powerUp) => powerUp.objId === objId && powerUp.centerGroundModel,
+            );
+            requests.push({
+                kind: "obj",
+                key: "obj:" + objId,
+                objId,
+                count: 1,
+                ...(center ? { center: true } : {}),
+            });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });

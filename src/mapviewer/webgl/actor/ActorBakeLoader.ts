@@ -29,6 +29,33 @@ import {
 
 type ModelSource = (seqId: number, frame: number) => Model | undefined;
 
+export function centerGroundModel(model: Model): Model {
+    if (model.verticesCount === 0) {
+        return model;
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let i = 0; i < model.verticesCount; i++) {
+        minX = Math.min(minX, model.verticesX[i]);
+        maxX = Math.max(maxX, model.verticesX[i]);
+        minZ = Math.min(minZ, model.verticesZ[i]);
+        maxZ = Math.max(maxZ, model.verticesZ[i]);
+    }
+    const x = Math.round((minX + maxX) / 2);
+    const z = Math.round((minZ + maxZ) / 2);
+    const copy: Model = Object.assign(Object.create(Object.getPrototypeOf(model)), model);
+    copy.verticesX = model.verticesX.slice();
+    copy.verticesZ = model.verticesZ.slice();
+    for (let i = 0; i < copy.verticesCount; i++) {
+        copy.verticesX[i] -= x;
+        copy.verticesZ[i] -= z;
+    }
+    copy.invalidateBounds();
+    return copy;
+}
+
 // A skeletal animation has a pose for every client tick (20ms), and a fully
 // posed copy of the model for each one is what made Varlamore's bosses too
 // big for a phone: Sol Heredit alone was over 100MB. One pose in every three
@@ -473,7 +500,10 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                 }
                 case "obj": {
                     const { objId, count } = request;
-                    const getModel: ModelSource = () => state.objModelLoader.getModel(objId, count);
+                    const getModel: ModelSource = () => {
+                        const model = state.objModelLoader.getModel(objId, count);
+                        return model && request.center ? centerGroundModel(model) : model;
+                    };
                     sets.push(bakeSet(state, frames, request.key, getModel, []));
                     break;
                 }

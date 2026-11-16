@@ -199,6 +199,20 @@ describe("merged enemy bakes", () => {
         expect(requests).toEqual(copy);
     });
 
+    test("keeps centred ground items separate from their original models", () => {
+        const helmet = GameAssets.getBaseRequests().find((r) => r.key === "obj:6656")!;
+        expect(helmet).toMatchObject({ kind: "obj", center: true });
+        const original = {
+            kind: "obj" as const,
+            key: "original-helmet",
+            objId: 6656,
+            count: 1,
+        };
+        const { requests, aliases } = GameAssets.mergeRequests([helmet, original]);
+        expect(requests).toHaveLength(2);
+        expect(aliases.size).toBe(0);
+    });
+
     test("bake Nex once for her four phases", () => {
         const { requests, aliases } = GameAssets.mergeRequests(
             GameAssets.getEnemyRequests(getMapEnemies(getMap("god_wars"))),

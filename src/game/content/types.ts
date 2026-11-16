@@ -4195,6 +4195,8 @@ export type PowerUpDef = {
     locId?: number;
     // Drawn this many times bigger on the ground than other power-ups
     scale?: number;
+    // Centre an offset item model on the pickup before it rotates
+    centerGroundModel?: boolean;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR

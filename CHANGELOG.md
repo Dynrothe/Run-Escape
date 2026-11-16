@@ -43,12 +43,16 @@ the version in the corner).
 - The Skip button shows the coins it takes, by Deivid Smarzaro: "Skip (-25 coins)".
 - Thrown axes fly on their side, by Jp66600, spinning flat so the whole blade shows from above
   instead of a thin line. The Chain-hit axes' and the Dagannoth Supreme's too.
+- Giant rune essence and the Drill Demon's helmet are bigger on the ground, by Deivid Smarzaro, so
+  they're easier to spot.
 
 ### Fixed
 
 - Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
   lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
 - The Ring of life showing your revive sits in the middle of its box. Fixed by Deivid Smarzaro.
+- The Drill Demon's dropped helmet turns on the spot, in the middle of its pickup. Fixed by Deivid
+  Smarzaro.
 
 ## 0.33.2 - 2026-11-15
 
