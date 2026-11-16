@@ -366,7 +366,6 @@
     "ui.invocations.save": "Save",
     "ui.invocations.total": "Points",
     "ui.levelup.banish_tooltip": "Never offered {title} again this run",
-    "ui.levelup.banished_list": "Banished:",
     "ui.levelup.banishes_left.one": "{n} banish left",
     "ui.levelup.banishes_left.other": "{n} banishes left",
     "ui.levelup.evolves": "Evolves {names}",
