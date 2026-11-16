@@ -1,5 +1,9 @@
 const fs = require("fs");
-const AdmZip = require("adm-zip");
+const path = require("node:path");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
+const { promisify } = require("node:util");
+const yauzl = require("yauzl");
 
 const readline = require("readline");
 
@@ -50,10 +54,8 @@ function getTimeout() {
     return timeout;
 }
 
-// Fetches url and returns its body. The timer restarts each time data arrives,
-// headers included, so a slow but moving download isn't cut off the way a
-// deadline on the whole request would cut off the cache's zip.
-async function fetchArchive(url, timeout) {
+// ZIPs go straight to disk; only the archive's JSON responses are buffered.
+async function fetchArchive(url, timeout, destination) {
     const controller = new AbortController();
     let timer;
     const restartTimer = () => {
@@ -67,20 +69,50 @@ async function fetchArchive(url, timeout) {
     restartTimer();
     try {
         const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
         if (!response.ok) {
             // statusText is empty over HTTP/2
             const reason = response.statusText ? ` ${response.statusText}` : "";
             throw new Error(`Archive request failed: ${response.status}${reason} (${url})`);
         }
-        const parts = [];
-        if (response.body) {
-            const reader = response.body.getReader();
-            for (let res = await reader.read(); !res.done; res = await reader.read()) {
-                restartTimer();
-                parts.push(res.value);
+        if (!response.body) {
+            throw new Error(`Archive response has no body (${url})`);
+        }
+        const reader = response.body.getReader();
+        async function* readBody() {
+            try {
+                while (true) {
+                    // Do not count disk backpressure as a stalled connection.
+                    restartTimer();
+                    const res = await reader.read();
+                    clearTimeout(timer);
+                    if (res.done) {
+                        break;
+                    }
+                    yield res.value;
+                }
+            } finally {
+                await reader.cancel();
+                reader.releaseLock();
             }
         }
+        if (destination) {
+            await pipeline(
+                Readable.from(readBody()),
+                fs.createWriteStream(destination, { flags: "wx" }),
+            );
+            return;
+        }
+        const parts = [];
+        for await (const part of readBody()) {
+            parts.push(part);
+        }
         return Buffer.concat(parts);
+    } catch (e) {
+        if (controller.signal.aborted) {
+            throw controller.signal.reason;
+        }
+        throw e;
     } finally {
         clearTimeout(timer);
     }
@@ -212,9 +244,14 @@ async function downloadCache(cache, cacheDir, timeout) {
 
     console.log("Downloading cache to:", cacheDir);
 
-    const cacheZipBuffer = await fetchCacheFiles(cache, timeout);
-    const cacheZip = new AdmZip(cacheZipBuffer, { readEntries: true });
-    cacheZip.extractEntryTo("cache/", cacheDir, false, true);
+    const temporary = await fs.promises.mkdtemp(path.join(cacheDir, ".download-"));
+    try {
+        const archive = path.join(temporary, "disk.zip");
+        await fetchCacheFiles(cache, timeout, archive);
+        await extractCacheFiles(archive, cacheDir);
+    } finally {
+        await fs.promises.rm(temporary, { recursive: true, force: true });
+    }
 
     const xteas = await fetchXteas(cache, timeout);
 
@@ -222,11 +259,39 @@ async function downloadCache(cache, cacheDir, timeout) {
     fs.writeFileSync(cacheDir + "info.json", JSON.stringify(cache), "utf8");
 }
 
-function fetchCacheFiles(cache, timeout) {
+function fetchCacheFiles(cache, timeout, destination) {
     return fetchArchive(
         `https://archive.openrs2.org/caches/${cache.scope}/${cache.id}/disk.zip`,
         timeout,
+        destination,
     );
+}
+
+async function extractCacheFiles(archive, cacheDir) {
+    const zip = await promisify(yauzl.open)(archive, { lazyEntries: true, autoClose: false });
+    try {
+        await new Promise((resolve, reject) => {
+            zip.on("error", reject);
+            zip.on("end", resolve);
+            zip.on("entry", (entry) => {
+                const extract = async () => {
+                    if (entry.fileName.startsWith("cache/") && !entry.fileName.endsWith("/")) {
+                        const name = entry.fileName.slice("cache/".length);
+                        if (!name || name === "." || name === ".." || /[/\\]/.test(name)) {
+                            throw new Error(`Unexpected cache archive path: ${entry.fileName}`);
+                        }
+                        const stream = await promisify(zip.openReadStream.bind(zip))(entry);
+                        await pipeline(stream, fs.createWriteStream(path.join(cacheDir, name)));
+                    }
+                    zip.readEntry();
+                };
+                extract().catch(reject);
+            });
+            zip.readEntry();
+        });
+    } finally {
+        zip.close();
+    }
 }
 
 async function fetchXteas(cache, timeout) {

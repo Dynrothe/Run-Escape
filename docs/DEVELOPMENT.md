@@ -49,6 +49,16 @@ part too. Once the whole file's in hand it's kept, and only then are the parts d
 reloaded while a phone's still writing it (or out of room) is put together from the parts: its
 resume asks past the end, and a 416 with the parts' length means every part was there.
 
+For preparing a server, `bun run download-caches` streams OpenRS2's ZIP to a unique temporary
+directory inside the destination cache folder. It uses backpressure for slow disks and extracts
+files sequentially with streaming decompression, rather than buffering the ZIP or its large
+data file in RAM. Leave enough disk space for the ZIP and extracted cache together. Temporary
+files are removed on success or a reported failure; retrying downloads the ZIP again, not a
+resume. `info.json` is written only after extraction and the keys download succeed. The
+`CACHE_DOWNLOAD_TIMEOUT_MS` inactivity limit counts waits for network data, not disk writes.
+This reduces setup memory, not the browser's runtime memory or the slim-cache builder's; on a
+small build machine use `SLIM_WORKERS=1`, or build elsewhere and host the finished `dist/`.
+
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes, of item icons and of monster chatheads, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
