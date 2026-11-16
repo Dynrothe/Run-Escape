@@ -512,6 +512,7 @@
     "ui.result.stat.rerolls_skips": "Rerolls / skips",
     "ui.result.tab.combat": "Combat",
     "ui.result.tab.summary": "Summary",
+    "ui.result.tab.unlocks": "Unlocks",
     "ui.result.tabs_aria": "Results pages",
     "ui.result.stat.run_time": "Run time",
     "ui.result.unlocked_character": "The {name} joins you!",

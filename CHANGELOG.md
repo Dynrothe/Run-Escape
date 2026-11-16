@@ -3,6 +3,18 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.34.1 - 2026-11-16
+
+### Changed
+
+- What a run unlocked is on an Unlocks tab of its own in the results, with how many on the tab,
+  leaving the stats room on a phone.
+
+### Fixed
+
+- On a phone, a won map's results could push Play again and Back to the title off the screen,
+  leaving no way past them.
+
 ## 0.34.0 - 2026-11-16
 
 ### Added

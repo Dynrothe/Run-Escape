@@ -179,6 +179,9 @@ test("starts on your own stats and cycles every player with themed buttons and a
     expect(screen.getByText("Charlie")).toBeInTheDocument();
     expect(stat("Party totals", "Kills")).toBe("10");
     expect(stat("Party totals", "Coins banked")).toBe("250");
+    // What the run unlocked is on a tab of its own
+    expect(screen.queryByText("New in the Armoury: Rune platebody")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Unlocks (1)" }));
     expect(screen.getByText("New in the Armoury: Rune platebody")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to the party" }));
@@ -210,6 +213,44 @@ test("solo results show personal totals without player navigation", () => {
     expect(stat("Individual stats", "Kills")).toBe("2");
     expect(stat("Run totals", "Run time")).toBe("2:03");
     expect(screen.getByRole("button", { name: "Back to the title" })).toBeInTheDocument();
+});
+
+test("a run's unlocks are on their own tab, counted, and a run without any has no such tab", () => {
+    const ui = createUi(true);
+    render(
+        <ResultModal
+            ui={{
+                ...ui,
+                overlay: "victory",
+                result: {
+                    ...ui.result!,
+                    victory: true,
+                    unlockedMap: "Draynor Village",
+                    unlockedCharacters: ["Ranger"],
+                    quests: [{ name: "Goblin slayer", coins: 50 }],
+                    // Came to nothing: a note over the tabs, not an unlock
+                    invasion: { id: "invading_vardorvis", came: true, killed: false },
+                },
+            }}
+            client={client}
+        />,
+    );
+    // The stats come first, the unlocks a tab away with how many there are
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("Draynor Village is open to you now!")).toBeNull();
+    const tab = screen.getByRole("tab", { name: "Unlocks (4)" });
+    expect(within(tab).getByText("4")).toBeInTheDocument();
+    expect(screen.getByText(/still stood when the run ended/)).toBeInTheDocument();
+    fireEvent.click(tab);
+    const page = screen.getByRole("tabpanel");
+    expect(within(page).getByText("Draynor Village is open to you now!")).toBeInTheDocument();
+    expect(within(page).getByText("The Ranger joins you!")).toBeInTheDocument();
+    expect(within(page).getByText(/Quest complete: Goblin slayer/)).toBeInTheDocument();
+    expect(within(page).getByText("New in the Armoury: Rune platebody")).toBeInTheDocument();
+    cleanup();
+
+    render(<ResultModal ui={{ ...ui, result: { ...ui.result!, newGear: [] } }} client={client} />);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Summary", "Combat"]);
 });
 
 test("hard mode shows with the run's totals", () => {

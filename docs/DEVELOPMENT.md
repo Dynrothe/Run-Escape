@@ -902,11 +902,26 @@ src/rs/model/player/         player models from identity kits and worn items
 
 ### Results screens
 
-A finished run's results are `ClassicResults` (`ui/results/ClassicResults.tsx`); `ResultModal` in `ui/GameUi.tsx` shows it. The screen takes the shared `{ ui, client }` `ScreenProps`, and uses `ResultNotices` and `ResultButtons` (`ui/results/shared.tsx`, with the raid chest and the Tombs' board) so unlocks and Retry/Back behave as before.
+A finished run's results are `ClassicResults` (`ui/results/ClassicResults.tsx`); `ResultModal` in `ui/GameUi.tsx` shows it. The screen takes the shared `{ ui, client }` `ScreenProps`, and uses `ResultNotices`, `resultUnlocks` and `ResultButtons` (`ui/results/shared.tsx`, with the raid chest and the Tombs' board) so unlocks and Retry/Back behave as before.
 
-The classic screen has two tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player's stats beside the
-run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the player
-whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
+The classic screen has up to three tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player's stats
+beside the run's totals and bosses; Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the
+player whose page it is; and Unlocks, only when the run unlocked something. `resultUnlocks` gives
+its lines, the yellow ones (records, Act II's extras won, maps, adventurers, items, the Collection
+log's and the Armoury's new entries, quests and Combat Achievements), and the tab shows how many
+(`TabDef.count`) with the Collection log's book for its icon (`TabDef.objId`), so it isn't missed.
+Over the tabs, `ResultNotices` keeps the party line, the Tombs' board, the raid chest and the grey
+notes on what didn't count or came to nothing.
+
+The open tab's page (`.ui-result-page`) is what scrolls, between the notices and the buttons, so
+the buttons stay in view. Everything else in the panel keeps its height, and the rule that does
+that has to leave the page out: a phone's panel clips what doesn't fit (`Mobile.css`), so a page
+kept whole pushed the buttons out of reach after a win with a few notices. On a phone the page
+keeps a few rows; when what's over the tabs doesn't leave room for them, the whole panel scrolls
+instead. A quest's or task's coins sit on the middle of the line without making it taller, so the
+Unlocks page has padding at either end for the coins that stand out of its first and last lines.
+
+The pause menu's Combat tab is `CombatReport`, in the same file as `CombatBreakdown`, a fight report
 laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
 `CombatView`. Co-op's pause menu has a Party tab: the host's kick buttons, then Party stats, each
 player's results so far behind the results' arrows (`PlayerStatsNav` and `PlayerStatsTable` in
