@@ -426,6 +426,7 @@ export const YAMA_ENEMIES: EnemyDef[] = [
     {
         id: "voidflare",
         name: "Void Flare",
+        ashes: true,
         npcId: FLARE_NPC,
         idleSeq: FLARE_SEQ,
         walkSeq: FLARE_SEQ,

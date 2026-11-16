@@ -550,7 +550,7 @@ const DEATH_SINK_TICKS = 25;
 const MAX_DEATH_ANIM_TICKS = 60;
 // The most piles of bones, and of coins, lying around at once. Each kind
 // counts its own, so coins and food left behind don't keep new bones off the
-// ground.
+// ground. Ashes count as bones here, though they only gather with ashes.
 const MAX_PILES: Partial<Record<PickupKind, number>> = { bones: 400, coins: 100 };
 // Every so often bones lying this close to a bigger pile slide over and join
 // it, and coins do the same
@@ -23975,16 +23975,14 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                if (
-                    pickup.kind !== kind ||
-                    (kind === "bones" && !!pickup.ashes !== !!extra.ashes)
-                ) {
+                if (pickup.kind !== kind) {
                     continue;
                 }
+                // Ashes and bones count as one towards the limit, but only gather with their own
                 count++;
                 // (one already flying to the player, or to another pile, stays
                 // where it is)
-                if (pickup.attracted || pickup.pileUid !== 0) {
+                if (pickup.attracted || pickup.pileUid !== 0 || !!pickup.ashes !== !!extra.ashes) {
                     continue;
                 }
                 const d = Math.abs(pickup.x - player.x) + Math.abs(pickup.y - player.y);

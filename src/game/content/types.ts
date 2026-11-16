@@ -109,7 +109,8 @@ export type EnemyDef = {
     radius: number;
     // XP of the remains it drops
     xp: number;
-    // Ashes instead of bones, with the same XP and pickup behavior
+    // Drops ashes instead of bones (imps and demons), for the same XP. They're picked up as
+    // bones are, but gather into piles of their own
     ashes?: boolean;
     // 0 = full knockback, 1 = immune
     knockbackResist?: number;

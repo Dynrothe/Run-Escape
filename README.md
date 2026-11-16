@@ -3,7 +3,7 @@
 A Vampire Survivors-style game set in the real Old School RuneScape world, in the browser.
 
 Run around Lumbridge while hordes of chickens, goblins, zombies and ghosts close in, pick up their
-bones (ashes from imps and demons) to level up, and survive fifteen minutes until the Wise Old Man comes for you. Beat him and
+bones to level up, and survive fifteen minutes until the Wise Old Man comes for you. Beat him and
 the Barrows opens up, then the Wilderness, and on through the Kharidian Desert, the Fremennik
 Province, Karamja, Kourend, Varlamore, Morytania, the God Wars Dungeon and Prifddinas to the
 Inferno.

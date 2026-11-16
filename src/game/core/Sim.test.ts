@@ -158,6 +158,8 @@ describe("Sim", () => {
                 expect(drops(true), def.id).toEqual(drops(false));
             }
         },
+        // Two sims for every enemy that drops ashes
+        60_000,
     );
 
     test("ash piles merge and collect on the same schedule as bone piles", () => {
@@ -201,24 +203,31 @@ describe("Sim", () => {
         },
     );
 
-    test.each([false, true])("the pile limit never mixes remains (ashes: %s)", (ashes) => {
-        const sim = createSim();
-        const { x, y } = sim.player;
-        for (let i = 0; i < 400; i++) {
-            sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1, {
-                ashes,
-            });
-        }
-        sim.dropPickup("bones", x + 2, y, 10, { ashes: !ashes });
-        expect(sim.pickups).toHaveLength(401);
-        expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10, x: x + 2, y });
-        sim.dropPickup("bones", x + 1, y, 7, { ashes });
-        expect(sim.pickups).toHaveLength(401);
-        const newest = sim.pickups.find((p) => p.x === x + 1 && p.y === y)!;
-        expect(newest).toMatchObject({ ashes, value: 8 });
-        expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10 });
-        expect(sim.pickups.reduce((total, p) => total + p.value, 0)).toBe(417);
-    });
+    test.each([false, true])(
+        "the pile limit counts both remains but never mixes them (ashes: %s)",
+        (ashes) => {
+            const sim = createSim();
+            const { x, y } = sim.player;
+            for (let i = 0; i < 400; i++) {
+                sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1, {
+                    ashes,
+                });
+            }
+            sim.dropPickup("bones", x + 2, y, 10, { ashes: !ashes });
+            expect(sim.pickups).toHaveLength(401);
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10, x: x + 2, y });
+            sim.dropPickup("bones", x + 1, y, 7, { ashes });
+            expect(sim.pickups).toHaveLength(401);
+            const newest = sim.pickups.find((p) => p.x === x + 1 && p.y === y)!;
+            expect(newest).toMatchObject({ ashes, value: 8 });
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 10 });
+            // The other remains are over the limit too: they come to their own pile, not a new one
+            sim.dropPickup("bones", x + 3, y, 5, { ashes: !ashes });
+            expect(sim.pickups).toHaveLength(401);
+            expect(sim.pickups[400]).toMatchObject({ ashes: !ashes, value: 15, x: x + 3, y });
+            expect(sim.pickups.reduce((total, p) => total + p.value, 0)).toBe(422);
+        },
+    );
 
     test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
         expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
