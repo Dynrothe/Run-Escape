@@ -1544,6 +1544,16 @@
         padding-right: 4px;
     }
 
+    /* The results' page keeps a few rows. When a win's notices don't leave room for them, the
+       whole panel scrolls instead, so its buttons can always be reached. */
+    .ui-result {
+        overflow-y: auto;
+    }
+
+    .ui-result-page {
+        min-height: 72px;
+    }
+
     .ui-pause-page .ui-pause-columns,
     .ui-result-page .ui-result-columns {
         flex: none;

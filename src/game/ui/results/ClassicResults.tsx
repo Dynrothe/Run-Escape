@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { formatTime } from "../../content/format";
 import { getMap } from "../../content/maps";
 import { RELIC_BY_ID, relicName } from "../../content/relics";
-import { RESULT_TAB_SPRITES } from "../../content/titleIcons";
+import { COLLECTION_LOG_OBJ, RESULT_TAB_SPRITES } from "../../content/titleIcons";
 import { list, t, tl } from "../../i18n";
 import { Coins } from "../Coins";
 import { CombatBreakdown } from "../CombatBreakdown";
 import { Platinum } from "../Platinum";
 import { PlayerStatsNav, PlayerStatsTable } from "../PlayerStats";
-import { TabBar } from "../TabBar";
+import { TabBar, TabDef } from "../TabBar";
 import { useMenuKeys } from "../menuKeys";
 import { useDialog } from "../useDialog";
 import {
@@ -18,10 +18,11 @@ import {
     ResultButtons,
     ResultNotices,
     ScreenProps,
+    resultUnlocks,
     stageVictoryText,
 } from "./shared";
 
-type ResultTab = "summary" | "combat";
+type ResultTab = "summary" | "combat" | "unlocks";
 
 // The results as a panel of tables: the page of each player, the run's totals and
 // the damage breakdown
@@ -73,6 +74,21 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
         guardMs: RESULT_KEY_GUARD_MS,
     });
     const { titleId, dialogProps } = useDialog<HTMLDivElement>();
+    // What the run unlocked, on a tab of its own after the stats (none, no tab), with the
+    // Collection log's book for its icon and how many on it so it isn't missed
+    const unlocks = resultUnlocks(result);
+    const tabs: TabDef<ResultTab>[] = [
+        { id: "summary", name: t("ui.result.tab.summary"), spriteId: RESULT_TAB_SPRITES.summary },
+        { id: "combat", name: t("ui.result.tab.combat"), spriteId: RESULT_TAB_SPRITES.combat },
+    ];
+    if (unlocks.length > 0) {
+        tabs.push({
+            id: "unlocks",
+            name: t("ui.result.tab.unlocks"),
+            objId: COLLECTION_LOG_OBJ,
+            count: unlocks.length,
+        });
+    }
     return (
         <div className="ui-modal">
             <div {...dialogProps} className="ui-panel rs-border rs-background ui-result">
@@ -93,18 +109,7 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                 {result && player && (
                     <>
                         <TabBar
-                            tabs={[
-                                {
-                                    id: "summary",
-                                    name: t("ui.result.tab.summary"),
-                                    spriteId: RESULT_TAB_SPRITES.summary,
-                                },
-                                {
-                                    id: "combat",
-                                    name: t("ui.result.tab.combat"),
-                                    spriteId: RESULT_TAB_SPRITES.combat,
-                                },
-                            ]}
+                            tabs={tabs}
                             open={tab}
                             onOpen={setTab}
                             idPrefix="result"
@@ -256,12 +261,14 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                                         )}
                                     </div>
                                 </div>
-                            ) : (
+                            ) : tab === "combat" ? (
                                 <CombatBreakdown
                                     kinds={player.kinds}
                                     sources={player.damage}
                                     kills={player.killsByEnemy}
                                 />
+                            ) : (
+                                <div className="ui-result-unlocks">{unlocks}</div>
                             )}
                         </div>
                     </>
