@@ -1,3 +1,4 @@
+import { fmtNum } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 
 // The tab an arrow key, Home or End moves to from the one that's open, round from the last to
@@ -22,8 +23,11 @@ export function getTabFromKey<T>(
 export type TabDef<T extends string> = {
     id: T;
     name: string;
-    // The client's own side tab icon (titleIcons.ts), beside the name
+    // The client's own side tab icon (titleIcons.ts), beside the name, or an item's
     spriteId?: number;
+    objId?: number;
+    // How many things are on its page, after the name (the results' unlocks)
+    count?: number;
 };
 
 // A row of stone tabs over a panel's pages, the open one pressed in (none of them, when the page
@@ -64,25 +68,36 @@ export function TabBar<T extends string>({
                 }
             }}
         >
-            {tabs.map((tab) => (
-                <button
-                    key={tab.id}
-                    id={`${idPrefix}-tab-${tab.id}`}
-                    className="ui-button"
-                    role="tab"
-                    tabIndex={open === tab.id || (open === undefined && tab === tabs[0]) ? 0 : -1}
-                    aria-selected={open === tab.id}
-                    aria-controls={`${idPrefix}-page-${tab.id}`}
-                    aria-label={tab.name}
-                    title={tab.name}
-                    onClick={() => onOpen(tab.id)}
-                >
-                    {tab.spriteId !== undefined && (
-                        <ItemIcon objId={-1} spriteId={tab.spriteId} size={24} />
-                    )}
-                    <span className="ui-page-tab-name">{tab.name}</span>
-                </button>
-            ))}
+            {tabs.map((tab) => {
+                const label =
+                    tab.count === undefined ? tab.name : `${tab.name} (${fmtNum(tab.count)})`;
+                return (
+                    <button
+                        key={tab.id}
+                        id={`${idPrefix}-tab-${tab.id}`}
+                        className="ui-button"
+                        role="tab"
+                        tabIndex={
+                            open === tab.id || (open === undefined && tab === tabs[0]) ? 0 : -1
+                        }
+                        aria-selected={open === tab.id}
+                        aria-controls={`${idPrefix}-page-${tab.id}`}
+                        aria-label={label}
+                        title={label}
+                        onClick={() => onOpen(tab.id)}
+                    >
+                        {tab.spriteId !== undefined ? (
+                            <ItemIcon objId={-1} spriteId={tab.spriteId} size={24} />
+                        ) : (
+                            tab.objId !== undefined && <ItemIcon objId={tab.objId} size={24} />
+                        )}
+                        <span className="ui-page-tab-name">{tab.name}</span>
+                        {tab.count !== undefined && (
+                            <span className="ui-page-tab-count">{fmtNum(tab.count)}</span>
+                        )}
+                    </button>
+                );
+            })}
         </div>
     );
 }

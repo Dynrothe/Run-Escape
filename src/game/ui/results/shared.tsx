@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { GameClient } from "../../client/GameClient";
 import type { UiSnapshot } from "../../client/GameStore";
 import { formatTime } from "../../content/format";
@@ -245,8 +247,8 @@ export function stageVictoryText(map: MapDef, stage: number | undefined): string
     return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
 }
 
-// The party line and the notices of what the run unlocked or earned: records,
-// the raid chest, maps, characters, items, trophies, gear and quests
+// Over the results' tabs: the party line, the Tombs' board, the raid chest, and the notes on what
+// didn't count or came to nothing. What the run unlocked is on a tab of its own (resultUnlocks).
 export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
     const result = ui.result;
     return (
@@ -258,100 +260,108 @@ export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
                     })}
                 </p>
             )}
-            {result?.endlessRecord && (
-                <p className="ui-unlocked">
-                    {result.hard
-                        ? t("ui.result.endless_record_hard", {
-                              map: mapName(getMap(result.mapId)),
-                          })
-                        : t("ui.result.endless_record", { map: mapName(getMap(result.mapId)) })}
-                </p>
-            )}
             {result?.tombs && <TombsBoardView tombs={result.tombs} />}
             {result?.raidChest && <RaidChestView chest={result.raidChest} />}
             {result?.hard && result.victory && result.relics && (
                 <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
             )}
             {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
-            {result?.firstHardWin && (
-                <p className="ui-unlocked">
-                    {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
-                </p>
-            )}
-            {/* Act II's extras (act-2-fallen-empire.md 8.6): an invader felled, an orb spent
-                or won, the Vault's week */}
-            {result?.invasion?.killed && (
-                <p className="ui-unlocked">
-                    {t("ui.result.invader_killed", { name: invaderName(result.invasion.id) })}
-                </p>
-            )}
+            {/* Act II's extras (act-2-fallen-empire.md 8.6) that came to nothing: an invader
+                that lived, an orb spent, a week's Vault run that wasn't its best */}
             {result?.invasion?.came && !result.invasion.killed && (
                 <p className="ui-subtle">
                     {t("ui.result.invader_lived", { name: invaderName(result.invasion.id) })}
                 </p>
             )}
-            {result?.awakened?.seen && (
-                <p className={result.victory ? "ui-unlocked" : "ui-subtle"}>
-                    {result.victory
-                        ? t("ui.result.awakened_won", {
-                              coins: fmtNum(result.awakened.casketCoins ?? 0),
-                          })
-                        : t("ui.result.awakened_spent")}
-                </p>
+            {result?.awakened?.seen && !result.victory && (
+                <p className="ui-subtle">{t("ui.result.awakened_spent")}</p>
             )}
-            {result?.orbWon && <p className="ui-unlocked">{t("ui.result.orb_won")}</p>}
-            {result?.vault && (
-                <p className={result.vault.best ? "ui-unlocked" : "ui-subtle"}>
-                    {result.vault.best
-                        ? t("ui.result.vault_best", {
-                              week: parseWeekKey(result.vault.key)?.week ?? 0,
-                          })
-                        : t("ui.result.vault_not_best")}
-                </p>
+            {result?.vault && !result.vault.best && (
+                <p className="ui-subtle">{t("ui.result.vault_not_best")}</p>
             )}
-            {result?.unlockedMap && (
-                <p className="ui-unlocked">
-                    {t("ui.result.unlocked_map", { map: tl(result.unlockedMap) })}
-                </p>
-            )}
-            {result?.unlockedCharacters.map((name) => (
-                <p key={name} className="ui-unlocked">
-                    {t("ui.result.unlocked_character", { name: tl(name) })}
-                </p>
-            ))}
-            {result?.unlockedItems.map((name) => (
-                <p key={name} className="ui-unlocked">
-                    {t("ui.result.unlocked_item", { name: tl(name) })}
-                </p>
-            ))}
-            {result && result.newTrophies.length > 0 && (
-                <p className="ui-unlocked">
-                    {t("ui.result.new_trophies", {
-                        trophies: listNames(result.newTrophies.map(tl)),
-                    })}
-                </p>
-            )}
-            {result && result.newGear.length > 0 && (
-                <p className="ui-unlocked">
-                    {t("ui.result.new_gear", {
-                        gear: listNames(result.newGear.map(tl)),
-                    })}
-                </p>
-            )}
-            {result?.quests.map((quest) => (
-                <p key={quest.name} className="ui-unlocked">
-                    {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
-                    <Coins amount={quest.coins} />
-                </p>
-            ))}
-            {result?.combatTasks.map((task) => (
-                <p key={task.name} className="ui-unlocked">
-                    {t("ui.result.combat_task_complete", { name: task.name, tier: task.tier })}{" "}
-                    <Coins amount={task.coins} />
-                </p>
-            ))}
         </>
     );
+}
+
+// What the run unlocked or earned, a line each, for the results' Unlocks tab: records, Act II's
+// extras (an invader felled, an orb won, the Vault's best), maps, characters, items, trophies,
+// gear, quests and Combat Achievements
+export function resultUnlocks(result: UiSnapshot["result"]): JSX.Element[] {
+    if (!result) {
+        return [];
+    }
+    const lines: JSX.Element[] = [];
+    const line = (key: string, content: ReactNode) =>
+        lines.push(
+            <p key={key} className="ui-unlocked">
+                {content}
+            </p>,
+        );
+    const map = mapName(getMap(result.mapId));
+    if (result.endlessRecord) {
+        line(
+            "endless",
+            t(result.hard ? "ui.result.endless_record_hard" : "ui.result.endless_record", { map }),
+        );
+    }
+    if (result.firstHardWin) {
+        line("hard", t("ui.result.first_hard_win", { map }));
+    }
+    if (result.invasion?.killed) {
+        line("invader", t("ui.result.invader_killed", { name: invaderName(result.invasion.id) }));
+    }
+    if (result.awakened?.seen && result.victory) {
+        line(
+            "awakened",
+            t("ui.result.awakened_won", { coins: fmtNum(result.awakened.casketCoins ?? 0) }),
+        );
+    }
+    if (result.orbWon) {
+        line("orb", t("ui.result.orb_won"));
+    }
+    if (result.vault?.best) {
+        line(
+            "vault",
+            t("ui.result.vault_best", { week: parseWeekKey(result.vault.key)?.week ?? 0 }),
+        );
+    }
+    if (result.unlockedMap) {
+        line("map", t("ui.result.unlocked_map", { map: tl(result.unlockedMap) }));
+    }
+    for (const name of result.unlockedCharacters) {
+        line(`character:${name}`, t("ui.result.unlocked_character", { name: tl(name) }));
+    }
+    for (const name of result.unlockedItems) {
+        line(`item:${name}`, t("ui.result.unlocked_item", { name: tl(name) }));
+    }
+    if (result.newTrophies.length > 0) {
+        line(
+            "trophies",
+            t("ui.result.new_trophies", { trophies: listNames(result.newTrophies.map(tl)) }),
+        );
+    }
+    if (result.newGear.length > 0) {
+        line("gear", t("ui.result.new_gear", { gear: listNames(result.newGear.map(tl)) }));
+    }
+    for (const quest of result.quests) {
+        line(
+            `quest:${quest.name}`,
+            <>
+                {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
+                <Coins amount={quest.coins} />
+            </>,
+        );
+    }
+    for (const task of result.combatTasks) {
+        line(
+            `task:${task.name}`,
+            <>
+                {t("ui.result.combat_task_complete", { name: task.name, tier: task.tier })}{" "}
+                <Coins amount={task.coins} />
+            </>,
+        );
+    }
+    return lines;
 }
 
 // Play again or retry on your own, and back to the title or the party

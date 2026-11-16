@@ -3138,6 +3138,12 @@
     white-space: nowrap;
 }
 
+/* How many things are on a tab's page (the results' unlocks), in their yellow */
+.ui-page-tab-count {
+    flex-shrink: 0;
+    color: var(--ui-yellow);
+}
+
 @media (max-width: 560px) {
     /* Give up, Collection log, Settings and Resume don't fit across a phone: two by two */
     .ui-pause > .ui-row {
@@ -3458,7 +3464,8 @@
     color: var(--ui-text);
 }
 
-/* The stats scroll, and the buttons stay in view under them */
+/* The open tab's page scrolls, and the buttons stay in view under it. Only a window too short for
+   the page's minimum scrolls the whole panel. */
 .ui-result {
     display: flex;
     flex-direction: column;
@@ -3467,18 +3474,35 @@
     overflow-y: auto;
 }
 
-.ui-result > :not(.ui-result-columns) {
+/* Everything but the page keeps its height. The page has to be left out: kept whole, it pushes
+   the buttons out of a phone's panel, which clips them (Mobile.css). */
+.ui-result > :not(.ui-result-page) {
     flex-shrink: 0;
 }
 
-.ui-result-columns {
+.ui-result-page {
     flex: 1 1 auto;
     min-height: 120px;
+    padding-right: 4px;
+    overflow-y: auto;
+}
+
+.ui-result-columns {
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
-    padding-right: 4px;
-    overflow-y: auto;
+}
+
+/* A quest's or task's coins on the middle of its line, without making the line taller */
+.ui-unlocked .ui-coins {
+    vertical-align: middle;
+    margin: -6px 0;
+}
+
+/* The results' Unlocks tab: room at either end for a first or last line's coins, which stand
+   out of it, so a list that fits doesn't scroll */
+.ui-result-unlocks {
+    padding: 6px 0;
 }
 
 .ui-result-player-nav {
