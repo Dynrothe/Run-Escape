@@ -1059,9 +1059,11 @@ function StoreDetails({
             ) : trophy ? (
                 <>
                     <div className="ui-card-style">
-                        {t("wardrobe.not_sold", {
-                            map: mapName(getMap(getTrophyMap(trophy))),
-                        })}
+                        {trophy.from.kind === "combatTier"
+                            ? t("wardrobe.not_sold_combat")
+                            : t("wardrobe.not_sold", {
+                                  map: mapName(getMap(getTrophyMap(trophy))),
+                              })}
                     </div>
                     {trophy.objId !== piece.objId && (
                         <p className="ui-subtle">

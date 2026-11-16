@@ -9,6 +9,13 @@ import {
     ItemIconRequest,
     MAX_ICON_SCALE,
 } from "../../mapviewer/worker/ItemIconLoader";
+import {
+    HEAD_SIZE,
+    NpcHead as NpcHeadData,
+    NpcHeadInput,
+    NpcHeadLoader,
+    NpcHeadRequest,
+} from "../../mapviewer/worker/NpcHeadLoader";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
 import {
     SpriteDataInput,
@@ -37,6 +44,7 @@ export class IconCache {
     private readonly waiting = new Map<string, ((url: string) => void)[]>();
     private queued: ItemIconRequest[] = [];
     private queuedSprites: SpriteRequest[] = [];
+    private queuedHeads: NpcHeadRequest[] = [];
     private flushScheduled = false;
     // Batches that failed in a row, for how long to wait before trying again
     private failures = 0;
@@ -55,6 +63,11 @@ export class IconCache {
 
     static spriteKey(spriteId: number): string {
         return `sprite:${spriteId}`;
+    }
+
+    // A portrait's framing is part of the key: two enemies can share an NPC, framed differently
+    static headKey({ npcId, portrait }: NpcHeadRequest): string {
+        return portrait ? `head:${npcId}:${JSON.stringify(portrait)}` : `head:${npcId}`;
     }
 
     static frameKey(spriteId: number, frame: number): string {
@@ -77,6 +90,18 @@ export class IconCache {
     // "" for a frame the cache hasn't got
     getFrame(spriteId: number, frame: number): string | undefined {
         return this.urls.get(IconCache.frameKey(spriteId, frame));
+    }
+
+    // "" for an NPC with no model
+    getHead(request: NpcHeadRequest): string | undefined {
+        return this.urls.get(IconCache.headKey(request));
+    }
+
+    requestHead(request: NpcHeadRequest, callback: (url: string) => void): void {
+        if (this.wait(IconCache.headKey(request), callback)) {
+            this.queuedHeads.push(request);
+            this.scheduleFlush();
+        }
     }
 
     request(
@@ -137,7 +162,9 @@ export class IconCache {
         if (
             this.flushScheduled ||
             !this.workerPool ||
-            (this.queued.length === 0 && this.queuedSprites.length === 0)
+            (this.queued.length === 0 &&
+                this.queuedSprites.length === 0 &&
+                this.queuedHeads.length === 0)
         ) {
             return;
         }
@@ -155,10 +182,13 @@ export class IconCache {
         this.queued = [];
         const spriteRequests = this.queuedSprites;
         this.queuedSprites = [];
+        const headRequests = this.queuedHeads;
+        this.queuedHeads = [];
         let icons: ItemIconData[];
         let sprites: SpriteImage[];
+        let heads: NpcHeadData[];
         try {
-            [icons, sprites] = await Promise.all([
+            [icons, sprites, heads] = await Promise.all([
                 requests.length > 0
                     ? workerPool.queueLoad<ItemIconInput, ItemIconData[], ItemIconLoader>(
                           new ItemIconLoader(),
@@ -172,6 +202,12 @@ export class IconCache {
                               spriteIds: spriteRequests.map((request) => request.id),
                               frames: spriteRequests.map((request) => request.frame ?? 0),
                           },
+                      )
+                    : [],
+                headRequests.length > 0
+                    ? workerPool.queueLoad<NpcHeadInput, NpcHeadData[], NpcHeadLoader>(
+                          new NpcHeadLoader(),
+                          { heads: headRequests },
                       )
                     : [],
             ]);
@@ -196,6 +232,12 @@ export class IconCache {
                 this.waiting.delete(key);
                 again.push(() => callbacks.forEach((cb) => this.queueSprite(request, cb)));
             }
+            for (const request of headRequests) {
+                const key = IconCache.headKey(request);
+                const callbacks = this.waiting.get(key) ?? [];
+                this.waiting.delete(key);
+                again.push(() => callbacks.forEach((cb) => this.requestHead(request, cb)));
+            }
             if (this.failures < ICON_RETRIES) {
                 this.failures++;
                 setTimeout(() => again.forEach((retry) => retry()), ICON_RETRY_MS * this.failures);
@@ -210,6 +252,14 @@ export class IconCache {
                 toDataUrl(icon.pixels, ICON_WIDTH * scale, ICON_HEIGHT * scale),
             );
         }
+        // The worker answers in the order it was asked
+        heads.forEach((head, i) => {
+            const empty = head.pixels.every((pixel) => pixel === 0);
+            this.resolve(
+                IconCache.headKey(headRequests[i]),
+                empty ? "" : toDataUrl(head.pixels, HEAD_SIZE, HEAD_SIZE),
+            );
+        });
         // The worker answers in the order it was asked
         sprites.forEach((sprite, i) => {
             const request = spriteRequests[i];
@@ -363,5 +413,47 @@ export function ItemIcon(props: Props): JSX.Element {
         />
     ) : (
         <span className="ui-icon" style={{ width, height: size, display: "inline-block" }} />
+    );
+}
+
+// An NPC's chathead, drawn in a worker as the icons are, in a portrait's framing if it has one
+// (EnemyHead's). Nothing at all for one with no model.
+export function NpcHead({
+    npcId,
+    portrait,
+    size = 48,
+}: NpcHeadRequest & { size?: number }): JSX.Element {
+    const key = IconCache.headKey({ npcId, portrait });
+    const [loaded, setLoaded] = useState(() => ({
+        key,
+        url: iconCache.getHead({ npcId, portrait }),
+    }));
+    const url = loaded.key === key ? loaded.url : iconCache.getHead({ npcId, portrait });
+    useEffect(() => {
+        let cancelled = false;
+        iconCache.requestHead({ npcId, portrait }, (url) => {
+            if (!cancelled) {
+                setLoaded({ key, url });
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+        // The key stands for the portrait, which can be a new object each render
+    }, [key]);
+    return url ? (
+        <img
+            className="ui-icon ui-npc-head"
+            src={url}
+            width={size}
+            height={size}
+            alt=""
+            draggable={false}
+        />
+    ) : (
+        <span
+            className="ui-npc-head"
+            style={{ width: size, height: size, display: "inline-block" }}
+        />
     );
 }

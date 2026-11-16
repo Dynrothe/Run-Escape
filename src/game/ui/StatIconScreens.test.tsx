@@ -14,7 +14,7 @@ import {
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
 import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
-import { pairStats } from "../content/stats";
+import { statChanges } from "../content/stats";
 import { createSave } from "../core/save";
 import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
@@ -36,6 +36,7 @@ function createHud(): HudView {
         weapons: [],
         passives: [],
         stats: [],
+        statRows: [],
         gear: [],
         inventory: [null, null, null, null],
         rerolls: 0,
@@ -59,6 +60,7 @@ function createNumbers(): HudNumbers {
         otherDps: 0,
         buffs: [],
         quests: [],
+        combatTasks: [],
     };
 }
 
@@ -249,50 +251,27 @@ describe("stat icons on the screens that show stats", () => {
         }
     });
 
-    test("ChestModal puts gear beside the worn piece, a row for each stat", () => {
+    test("ChestModal lists the found gear's stats and only the differences from the worn piece", () => {
         vi.useFakeTimers();
         try {
             const view = renderChest(
                 gearChest({
                     item: crystalBody,
                     alchCoins: 10,
-                    stats: [
-                        {
-                            key: "might",
-                            label: "Damage",
-                            worn: "+5%",
-                            found: "+10%",
-                            change: "+5%",
-                            better: true,
-                        },
-                        {
-                            key: "armor",
-                            label: "Armour",
-                            worn: "+1",
-                            found: "+2",
-                            change: "+1",
-                            better: true,
-                        },
-                        {
-                            key: "maxHp",
-                            label: "Max hitpoints",
-                            worn: "+5%",
-                            found: "+5%",
-                            better: true,
-                        },
-                        {
-                            key: "speed",
-                            label: "Projectile speed",
-                            worn: "+15%",
-                            change: "-15%",
-                            better: false,
-                        },
-                    ],
+                    changes: statChanges(
+                        { might: 0.05, armor: 1, maxHp: 0.05, speed: 0.15 },
+                        { might: 0.1, armor: 2, maxHp: 0.05 },
+                    ),
                 }),
             );
 
-            // Its stats are in the table, not listed as well
-            expect(view.container.querySelector(".ui-chest-lines")).toBeNull();
+            // Wider, so the worn piece's line fits on one line
+            expect(view.container.querySelector(".ui-chest-card")).toHaveClass(
+                "ui-chest-card-compare",
+            );
+            expect(view.container.querySelector(".ui-chest-lines")?.textContent).toBe(
+                "+10% damage+2 armour",
+            );
             const compare = view.container.querySelector(".ui-chest-compare")!;
             expect(compare.textContent).toContain("Crystal body");
             expect(compare.textContent).toContain("· Rare");
@@ -305,54 +284,68 @@ describe("stat icons on the screens that show stats", () => {
             ]);
             expect(sets[1]).toHaveClass("ui-chest-set-on");
 
-            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
-            expect(rows.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
-                ["Damage", "+5%", "+10%", "(+5%)"],
-                ["Armour", "+1", "+2", "(+1)"],
-                ["Max hitpoints", "+5%", "+5%", ""],
-                ["Projectile speed", "+15%", "—", "(-15%)"],
+            const changes = [...compare.querySelectorAll(".ui-chest-changes .ui-stat-line")];
+            // Worded as the found piece's own lines are, and the same max hitpoints left out
+            expect(changes.map((line) => line.textContent)).toEqual([
+                "+5% damage",
+                "+1 armour",
+                "-15% projectile speed",
             ]);
-            const tone = (row: Element) => [...row.children].slice(2).map((cell) => cell.className);
-            expect(tone(rows[0])).toEqual(["ui-good", "ui-good"]);
-            expect(tone(rows[2])).toEqual(["", ""]);
-            expect(tone(rows[3])).toEqual(["ui-bad", "ui-bad"]);
-            // The difference's column has a name for screen readers
-            const headings = [...view.container.querySelectorAll(".ui-chest-table thead th")];
-            expect(headings.map((th) => th.getAttribute("aria-label") ?? th.textContent)).toEqual([
-                "Wearing",
-                "New",
-                "Difference",
-            ]);
+            expect(changes[0]).toHaveClass("ui-good");
+            expect(changes[1]).toHaveClass("ui-good");
+            expect(changes[2]).toHaveClass("ui-bad");
         } finally {
             vi.useRealTimers();
         }
     });
 
-    test("the gear table gives each stat its icon in any language", () => {
+    test("gear differences give each stat its icon in any language", () => {
         vi.useFakeTimers();
         const iconSrc = iconsById();
         try {
             setLang("pt-BR");
-            const stats = pairStats(
+            const changes = statChanges(
                 { might: 0.03, speed: 0.15 },
                 { might: 0.05, maxHp: 0.13, armor: 1 },
             );
+            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, changes }));
+            const lines = [...view.container.querySelectorAll(".ui-chest-changes .ui-stat-line")];
             // Nothing in the words to find an icon by
-            expect(stats.map((pair) => pair.label)).toEqual([
-                "Dano",
-                "Armadura",
-                "Pontos de vida máximos",
-                "Velocidade de projétil",
+            expect(lines.map((line) => line.textContent)).toEqual([
+                "+2% dano",
+                "+1 armadura",
+                "+13% pontos de vida máximos",
+                "-15% velocidade de projétil",
             ]);
-            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, stats }));
-            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
-            expect(rows.map((row) => row.querySelector("th img")?.getAttribute("src"))).toEqual(
-                stats.map((pair) => iconSrc(statKeyIcon(pair.key))),
+            expect(lines.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
+                changes.map((change) => iconSrc(statKeyIcon(change.key))),
             );
         } finally {
             setLang("en");
             vi.useRealTimers();
             vi.restoreAllMocks();
+        }
+    });
+
+    test("identical gear shows no stat differences", () => {
+        vi.useFakeTimers();
+        try {
+            const view = renderChest(
+                gearChest({
+                    item: crystalBody,
+                    alchCoins: 10,
+                    changes: statChanges({ might: 0.1, armor: 2 }, { might: 0.1, armor: 2 }),
+                }),
+            );
+            expect(view.container.querySelector(".ui-chest-changes")).toBeNull();
+            expect(view.container.querySelector(".ui-chest-replaces")?.textContent).toContain(
+                "Crystal body",
+            );
+            expect(view.container.querySelector(".ui-chest-lines")?.textContent).toBe(
+                "+10% damage+2 armour",
+            );
+        } finally {
+            vi.useRealTimers();
         }
     });
 
@@ -448,7 +441,7 @@ describe("stat icons on the screens that show stats", () => {
         expect(statLines[1].querySelector(".ui-stat-spacer")).not.toBeNull();
     });
 
-    test("the pause menu lists each slot's, the player's and worn gear's stats a line each", () => {
+    test("the pause menu lists each slot's and player's stats, with worn gear details on focus", () => {
         const store = new GameStore(createSave());
         const client = createMockClient(store);
         store.set({
@@ -469,6 +462,10 @@ describe("stat icons on the screens that show stats", () => {
                     },
                 ],
                 stats: [{ text: "+10% damage" }, { text: "+1 armour" }],
+                statRows: [
+                    { key: "might", group: "offense", label: "Damage", value: "+10%", zero: false },
+                    { key: "armor", group: "defense", label: "Armour", value: "+1", zero: false },
+                ],
                 gear: [
                     {
                         slot: "head",
@@ -489,15 +486,10 @@ describe("stat icons on the screens that show stats", () => {
         store.setNumbers(createNumbers());
         const view = render(<GameUi store={store} client={client} />);
 
-        const leftColumn = view.container.querySelector(".ui-pause-column")!;
-        expect(leftColumn.firstElementChild).toHaveTextContent("Your stats");
-        expect(leftColumn.children[1]).toHaveClass("ui-pause-stats");
-        expect(leftColumn.children[2]).toHaveClass("ui-pause-loadout");
-        expect(leftColumn.children[2]).toHaveTextContent("Rune scimitar");
-        expect(leftColumn.children[3]).toHaveTextContent("Worn equipment");
-
-        const [weapon, gear] = view.container.querySelectorAll(".ui-pause-item");
-        const weaponLines = weapon.querySelectorAll(".ui-pause-detail > .ui-stat-line");
+        const weapon = view.container.querySelector(".ui-loadout-weapon")!;
+        const gear = view.container.querySelector<HTMLElement>(".ui-loadout-gear-head")!;
+        // Each stat of a weapon is a cell of its grid, with its icon
+        const weaponLines = weapon.querySelectorAll(".ui-loadout-cell");
         expect([...weaponLines].map((line) => line.textContent)).toEqual([
             "Damage 13",
             "Attacks 1.25/s",
@@ -507,21 +499,23 @@ describe("stat icons on the screens that show stats", () => {
             expect(line.querySelector(".ui-icon")).not.toBeNull();
         }
 
-        const stats = view.container.querySelectorAll(".ui-pause-stats > .ui-stat-line");
-        expect([...stats].map((line) => line.textContent)).toEqual(["+10% damage", "+1 armour"]);
+        // Each stat is a row: its icon and name, and its size
+        const stats = view.container.querySelectorAll(".ui-loadout-stat");
+        expect([...stats].map((row) => row.textContent)).toEqual(["Damage+10%", "Armour+1"]);
+        for (const row of stats) {
+            expect(row.querySelector(".ui-stat-line .ui-icon")).not.toBeNull();
+        }
 
-        // The name and its lines sit together beside the icon, as a slot's do
-        expect(gear.querySelector(":scope > .ui-pause-name")?.textContent).toContain(
-            "Void mage helm",
-        );
-        const gearLines = gear.querySelectorAll(".ui-pause-detail > .ui-stat-line");
-        expect([...gearLines].map((line) => line.textContent)).toEqual([
-            "+10% magic damage",
-            "+1 armour",
-        ]);
-        const set = gear.querySelector(".ui-pause-set .ui-stat-line");
-        expect(set?.textContent).toBe("Void knight 2/4");
-        expect(set?.querySelector(".ui-stat-spacer")).not.toBeNull();
+        // Canonical equipment squares keep the slot visible and put the item's details in the
+        // keyboard-accessible tooltip rather than stretching the equipment silhouette into rows.
+        expect(gear.querySelector(".ui-loadout-gear-cell-name")?.textContent).toBe("Head");
+        expect(gear.querySelector(".ui-icon")).not.toBeNull();
+        act(() => gear.focus());
+        const gearTip = document.querySelector('[role="tooltip"]')!;
+        expect(gearTip.textContent).toContain("Void mage helm");
+        expect(gearTip.textContent).toContain("+10% magic damage");
+        expect(gearTip.textContent).toContain("+1 armour");
+        expect(gearTip.textContent).toContain("Void knight 2/4");
     });
 
     test("a description's set line lines up with its stats", () => {
