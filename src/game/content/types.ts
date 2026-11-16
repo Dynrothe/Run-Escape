@@ -107,8 +107,10 @@ export type EnemyDef = {
     // Collision radius in tiles (kept under half a tile so everything fits
     // through doors)
     radius: number;
-    // XP of the bones it drops
+    // XP of the remains it drops
     xp: number;
+    // Ashes instead of bones, with the same XP and pickup behavior
+    ashes?: boolean;
     // 0 = full knockback, 1 = immune
     knockbackResist?: number;
     // Render scale on top of the NPC's own

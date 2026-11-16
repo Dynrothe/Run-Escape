@@ -199,6 +199,7 @@ export const KRIL_ENEMIES: EnemyDef[] = [
     {
         id: "kril_general",
         name: "K'ril Tsutsaroth",
+        ashes: true,
         faction: "zamorak",
         npcId: 3129,
         idleSeq: IDLE_SEQ,

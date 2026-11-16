@@ -104,6 +104,99 @@ function runFor(sim: Sim, seconds: number, move: "circle" | "still" = "circle"):
 }
 
 describe("Sim", () => {
+    test.each([
+        "imp",
+        "gwd_imp",
+        "revenant_imp",
+        "scarred_imp",
+        "lesser_demon",
+        "greater_demon",
+        "black_demon",
+        "revenant_demon",
+        "reanimated_demon",
+        "scarred_black_demon",
+    ])("%s drops ashes without changing its XP", (id) => {
+        const sim = createSim();
+        sim.weapons = [];
+        const { x, y } = sim.player;
+        const enemy = sim.spawnEnemy(getEnemy(id), "normal", { x: x + 5, y })!;
+        enemy.bonesOnly = true;
+        sim.damageEnemy(enemy, 1e9, 0, x, y);
+        const [pickup] = sim.pickups;
+        expect(pickup).toMatchObject({ kind: "bones", ashes: true, value: enemy.xp });
+        const xp = sim.xp;
+        sim["collect"](pickup);
+        expect(sim.xp).toBeCloseTo(xp + enemy.xp * (1 + sim.stats.growth));
+    });
+
+    test.each(["normal", "hard", "endless"] as const)(
+        "ash drops preserve all enemies' XP and other loot in %s runs",
+        (mode) => {
+            for (const def of ENEMIES.filter((enemy) => enemy.ashes)) {
+                const drops = (ashes: boolean) => {
+                    const sim = createSim(
+                        "wizard",
+                        3,
+                        "lumbridge",
+                        emptyStats(),
+                        mode === "endless",
+                        mode === "hard",
+                    );
+                    const enemy = sim.spawnEnemy({ ...def, ashes }, "normal", {
+                        x: sim.player.x + 5,
+                        y: sim.player.y,
+                    })!;
+                    sim["dropLoot"](enemy);
+                    for (const pickup of sim.pickups.filter((p) => p.kind === "bones")) {
+                        sim["collect"](pickup);
+                    }
+                    return {
+                        xp: sim.xp,
+                        pickups: sim.pickups.map(({ ashes: _ashes, ...pickup }) => pickup),
+                    };
+                };
+                expect(drops(true), def.id).toEqual(drops(false));
+            }
+        },
+    );
+
+    test("mixed remains merge and collect on the same schedule as bones", () => {
+        const run = (ashes: boolean) => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { x, y } = sim.player;
+            sim.dropPickup("bones", x + 10, y, 30, { ashes });
+            sim.dropPickup("bones", x + 11, y, 10);
+            runFor(sim, 1, "still");
+            expect(sim.pickups).toEqual([
+                expect.objectContaining({ x: x + 10, y, value: 40, ashes }),
+            ]);
+            sim.pickups[0].attracted = true;
+            const xp: number[] = [];
+            for (let i = 0; i < 60; i++) {
+                sim.step(0, 0);
+                xp.push(sim.xp);
+            }
+            return xp;
+        };
+        expect(run(true)).toEqual(run(false));
+    });
+
+    test("the pile limit keeps the newest remains' appearance without losing XP", () => {
+        const sim = createSim();
+        const { x, y } = sim.player;
+        for (let i = 0; i < 400; i++) {
+            sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1);
+        }
+        sim.dropPickup("bones", x + 2, y, 10, { ashes: true });
+        expect(sim.pickups).toHaveLength(400);
+        expect(sim.pickups[399]).toMatchObject({ ashes: true, value: 11, x: x + 2, y });
+        sim.dropPickup("bones", x + 1, y, 7);
+        const newest = sim.pickups.find((p) => p.x === x + 1 && p.y === y)!;
+        expect(newest.ashes).toBeUndefined();
+        expect(sim.pickups.reduce((total, p) => total + p.value, 0)).toBe(417);
+    });
+
     test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
         expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
         const peck = getEnemy("evil_chicken").boss!.attacks[0];

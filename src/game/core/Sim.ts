@@ -20581,7 +20581,9 @@ export class Sim {
         }
         // The realm's richer (RealmRuleDef.drops)
         const realm = this.realm?.drops;
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1), {
+            ...(enemy.def.ashes && { ashes: true }),
+        });
         if (!last) {
             return;
         }
@@ -23656,7 +23658,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts" | "ashes"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -23688,6 +23690,7 @@ export class Sim {
                 pile.x = pile.prevX = x;
                 pile.y = pile.prevY = y;
                 pile.value += value;
+                pile.ashes = extra.ashes;
                 return;
             }
         }

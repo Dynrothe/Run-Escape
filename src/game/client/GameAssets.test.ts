@@ -40,6 +40,8 @@ import {
     getHeldRunPoses,
     getLookKey,
     getOfferedAttackSeqs,
+    getPickupModelKey,
+    getPileLook,
     getPlayerAttackSeqs,
     getPoolKey,
     getPowerUpLookRequests,
@@ -52,6 +54,43 @@ import {
     lookHas,
 } from "./GameAssets";
 import { getGameSoundIds } from "./GameSounds";
+
+describe("ash pickup models", () => {
+    test.each([
+        [0, 25766],
+        [19, 25766],
+        [20, 25769],
+        [99, 25769],
+        [100, 25772],
+        [299, 25772],
+        [300, 25775],
+        [999, 25775],
+        [1000, 25778],
+        [3000, 25778],
+    ])("bakes the ash model for a pile worth %s XP", (value, objId) => {
+        const sim = new Sim({
+            grid: makeGrid([".....", ".....", "....."]),
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 2.5,
+            spawnY: 1.5,
+        });
+        sim.dropPickup("bones", 1, 1, value, { ashes: true });
+        const pickup = sim.pickups[0];
+        const key = getPickupModelKey(pickup);
+        expect(key).toMatch(/^pickup:ashes_/);
+        expect(getPileLook(pickup)?.objId).toBe(objId);
+        expect(GameAssets.getBaseRequests().find((request) => request.key === key)).toMatchObject({
+            kind: "obj",
+            objId,
+            count: 1,
+        });
+        pickup.ashes = undefined;
+        expect(getPickupModelKey(pickup)).toMatch(/^pickup:bones_/);
+        expect(getPileLook(pickup)?.objId).not.toBe(objId);
+    });
+});
 
 describe("enemy bakes", () => {
     test("bake an arena fight's statues and jets with every animation its attacks play", () => {

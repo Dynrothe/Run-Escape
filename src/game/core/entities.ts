@@ -755,6 +755,8 @@ export type Pickup = {
     spawnTick: number;
     // Bones and coins sliding over to join a bigger pile: its uid, 0 for none
     pileUid: number;
+    // XP pickups still use kind "bones"; this only changes their appearance
+    ashes?: boolean;
     // Caskets only
     tier?: CasketTier;
     // Dug up a tier better (the Treasure hunter's trait, CharacterTraitDef dig)

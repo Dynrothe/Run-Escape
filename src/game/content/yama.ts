@@ -310,6 +310,7 @@ export const YAMA_ENEMIES: EnemyDef[] = [
     {
         id: "yama",
         name: "Yama",
+        ashes: true,
         npcId: 14176,
         idleSeq: IDLE_SEQ,
         walkSeq: WALK_SEQ,

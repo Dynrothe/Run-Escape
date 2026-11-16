@@ -206,6 +206,7 @@ export const DUKE_ENEMIES: EnemyDef[] = [
     {
         id: AWAKENED_DUKE_ID,
         name: "Awakened Duke Sucellus",
+        ashes: true,
         npcId: 12191,
         idleSeq: IDLE_SEQ,
         walkSeq: IDLE_SEQ,
