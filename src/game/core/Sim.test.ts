@@ -1134,6 +1134,26 @@ describe("power-ups", () => {
     describe("the fairy ring", () => {
         const ring = () => getPowerUp("fairy_ring");
 
+        test("starts the fairy teleport's visible frames as the enemy is warped away", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.player.invulnerable = 100000;
+            const { x, y } = sim.player;
+            const enemy = goblin(sim, x + 1, y);
+            enemy.frozen = 10000;
+            sim.usePowerUp(ring());
+            sim.step(0, 0);
+            const effect = sim.effects.find((effect) => effect.spotAnim === 569);
+            expect(effect).toMatchObject({ x: x + 1, y, enemyUid: 0 });
+            expect(sim.tick - effect!.startTick).toBeGreaterThanOrEqual(55);
+            expect(effect!.endTick - effect!.startTick).toBe(210);
+            expect(Math.hypot(enemy.x - x, enemy.y - y)).toBeGreaterThan(8);
+            runFor(sim, 1, "still");
+            expect(sim.effects).toContain(effect);
+            runFor(sim, 3, "still");
+            expect(sim.effects).not.toContain(effect);
+        });
+
         test("warps away what walks into it, far from the player", () => {
             const sim = createSim();
             sim.weapons = [];

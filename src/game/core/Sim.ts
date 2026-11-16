@@ -458,6 +458,9 @@ const LAP_PULL_TILES = 3;
 // only so many at a time
 const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
+// fairy_flower_ring is shrunk away for its first 55 ticks, of 210 in all.
+const RING_EFFECT_START = 55;
+const RING_EFFECT_TICKS = 210;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
@@ -24814,7 +24817,16 @@ export class Sim {
         let effects = 0;
         for (const enemy of caught) {
             if (effects < MAX_RING_EFFECTS) {
-                this.addEffect(ring.spotAnim, enemy.x, enemy.y, 0, 40);
+                const effect = this.addEffect(
+                    ring.spotAnim,
+                    enemy.x,
+                    enemy.y,
+                    0,
+                    RING_EFFECT_TICKS - RING_EFFECT_START,
+                );
+                if (effect) {
+                    effect.startTick -= RING_EFFECT_START;
+                }
                 effects++;
             }
             this.relocate(enemy, true);
