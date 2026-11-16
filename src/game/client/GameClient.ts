@@ -51,7 +51,13 @@ import {
     takesRelics,
 } from "../content/maps";
 import { Hsl } from "../content/maxCape";
-import { getPassive, passiveValueText } from "../content/passives";
+import {
+    PASSIVE_BY_ID,
+    getPassive,
+    passiveDescription,
+    passiveName,
+    passiveValueText,
+} from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUEST_ICON_OBJ_IDS } from "../content/questIcons";
@@ -85,7 +91,14 @@ import {
 } from "../content/vault";
 import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
-import { getWeapon, getWeaponDamageKinds, getWeaponStyle } from "../content/weapons";
+import {
+    WEAPON_BY_ID,
+    getWeapon,
+    getWeaponDamageKinds,
+    getWeaponStyle,
+    weaponDescription,
+    weaponName,
+} from "../content/weapons";
 import { CombatTaskStatus, CombatTracker } from "../core/CombatTracker";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
@@ -215,6 +228,7 @@ import { padHints } from "./GamePad";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
+    BanishedView,
     ChoiceView,
     CombatTrackView,
     CombatView,
@@ -602,6 +616,32 @@ function blessingCount(
 ): string | undefined {
     const { max } = getBlessing(blessings, choice.blessingId);
     return Number.isFinite(max) && max > 1 ? `${choice.count} of ${max}` : undefined;
+}
+
+// What's been banished, so a level up can say what won't be offered any more. An id that's
+// neither is left out rather than throwing, which would take the HUD down every update.
+function getBanishedViews(sim: Sim): BanishedView[] {
+    return [...sim.banished].flatMap((id) => {
+        const weapon = WEAPON_BY_ID.get(id);
+        if (weapon) {
+            return {
+                id,
+                name: weaponName(weapon),
+                description: weaponDescription(weapon),
+                iconObjId: weapon.iconObjId,
+            };
+        }
+        const passive = PASSIVE_BY_ID.get(id);
+        return passive
+            ? {
+                  id,
+                  name: passiveName(passive),
+                  description: passiveDescription(passive),
+                  iconObjId: passive.iconObjId,
+                  iconSpriteId: passive.iconSpriteId,
+              }
+            : [];
+    });
 }
 
 function getChoiceViews(sim: Sim): ChoiceView[] {
@@ -5501,6 +5541,7 @@ export class GameClient implements GameFrameHandler {
             inventory: getInventoryViews(sim),
             rerolls: sim.rerollsLeft,
             banishes: sim.banishesLeft,
+            banished: getBanishedViews(sim),
             skip: sim.canSkip
                 ? { cost: sim.skipCost, affordable: sim.coins >= sim.skipCost }
                 : undefined,

@@ -2247,6 +2247,10 @@ export class Sim {
     get banishesLeft(): number {
         return this.hero.banishesLeft;
     }
+    // Weapons' and passives' ids, in the order they were banished
+    get banished(): ReadonlySet<string> {
+        return this.hero.banished;
+    }
     get banishedItems(): ReadonlySet<string> {
         return this.hero.banishedItems;
     }

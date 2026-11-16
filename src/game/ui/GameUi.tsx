@@ -4555,6 +4555,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     const blessing = ui.choices.some((choice) => choice.isBlessing);
     const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
+    const banished = ui.hud?.banished ?? [];
     const coins = useHudNumber(client, (n) => n.coins) ?? 0;
     const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
@@ -4679,6 +4680,36 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 {banishes > 0 && (
                     <div className="ui-subtle ui-banishes">
                         {tp("ui.levelup.banishes_left", banishes)}
+                    </div>
+                )}
+                {/* Once banished, a reward's gone from the offers without a word: say which */}
+                {banished.length > 0 && (
+                    <div
+                        className="ui-banished-list"
+                        role="group"
+                        aria-label={t("ui.levelup.banished_list")}
+                    >
+                        <span className="ui-subtle">{t("ui.levelup.banished_list")}</span>
+                        {banished.map((entry) => (
+                            <DescriptionButton
+                                key={entry.id}
+                                itemId={entry.id}
+                                aria-label={entry.name}
+                                className="ui-slot ui-banished-slot"
+                                description={
+                                    <>
+                                        <strong>{entry.name}</strong>
+                                        <span>{entry.description}</span>
+                                    </>
+                                }
+                            >
+                                <ItemIcon
+                                    objId={entry.iconObjId}
+                                    spriteId={entry.iconSpriteId}
+                                    size={22}
+                                />
+                            </DescriptionButton>
+                        ))}
                     </div>
                 )}
                 {!hilt && (

@@ -256,6 +256,8 @@ export type HudView = {
     rerolls: number;
     // Banishes left (Firemaking)
     banishes: number;
+    // The weapons and passives banished this run, for the level up to list
+    banished?: BanishedView[];
     // What skipping the level up's rewards costs, while they can be skipped
     skip?: { cost: number; affordable: boolean };
     // Reloaded (content/relics.ts): keeps left and offers kept, and whether each can be done now
@@ -569,6 +571,15 @@ export type ChoiceView = {
     banished: boolean;
     // A weapon whose style a raid's bosses all pray against: what it loses against them
     bossPenalty?: string;
+};
+
+// A weapon or passive banished this run, never offered again
+export type BanishedView = {
+    id: string;
+    name: string;
+    description: string;
+    iconObjId: number;
+    iconSpriteId?: number;
 };
 
 // Co-op: a player in the run besides you, for the party frames
