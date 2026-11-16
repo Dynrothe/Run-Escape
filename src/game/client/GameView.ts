@@ -3235,9 +3235,10 @@ export class GameView {
             if (!p.visible) {
                 continue;
             }
-            const [offsetX, offsetY] = HITSPLAT_OFFSETS[hitsplat.slot];
-            const x = p.x + offsetX * pixel;
-            const y = p.y + offsetY * pixel;
+            // Indexed, not destructured: this runs for every hitsplat every frame
+            const offset = HITSPLAT_OFFSETS[hitsplat.slot];
+            const x = p.x + offset[0] * pixel;
+            const y = p.y + offset[1] * pixel;
             ctx.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
             const sprite = this.assets.getSprite(HITSPLAT_SPRITES[hitsplat.kind]);
             if (sprite && cache) {
