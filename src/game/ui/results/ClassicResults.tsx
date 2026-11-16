@@ -87,6 +87,7 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                         players={players}
                         playerIndex={playerIndex}
                         changePlayer={changePlayer}
+                        keys
                     />
                 )}
                 {result && player && (

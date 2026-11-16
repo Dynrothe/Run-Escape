@@ -412,39 +412,30 @@ describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
 
-    test.each([0, 1])("publishes live party stats only in the co-op menu (focus %s)", (focus) => {
+    test.each([0, 1])("reads every player's stats for co-op's Party stats (focus %s)", (focus) => {
         const sim = createSim(focus);
-        const { client, store } = createClient(sim, false);
+        const { client } = createClient(sim, false);
         const wizardSource = `weapon:${sim.heroes[1].weapons[0].def.id}` as const;
         sim.heroes[0].damageBySource["weapon:scimitar"] = 100;
         sim.heroes[1].damageBySource[wizardSource] = 250;
         sim.heroes[0].down = true;
         sim.heroes[0].left = true;
         const before = sim.getResult();
-        updateHud(client);
-        expect(store.getNumbers()!.partyStats).toBeUndefined();
-        client.pause();
-        updateHud(client);
-        const players = store.getNumbers()!.partyStats!;
+        const players = client.getPartyStats()!;
         expect(players.map((player) => player.damageDealt)).toEqual([100, 250]);
         expect(players.map((player) => player.isLocal)).toEqual([focus === 0, focus === 1]);
         expect(players[0]).toMatchObject({ down: true, left: true });
+        // Reading them changes nothing in the run
         expect(sim.getResult()).toEqual(before);
         expect(sim.player).toBe(sim.heroes[focus].player);
         sim.heroes[1].damageBySource[wizardSource] = 500;
-        updateHud(client);
-        expect(store.getNumbers()!.partyStats![1].damageDealt).toBe(500);
+        expect(client.getPartyStats()![1].damageDealt).toBe(500);
         expect(players[1].damageDealt).toBe(250);
-        client.paused = false;
-        updateHud(client);
-        expect(store.getNumbers()!.partyStats).toBeUndefined();
     });
 
-    test("solo pause does not publish party stats", () => {
-        const { client, store } = createClient(createSim(), false);
-        client.pause();
-        updateHud(client);
-        expect(store.getNumbers()!.partyStats).toBeUndefined();
+    test("has no party stats in a solo run", () => {
+        const { client } = createClient(createSim(), false);
+        expect(client.getPartyStats()).toBeUndefined();
     });
 
     test.each([undefined, 0, 1])(

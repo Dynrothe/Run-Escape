@@ -154,8 +154,7 @@ import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } 
 import { Coins } from "./Coins";
 import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
-import { CombatBreakdown } from "./CombatBreakdown";
-import { CombatReport } from "./CombatBreakdown";
+import { CombatBreakdown, CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
@@ -4932,9 +4931,14 @@ function formatQuestProgress(quest: QuestTrackView): string {
         : t("quest.progress", { done: fmtNum(quest.done), total: fmtNum(quest.of) });
 }
 
+// Read once a second, as the Combat tab is: the run goes on behind a co-op pause menu
 function PartyStats({ client }: { client: GameClient }): JSX.Element | null {
-    const players = useHudNumber(client, (n) => n.partyStats);
+    const [players, setPlayers] = useState(() => client.getPartyStats());
     const [selected, setSelected] = useState<number>();
+    useEffect(() => {
+        const timer = window.setInterval(() => setPlayers(client.getPartyStats()), 1000);
+        return () => window.clearInterval(timer);
+    }, [client]);
     if (!players?.length) return null;
     const playerIndex =
         selected ??
@@ -5161,8 +5165,10 @@ function PauseModal({
                     {open === "quests" && <PauseQuests quests={quests} combatTasks={combatTasks} />}
                     {open === "party" && (
                         <>
+                            {kickable.length > 0 && (
+                                <PauseParty kickable={kickable} client={client} />
+                            )}
                             <PartyStats client={client} />
-                            <PauseParty kickable={kickable} client={client} />
                         </>
                     )}
                     {open === "collection" && (

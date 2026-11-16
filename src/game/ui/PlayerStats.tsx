@@ -2,14 +2,17 @@ import type { PlayerResultView } from "../client/GameStore";
 import { t, tl } from "../i18n";
 import { Big } from "./results/shared";
 
+// keys: the arrow keys change player here (the results'), so the buttons' tooltips say so
 export function PlayerStatsNav({
     players,
     playerIndex,
     changePlayer,
+    keys = false,
 }: {
     players: PlayerResultView[];
     playerIndex: number;
     changePlayer: (direction: number) => void;
+    keys?: boolean;
 }): JSX.Element {
     const player = players[playerIndex];
     return (
@@ -21,6 +24,7 @@ export function PlayerStatsNav({
             <button
                 className="ui-button ui-result-arrow"
                 aria-label={t("ui.result.prev_player_aria")}
+                title={keys ? t("ui.result.prev_player_title") : undefined}
                 onClick={() => changePlayer(-1)}
             >
                 <span className="ui-result-arrow-left" aria-hidden="true" />
@@ -41,6 +45,7 @@ export function PlayerStatsNav({
             <button
                 className="ui-button ui-result-arrow"
                 aria-label={t("ui.result.next_player_aria")}
+                title={keys ? t("ui.result.next_player_title") : undefined}
                 onClick={() => changePlayer(1)}
             >
                 <span className="ui-result-arrow-right" aria-hidden="true" />

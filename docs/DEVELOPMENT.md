@@ -887,7 +887,12 @@ The classic screen has two tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player
 run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the player
 whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
 laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
-`CombatView`.
+`CombatView`. Co-op's pause menu has a Party tab: the host's kick buttons, then Party stats, each
+player's results so far behind the results' arrows (`PlayerStatsNav` and `PlayerStatsTable` in
+`ui/PlayerStats.tsx`, shared with `ClassicResults`) over their `CombatBreakdown`. It reads
+`GameClient.getPartyStats` once a second while it's open, as the Combat tab reads its view, not
+through the HUD's numbers. Its DPS is the results' average over each source's active time, not the
+damage meter's recent window.
 The monsters killed are shown as their chatheads: `EnemyHead` (`ui/EnemyHead.tsx`) gives
 `NpcHead` (`ui/ItemIcon.tsx`) the monster's NPC and its framing, `iconCache` asks for it, and
 `NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC with none),
@@ -903,7 +908,7 @@ zooming never moves the picture, pitched or not. They were set by eye with the e
 `feat/portrait-editor` branch (`?portraits` there). A framing that picks a body, a model or a
 sequence uses more of the cache, so deploy it with a new slim cache.
 
-The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
+The pause menu's tabs are Loadout, Combat, then Quests when there are any and Party in co-op
 (`PauseModal`; Quests has the Combat Achievements a solo run follows under its quests, in
 `PauseQuests`), and its Collection log and settings are buttons at the bottom, beside Give up and
 Resume, each one's page replacing the open tab (`PAUSE_BUTTON_PAGES`; the button goes back to the
@@ -2707,14 +2712,6 @@ So does any other full cache the original map viewer (`?viewer=1`) loaded: the v
 it again when it's next opened on it.
 
 ### Co-op
-
-The co-op menu's **Party stats**, in its Party tab, reuses the results' player navigation and
-individual totals in `ui/PlayerStats.tsx`, and `CombatBreakdown` for the combat details.
-`GameClient.updateHud` publishes `HudNumbers.partyStats` using
-`RunStatsViews.getPlayerResultViews` only while the co-op menu is open.
-It follows the HUD's number store, so browsing updates live without changing the sim or sending
-network actions. DPS is the results' average over each source's active time, not the HUD meter's
-recent window.
 
 Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from the same seed and
 everyone's loadout (`GameStart`), and only what the players do goes over the network. The host

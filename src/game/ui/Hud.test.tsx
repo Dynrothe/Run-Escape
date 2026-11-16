@@ -113,77 +113,86 @@ function renderHud(methods: Record<string, unknown> = {}, devTools = false) {
 
 test.each([false, true])("co-op menu browses live player stats (touch %s)", (coarse) => {
     device.coarse = coarse;
-    const { store } = renderHud();
-    const players: PlayerResultView[] = ["Alice", "Bob", "Charlie"].map((name, index) => ({
-        name,
-        characterName: "Warrior",
-        isLocal: index === 1,
-        down: index === 0,
-        left: index === 2,
-        kills: index + 1,
-        damageDealt: (index + 1) * 100,
-        caskets: index,
-        highestHit: 30 + index,
-        damageTaken: 10 + index,
-        healed: 20 + index,
-        rerollsUsed: 0,
-        skips: 0,
-        kinds: [],
-        killsByEnemy: [],
-        damage: [{ name: `${name}'s weapon`, damage: 100, kills: index + 1, perSecond: 5 }],
-    }));
-    act(() =>
-        store.set({
-            overlay: "paused",
-            party: players
-                .filter((player) => !player.isLocal)
-                .map((player) => ({
-                    name: player.name,
-                    characterId: "warrior",
-                    hp: 10,
-                    maxHp: 20,
-                    down: player.down,
-                    left: player.left,
-                    revivable: false,
-                    reviveProgress: 0,
-                    immune: false,
-                })),
-        }),
-    );
-    fireEvent.click(screen.getByRole("tab", { name: "Party" }));
-    // The menu can mount before its first numbers update.
-    expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
-    act(() => store.setNumbers(numbers({ partyStats: players })));
-    expect(screen.getByText("Bob (you)")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Next player's stats" }));
-    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
-    const individual = () => screen.getByRole("table", { name: "Individual stats" });
-    expect(individual()).toHaveTextContent("300");
-    expect(screen.getByRole("table", { name: "Damage by source" })).toHaveTextContent(
-        "Charlie's weapon",
-    );
-    act(() =>
-        store.setNumbers(
-            numbers({
-                partyStats: players.map((player) =>
-                    player.name === "Charlie" ? { ...player, damageDealt: 450 } : player,
-                ),
+    vi.useFakeTimers();
+    try {
+        const players: PlayerResultView[] = ["Alice", "Bob", "Charlie"].map((name, index) => ({
+            name,
+            characterName: "Warrior",
+            isLocal: index === 1,
+            down: index === 0,
+            left: index === 2,
+            kills: index + 1,
+            damageDealt: (index + 1) * 100,
+            caskets: index,
+            highestHit: 30 + index,
+            damageTaken: 10 + index,
+            healed: 20 + index,
+            rerollsUsed: 0,
+            skips: 0,
+            kinds: [],
+            killsByEnemy: [],
+            damage: [{ name: `${name}'s weapon`, damage: 100, kills: index + 1, perSecond: 5 }],
+        }));
+        let current = players;
+        const getPartyStats = vi.fn(() => current);
+        const { store } = renderHud({ getPartyStats });
+        act(() =>
+            store.set({
+                overlay: "paused",
+                party: players
+                    .filter((player) => !player.isLocal)
+                    .map((player) => ({
+                        name: player.name,
+                        characterId: "warrior",
+                        hp: 10,
+                        maxHp: 20,
+                        down: player.down,
+                        left: player.left,
+                        revivable: false,
+                        reviveProgress: 0,
+                        immune: false,
+                    })),
             }),
-        ),
-    );
-    expect(individual()).toHaveTextContent("450");
-    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Next player's stats" }));
-    expect(screen.getByText("Player 1 of 3 · Down")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Previous player's stats" }));
-    expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
-    act(() => store.set({ overlay: "none" }));
-    expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
-    act(() => store.set({ overlay: "paused" }));
-    expect(screen.getByText("Bob (you)")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Loadout" }));
-    cleanup();
-    device.coarse = false;
+        );
+        fireEvent.click(screen.getByRole("tab", { name: "Party" }));
+        expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+        const next = () => screen.getByRole("button", { name: "Next player's stats" });
+        // The arrow keys only change player on the results, so the tooltip saying so isn't here
+        expect(next()).not.toHaveAttribute("title");
+        fireEvent.click(next());
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        const individual = () => screen.getByRole("table", { name: "Individual stats" });
+        expect(individual()).toHaveTextContent("300");
+        expect(screen.getByRole("table", { name: "Damage by source" })).toHaveTextContent(
+            "Charlie's weapon",
+        );
+        // Read again a second later, as the run goes on behind the menu
+        current = players.map((player) =>
+            player.name === "Charlie" ? { ...player, damageDealt: 450 } : player,
+        );
+        const reads = getPartyStats.mock.calls.length;
+        act(() => vi.advanceTimersByTime(1000));
+        expect(getPartyStats.mock.calls.length).toBe(reads + 1);
+        expect(individual()).toHaveTextContent("450");
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        fireEvent.click(next());
+        expect(screen.getByText("Player 1 of 3 · Down")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Previous player's stats" }));
+        expect(screen.getByText("Player 3 of 3 · Left the run")).toBeInTheDocument();
+        act(() => store.set({ overlay: "none" }));
+        expect(screen.queryByRole("group", { name: "Player stats navigation" })).toBeNull();
+        // Closed, it reads no more
+        const closed = getPartyStats.mock.calls.length;
+        act(() => vi.advanceTimersByTime(3000));
+        expect(getPartyStats.mock.calls.length).toBe(closed);
+        act(() => store.set({ overlay: "paused" }));
+        expect(screen.getByText("Bob (you)")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("tab", { name: "Loadout" }));
+    } finally {
+        vi.useRealTimers();
+        cleanup();
+        device.coarse = false;
+    }
 });
 
 afterEach(() => {
