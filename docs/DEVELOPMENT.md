@@ -310,9 +310,8 @@ mostly Node writing to sockets.
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop bun run build` to point it anywhere
 else. `bun run start` and `bun run preview` run a relay of their own at `/coop`
-(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without). The `start:singleplayer` and
-`serve:singleplayer` scripts export `MULTIPLAYER=off` in Bun's shell, so it overrides an inherited
-value on Windows too.
+(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without). The `:singleplayer` scripts set
+`MULTIPLAYER=off` themselves, over any value already set.
 
 **On Cloudflare instead.** [server/cloudflare/](../server/cloudflare/README.md) is the same relay
 as a Cloudflare Worker with Durable Objects: a lobby for the rooms list and names, and each room its
