@@ -395,13 +395,28 @@ type RoomSetup = { mapId: string; hard: boolean };
 export function RunInvocationsButton({
     ui,
     room,
+    locked,
     onOpen,
 }: {
     ui: UiSnapshot;
     room?: RoomSetup;
+    // Why it's shut, in place of the button: the map's not beaten (or, in a room, by everyone)
+    locked?: string;
     onOpen: () => void;
 }): JSX.Element {
     const points = getInvocationPoints(runBoardOn(ui, room));
+    if (locked !== undefined) {
+        const map = mapName(getMap(room?.mapId ?? ui.mapId));
+        return (
+            <div
+                className="ui-endless ui-endless-locked"
+                title={t("ui.invocations.tooltip.locked", { map })}
+            >
+                <span className="ui-endless-name">{t("ui.invocations.title")}</span>
+                <span className="ui-endless-hint">{locked}</span>
+            </div>
+        );
+    }
     return (
         <button className="ui-button ui-invocations-button" onClick={onOpen}>
             {t("ui.invocations.title")}

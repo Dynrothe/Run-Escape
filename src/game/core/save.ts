@@ -43,6 +43,7 @@ import {
     isFunMap,
     isRaidMap,
     isSeasonalMap,
+    takesInvocations,
     takesRelics,
 } from "../content/maps";
 import { PET_BY_ID, isPetFound } from "../content/pets";
@@ -1767,6 +1768,23 @@ export function isHardUnlocked(save: SaveData, mapId: string): boolean {
         return false;
     }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
+}
+
+// A run's invocations (content/invocations.ts, RUN_SET) open as hard mode does: on a map that takes
+// them, once it's been beaten
+export function isInvocationsUnlocked(save: SaveData, mapId: string): boolean {
+    const map = MAP_BY_ID.get(mapId);
+    return map !== undefined && takesInvocations(map) && (save.mapVictories[mapId] ?? 0) > 0;
+}
+
+// The invocations a solo run on the map gets: the board's picks once they're open there, and none
+// before (undefined off a map that takes them)
+export function getRunInvocations(save: SaveData, mapId: string): string[] | undefined {
+    const map = MAP_BY_ID.get(mapId);
+    if (!map || !takesInvocations(map)) {
+        return undefined;
+    }
+    return isInvocationsUnlocked(save, mapId) ? [...(save.runInvocations ?? [])] : [];
 }
 
 // A raid's expert mode, once it's been beaten on hard

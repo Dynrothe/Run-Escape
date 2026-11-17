@@ -436,8 +436,9 @@ version and how to run it.
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
   records of its own. A win counts as a win on the map, and turns its tick gold. On campaign
   and Act II maps, hard mode is a preset of four invocations (below) worth 180 points.
-- **Invocations**: on campaign and Act II maps, the Invocations button beside
-  Hard opens a board of opt-in handicaps, as the Tombs of Amascut's: Walk the Path (enemies 15%
+- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone
+  in the room), the Invocations button beside Hard opens a board of opt-in handicaps, as the Tombs
+  of Amascut's: Walk the Path (enemies 15%
   faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
   rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
   getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'

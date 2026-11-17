@@ -1189,7 +1189,8 @@ Both are in, and in the first build (decided): they ship with the Stranglewood, 
 
 ### 9.1 Invocations
 
-The Tombs of Amascut's: opt-in handicaps on every campaign map, picked on the map's card, each worth points.
+The Tombs of Amascut's: opt-in handicaps on every campaign map once it's been beaten (as hard mode opens), picked
+on the map's card, each worth points.
 Act II maps and remixes take them too; boss fights and the gauntlet don't (their hard modes are the handicap). The
 run's coins are +1.5% a point, adding to the other bonuses (8.3), and badges go on the card at 100, 200 and 300 points.
 A record shows the points it was set at.
@@ -1240,7 +1241,10 @@ A run's set is `RUN_SET`, ids `run_*` (the Tombs already have a Walk the Path, a
 other things there), saved as `SaveData.runInvocations`, and sent in co-op in the same `GameStart.invocations` (the
 Sim cleans it by the map's board). Which maps take them is `takesInvocations(map)` in `maps.ts`: every campaign
 map, Lumbridge, the Barrows and the Wilderness too, and the Act II maps. The weekly Vault and invasions still start
-at the Desert.
+at the Desert. A map's board opens once it's been beaten, as hard mode does (`isInvocationsUnlocked` in `save.ts`),
+and before that its runs take none of the saved picks (`getRunInvocations`). In co-op it opens once everyone in the
+room has beaten the map (`GameClient.roomHasInvocations`): the relay checks hard mode, but not invocations, so the
+host does, by the members' hard unlocks.
 
 **Hard mode's preset** is four invocations, so a hard run is the same run: Hardened Foes (the map's hard hitpoints
 and damage, and the weapons' hard-mode balance, 90 points), Thronging (the crowd x1.25, bones' experience x0.9, 40),
