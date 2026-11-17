@@ -641,13 +641,12 @@ version and how to run it.
       after another, so you can get away), Jal-Xil, and Jal-Zek that raise the dead.
     - **The Stranglewood** (Act II, open once the Inferno's beaten): the real wood round
       Vardorvis's arena, its undergrowth opened up so there's room to fight, with the wood itself
-      round its edge and in thickets; mountain rock and steep faces stay impassable. The Strangled,
-      Strangled Boars from 2:00, Strangled Lynxes
-      from 4:00 that rush the last few tiles, and the Strangled Bear, an elite that leaves roots
-      behind it. Played by its **roots** (below).
+      round its edge and in thickets, and its mountain rock and steep faces too. The Strangled,
+      Strangled Boars from 2:00, Strangled Lynxes from 4:00 that rush the last few tiles, and the
+      Strangled Bear, an elite that leaves roots behind it. Played by its **roots** (below).
     - **The Lassar Undercity** (Act II, open once the Inferno's beaten): the real sunken city
-      under Ice Mountain, its streets cleared of clutter so there's room to fight, round the
-      drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
+      under Ice Mountain, its streets cleared of clutter so there's room to fight, west and north
+      of the drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
       Wighted Leeches from 2:00 whose bite drains a while, Ghosts from 4:00 that go through walls,
       and Ancient Guardians, slow and hard, which are its elites too. Played by its **Shadow
       Realm** (below).

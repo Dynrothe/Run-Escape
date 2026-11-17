@@ -23,10 +23,11 @@ import type { BuildContext, MapPoint, MapRecipe } from "../recipe";
 //
 // In OSRS its streets are broken up by one-tile clutter (crates, barrels, rubble, the shelves of
 // its stalls) into a dozen pockets that don't join: off come the clutter and its doors, so the
-// city's streets have room for crowds. Its lamps and
-// braziers stay. Its middle is the drowned city, the water the cathedral stands in; the
-// cathedral's island is the Whisperer's, joined to the north streets by a causeway, and the run
-// starts on the forecourt at its top.
+// city's streets join, with room for crowds. Its lamps and braziers stay. Its middle is the
+// drowned city, the water the cathedral stands in; the cathedral's island is the Whisperer's,
+// joined to the north streets by a causeway, and the run starts on the forecourt at its top. The
+// black void round the city (floor the cache hides, or none) is blocked, and so is what's only
+// reached across it (the south-east plaza).
 
 const MAP_X = 62;
 const MAP_Y = 104;

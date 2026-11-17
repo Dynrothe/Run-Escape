@@ -24,6 +24,7 @@ the version in the corner).
 - Braziers in Frozen remixes now block movement, whether lit or unlit. Fixed by Deivid Smarzaro.
 - The black void in the Lassar Undercity is no longer walkable or a place for monsters to spawn.
   Fixed by Deivid Smarzaro.
+- Mountains and steep slopes in the Stranglewood can't be walked through. Fixed by Deivid Smarzaro.
 
 ## 0.34.1 - 2026-11-16
 
@@ -98,7 +99,6 @@ the version in the corner).
 
 ### Fixed
 
-- Mountains and steep slopes in the Stranglewood no longer let you walk through them. Fixed by Deivid Smarzaro.
 - Auto equip and Production Prodigy take gear the casket shows only gains for, even when a stat is
   lower by less than the casket shows (2.5% against 3%, both +3%). Fixed by Deivid Smarzaro.
 - The Ring of life showing your revive sits in the middle of its box. Fixed by Deivid Smarzaro.
