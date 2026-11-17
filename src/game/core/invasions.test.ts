@@ -388,6 +388,14 @@ describe("the weekly Vault", () => {
     });
 
     it("is the same run for everyone in a week, and another the next", () => {
+        expect(getVault("2026-W47")).toEqual({
+            key: "2026-W47",
+            seed: 1879706719,
+            mapId: "kourend",
+            remixes: ["overgrown", "frozen"],
+            invocations: ["run_upset_stomach", "run_overly_draining", "run_blood_moon"],
+            characterId: "hunter",
+        });
         expect(getVault("2026-W46")).toEqual(getVault("2026-W46"));
         expect(vaultSeed("2026-W46")).not.toBe(vaultSeed("2026-W47"));
         const maps = new Set<string>();
@@ -395,6 +403,7 @@ describe("the weekly Vault", () => {
             const vault = getVault(weekKey({ year: 2026, week }));
             maps.add(vault.mapId);
             expect(VAULT_MAPS).toContain(vault.mapId);
+            expect(["lumbridge", "barrows", "wilderness"]).not.toContain(vault.mapId);
             expect(vault.remixes.length).toBeGreaterThanOrEqual(1);
             expect(vault.remixes.length).toBeLessThanOrEqual(2);
             expect(vault.invocations).toHaveLength(3);

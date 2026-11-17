@@ -83,24 +83,31 @@ describe("damage by type and kills by monster", () => {
         expect(DAMAGE_KINDS).toContain("other");
     });
 
-    test("the Combat view lists only the invocations active on this map", () => {
-        const invoked = createSim(undefined, {
-            mapId: "desert",
-            invocations: ["run_glass_cannon", "run_ancient_haste"],
-        });
-        const view = getCombatView(invoked);
-        expect(view.invocations.map((invocation) => invocation.id)).toEqual([
-            "run_glass_cannon",
-            "run_ancient_haste",
-        ]);
-        expect(view.invocationTotal).toBe(30);
-        expect(view.tombsInvocations).toBe(false);
+    test.each(["lumbridge", "barrows", "wilderness", "desert"])(
+        "the Combat view lists the invocations active on %s",
+        (mapId) => {
+            const invoked = createSim(undefined, {
+                mapId,
+                invocations: ["run_glass_cannon", "run_ancient_haste"],
+            });
+            const view = getCombatView(invoked);
+            expect(view.invocations.map((invocation) => invocation.id)).toEqual([
+                "run_glass_cannon",
+                "run_ancient_haste",
+            ]);
+            expect(view.invocationTotal).toBe(30);
+            expect(view.tombsInvocations).toBe(false);
+        },
+    );
 
+    test("the Combat view leaves out invocations on a map without the board", () => {
         const inactive = createSim(undefined, {
-            mapId: "lumbridge",
+            mapId: "zachariah",
             invocations: ["run_glass_cannon"],
         });
-        expect(getCombatView(inactive).invocations).toEqual([]);
+        const view = getCombatView(inactive);
+        expect(view.invocations).toEqual([]);
+        expect(view.invocationTotal).toBe(0);
     });
 });
 

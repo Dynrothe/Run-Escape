@@ -1820,7 +1820,7 @@ export class Sim {
     readonly hard: boolean;
     readonly expert: boolean;
     // The invocations on (content/invocations.ts): the Tombs of Amascut's, and the raid level they
-    // come to; or a run's (RUN_SET, maps from the Desert on), hard mode's preset among them
+    // come to; or a run's (RUN_SET, maps.ts takesInvocations), hard mode's preset among them
     readonly invocations: string[];
     readonly raidLevel: number;
     // A run's invocation points (0 off a map that takes them), for its records
@@ -2445,11 +2445,7 @@ export class Sim {
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
         // The Tombs go by their invocations instead. A map with the runs' board has hard mode as a
         // preset of them, so its hard runs play as they always have.
-        const board = this.map.tombs
-            ? TOMBS_SET
-            : takesInvocations(this.map, this.remixes.length > 0)
-              ? RUN_SET
-              : undefined;
+        const board = this.map.tombs ? TOMBS_SET : takesInvocations(this.map) ? RUN_SET : undefined;
         const picked = board ? cleanInvocations(options.invocations ?? [], board) : [];
         const runBoard = board === RUN_SET;
         this.invocations =

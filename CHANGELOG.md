@@ -13,6 +13,8 @@ the version in the corner).
 ### Changed
 
 - Cards have a new back, by trippy22: a trail of footprints, the same shape as their fronts.
+- Invocations on Lumbridge, Barrows and Wilderness, by Deivid Smarzaro: no remix needed now, and
+  they have records and badges of their own there.
 
 ### Fixed
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
-import { getMap, takesInvocations } from "../content/maps";
+import { getMap } from "../content/maps";
 import {
     REMIX_CROWD_SHARE,
     cleanRemixes,
@@ -99,9 +99,11 @@ describe("remixes", () => {
         expect(getRemixToughness(getMap("inferno"))).toBeCloseTo(1);
     });
 
-    it("take invocations on every first-campaign map once remixed", () => {
-        expect(takesInvocations(LUMBRIDGE)).toBe(false);
-        expect(takesInvocations(LUMBRIDGE, true)).toBe(true);
+    it("keep invocations on remixed runs", () => {
+        const sim = createSim({ remixes: ["dark"], invocations: ["run_glass_cannon"] });
+        expect(sim.remixes).toEqual(["dark"]);
+        expect(sim.invocations).toEqual(["run_glass_cannon"]);
+        expect(sim.invocationPoints).toBe(20);
     });
 
     it("put nothing on a run without them", () => {

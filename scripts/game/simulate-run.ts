@@ -29,7 +29,7 @@
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
 //   MAP=tombs_of_amascut ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
 //   INVOCATIONS=run_glass_cannon,run_blood_moon MAP=desert ...  # a run's invocations, on a map
-//                                          # from the Desert on (INVOCATIONS=all for all nine;
+//                                          # that takes them (INVOCATIONS=all for all nine;
 //                                          # HARD=1 is hard mode's preset)
 //   RELICS=trickster,globetrotter ...      # relics on (content/relics.ts)
 //   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
