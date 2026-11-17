@@ -138,6 +138,7 @@ import {
     isExpertUnlocked,
     isGauntletOpen,
     isHardUnlocked,
+    isInvocationsUnlocked,
     isMapUnlocked,
 } from "../core/save";
 import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
@@ -1301,8 +1302,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const [picker, setPicker] = useState<PhonePicker>();
     // A picker's left open as the phone turns upright, and comes back as it turns again
     const picking = phone ? picker : undefined;
-    // A run's invocations (content/invocations.ts, RUN_SET), remixed or not
+    // A run's invocations (content/invocations.ts, RUN_SET), remixed or not, once the map's
+    // been beaten
     const runBoard = takesInvocations(map);
+    const runBoardOpen = isInvocationsUnlocked(ui.save, map.id);
     const shownMapName = remixedMapName(map, ui.remixes);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
@@ -1339,7 +1342,13 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
             {!map.raid && <EndlessSwitch ui={ui} client={client} />}
             <HardSwitch ui={ui} client={client} />
             {expertShown && <ExpertSwitch ui={ui} client={client} />}
-            {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
+            {runBoard && (
+                <RunInvocationsButton
+                    ui={ui}
+                    locked={runBoardOpen ? undefined : t("ui.endless.beat_map")}
+                    onOpen={() => setBoard(true)}
+                />
+            )}
         </>
     );
     const back = (
@@ -1363,7 +1372,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
             {board && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
-            {board && runBoard && (
+            {board && runBoardOpen && (
                 <RunInvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
             {/* Over the whole screen, not in the bar (sticky on a narrow one) */}
@@ -2714,8 +2723,9 @@ function ActDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
 }
 
 // A map's best at invocations (SaveData.invocationBest) and its badges, on a map that takes them
+// once they're open (MapModes says what opens them)
 function InvocationDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element | null {
-    if (!takesInvocations(map)) {
+    if (!isInvocationsUnlocked(save, map.id)) {
         return null;
     }
     const best = save.invocationBest?.[map.id];
@@ -3059,8 +3069,8 @@ function MapDetails({
     );
 }
 
-// What endless, hard and expert do on this map, or what it takes to open them: the switches in the
-// bar below only have room for their names
+// What endless, hard and expert do on this map, or what it takes to open them and invocations: the
+// switches in the bar below only have room for their names
 function MapModes({
     save,
     map,
@@ -3098,6 +3108,15 @@ function MapModes({
         text: hardOpen ? t("ui.hard.tooltip.open") : t("ui.hard.tooltip.locked", { map: name }),
         open: hardOpen,
     });
+    // Invocations say only what opens them: once open, their record and badges are above
+    if (takesInvocations(map) && !isInvocationsUnlocked(save, map.id)) {
+        modes.push({
+            key: "invocations",
+            name: t("ui.invocations.title"),
+            text: t("ui.invocations.tooltip.locked", { map: name }),
+            open: false,
+        });
+    }
     if (map.raid && expertShown) {
         const expertOpen = isExpertUnlocked(save, map.id);
         modes.push({

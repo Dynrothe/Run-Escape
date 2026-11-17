@@ -146,6 +146,7 @@ import {
     getQuestProgress,
     getRaidPortals,
     getReachedStages,
+    getRunInvocations,
     getStartingCharacter,
     hasGauntletLooks,
     isEndlessRecord,
@@ -155,6 +156,7 @@ import {
     isGauntletOpen,
     isHardRecord,
     isHardUnlocked,
+    isInvocationsUnlocked,
     isMapUnlocked,
     recordGauntlet,
     recordRun,
@@ -1722,6 +1724,19 @@ export class GameClient implements GameFrameHandler {
         return this.coop.isHost ? this.coop.room : undefined;
     }
 
+    // Whether a run's invocations go on in the room: once everyone in it has beaten the map, as
+    // hard mode's switch goes (unless the relay takes anyone). The relay doesn't check them, so the
+    // host does: on a map that takes them, having hard mode is having beaten it.
+    private roomHasInvocations(mapId: string): boolean {
+        const { room, anyMap } = this.store.getSnapshot().coop;
+        return (
+            anyMap ||
+            (isInvocationsUnlocked(this.save, mapId) &&
+                (room?.members.every((member) => member.unlocks?.hard?.includes(mapId) === true) ??
+                    true))
+        );
+    }
+
     // Whether a map's endless or hard mode can be on in the room: this player
     // has it, and so does everyone else (unless the relay takes anyone), as
     // the relay checks before it takes a setting
@@ -1951,10 +1966,13 @@ export class GameClient implements GameFrameHandler {
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
             // The Tombs' raid level is the host's, as the invocation board set it, and so are a
-            // run's invocations (the room's Hard is hard mode's), and its remixes
+            // run's invocations (the room's Hard is hard mode's), once the room has them, and its
+            // remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
             ...(takesInvocations(map) && {
-                invocations: this.save.runInvocations ?? [],
+                invocations: this.roomHasInvocations(map.id)
+                    ? (this.save.runInvocations ?? [])
+                    : [],
             }),
             ...(remixes.length > 0 && { remixes }),
             ...(isInvasionOpen(this.save.mapVictories) && { invasions: true }),
@@ -2554,9 +2572,7 @@ export class GameClient implements GameFrameHandler {
                 ? vault.invocations
                 : map.tombs
                   ? (this.save.invocations ?? [])
-                  : takesInvocations(map)
-                    ? (this.save.runInvocations ?? [])
-                    : undefined,
+                  : getRunInvocations(this.save, mapId),
             relics: vault ? [] : this.runRelics(map),
             remixes,
             invasions,

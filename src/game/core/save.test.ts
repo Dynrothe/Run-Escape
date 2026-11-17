@@ -35,12 +35,14 @@ import {
     getMetaStats,
     getNextUpgradeCost,
     getQuestProgress,
+    getRunInvocations,
     getSkillCoins,
     getStartingCharacter,
     importSave,
     isEndlessRecord,
     isEndlessUnlocked,
     isHardUnlocked,
+    isInvocationsUnlocked,
     isMapUnlocked,
     migrateSave,
     recordRun,
@@ -1046,6 +1048,33 @@ describe("hard mode", () => {
         });
         expect(broken.hardVictories).toEqual({ lumbridge: 2 });
         expect(broken.hardEndlessBest).toEqual({ lumbridge: { round: 3, seconds: 900 } });
+    });
+});
+
+describe("a run's invocations", () => {
+    test("open on a map once it's been beaten, as hard mode does, and go on its runs from then", () => {
+        const save = createSave();
+        save.runInvocations = ["run_glass_cannon"];
+        for (const mapId of ["lumbridge", "wilderness", "desert", "stranglewood"]) {
+            expect(isInvocationsUnlocked(save, mapId)).toBe(false);
+            expect(getRunInvocations(save, mapId)).toEqual([]);
+            recordRun(save, run(mapId, { victory: true, seconds: 900 }));
+            expect(isInvocationsUnlocked(save, mapId)).toBe(isHardUnlocked(save, mapId));
+            expect(getRunInvocations(save, mapId)).toEqual(["run_glass_cannon"]);
+        }
+        // A loss opens nothing
+        recordRun(save, run("barrows", { seconds: 600 }));
+        expect(getRunInvocations(save, "barrows")).toEqual([]);
+    });
+
+    test("never on a map without the board, beaten or not", () => {
+        const save = createSave();
+        save.runInvocations = ["run_glass_cannon"];
+        for (const mapId of ["zachariah", "tombs_of_amascut", FUN_MAPS[0].id]) {
+            recordRun(save, run(mapId, { victory: true, seconds: 900 }));
+            expect(isInvocationsUnlocked(save, mapId)).toBe(false);
+            expect(getRunInvocations(save, mapId)).toBeUndefined();
+        }
     });
 });
 
