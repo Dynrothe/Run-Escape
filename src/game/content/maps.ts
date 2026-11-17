@@ -863,8 +863,9 @@ export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
 // The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
 export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
 
-// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign and act maps, with or without
-// remixes. Boss fights, raids, the Tombs (their own board), quests in parts, the seasonal and fun maps don't.
+// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on every campaign map and the acts'
+// maps, remixed or not. Boss fights, raids, the Tombs (their own board), quests in parts, the
+// seasonal and fun maps don't.
 export function takesInvocations(map: MapDef): boolean {
     if (map.act) {
         return true;

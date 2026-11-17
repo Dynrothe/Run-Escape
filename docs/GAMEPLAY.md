@@ -435,8 +435,7 @@ version and how to run it.
   bought everything walks through them, and the late ones the least. Experience from bones is 10%
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
   records of its own. A win counts as a win on the map, and turns its tick gold. On campaign
-  and Act II maps, hard mode is a preset of four invocations
-  (below) worth 180 points.
+  and Act II maps, hard mode is a preset of four invocations (below) worth 180 points.
 - **Invocations**: on campaign and Act II maps, the Invocations button beside
   Hard opens a board of opt-in handicaps, as the Tombs of Amascut's: Walk the Path (enemies 15%
   faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no

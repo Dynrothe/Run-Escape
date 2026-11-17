@@ -1539,8 +1539,8 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
-    // A run's invocations (content/invocations.ts, RUN_SET): on if it
-    // was off, off if it was on. Hard mode's are the Hard switch's, not the board's.
+    // A run's invocations (content/invocations.ts, RUN_SET): on if it was off, off if it was on.
+    // Hard mode's are the Hard switch's, not the board's.
     toggleRunInvocation(id: string): void {
         if (isHardInvocation(id)) {
             this.toggleHard();

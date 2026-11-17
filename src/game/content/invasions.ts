@@ -44,8 +44,7 @@ export type Invasion = { invader: InvaderDef; at: number; hp: number };
 
 const FIRST_INVASION_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
 
-// The maps invaded: campaign survival runs from the Desert on, regardless of earlier maps'
-// invocation boards
+// The maps invaded: campaign survival runs from the Desert on
 export function takesInvasions(map: MapDef): boolean {
     const index = CAMPAIGN_MAPS.indexOf(map);
     return index >= FIRST_INVASION_MAP && takesInvocations(map);

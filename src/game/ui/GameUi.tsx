@@ -1301,7 +1301,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const [picker, setPicker] = useState<PhonePicker>();
     // A picker's left open as the phone turns upright, and comes back as it turns again
     const picking = phone ? picker : undefined;
-    // A run's invocations (content/invocations.ts, RUN_SET), including remixed maps
+    // A run's invocations (content/invocations.ts, RUN_SET), remixed or not
     const runBoard = takesInvocations(map);
     const shownMapName = remixedMapName(map, ui.remixes);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)

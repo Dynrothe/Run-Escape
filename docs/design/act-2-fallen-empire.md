@@ -1238,9 +1238,9 @@ a row of four slots. About a week for the two systems, with invocations' card sw
 any set. The Tombs keep their own set, raid level, presets, save field (`invocations`) and co-op field as they were.
 A run's set is `RUN_SET`, ids `run_*` (the Tombs already have a Walk the Path, an Upset Stomach and so on that mean
 other things there), saved as `SaveData.runInvocations`, and sent in co-op in the same `GameStart.invocations` (the
-Sim cleans it by the map's board). Which maps take them is `takesInvocations(map)` in `maps.ts`: campaign
-maps including Lumbridge, the Barrows and the Wilderness, and the Act II maps.
-The weekly Vault and invasions still start at the Desert, independently of invocation eligibility.
+Sim cleans it by the map's board). Which maps take them is `takesInvocations(map)` in `maps.ts`: every campaign
+map, Lumbridge, the Barrows and the Wilderness too, and the Act II maps. The weekly Vault and invasions still start
+at the Desert.
 
 **Hard mode's preset** is four invocations, so a hard run is the same run: Hardened Foes (the map's hard hitpoints
 and damage, and the weapons' hard-mode balance, 90 points), Thronging (the crowd x1.25, bones' experience x0.9, 40),
