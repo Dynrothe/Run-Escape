@@ -1051,8 +1051,7 @@ pull of work put all four on). Where it differs from 8.2 and 8.3, and why:
   Roots in the dark are drawn as the lighting draws them; their sprouts aren't drawn unlit (left as they are).
   With all four, sanity and cold are the two bars under hitpoints already.
 - **Coins**: 0.3 for one, 0.25 for each more, added to hard mode's or the invocations', and Act II's steps, under
-  the +300% cap. A remixed map takes invocations whatever it is (`takesInvocations(map, true)`): Lumbridge, the Barrows and
-  the Wilderness get the board when remixed.
+  the +300% cap. Remixed maps take invocations, as their unremixed maps do (`takesInvocations(map)`).
 - **Records** (`SaveData.remixVictories`, keyed `lumbridge:dark+frozen`): wins, the best time, wins on hard (the
   gold tick) and the best endless round, relic-free. A remixed win counts as a win of the map (its tick, quests),
   but sets none of the map's own hard, act, invocation or endless records: they stay the plain map's. No
@@ -1187,7 +1186,7 @@ Both are in, and in the first build (decided): they ship with the Stranglewood, 
 
 ### 9.1 Invocations
 
-The Tombs of Amascut's: opt-in handicaps on any map from the Desert on, picked on the map's card, each worth points.
+The Tombs of Amascut's: opt-in handicaps on every campaign map, picked on the map's card, each worth points.
 Act II maps and remixes take them too; boss fights and the gauntlet don't (their hard modes are the handicap). The
 run's coins are +1.5% a point, adding to the other bonuses (8.3), and badges go on the card at 100, 200 and 300 points.
 A record shows the points it was set at.
@@ -1236,8 +1235,9 @@ a row of four slots. About a week for the two systems, with invocations' card sw
 any set. The Tombs keep their own set, raid level, presets, save field (`invocations`) and co-op field as they were.
 A run's set is `RUN_SET`, ids `run_*` (the Tombs already have a Walk the Path, an Upset Stomach and so on that mean
 other things there), saved as `SaveData.runInvocations`, and sent in co-op in the same `GameStart.invocations` (the
-Sim cleans it by the map's board). Which maps take them is `takesInvocations(map, remixed)` in `maps.ts`: campaign
-maps from the Desert on and the Act II maps; `remixed` is the hook for remixes on the earlier maps.
+Sim cleans it by the map's board). Which maps take them is `takesInvocations(map)` in `maps.ts`: campaign
+maps including Lumbridge, the Barrows and the Wilderness, and the Act II maps.
+The weekly Vault and invasions still start at the Desert, independently of invocation eligibility.
 
 **Hard mode's preset** is four invocations, so a hard run is the same run: Hardened Foes (the map's hard hitpoints
 and damage, and the weapons' hard-mode balance, 90 points), Thronging (the crowd x1.25, bones' experience x0.9, 40),
@@ -1247,7 +1247,7 @@ They pay hard mode's +25% coins between them (each 6.25%), not 1.5% a point. Che
 the same hash with the preset alone (`runHash.test.ts`), and seeded bot runs on hard (the Desert x4, the Inferno, the
 Stranglewood) print the same, line for line, before and after. The Hard switch turns all four on and off; they
 aren't picked one by one on the board for now (a row of their own, lit with the switch), so a hard record is always
-the whole preset. Off the board's maps (Lumbridge to the Wilderness, boss fights, raids) Hard is the switch it was.
+the whole preset. Off the board's maps (boss fights, raids) Hard is the switch it was.
 
 **Coins** add together now: 1 + (hard mode or the invocations' + an act's step), up to +300% (`COIN_BONUS_CAP`).
 Before, hard mode multiplied the act's step; that changes only hard runs on Act II's later steps.

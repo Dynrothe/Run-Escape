@@ -1539,7 +1539,7 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
-    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET): on if it
+    // A run's invocations (content/invocations.ts, RUN_SET): on if it
     // was off, off if it was on. Hard mode's are the Hard switch's, not the board's.
     toggleRunInvocation(id: string): void {
         if (isHardInvocation(id)) {
@@ -1953,7 +1953,7 @@ export class GameClient implements GameFrameHandler {
             // The Tombs' raid level is the host's, as the invocation board set it, and so are a
             // run's invocations (the room's Hard is hard mode's), and its remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
-            ...(takesInvocations(map, remixes.length > 0) && {
+            ...(takesInvocations(map) && {
                 invocations: this.save.runInvocations ?? [],
             }),
             ...(remixes.length > 0 && { remixes }),
@@ -2554,7 +2554,7 @@ export class GameClient implements GameFrameHandler {
                 ? vault.invocations
                 : map.tombs
                   ? (this.save.invocations ?? [])
-                  : takesInvocations(map, remixes.length > 0)
+                  : takesInvocations(map)
                     ? (this.save.runInvocations ?? [])
                     : undefined,
             relics: vault ? [] : this.runRelics(map),

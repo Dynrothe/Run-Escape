@@ -863,16 +863,13 @@ export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
 // The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
 export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
 
-// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign maps from the Desert on, on
-// the acts' maps, and on any campaign map with a remix on (content/remixes.ts): `remixed`. Boss
-// fights, raids, the Tombs (their own board), quests in parts, the seasonal and fun maps don't.
-const FIRST_INVOCATION_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
-export function takesInvocations(map: MapDef, remixed = false): boolean {
+// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign and act maps, with or without
+// remixes. Boss fights, raids, the Tombs (their own board), quests in parts, the seasonal and fun maps don't.
+export function takesInvocations(map: MapDef): boolean {
     if (map.act) {
         return true;
     }
-    const index = CAMPAIGN_MAPS.indexOf(map);
-    return index >= 0 && (remixed || index >= FIRST_INVOCATION_MAP) && isPlainRun(map);
+    return CAMPAIGN_MAPS.includes(map) && isPlainRun(map);
 }
 
 // Relics (content/relics.ts) are on every campaign map and the acts' maps (and remixes), and off in

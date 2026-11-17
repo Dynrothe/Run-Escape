@@ -387,7 +387,7 @@ export function InvocationPresets({
 
 // ---- A run's invocations (content/invocations.ts, RUN_SET) ----
 
-// On a map from the Desert on: the points the card's invocations come to (hard mode's preset with
+// On a map that takes them: the points the card's invocations come to (hard mode's preset with
 // them when the Hard switch is on), and the way to the board
 // A co-op room's board goes by its map and its Hard (room)
 type RoomSetup = { mapId: string; hard: boolean };

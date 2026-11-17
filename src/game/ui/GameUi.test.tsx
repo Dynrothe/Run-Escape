@@ -293,6 +293,25 @@ function renderMaps(mapId = "lumbridge", save = createSave()) {
     return actions;
 }
 
+test.each(["lumbridge", "barrows", "wilderness"])(
+    "%s shows its standalone invocation board and saved record",
+    (mapId) => {
+        const save = createSave();
+        save.mapVictories.lumbridge = 1;
+        save.mapVictories.barrows = 1;
+        save.runInvocations = ["run_glass_cannon"];
+        save.invocationBest = { [mapId]: { points: 200, seconds: 900 } };
+        renderMaps(mapId, save);
+        expect(screen.getByText("Best at invocations: 200 points (15:00)")).toBeVisible();
+        fireEvent.click(screen.getByRole("button", { name: /^Invocations/ }));
+        expect(screen.getByRole("heading", { name: "Invocations" })).toBeVisible();
+        expect(screen.getByRole("button", { name: "Glass Cannon" })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    },
+);
+
 // A phone held sideways, as Mobile.css's query sees it (jsdom has no matchMedia of its own)
 function asPhone(): void {
     vi.stubGlobal(

@@ -633,7 +633,7 @@ export function cleanInvocationPresets(data: unknown): InvocationPreset[] {
 }
 
 // ---- Runs' invocations (act-2-fallen-empire.md, 9.1) ----
-// The same board on a survival run: opt-in handicaps on any map from the Desert on (maps.ts,
+// The same board on a survival run: opt-in handicaps on maps that take them (maps.ts,
 // takesInvocations), each worth points. The points add coins (RUN_INVOCATION_COINS a point, with the
 // run's other bonuses, up to COIN_BONUS_CAP) and badges on the map's card (INVOCATION_BADGES), and
 // a record shows the points it was set at. The Tombs keep their own board and raid level above:

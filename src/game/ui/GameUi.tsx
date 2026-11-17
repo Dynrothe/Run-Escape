@@ -1301,8 +1301,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const [picker, setPicker] = useState<PhonePicker>();
     // A picker's left open as the phone turns upright, and comes back as it turns again
     const picking = phone ? picker : undefined;
-    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET), or remixed
-    const runBoard = takesInvocations(map, ui.remixes.length > 0);
+    // A run's invocations (content/invocations.ts, RUN_SET), including remixed maps
+    const runBoard = takesInvocations(map);
     const shownMapName = remixedMapName(map, ui.remixes);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
