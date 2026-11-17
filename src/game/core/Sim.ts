@@ -1820,7 +1820,7 @@ export class Sim {
     readonly hard: boolean;
     readonly expert: boolean;
     // The invocations on (content/invocations.ts): the Tombs of Amascut's, and the raid level they
-    // come to; or a run's (RUN_SET, maps from the Desert on), hard mode's preset among them
+    // come to; or a run's (RUN_SET, maps.ts takesInvocations), hard mode's preset among them
     readonly invocations: string[];
     readonly raidLevel: number;
     // A run's invocation points (0 off a map that takes them), for its records
@@ -2361,6 +2361,7 @@ export class Sim {
 
     constructor(options: SimOptions) {
         this.grid = options.grid;
+        this.grid.setObjects([]);
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
@@ -2426,6 +2427,7 @@ export class Sim {
         this.realm = this.rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
         this.cold = this.rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
         this.roots = this.rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        this.syncBrazierCollision();
         // Overgrown and Frozen: roots don't grow on ice
         const cold = this.cold;
         if (this.roots && cold) {
@@ -2443,11 +2445,7 @@ export class Sim {
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
         // The Tombs go by their invocations instead. A map with the runs' board has hard mode as a
         // preset of them, so its hard runs play as they always have.
-        const board = this.map.tombs
-            ? TOMBS_SET
-            : takesInvocations(this.map, this.remixes.length > 0)
-              ? RUN_SET
-              : undefined;
+        const board = this.map.tombs ? TOMBS_SET : takesInvocations(this.map) ? RUN_SET : undefined;
         const picked = board ? cleanInvocations(options.invocations ?? [], board) : [];
         const runBoard = board === RUN_SET;
         this.invocations =
@@ -15419,6 +15417,38 @@ export class Sim {
         const along = this.enemies.filter(goes);
         this.otherEnemies = leaving;
         this.enemies = [...coming, ...along];
+        this.syncBrazierCollision();
+        const cold = this.cold;
+        if (to === 0 && cold) {
+            // A brazier comes back where someone may have stood in the realm: whoever's on one
+            // steps off it to free ground (a ghost or a flier goes on through it)
+            const size = cold.def.braziers.size;
+            const offBrazier = (
+                body: { x: number; y: number; prevX: number; prevY: number },
+                radius: number,
+            ) => {
+                const on = cold.braziers.some(
+                    (b) =>
+                        body.x + radius > b.x &&
+                        body.x - radius < b.x + size &&
+                        body.y + radius > b.y &&
+                        body.y - radius < b.y + size,
+                );
+                if (on) {
+                    const spot = findFreeSpot(this.grid, body.x, body.y, radius);
+                    body.x = body.prevX = spot.x;
+                    body.y = body.prevY = spot.y;
+                }
+            };
+            for (const { player } of this.heroes) {
+                offBrazier(player, player.radius);
+            }
+            for (const enemy of this.enemies) {
+                if (!enemy.def.flies && !enemy.def.ghost) {
+                    offBrazier(enemy, enemy.radius);
+                }
+            }
+        }
         const ground = this.pickups.filter((pickup) => pickup.value >= 0);
         this.pickups = this.otherPickups;
         this.otherPickups = ground;
@@ -20946,6 +20976,21 @@ export class Sim {
         this.realm = rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
         this.cold = rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
         this.roots = rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        this.syncBrazierCollision();
+    }
+
+    private syncBrazierCollision(): void {
+        const cold = this.cold;
+        const size = cold?.def.braziers.size ?? 0;
+        const braziers = this.realm?.layer === 1 ? [] : (cold?.braziers ?? []);
+        this.grid.setObjects(
+            braziers.map(({ x, y }) => ({
+                x0: x,
+                y0: y,
+                x1: x + size,
+                y1: y + size,
+            })),
+        );
     }
 
     // An invader keeps within its pocket: pulled back to its edge if it's gone past it

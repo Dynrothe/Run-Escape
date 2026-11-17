@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="350" height="100" viewBox="0 0 350 100">
+  <title>Run Escape</title>
+  <defs>
+    <linearGradient id="gold" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#dfbb87"/>
+      <stop offset="1" stop-color="#c9a16d"/>
+    </linearGradient>
+    <path id="e" d="M0 0H18.5V5H5.6V12.5H16.2V17.5H5.6V25.7H18.8V31H0Z"/>
+    <!-- The cap heights and angles follow the folds of the painted ribbon. -->
+    <g id="words" fill-rule="evenodd">
+      <path transform="translate(49.7 26.6) rotate(-13)"
+            d="M0 0H11.2C17.8 0 21.5 3.4 21.5 9.4C21.5 13.6 19.1 16.6 15.1 18L22.5 30H15.8L9.1 18.9H5.5V30H0ZM5.5 5V14H10.6C14.1 14 15.9 12.4 15.9 9.5C15.9 6.5 14.1 5 10.7 5Z"/>
+      <path transform="translate(79 18.5) rotate(-8)"
+            d="M0 0H5.5V19.5C5.5 24 6.9 26.2 10.6 26.2S15.9 24 15.9 19.5V0H21.4V19.8C21.4 27.5 17.8 31.2 10.6 31.2S0 27.5 0 19.8Z"/>
+      <path transform="translate(111.6 15) rotate(-2.5)"
+            d="M0 0H5.7L17.1 20.5V0H22.4V30.5H16.9L5.3 10V30.5H0Z"/>
+      <use xlink:href="#e" transform="translate(157.7 15.1) rotate(5.5)"/>
+      <path transform="translate(184.7 19.3) rotate(9)"
+            d="M20.7 5.7L16.2 8.4C14.7 5.9 12.8 4.9 10.4 4.9C7.7 4.9 6.1 6.3 6.1 8.3C6.1 10.6 7.6 11.7 12.4 13.2C18.4 15.1 21.3 17.7 21.3 22.3C21.3 27.8 17.1 31.5 10.6 31.5C5.7 31.5 1.9 29.6 0 25.7L4.5 22.6C6.1 25.3 8.3 26.5 11 26.5C14 26.5 15.7 25.1 15.7 22.8C15.7 20.6 14.1 19.4 9.5 17.9C3.6 16 0.6 13.4 0.6 8.6C0.6 3.4 4.6 0 10.5 0C15 0 18.6 1.9 20.7 5.7Z"/>
+      <path transform="translate(215.7 24.5) rotate(12.5)"
+            d="M22 6.4L17.2 9C16 6.3 14.5 5.1 11.8 5.1C7.5 5.1 5.5 8.6 5.5 15.6S7.5 26.3 11.8 26.3C14.1 26.3 16 25.2 17.4 22.4L22 25C19.9 29.6 16.4 31.4 11.7 31.4C4.2 31.4 0 25.8 0 15.7S4.2 0 11.7 0C16.5 0 20 2.1 22 6.4Z"/>
+      <path transform="translate(242.2 31.7) rotate(15)"
+            d="M9.4 0H15.4L24.5 31H18.6L16.6 23.5H8L5.8 31H0ZM9.3 18.7H15.3L12.3 7.6Z"/>
+      <path transform="translate(272.1 41.8) rotate(16)"
+            d="M0 0H10.9C17.9 0 21.5 3.8 21.5 10S17.7 20 10.9 20H5.6V30.6H0ZM5.6 5.1V14.9H10.4C14 14.9 15.9 13.3 15.9 10S14 5.1 10.4 5.1Z"/>
+      <use xlink:href="#e" transform="translate(298.4 49.1) rotate(16)"/>
+    </g>
+  </defs>
+  <use xlink:href="#words" transform="translate(.9 1.5)" fill="#30180e" opacity=".72"/>
+  <use xlink:href="#words" fill="url(#gold)"/>
+</svg>

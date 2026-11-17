@@ -79,7 +79,10 @@ export function vaultSeed(key: string): number {
 }
 
 // The maps it can be: campaign survival runs from the Desert on
-export const VAULT_MAPS = CAMPAIGN_MAPS.filter((map) => takesInvocations(map)).map((m) => m.id);
+const FIRST_VAULT_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
+export const VAULT_MAPS = CAMPAIGN_MAPS.slice(FIRST_VAULT_MAP)
+    .filter((map) => takesInvocations(map))
+    .map((m) => m.id);
 
 // The invocations it can pick: a run's own, not hard mode's (the Vault's never on hard)
 const VAULT_INVOCATION_IDS = RUN_SET.invocations

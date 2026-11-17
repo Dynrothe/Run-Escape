@@ -91,7 +91,10 @@ describe.skipIf(!existsSync(cacheFile))("with the game's cache", () => {
             ]);
             const expected = await readFile(
                 fileURLToPath(
-                    new URL("../../src/media/run-escape-card-back-vampire.png", import.meta.url),
+                    new URL(
+                        "../../src/media/run-escape-card-back-footprints-clean.png",
+                        import.meta.url,
+                    ),
                 ),
             );
             expect(both.back.equals(expected)).toBe(true);

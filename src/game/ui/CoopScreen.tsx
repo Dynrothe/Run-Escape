@@ -25,7 +25,12 @@ import {
 } from "../content/maps";
 import { getVault } from "../content/vault";
 import { isCardRunBlocked } from "../core/cardRuns";
-import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
+import {
+    isEndlessUnlocked,
+    isHardUnlocked,
+    isInvocationsUnlocked,
+    isMapUnlocked,
+} from "../core/save";
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
 import { CardNeedsWindow } from "./CardNeeds";
 import { useConfirm } from "./ConfirmDialog";
@@ -371,9 +376,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
         : undefined;
-    // A run's: the host's invocation points, hard mode's preset with them when the room's on hard
+    // A run's: the host's invocation points, hard mode's preset with them when the room's on hard,
+    // once everyone in the room has beaten the map (GameClient.roomHasInvocations)
     const runBoard = takesInvocations(map);
-    const invocationPoints = runBoard
+    const runBoardOpen =
+        runBoard &&
+        !withoutHard &&
+        (ui.coop.anyMap || !isHost || isInvocationsUnlocked(ui.save, map.id));
+    const invocationPoints = runBoardOpen
         ? getInvocationPoints([
               ...(Array.isArray(hostInvocations) ? hostInvocations : []),
               ...(room.hard ? HARD_PRESET : []),
@@ -385,6 +395,11 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const [boardMap, setBoardMap] = useState(room.mapId);
     if (boardMap !== room.mapId) {
         setBoardMap(room.mapId);
+        setBoard(false);
+    }
+    // and shut when the room stops having invocations (someone joins who hasn't beaten the map),
+    // so it doesn't come back by itself once they've left
+    if (board && runBoard && !runBoardOpen) {
         setBoard(false);
     }
     const [confirm, confirmDialog] = useConfirm();
@@ -668,6 +683,13 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 <RunInvocationsButton
                     ui={ui}
                     room={{ mapId: map.id, hard: room.hard }}
+                    locked={
+                        runBoardOpen
+                            ? undefined
+                            : withoutHard && isInvocationsUnlocked(ui.save, map.id)
+                              ? t("coop.member_hasnt_beaten", { name: withoutHard.name })
+                              : t("coop.beat_the_map")
+                    }
                     onOpen={() => setBoard(true)}
                 />
             )}
@@ -753,7 +775,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             {board && isHost && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
-            {board && isHost && runBoard && (
+            {board && isHost && runBoardOpen && (
                 <RunInvocationBoard
                     ui={ui}
                     client={client}

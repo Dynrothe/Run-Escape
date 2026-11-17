@@ -14,8 +14,9 @@ import type { PlayerPose } from "./PlayerPose";
 // Every light on a map with lighting (MapDef.lighting), gathered each frame where what gives it
 // off is drawn, and handed to the LightBudget to pick what's drawn. The sim's lights (players,
 // the map's, enemies') are what weapons aim by; the rest are only drawn and never touch the sim:
-// glowing scenery, spells and effects (SPOT_LIGHTS), a floor's tiles (FLOOR_LIGHTS), bosses'
-// windups and marks, and a boss's exposed core. Flicker and pulse are drawn only, too.
+// glowing scenery, spells and effects (SPOT_LIGHTS), burning ground and a floor's tiles
+// (FLOOR_LIGHTS), bosses' windups and marks, and a boss's exposed core. Flicker and pulse are
+// drawn only, too.
 
 // Tiles at a dark pocket's edge over which it fades into the day
 const POCKET_EDGE = 2.5;
@@ -36,6 +37,7 @@ const KIND_EXPOSED = 12;
 const KIND_CINEMATIC = 13;
 const KIND_BULLET = 14;
 const KIND_WARDENS = 15;
+const KIND_FIRE = 16;
 const SIM_KINDS = { player: KIND_PLAYER, map: KIND_MAP, enemy: KIND_ENEMY, left: KIND_LEFT };
 
 // A floor's tiles further than this from the view's middle aren't offered (tiles)
@@ -164,6 +166,21 @@ export class SceneLights {
             if (look) {
                 const key = lightKey(KIND_EFFECT, effect.uid);
                 this.offer(key, effect.x, effect.y, look.radius, look);
+            }
+        }
+
+        const fireLook = FLOOR_LIGHTS.burn;
+        if (fireLook) {
+            for (const fire of sim.fires) {
+                if (sim.tick < fire.endTick) {
+                    this.offer(
+                        lightKey(KIND_FIRE, fire.uid),
+                        fire.x,
+                        fire.y,
+                        fire.radius + fireLook.radius,
+                        fireLook,
+                    );
+                }
             }
         }
 

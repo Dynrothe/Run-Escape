@@ -3,9 +3,9 @@
 How the code is laid out, the tools that come with it, how to host a build, and the desktop app.
 The [README](../README.md) covers getting it running.
 
-**A checkout that was installed with npm** needs `node_modules` deleted before `bun install`.
-Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
-its `yallist`, and the dev server fails with `Yallist is not a constructor`.
+**If the dev server fails with `Yallist is not a constructor`**, delete `node_modules` and run
+`bun install --frozen-lockfile`. Stale nested dependencies from older installs can make Babel
+load an incompatible `lru-cache` and `yallist`.
 
 ## Hosting
 
@@ -68,6 +68,10 @@ ScapeRune squares. The one exception is the config type loaders made from an arc
 a while to make and read nothing after: a worker makes those once, and every unit gets the reads
 that made them. Before anything's published, the chunks in the out dir are read back, and every
 group has to come out of them as it went in; the check then loads it all from those same chunks.
+Item icons come from the content tables `getContentObjIds` walks, by any key ending `objId` or
+`objIds`: a new table of icons goes on its list, or it's blank only once deployed (Last Recall's
+was). `slim-load.test.ts` fails on an item any content file names that has neither an icon nor a
+bake.
 
 A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
 changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
@@ -306,7 +310,8 @@ mostly Node writing to sockets.
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop bun run build` to point it anywhere
 else. `bun run start` and `bun run preview` run a relay of their own at `/coop`
-(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without).
+(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without). The `:singleplayer` scripts set
+`MULTIPLAYER=off` themselves, over any value already set.
 
 **On Cloudflare instead.** [server/cloudflare/](../server/cloudflare/README.md) is the same relay
 as a Cloudflare Worker with Durable Objects: a lobby for the rooms list and names, and each room its
@@ -1119,6 +1124,14 @@ stump model it logs an error and draws no bases, rather than failing the map squ
 decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`. The slim cache's map
 pass runs the same loader, so it collects the stump model by itself.
 
+Braziers drawn by the game (`ColdRule`, including Frozen remixes) also need collision outside the
+map's scenery. `Sim.syncBrazierCollision` gives `ArenaGrid.setObjects` their footprints, including
+fractional tile positions. This run-local layer blocks walking and pathfinding, not projectiles,
+and co-op's movement prediction reads the same grid. It is cleared before a new run places its
+remixes, and while the braziers are hidden in the Shadow Realm. Returning restores them and moves
+anyone on one (but a ghost or a flier) to free ground. The map's own collision and fallen floor
+stay separate. The simulation bot targets open ground beside a brazier, not its blocked middle.
+
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
 (`ReferenceTable`); a group's files stay in one array (`Archive`), so a file's data can be part of
@@ -1780,7 +1793,9 @@ involved.
   fill transparent). A name ending in brackets ("Sanguinesti staff (uncharged)") puts them on a
   smaller line under it, the rest on one line a size smaller (`ui-tcg-name-main`). The picture is
   the item drawn from its model at the card's size (`ItemIcon`'s `large`). A face-down card is a
-  picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape. A
+  picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape:
+  `scripts/cards/make-back.ts` fits it to the front's plate, at the fronts' sizes, so a card
+  has one outline face up and face down. A
   pack opens on a playmat that fills the screen (`PackWindow`): its cards in a deck, each press
   dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`); the
   row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
@@ -2522,6 +2537,9 @@ windups, loot beams) was never lit.
   (`content/lights.ts`): `[100, { radius: 2.5, color: 0xff8a3a, intensity: 0.9, flicker: 0.25 }]`.
 - **A floor's tiles** (drawn only), by their effect in `FLOOR_LIGHTS`:
   `burn: { radius: 2, color: 0xff6a1a, intensity: 0.7 }`.
+- **A weapon's burning ground** (drawn only): `SceneLights` gathers `sim.fires` until each
+  patch's `endTick`, using `FLOOR_LIGHTS.burn` with its radius added to the patch's own.
+  One light covers each patch, not each flame, and fades out through the usual light budget.
 - **A boss's attack**: `light: { radius: 2, color: 0xff3030 }` on the `BossAttackDef` glows on
   each spot as it winds up, growing as the hit comes; on a `GroundPatternDef`, on each mark while
   it's down. `look: { exposedLight: { radius: 3, color: 0xffe08a, pulse: { amount: 0.3, seconds: 1 } } }`
@@ -2605,7 +2623,7 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
 
 Run `bun run cards 2415 --preview` to render a cache item as a collectible card with a looping
 gold foil preview. The [card generator guide](../scripts/cards/README.md) covers the TypeScript
-API, matte and foil finishes, the vampire back and numbered decks.
+API, matte and foil finishes, the footprints back and numbered decks.
 
 All run from the repository root with `bun run tsx`:
 
@@ -3499,7 +3517,7 @@ bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and
 
 ### Languages
 
-The game is in English and Português (BR). Only English is checked: the other languages are
+The game is in English, Português (BR) and Čeština. Only English is checked: the others are
 their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
 wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
 dropdown, and the title's globe). The first time the game is in another language, picked or the
@@ -3507,6 +3525,14 @@ browser's, `ui/LanguageNotice.tsx` says so,
 once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
 text is written in English only unless the developer asks for a translation (CLAUDE.md,
 Conventions), and a language without a key shows the English.
+
+Czech keeps OSRS's names in English (items, weapons, maps, monsters, quests, and Melee, Ranged
+and Magic), so its files leave those keys out and they show the English, and translates what's
+round them. It was machine translated first, then edited by hand, so never regenerate it. Its
+translator's words: "výprava" for a run, "truhla" for a casket ("rakev" is a coffin), "Zpět" for
+Back. The UI's fonts in `src/index.css` are `*-Czech.ttf` copies of the originals with Czech's
+carons and rings drawn on their pixel grid, every original glyph as it was:
+`python scripts/i18n/extend-czech-fonts.py` (Python's `fonttools`) makes them again.
 
 Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`. A
 new language is a folder of them, an entry in `LANGS` and `Lang`, and its browser-language match

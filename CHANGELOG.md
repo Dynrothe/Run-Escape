@@ -3,6 +3,32 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.35.0 - 2026-11-17
+
+### Added
+
+- Čeština, by Kitashikun-lab: the game in Czech, with OSRS's names kept as they are. Pick it in
+  Settings, or it's chosen for a browser in Czech.
+
+### Changed
+
+- Cards have a new back, by trippy22: a trail of footprints, the same shape as their fronts.
+- Invocations on Lumbridge, Barrows and Wilderness, by Deivid Smarzaro: no remix needed now, and
+  they have records and badges of their own there.
+- Invocations open on a map once you've beaten it, as hard mode does.
+
+### Fixed
+
+- Last Recall's icon is a Phoenix, for its revival, where it was blank. Fixed by Deivid Smarzaro.
+- A raid's supply chest, the Forgotten Four's camp blessings and the Crondis room's trap show
+  their icons, which were blank.
+- Toktz-mej-tal's burning ground lights what's round it on dark maps for as long as it burns.
+  Fixed by Deivid Smarzaro.
+- Braziers in Frozen remixes now block movement, whether lit or unlit. Fixed by Deivid Smarzaro.
+- The black void in the Lassar Undercity is no longer walkable or a place for monsters to spawn.
+  Fixed by Deivid Smarzaro.
+- Mountains and steep slopes in the Stranglewood can't be walked through. Fixed by Deivid Smarzaro.
+
 ## 0.34.1 - 2026-11-16
 
 ### Changed

@@ -18,7 +18,7 @@ jobs:
     check:
         runs-on: ubuntu-latest
         permissions:
-            # A token that can only read doesn't see draft releases. Nothing from npm runs here.
+            # A token that can only read doesn't see draft releases. No third-party packages run here.
             contents: write
         outputs:
             version: ${{ steps.release.outputs.version }}
@@ -253,7 +253,7 @@ jobs:
                   retention-days: 1
                   compression-level: 0
 
-    # Apart from the build, so the token that can write to releases never runs npm packages
+    # Apart from the build, so the token that can write to releases never runs third-party packages
     publish:
         needs: [check, build, android]
         if: >-

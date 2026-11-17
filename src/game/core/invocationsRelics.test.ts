@@ -17,7 +17,7 @@ import { MAPS, getMap, takesInvocations, takesRelics } from "../content/maps";
 import { RELICS, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
 import { emptyStats } from "../content/types";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
-import { Sim, SimOptions } from "./Sim";
+import { Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { applyAction, cleanAction } from "./lockstep";
 import { createSave, isHardRecord, migrateSave, recordRun } from "./save";
 import { makeGrid } from "./world/testGrid";
@@ -49,17 +49,16 @@ function sim(options: Partial<SimOptions> = {}): Sim {
 }
 
 describe("which maps take invocations and relics", () => {
-    test("invocations from the Desert on and on Act II maps; relics on every campaign map", () => {
+    test("invocations on campaign and Act II maps without requiring remixes", () => {
         const taking = MAPS.filter((map) => takesInvocations(map)).map((map) => map.id);
+        expect(taking).toContain("lumbridge");
+        expect(taking).toContain("barrows");
+        expect(taking).toContain("wilderness");
         expect(taking).toContain("desert");
         expect(taking).toContain("inferno");
         expect(taking).toContain("stranglewood");
         expect(taking).toContain("scar");
-        for (const id of ["lumbridge", "barrows", "wilderness", "awakened_vardorvis"]) {
-            expect(taking).not.toContain(id);
-        }
-        // A remix (later) takes them on any campaign map
-        expect(takesInvocations(getMap("lumbridge"), true)).toBe(true);
+        expect(taking).not.toContain("awakened_vardorvis");
         expect(takesRelics(getMap("lumbridge"))).toBe(true);
         expect(takesRelics(getMap("ghorrock"))).toBe(true);
         for (const map of MAPS.filter((m) => m.fight || m.stages || m.seasonal)) {
@@ -109,12 +108,12 @@ describe("hard mode as a preset of invocations", () => {
         // Part of it isn't
         expect(sim({ invocations: ["run_hard_foes"] }).hard).toBe(false);
         // Off the board's maps it's still the switch
-        const lumbridge = sim({ mapId: "lumbridge", hard: true });
-        expect(lumbridge.hard).toBe(true);
-        expect(lumbridge.invocations).toEqual([]);
-        expect(lumbridge.getResult().points).toBeUndefined();
+        const fight = sim({ mapId: "zachariah", hard: true });
+        expect(fight.hard).toBe(true);
+        expect(fight.invocations).toEqual([]);
+        expect(fight.getResult().points).toBeUndefined();
         // and a run's invocations do nothing there
-        expect(sim({ mapId: "lumbridge", invocations: ["run_glass_cannon"] }).invocations).toEqual(
+        expect(sim({ mapId: "zachariah", invocations: ["run_glass_cannon"] }).invocations).toEqual(
             [],
         );
     });
@@ -287,6 +286,36 @@ describe("records", () => {
         coins: 0,
         bossesKilled: [],
     };
+
+    test.each(["lumbridge", "barrows", "wilderness"])(
+        "%s applies invocations without remixes and keeps its records after loading",
+        (mapId) => {
+            const plain = sim({ mapId });
+            expect(plain.invocations).toEqual([]);
+            for (const hard of [false, true]) {
+                const run = sim({ mapId, hard, invocations: ["run_glass_cannon"] });
+                expect(run.player.maxHp).toBe(Math.round(plain.player.maxHp / 2));
+                expect(run.hard).toBe(hard);
+                expect(run.invocations).toEqual(
+                    cleanInvocations(["run_glass_cannon", ...(hard ? HARD_PRESET : [])], RUN_SET),
+                );
+                run.tick = 900 * TICKS_PER_SECOND;
+                run.state = "victory";
+                const result = run.getResult();
+                expect(result.remixes).toBeUndefined();
+                expect(result.points).toBe(hard ? 200 : 20);
+                const save = createSave();
+                recordRun(save, result);
+                const loaded = migrateSave(JSON.parse(JSON.stringify(save)));
+                expect(loaded.invocationBest?.[mapId]).toEqual({
+                    points: hard ? 200 : 20,
+                    seconds: 900,
+                });
+                expect(loaded.hardVictories[mapId] ?? 0).toBe(hard ? 1 : 0);
+                expect(loaded.remixVictories).toBeUndefined();
+            }
+        },
+    );
 
     test("a hard win with relics on counts, but sets no hard-mode record", () => {
         const save = createSave();

@@ -19,7 +19,10 @@ import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { DAMAGE_KIND_OBJ_IDS } from "../../src/game/content/damageKinds";
 import { ENEMIES } from "../../src/game/content/enemies";
-import { BLOOD_SOULREAPER_AXE_OBJ } from "../../src/game/content/gauntlet";
+import {
+    BLOOD_SOULREAPER_AXE_OBJ,
+    BLESSINGS as GAUNTLET_BLESSINGS,
+} from "../../src/game/content/gauntlet";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
@@ -28,7 +31,9 @@ import { portraitRequest } from "../../src/game/content/portraitConfig";
 import { getPortrait } from "../../src/game/content/portraits";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { QUEST_ICON_OBJ_IDS } from "../../src/game/content/questIcons";
+import { RAID_SUPPLIES } from "../../src/game/content/raids";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
+import { RELICS } from "../../src/game/content/relics";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { STAT_ICON_OBJ_IDS } from "../../src/game/content/statIcons";
@@ -38,6 +43,7 @@ import {
     COMBAT_ACHIEVEMENTS_OBJ,
     PLATINUM_TOKEN_OBJ,
 } from "../../src/game/content/titleIcons";
+import { CRONDIS } from "../../src/game/content/tombs";
 import { TROPHIES } from "../../src/game/content/trophies";
 import {
     BODY_PARTS,
@@ -218,6 +224,10 @@ function getContentObjIds(): number[] {
             ALL_MAPS,
             SHOP_UPGRADES,
             TROPHIES,
+            RELICS,
+            RAID_SUPPLIES,
+            GAUNTLET_BLESSINGS,
+            CRONDIS,
         },
         "",
     );

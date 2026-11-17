@@ -38,12 +38,11 @@ import { playerName, roomName } from "./name-gen.mjs";
 export const RELAY_PATH = "/coop";
 
 // Whether a server that has the relay in it (serve.mjs, and the dev and
-// preview servers) runs it. On unless it's turned off: MULTIPLAYER=off, the
-// :singleplayer scripts, or --no-multiplayer. Off, the game hides co-op.
+// preview servers) runs it. On unless it's turned off: MULTIPLAYER=off (set
+// by the :singleplayer scripts), or --no-multiplayer. Off, the game hides co-op.
 export function isMultiplayerOn(env = process.env, argv = process.argv) {
     return !(
         ["off", "0", "false", "no"].includes((env.MULTIPLAYER ?? "").trim().toLowerCase()) ||
-        (env.npm_lifecycle_event ?? "").endsWith(":singleplayer") ||
         argv.includes("--no-multiplayer")
     );
 }

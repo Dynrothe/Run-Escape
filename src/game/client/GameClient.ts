@@ -146,6 +146,7 @@ import {
     getQuestProgress,
     getRaidPortals,
     getReachedStages,
+    getRunInvocations,
     getStartingCharacter,
     hasGauntletLooks,
     isEndlessRecord,
@@ -155,6 +156,7 @@ import {
     isGauntletOpen,
     isHardRecord,
     isHardUnlocked,
+    isInvocationsUnlocked,
     isMapUnlocked,
     recordGauntlet,
     recordRun,
@@ -1539,8 +1541,8 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
-    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET): on if it
-    // was off, off if it was on. Hard mode's are the Hard switch's, not the board's.
+    // A run's invocations (content/invocations.ts, RUN_SET): on if it was off, off if it was on.
+    // Hard mode's are the Hard switch's, not the board's.
     toggleRunInvocation(id: string): void {
         if (isHardInvocation(id)) {
             this.toggleHard();
@@ -1720,6 +1722,17 @@ export class GameClient implements GameFrameHandler {
     // change
     private hostedRoom(): RoomView | undefined {
         return this.coop.isHost ? this.coop.room : undefined;
+    }
+
+    // Whether a run's invocations go on in the room: once everyone in it has beaten the map, as
+    // hard mode's switch goes (unless the relay takes anyone). The relay doesn't check them, so the
+    // host does: on a map that takes them, having hard mode is having beaten it.
+    private roomHasInvocations(room: RoomView, mapId: string): boolean {
+        return (
+            this.store.getSnapshot().coop.anyMap ||
+            (isInvocationsUnlocked(this.save, mapId) &&
+                room.members.every((member) => member.unlocks?.hard?.includes(mapId) === true))
+        );
     }
 
     // Whether a map's endless or hard mode can be on in the room: this player
@@ -1951,10 +1964,13 @@ export class GameClient implements GameFrameHandler {
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
             // The Tombs' raid level is the host's, as the invocation board set it, and so are a
-            // run's invocations (the room's Hard is hard mode's), and its remixes
+            // run's invocations (the room's Hard is hard mode's), once the room has them, and its
+            // remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
-            ...(takesInvocations(map, remixes.length > 0) && {
-                invocations: this.save.runInvocations ?? [],
+            ...(takesInvocations(map) && {
+                invocations: this.roomHasInvocations(room, map.id)
+                    ? (this.save.runInvocations ?? [])
+                    : [],
             }),
             ...(remixes.length > 0 && { remixes }),
             ...(isInvasionOpen(this.save.mapVictories) && { invasions: true }),
@@ -2554,9 +2570,7 @@ export class GameClient implements GameFrameHandler {
                 ? vault.invocations
                 : map.tombs
                   ? (this.save.invocations ?? [])
-                  : takesInvocations(map, remixes.length > 0)
-                    ? (this.save.runInvocations ?? [])
-                    : undefined,
+                  : getRunInvocations(this.save, mapId),
             relics: vault ? [] : this.runRelics(map),
             remixes,
             invasions,

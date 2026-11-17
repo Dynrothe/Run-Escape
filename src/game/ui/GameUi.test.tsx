@@ -6,6 +6,7 @@ import { GameStore } from "../client/GameStore";
 import type { RoomView } from "../client/coop/protocol";
 import { FALLEN_EMPIRE, isActOut } from "../content/acts";
 import { getCharacter } from "../content/characters";
+import { CAMPAIGN_MAPS, getMap } from "../content/maps";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
 import { GameUi } from "./GameUi";
@@ -293,6 +294,52 @@ function renderMaps(mapId = "lumbridge", save = createSave()) {
     return actions;
 }
 
+test.each(["lumbridge", "barrows", "wilderness"])(
+    "%s shows its standalone invocation board and saved record",
+    (mapId) => {
+        const save = createSave();
+        save.mapVictories.lumbridge = 1;
+        save.mapVictories.barrows = 1;
+        save.mapVictories[mapId] = 1;
+        save.runInvocations = ["run_glass_cannon"];
+        save.invocationBest = { [mapId]: { points: 200, seconds: 900 } };
+        renderMaps(mapId, save);
+        expect(screen.getByText("Best at invocations: 200 points (15:00)")).toBeVisible();
+        fireEvent.click(screen.getByRole("button", { name: /^Invocations/ }));
+        expect(screen.getByRole("heading", { name: "Invocations" })).toBeVisible();
+        expect(screen.getByRole("button", { name: "Glass Cannon" })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    },
+);
+
+test.each([
+    ["lumbridge", "Lumbridge"],
+    ["desert", "Kharidian Desert"],
+])("%s's invocations open once it's beaten, as Hard does", (mapId, name) => {
+    const save = createSave();
+    // Open to play, with every map before it beaten
+    for (const map of CAMPAIGN_MAPS.slice(0, CAMPAIGN_MAPS.indexOf(getMap(mapId)))) {
+        save.mapVictories[map.id] = 1;
+    }
+    save.runInvocations = ["run_glass_cannon"];
+    renderMaps(mapId, save);
+    // Shut in the bar beside Hard, and the card says what opens them
+    expect(screen.queryByRole("button", { name: /^Invocations/ })).toBeNull();
+    expect(screen.getByTitle(`Beat ${name} to play it with invocations`)).toHaveTextContent(
+        "InvocationsBeat the map",
+    );
+    expect(screen.getByText(`Beat ${name} to play it with invocations`)).toBeVisible();
+    expect(screen.queryByText("Not beaten with invocations yet")).toBeNull();
+    cleanup();
+    save.mapVictories[mapId] = 1;
+    renderMaps(mapId, save);
+    expect(screen.getByRole("button", { name: /^Invocations/ })).toHaveTextContent("20 points");
+    expect(screen.queryByText(`Beat ${name} to play it with invocations`)).toBeNull();
+    expect(screen.getByText("Not beaten with invocations yet")).toBeVisible();
+});
+
 // A phone held sideways, as Mobile.css's query sees it (jsdom has no matchMedia of its own)
 function asPhone(): void {
     vi.stubGlobal(
@@ -352,8 +399,13 @@ test("a phone sets a run up from what's picked, with each list over the whole sc
     }
 }, 30000);
 
-function renderRoom(you: string) {
-    const store = new GameStore(createSave());
+function renderRoom(you: string, { save = createSave(), anyMap = true, bobBeat = false } = {}) {
+    const store = new GameStore(save);
+    // What each has beaten, for what the host can turn on (the relay's Unlocks)
+    const unlocks = (beat: boolean) => {
+        const maps = beat ? ["lumbridge"] : [];
+        return { maps: ["lumbridge"], endless: maps, hard: maps };
+    };
     const room: RoomView = {
         code: "TESTROOM",
         name: "Party",
@@ -364,15 +416,27 @@ function renderRoom(you: string) {
         hard: false,
         started: false,
         members: [
-            { id: "alice", name: "Alice", characterId: "warrior", ready: false },
-            { id: "bob", name: "Bob", characterId: "wizard", ready: true },
+            {
+                id: "alice",
+                name: "Alice",
+                characterId: "warrior",
+                ready: false,
+                unlocks: unlocks((save.mapVictories.lumbridge ?? 0) > 0),
+            },
+            {
+                id: "bob",
+                name: "Bob",
+                characterId: "wizard",
+                ready: true,
+                unlocks: unlocks(bobBeat),
+            },
         ],
     };
     const setRoom = (change: Partial<RoomView>) => {
         const coop = store.getSnapshot().coop;
         store.set({ coop: { ...coop, room: { ...coop.room!, ...change } } });
     };
-    store.set({ screen: "coop", coop: { ...store.getSnapshot().coop, you, anyMap: true, room } });
+    store.set({ screen: "coop", coop: { ...store.getSnapshot().coop, you, anyMap, room } });
     const actions = {
         selectMap: vi.fn((mapId: string) => setRoom({ mapId })),
         selectCharacter: vi.fn((id: string) => store.set({ characterId: id })),
@@ -426,6 +490,27 @@ test("a phone's co-op room opens the same lists, and only the host's map card op
     } finally {
         vi.unstubAllGlobals();
     }
+}, 30000);
+
+test("a room's invocations open once everyone in it has beaten the map", () => {
+    const room = (hostBeat: boolean, bobBeat: boolean) => {
+        const save = createSave();
+        if (hostBeat) {
+            save.mapVictories.lumbridge = 1;
+        }
+        save.runInvocations = ["run_glass_cannon"];
+        renderRoom("alice", { save, anyMap: false, bobBeat });
+    };
+    const invocations = () => screen.getByText("Invocations").parentElement!;
+    room(false, true);
+    expect(invocations()).toHaveTextContent("InvocationsBeat the map");
+    cleanup();
+    room(true, false);
+    expect(invocations()).toHaveTextContent("InvocationsBob hasn't beaten it");
+    expect(screen.queryByRole("button", { name: /^Invocations/ })).toBeNull();
+    cleanup();
+    room(true, true);
+    expect(screen.getByRole("button", { name: /^Invocations/ })).toHaveTextContent("20 points");
 }, 30000);
 
 test("the map screen opens on the picked map's tab, and a map on another tab can be picked", () => {

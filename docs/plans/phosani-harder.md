@@ -244,8 +244,8 @@ console, so every later stage can be measured the same way. Targets to tune to:
 - Most hits taken are petals, not claws: the patterns are the fight, the claws its punctuation.
 - No phase has a 5-second stretch with nothing in the air.
 
-For each stage: `npm test` (the Phosani tests named in section 3 change), `npx tsc --noEmit
--p .`, Prettier, and `FLAT=1 MAP=phosani DODGE=1 npx tsx scripts/game/simulate-run.ts "" 3`
+For each stage: `bun run test` (the Phosani tests named in section 3 change), `bun run tsc --noEmit
+-p .`, Prettier, and `FLAT=1 MAP=phosani DODGE=1 bun run tsx scripts/game/simulate-run.ts "" 3`
 before and after, read as a density meter only (how much of what hit the bot). Playtest in
 the browser with `?autostart=inquisitor`, and on a phone's layout: the stick has to cross a
 barrage too. The Nightmare on Hallowed Night must play exactly as before, so defaults on every

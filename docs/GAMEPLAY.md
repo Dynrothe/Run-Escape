@@ -434,10 +434,11 @@ version and how to run it.
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's
   bought everything walks through them, and the late ones the least. Experience from bones is 10%
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
-  records of its own. A win counts as a win on the map, and turns its tick gold. From the Desert
-  on, and on Act II's maps, hard mode is a preset of four invocations (below) worth 180 points.
-- **Invocations**: on a map from the Desert on, and on Act II's maps, the Invocations button beside
-  Hard opens a board of opt-in handicaps, as the Tombs of Amascut's: Walk the Path (enemies 15%
+  records of its own. A win counts as a win on the map, and turns its tick gold. On campaign
+  and Act II maps, hard mode is a preset of four invocations (below) worth 180 points.
+- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone
+  in the room), the Invocations button beside Hard opens a board of opt-in handicaps, as the Tombs
+  of Amascut's: Walk the Path (enemies 15%
   faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
   rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
   getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
@@ -641,12 +642,12 @@ version and how to run it.
       after another, so you can get away), Jal-Xil, and Jal-Zek that raise the dead.
     - **The Stranglewood** (Act II, open once the Inferno's beaten): the real wood round
       Vardorvis's arena, its undergrowth opened up so there's room to fight, with the wood itself
-      round its edge and in thickets. The Strangled, Strangled Boars from 2:00, Strangled Lynxes
-      from 4:00 that rush the last few tiles, and the Strangled Bear, an elite that leaves roots
-      behind it. Played by its **roots** (below).
+      round its edge and in thickets, and its mountain rock and steep faces too. The Strangled,
+      Strangled Boars from 2:00, Strangled Lynxes from 4:00 that rush the last few tiles, and the
+      Strangled Bear, an elite that leaves roots behind it. Played by its **roots** (below).
     - **The Lassar Undercity** (Act II, open once the Inferno's beaten): the real sunken city
-      under Ice Mountain, its streets cleared of clutter so there's room to fight, round the
-      drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
+      under Ice Mountain, its streets cleared of clutter so there's room to fight, west and north
+      of the drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
       Wighted Leeches from 2:00 whose bite drains a while, Ghosts from 4:00 that go through walls,
       and Ancient Guardians, slow and hard, which are its elites too. Played by its **Shadow
       Realm** (below).
