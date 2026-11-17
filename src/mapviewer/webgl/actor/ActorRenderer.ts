@@ -45,6 +45,7 @@ export class ActorAnim {
         readonly runPose: boolean = false,
         // Where each frame's positions start in its page's (BakedAnim.positionStarts)
         readonly positionStarts: Int32Array = new Int32Array(frameLengths.length).fill(-1),
+        readonly runCastFrame?: number,
     ) {
         this.frameCount = frameLengths.length;
         this.frameStarts = new Uint32Array(this.frameCount);
@@ -81,6 +82,7 @@ export class ActorModel {
     readonly animIndices: Map<number, number> = new Map();
     // Attacks' poses over the run (BakedAnim.runPose), by the attack's seq
     readonly runPoses: Map<number, ActorAnim> = new Map();
+    readonly runCasts: Map<number, ActorAnim[]> = new Map();
 
     constructor(
         readonly page: ActorPage,
@@ -95,7 +97,14 @@ export class ActorModel {
         readonly layered = false,
     ) {
         anims.forEach((anim, i) => {
-            if (anim.runPose) {
+            if (anim.runCastFrame !== undefined) {
+                let cast = this.runCasts.get(anim.seqId);
+                if (!cast) {
+                    cast = [];
+                    this.runCasts.set(anim.seqId, cast);
+                }
+                cast[anim.runCastFrame] = anim;
+            } else if (anim.runPose) {
                 this.runPoses.set(anim.seqId, anim);
             } else if (!this.animIndices.has(anim.seqId)) {
                 this.animIndices.set(anim.seqId, i);
@@ -488,6 +497,7 @@ export class ActorRenderer {
                         anim.looping,
                         anim.runPose,
                         anim.positionStarts,
+                        anim.runCastFrame,
                     ),
             );
             models.set(

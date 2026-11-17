@@ -79,6 +79,7 @@ import { CinematicLight, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
 import {
     GameAssets,
+    HIGH_ALCH_SPOTANIM,
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
     getCannonModelKey,
@@ -120,6 +121,7 @@ const SOULS_HEIGHT = 1.6;
 const SOULS_MAX = 5;
 // Drawn this big (a rune's model is about a tile across)
 const SOULS_SCALE = 0.5;
+const HIGH_ALCH_HEIGHT = 100 / 128;
 const VENT_PUFFS = [
     [0, 0],
     [-0.9, -0.9],
@@ -524,6 +526,7 @@ export class GameView {
     private swings: SwingFx[] = [];
     private shouts: Shout[] = [];
     private escapees: EscapeeFx[] = [];
+    private alchs = new Map<number, { start: number; gestureStart?: number }>();
     private flash?: FlashFx;
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
@@ -572,6 +575,7 @@ export class GameView {
         this.swings = [];
         this.shouts = [];
         this.escapees = [];
+        this.alchs.clear();
         this.flash = undefined;
     }
 
@@ -615,6 +619,24 @@ export class GameView {
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
+                case "alch":
+                case "equip":
+                    if (event.type === "alch" || event.replacedId) {
+                        const hero = event.hero ?? sim.focus;
+                        const previous = this.alchs.get(hero);
+                        const duration =
+                            this.assets.get("spot:" + HIGH_ALCH_SPOTANIM)?.anims[0].totalTicks ?? 0;
+                        if (
+                            previous &&
+                            ((now - previous.start) / 1000) * TICKS_PER_SECOND < duration
+                        ) {
+                            // Rapid Auto alch renews the glow, never the hand gesture.
+                            previous.start = now;
+                        } else {
+                            this.alchs.set(hero, { start: now, gestureStart: now });
+                        }
+                    }
+                    break;
                 case "petLeap":
                     this.pets.leap(event.owner, event.x, event.y, sim.tick);
                     break;
@@ -2596,6 +2618,22 @@ export class GameView {
         }
         const player = sim.heroes[hero].player;
         const tick = sim.tick;
+        // Keep the cast and its sound together even while another casket holds the run.
+        const alchFx = this.alchs.get(hero);
+        const alchTicks =
+            alchFx === undefined
+                ? -1
+                : ((performance.now() - alchFx.start) / 1000) * TICKS_PER_SECOND;
+        const alch = alchTicks >= 0 ? model.getAnim(PLAYER_SEQS.alch) : undefined;
+        const alchEffect =
+            alchTicks >= 0 ? this.assets.get("spot:" + HIGH_ALCH_SPOTANIM) : undefined;
+        const alchEffectAnim = alchEffect?.anims[0];
+        if (
+            alchFx &&
+            alchTicks >= Math.max(alch?.totalTicks ?? 0, alchEffectAnim?.totalTicks ?? 0)
+        ) {
+            this.alchs.delete(hero);
+        }
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
@@ -2608,6 +2646,32 @@ export class GameView {
             ? getRunPoseFrame(runPose, run, attackTicks, pose.moveTicks)
             : -1;
         const reviving = sim.heroes.find((downed) => downed.revive?.hero === hero)?.revive?.ticks;
+        const attacking =
+            attack &&
+            attack.seqId === player.attackSeq &&
+            !pose.moving &&
+            attackTicks >= 0 &&
+            attackTicks < attack.totalTicks;
+        if (
+            alchFx &&
+            (attacking ||
+                runPoseFrame !== -1 ||
+                player.deathTick !== -1 ||
+                reviving !== undefined ||
+                lookModel)
+        ) {
+            // A combat action cancels the gesture, rather than resuming it after the shot.
+            alchFx.gestureStart = undefined;
+        }
+        const gestureTicks =
+            alchFx?.gestureStart === undefined
+                ? -1
+                : ((performance.now() - alchFx.gestureStart) / 1000) * TICKS_PER_SECOND;
+        const castFrame = alch?.getFrame(gestureTicks, false) ?? 0;
+        const runningCast =
+            pose.moving && alch?.seqId === PLAYER_SEQS.alch
+                ? model.runCasts.get(PLAYER_SEQS.alch)?.[castFrame]
+                : undefined;
         if (look && lookModel) {
             anim = model.getAnim(pose.moving ? look.moveSeq : look.idleSeq);
             frame = anim.getFrame(pose.moveTicks);
@@ -2623,14 +2687,17 @@ export class GameView {
         } else if (runPose && runPoseFrame !== -1) {
             anim = runPose;
             frame = runPoseFrame;
-        } else if (
-            attack &&
-            attack.seqId === player.attackSeq &&
-            !pose.moving &&
-            attackTicks < attack.totalTicks
-        ) {
+        } else if (attacking) {
             anim = attack;
             frame = anim.getFrame(attackTicks, false);
+        } else if (
+            alch?.seqId === PLAYER_SEQS.alch &&
+            gestureTicks >= 0 &&
+            gestureTicks < alch.totalTicks &&
+            (!pose.moving || runningCast)
+        ) {
+            anim = runningCast ?? alch;
+            frame = runningCast ? runningCast.getFrame(pose.moveTicks) : castFrame;
         } else {
             anim = pose.moving ? run : model.getAnim(stance.idle);
             frame = anim.getFrame(pose.moveTicks);
@@ -2665,6 +2732,24 @@ export class GameView {
             flash,
             ...(big !== 1 && { scale: big }),
         });
+        if (
+            alchEffect &&
+            alchEffectAnim &&
+            alchTicks < alchEffectAnim.totalTicks &&
+            player.deathTick === -1 &&
+            !lookModel
+        ) {
+            actors.draw(
+                alchEffect,
+                alchEffectAnim,
+                alchEffectAnim.getFrame(alchTicks, false),
+                x,
+                this.ground(sim, x, y) - HIGH_ALCH_HEIGHT,
+                y,
+                pose.yaw,
+                UNLIT,
+            );
+        }
         const overhead = getCharacter(sim.heroes[hero].characterId).overheadSpotAnim;
         const effect = overhead === undefined ? undefined : this.assets.get("spot:" + overhead);
         if (effect) {

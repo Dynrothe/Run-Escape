@@ -2573,6 +2573,20 @@ Wiki's [list of in-game sound IDs](https://oldschool.runescape.wiki/w/List_of_in
 A sound's samples are let go once it's first played and its `AudioBuffer` holds them
 (`GameAudio.getBuffer`), so each sound is only in memory once.
 
+High alching (including replaced gear and Auto alch) plays the cache's player cast, spot
+animation and sound. Only the opening hand gesture is baked (`HIGH_ALCH_FRAMES` in `GameAssets`):
+`PlayerBakeRequest.seqFrameLimits` limits both its stationary frames and its running blends, not
+just playback. The separate glow plays out in full. `GameView` keeps both per hero on the
+presentation clock, so another casket pausing the sim doesn't freeze them. Weapon attacks and
+running aim cancel the gesture immediately; it doesn't resume after them. Rapid alchs renew the
+glow without restarting the hands, until there's a gap long enough for the glow to end.
+`GameAssets.getLookRequest` includes the short gesture in normal player looks; `PLAYER_SEQS`,
+`getSpotAnimIds` and `getGameSoundIds` keep the assets in the slim cache. While moving, only the
+gesture's frames are baked over the weapon stance's run frames using the player's interleave
+mask (`PlayerBakeRequest.runPoses.casts`). The upper body follows the gesture clock while the
+legs keep the displayed movement's stride, including through stops and starts. If a blend can't
+be baked, the run keeps showing instead of freezing the legs with a full-body cast.
+
 ### Keeping it light on a phone
 
 - **Frame cap**: `GameClient.update` sets `Renderer.fpsLimit` every frame from the Frame rate

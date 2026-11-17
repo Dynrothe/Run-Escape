@@ -112,7 +112,12 @@ export const PLAYER_SEQS = {
     walk: 819,
     run: 824,
     death: 836,
+    alch: 713,
 };
+
+export const HIGH_ALCH_SPOTANIM = 113;
+// Just the opening hand gesture; the separate glow still plays out in full.
+const HIGH_ALCH_FRAMES = 3;
 
 // Eating, whose interleave order is the cache's usual split of a player for
 // doing something while walking: the legs (and the body's root) from the
@@ -289,6 +294,7 @@ export function getSpotAnimIds(): number[] {
         BLOOD_FURY_SPOTANIM,
         VISITOR_SPOTANIM,
         REVIVE_SPOTANIM,
+        HIGH_ALCH_SPOTANIM,
         // GALLERY-TEMP
         318,
         713,
@@ -820,7 +826,7 @@ function getRequestBody(request: BakeRequest): string {
         case "npc":
             return `npc:${SAME_NPC_LOOK[request.npcId] ?? request.npcId}:${request.seqIds[0]}`;
         case "player":
-            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
+            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}:${JSON.stringify(request.seqFrameLimits)}:${JSON.stringify(request.runPoses)}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
@@ -1836,6 +1842,7 @@ export class GameAssets {
             stance.idle,
             stance.run,
             PLAYER_SEQS.death,
+            PLAYER_SEQS.alch,
             ...attackSeqs,
         ].filter((id, i, all) => all.indexOf(id) === i);
         // The held weapon's aim over the run, for a moment after each shot on the move
@@ -1845,10 +1852,13 @@ export class GameAssets {
             key: "player",
             appearance,
             seqIds,
-            runPoses:
-                poses.length > 0
-                    ? { poses, runSeqId: stance.run, maskSeqId: PLAYER_INTERLEAVE_SEQ }
-                    : undefined,
+            seqFrameLimits: { [PLAYER_SEQS.alch]: HIGH_ALCH_FRAMES },
+            runPoses: {
+                poses,
+                casts: [PLAYER_SEQS.alch],
+                runSeqId: stance.run,
+                maskSeqId: PLAYER_INTERLEAVE_SEQ,
+            },
         };
         return { request, stance };
     }

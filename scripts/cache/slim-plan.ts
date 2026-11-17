@@ -9,6 +9,7 @@ import {
     GameAssets,
     PICKUP_OBJS,
     PILE_LOOKS,
+    PLAYER_INTERLEAVE_SEQ,
     PLAYER_SEQS,
     getCharacterAppearance,
     getGameSpriteIds,
@@ -290,7 +291,11 @@ function getCosmeticRequests(): BakeRequest[] {
 }
 
 function getPlayerRequests(): BakeRequest[] {
-    const playerSeqs = [...Object.values(PLAYER_SEQS), ...getPlayerAttackSeqs()];
+    const playerSeqs = [
+        ...Object.values(PLAYER_SEQS),
+        ...getPlayerAttackSeqs(),
+        PLAYER_INTERLEAVE_SEQ,
+    ];
     return [
         // Every body kit
         playerRequest("bare", createAppearance(), playerSeqs),

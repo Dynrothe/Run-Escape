@@ -224,6 +224,10 @@ export class GameSounds {
                     audio.playAt(SOUNDS.casketDrop, event.x, event.y, px, py, { volume: 1 });
                     break;
                 case "equip":
+                    audio.play(event.replacedId ? SOUNDS.alch : SOUNDS.casketPickup, {
+                        volume: 0.7,
+                    });
+                    break;
                 case "stash":
                     audio.play(SOUNDS.casketPickup, { volume: 0.7 });
                     break;
