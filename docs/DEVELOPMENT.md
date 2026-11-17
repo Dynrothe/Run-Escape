@@ -68,6 +68,10 @@ ScapeRune squares. The one exception is the config type loaders made from an arc
 a while to make and read nothing after: a worker makes those once, and every unit gets the reads
 that made them. Before anything's published, the chunks in the out dir are read back, and every
 group has to come out of them as it went in; the check then loads it all from those same chunks.
+Item icons come from the content tables `getContentObjIds` walks, by any key ending `objId` or
+`objIds`: a new table of icons goes on its list, or it's blank only once deployed (Last Recall's
+was). `slim-load.test.ts` fails on an item any content file names that has neither an icon nor a
+bake.
 
 A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
 changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and

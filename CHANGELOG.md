@@ -7,7 +7,9 @@ the version in the corner).
 
 ### Fixed
 
-- Last Recall uses a Phoenix icon to show its revival effect. Fixed by Deivid Smarzaro.
+- Last Recall's icon is a Phoenix, for its revival, where it was blank. Fixed by Deivid Smarzaro.
+- A raid's supply chest, the Forgotten Four's camp blessings and the Crondis room's trap show
+  their icons, which were blank.
 
 ## 0.34.1 - 2026-11-16
 

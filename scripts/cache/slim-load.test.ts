@@ -48,6 +48,48 @@ test("the plan has unique, serializable payloads and separate asset groups", () 
     }
 });
 
+// Every item a content table names (objId, iconObjId, objIds...) has its icon in the slim cache,
+// or is baked as a model: a table the plan doesn't read shows a blank icon only once deployed
+// (Last Recall's, before the plan read RELICS)
+test("the plan has an icon for every item the content names", () => {
+    const content = import.meta.glob<Record<string, unknown>>(
+        ["../../src/game/content/**/*.ts", "!**/*.test.ts"],
+        { eager: true },
+    );
+    const planned = new Set<number>();
+    for (const unit of getSlimUnits("recipes")) {
+        if (unit.kind === "icons") {
+            unit.objIds.forEach((id) => planned.add(id));
+        } else if (unit.kind === "bake") {
+            for (const request of unit.requests) {
+                if (request.kind === "obj") {
+                    planned.add(request.objId);
+                }
+            }
+        }
+    }
+    const missing = new Set<string>();
+    const seen = new Set<object>();
+    const visit = (value: unknown, key: string, where: string): void => {
+        if (typeof value === "number") {
+            if (/objIds?$/i.test(key) && value >= 0 && !planned.has(value)) {
+                missing.add(`${where}: ${value}`);
+            }
+        } else if (value && typeof value === "object" && !seen.has(value)) {
+            seen.add(value);
+            for (const [childKey, child] of Object.entries(value)) {
+                visit(child, Array.isArray(value) ? key : childKey, where);
+            }
+        }
+    };
+    for (const [file, exports] of Object.entries(content)) {
+        for (const [name, value] of Object.entries(exports)) {
+            visit(value, name, `${path.basename(file)} ${name}`);
+        }
+    }
+    expect([...missing]).toEqual([]);
+});
+
 describe("batchByKey", () => {
     const keys = Array.from({ length: 500 }, (_, i) => `item-${i}`);
     const batch = (items: string[]) => batchByKey(items, (key) => key, 16, 25);
