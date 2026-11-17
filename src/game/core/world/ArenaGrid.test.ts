@@ -23,6 +23,50 @@ function box(grid: ArenaGrid, x: number, y: number) {
     return grid.getSolidBox(x, y, { x0: 0, y0: 0, x1: 0, y1: 0 });
 }
 
+describe("run-local objects", () => {
+    test("fits fractional footprints and updates cached pathfinding when replaced or cleared", () => {
+        const grid = makeGrid(OPEN, 100, 200);
+        const obstacle = { x0: 102.5, y0: 202.5, x1: 104.5, y1: 204.5 };
+        const version = grid.version;
+        grid.setObjects([obstacle]);
+        expect(grid.version).toBeGreaterThan(version);
+        expect(grid.steps.can(101, 203, 1)).toBe(false);
+        expect(box(grid, 102, 203).x0).toBe(102.5);
+        expect(box(grid, 104, 203).x1).toBe(104.5);
+        expect(isCircleFree(grid, 102.14, 203.5, 0.35)).toBe(true);
+        expect(isCircleFree(grid, 102.16, 203.5, 0.35)).toBe(false);
+        const pos = { x: 101, y: 203.5 };
+        moveCircle(grid, pos, 5, 0, 0.35);
+        expect(pos.x).toBeCloseTo(102.15);
+        grid.setObjects([{ ...obstacle, x0: 105, x1: 106 }]);
+        expect(grid.steps.can(101, 203, 1)).toBe(true);
+        expect(isCircleFree(grid, 103.5, 203.5, 0.35)).toBe(true);
+        expect(grid.isSolid(105, 203)).toBe(true);
+        grid.setObjects([]);
+        expect(grid.isSolid(105, 203)).toBe(false);
+        expect(grid.data.collisionFlags.every((flag) => flag === 0)).toBe(true);
+    });
+
+    test("keeps scenery, walls and floor changes independent of the objects", () => {
+        const grid = makeGrid([".#~|....", "........", "........"], 100, 200);
+        const original = grid.data.collisionFlags.slice();
+        const scenery = box(grid, 101, 202);
+        grid.dropTile(102, 201);
+        grid.setObjects([{ x0: 101.5, y0: 201.5, x1: 104.5, y1: 203 }]);
+        expect(box(grid, 102, 202)).toEqual({ x0: 102, y0: 202, x1: 103, y1: 203 });
+        grid.restoreTile(102, 201);
+        expect(grid.isSolid(102, 201)).toBe(true);
+        grid.setObjects([]);
+        expect(grid.isSolid(102, 201)).toBe(false);
+        expect(box(grid, 101, 202)).toEqual(scenery);
+        for (let y = 200; y < 203; y++) {
+            for (let x = 100; x < 108; x++) {
+                expect(grid.getFlags(x, y)).toBe(original[x - 100 + (y - 200) * 8]);
+            }
+        }
+    });
+});
+
 describe("overlapping scenery", () => {
     test("fits the exposed sides of a rock and its overlapping base", () => {
         const grid = makeGrid(OPEN, 100, 200, [ROCK, TOP]);

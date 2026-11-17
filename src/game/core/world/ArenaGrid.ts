@@ -62,6 +62,8 @@ export class ArenaGrid {
     // What blocks on each solid tile: a box, x0, y0, x1, y1 in tiles from the
     // tile's south-west corner
     private readonly boxes: Float32Array;
+    // Run-local objects drawn by the game rather than the map, indexed by tile
+    private objects?: Map<number, Box>;
     // Which steps out of each tile are allowed, for finding the way
     readonly steps: Steps;
     // Floor that's fallen away during a run (dropTile), by tile, so it can be put back
@@ -139,6 +141,48 @@ export class ArenaGrid {
         }
         this.steps = new Steps(this, this.baseX, this.baseY, this.sizeX, this.sizeY);
         this.dropped = new Uint8Array(this.sizeX * this.sizeY);
+    }
+
+    // Replace the run's objects without changing the map's scenery or fallen floor.
+    setObjects(boxes: readonly Box[]): void {
+        const previous = this.objects;
+        if (!previous && boxes.length === 0) {
+            return;
+        }
+        const objects = new Map<number, Box>();
+        for (const box of boxes) {
+            for (let y = Math.floor(box.y0); y < Math.ceil(box.y1); y++) {
+                for (let x = Math.floor(box.x0); x < Math.ceil(box.x1); x++) {
+                    const i = this.indexOf(x, y);
+                    if (i < 0) {
+                        continue;
+                    }
+                    const part = {
+                        x0: Math.max(x, box.x0),
+                        y0: Math.max(y, box.y0),
+                        x1: Math.min(x + 1, box.x1),
+                        y1: Math.min(y + 1, box.y1),
+                    };
+                    const old = objects.get(i);
+                    objects.set(
+                        i,
+                        old
+                            ? {
+                                  x0: Math.min(old.x0, part.x0),
+                                  y0: Math.min(old.y0, part.y0),
+                                  x1: Math.max(old.x1, part.x1),
+                                  y1: Math.max(old.y1, part.y1),
+                              }
+                            : part,
+                    );
+                }
+            }
+        }
+        this.objects = objects.size ? objects : undefined;
+        const changed = new Set([...(previous?.keys() ?? []), ...objects.keys()]);
+        for (const i of changed) {
+            this.changed(this.baseX + (i % this.sizeX), this.baseY + Math.floor(i / this.sizeX));
+        }
     }
 
     // An open tile's floor falls away (MapDef.floor): it's blocked floor, as water is, until it's
@@ -527,7 +571,8 @@ export class ArenaGrid {
         if (x < 0 || y < 0 || x >= this.sizeX || y >= this.sizeY) {
             return OUTSIDE_FLAGS;
         }
-        return this.flags[x + y * this.sizeX];
+        const i = x + y * this.sizeX;
+        return this.flags[i] | (this.objects?.has(i) ? CollisionFlag.OBJECT : 0);
     }
 
     isSolid(tileX: number, tileY: number): boolean {
@@ -546,11 +591,23 @@ export class ArenaGrid {
             out.y1 = tileY + 1;
             return out;
         }
-        const i = (x + y * this.sizeX) * 4;
+        const tile = x + y * this.sizeX;
+        const object = this.objects?.get(tile);
+        if (object && (this.flags[tile] & SOLID_FLAGS) === 0) {
+            Object.assign(out, object);
+            return out;
+        }
+        const i = tile * 4;
         out.x0 = tileX + this.boxes[i];
         out.y0 = tileY + this.boxes[i + 1];
         out.x1 = tileX + this.boxes[i + 2];
         out.y1 = tileY + this.boxes[i + 3];
+        if (object) {
+            out.x0 = Math.min(out.x0, object.x0);
+            out.y0 = Math.min(out.y0, object.y0);
+            out.x1 = Math.max(out.x1, object.x1);
+            out.y1 = Math.max(out.y1, object.y1);
+        }
         return out;
     }
 

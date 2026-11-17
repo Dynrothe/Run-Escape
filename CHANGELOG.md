@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Braziers in Frozen remixes now block movement, whether lit or unlit. Fixed by Deivid Smarzaro.
+
 ## 0.34.1 - 2026-11-16
 
 ### Changed

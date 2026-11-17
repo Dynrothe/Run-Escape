@@ -13,7 +13,7 @@ import {
     PREDICTION_MS,
 } from "./MovementPrediction";
 
-function makeSim(focus = 1, wall = false): Sim {
+function makeSim(focus = 1, wall = false, remixes: string[] = []): Sim {
     const rows = Array.from({ length: 72 }, () =>
         Array.from({ length: 72 }, (_, x) => (wall && x === 35 ? "|" : ".")).join(""),
     );
@@ -22,6 +22,7 @@ function makeSim(focus = 1, wall = false): Sim {
         characterId: "warrior",
         metaStats: emptyStats(),
         seed: 3,
+        remixes,
         spawnX: 1033.5,
         spawnY: 1036.5,
         focus,
@@ -42,6 +43,25 @@ function setup(wall = false) {
 }
 
 afterEach(() => usePortableMath(false));
+
+test("predicted movement stops at a Frozen remix's brazier without changing the sim", () => {
+    let now = 0;
+    const sim = makeSim(1, false, ["frozen"]);
+    const brazier = sim.cold!.braziers[0];
+    const half = sim.cold!.def.braziers.size / 2;
+    sim.player.x = brazier.x - sim.player.radius - 0.1;
+    sim.player.y = brazier.midY;
+    sim.heroes[1].stats.moveSpeed = 4;
+    const prediction = new MovementPrediction(sim, () => now);
+    prediction.confirm([]);
+    prediction.sample([127, 0]);
+    const before = syncHash(sim);
+    now = 200;
+    const pose = prediction.render()!;
+    expect(pose.x).toBeCloseTo(brazier.midX - half - sim.player.radius);
+    expect(pose.y).toBe(brazier.midY);
+    expect(syncHash(sim)).toBe(before);
+});
 
 test("moves and turns immediately without writing any confirmed player state", () => {
     const { sim, prediction, time } = setup();

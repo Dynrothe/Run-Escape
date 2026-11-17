@@ -94,6 +94,7 @@ import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { createSave } from "../../src/game/core/save";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { findFreeSpot } from "../../src/game/core/world/Collision";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import {
@@ -639,20 +640,26 @@ function coldGoal(sim: Sim, cold: ColdRule): { x: number; y: number; pull: numbe
     for (const brazier of cold.braziers) {
         // An out one costs a relight: count it further off
         const lit = cold.isLit(brazier, sim.tick);
-        const walk = walkTiles(sim, brazier.midX, brazier.midY);
+        const dx = player.x - brazier.midX;
+        const dy = player.y - brazier.midY;
+        const len = Math.hypot(dx, dy) || 1;
+        // The middle now blocks: pick reachable ground beside it, not a partially blocked tile.
+        const spot = findFreeSpot(
+            sim.grid,
+            brazier.midX + (dx / len) * 1.8,
+            brazier.midY + (dy / len) * 1.8,
+            player.radius,
+            (x, y) => !sim.grid.isSolid(x, y),
+        );
+        const walk = walkTiles(sim, spot.x, spot.y);
         if (walk === undefined) {
             continue;
         }
         const d = walk + (lit ? 0 : 10);
         if (d < bestD) {
             bestD = d;
-            // Beside it, not into it
-            const dx = player.x - brazier.midX;
-            const dy = player.y - brazier.midY;
-            const len = Math.hypot(dx, dy) || 1;
             best = {
-                x: brazier.midX + (dx / len) * 1.8,
-                y: brazier.midY + (dy / len) * 1.8,
+                ...spot,
                 // Harder the colder it is: a melee bot otherwise fights on until it freezes
                 pull: 3.5 + Math.max(0, level - COLD_GO) / 8,
             };
