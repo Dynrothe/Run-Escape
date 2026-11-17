@@ -102,8 +102,8 @@ export const RELICS: RelicDef[] = [
         description:
             "Once a run, falling takes you back to the start with half your hitpoints, and " +
             "stuns everything near you there.",
-        // Ectophial
-        iconObjId: 4251,
+        // Phoenix
+        iconObjId: 20693,
     },
     {
         id: "reloaded",

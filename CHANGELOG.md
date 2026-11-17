@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Last Recall uses a Phoenix icon to show its revival effect. Fixed by Deivid Smarzaro.
+
 ## 0.34.1 - 2026-11-16
 
 ### Changed
