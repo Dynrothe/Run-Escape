@@ -15422,20 +15422,34 @@ export class Sim {
         this.otherEnemies = leaving;
         this.enemies = [...coming, ...along];
         this.syncBrazierCollision();
-        if (to === 0 && this.cold) {
-            // A brazier can reappear where someone stood in the realm.
-            for (const { player } of this.heroes) {
-                const spot = findFreeSpot(this.grid, player.x, player.y, player.radius);
-                if (spot.x !== player.x || spot.y !== player.y) {
-                    player.x = player.prevX = spot.x;
-                    player.y = player.prevY = spot.y;
+        const cold = this.cold;
+        if (to === 0 && cold) {
+            // A brazier comes back where someone may have stood in the realm: whoever's on one
+            // steps off it to free ground (a ghost or a flier goes on through it)
+            const size = cold.def.braziers.size;
+            const offBrazier = (
+                body: { x: number; y: number; prevX: number; prevY: number },
+                radius: number,
+            ) => {
+                const on = cold.braziers.some(
+                    (b) =>
+                        body.x + radius > b.x &&
+                        body.x - radius < b.x + size &&
+                        body.y + radius > b.y &&
+                        body.y - radius < b.y + size,
+                );
+                if (on) {
+                    const spot = findFreeSpot(this.grid, body.x, body.y, radius);
+                    body.x = body.prevX = spot.x;
+                    body.y = body.prevY = spot.y;
                 }
+            };
+            for (const { player } of this.heroes) {
+                offBrazier(player, player.radius);
             }
             for (const enemy of this.enemies) {
-                if (!enemy.def.flies) {
-                    const spot = findFreeSpot(this.grid, enemy.x, enemy.y, enemy.radius);
-                    enemy.x = spot.x;
-                    enemy.y = spot.y;
+                if (!enemy.def.flies && !enemy.def.ghost) {
+                    offBrazier(enemy, enemy.radius);
                 }
             }
         }
