@@ -462,8 +462,9 @@
     }
 }
 
-/* Face down: the deck's back, a picture of its own (ui/cards/card-back-*.webp), its cut corners
-   clear, kept to its shape in the card's room rather than stretched */
+/* Face down: the deck's back, a picture of its own (ui/cards/card-back-*.webp, fitted to the front's
+   plate by scripts/cards/make-back.ts, so it's a face's shape), its cut corners clear, kept to
+   its shape in the card's room rather than stretched */
 .ui-tcg-back {
     position: relative;
     box-sizing: border-box;

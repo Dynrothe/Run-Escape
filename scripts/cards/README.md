@@ -1,6 +1,6 @@
 # Run Escape card generator
 
-Generate 1073 × 1466 transparent PNGs from the game's pinned OSRS cache, fonts, matte front frame and shared vampire back. Run `bun install --frozen-lockfile` and `bun run download-caches` from the repository root if the dependencies or full cache are missing.
+Generate 1073 × 1466 transparent PNGs from the game's pinned OSRS cache, fonts, matte front frame and shared back. Run `bun install --frozen-lockfile` and `bun run download-caches` from the repository root if the dependencies or full cache are missing.
 
 ## Command line
 
@@ -53,3 +53,7 @@ console.log(face.footer); // its number in the game's set, 267/303 when written
 Use `--preview` or `await cards.renderFoilPreview({ itemId: 2415 })` for a looping WebP. Its warm gold reflection travels across the item window, with small glints at the brightest angle. The CLI also saves the full-size foil PNG.
 
 `createCardGenerator({ cacheDir, backPath })` accepts an alternative cache root containing `caches.json` and an alternative full-size back PNG. By default the generator resolves the project's own cache and assets relative to the library.
+
+## The back
+
+`bun run tsx scripts/cards/make-back.ts` makes the shared back, `src/media/run-escape-card-back-footprints-clean.png`, and the game's pictures of it (`src/game/ui/cards/card-back-*.webp`, at the fronts' sizes) from `src/media/run-escape-card-back-footprints.png`. It fits that picture's card to the front's plate, so a card has one outline on both sides, and draws the banner's Run Escape again with a clean edge in one colour, as the painted letters are ragged. Run it again after changing either picture.
