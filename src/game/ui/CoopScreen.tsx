@@ -397,6 +397,11 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
         setBoardMap(room.mapId);
         setBoard(false);
     }
+    // and shut when the room stops having invocations (someone joins who hasn't beaten the map),
+    // so it doesn't come back by itself once they've left
+    if (board && runBoard && !runBoardOpen) {
+        setBoard(false);
+    }
     const [confirm, confirmDialog] = useConfirm();
     const disband = async () => {
         if (

@@ -1622,6 +1622,44 @@ describe("saving", () => {
         ).toEqual(["avian_assaulter", "avian_assaulter"]);
     });
 
+    test("a co-op run takes the host's invocations once everyone in the room has beaten the map", () => {
+        const { client } = createSaving(true);
+        client.save.runInvocations = ["run_glass_cannon"];
+        const started = (hostBeat: boolean, guestBeat: boolean) => {
+            client.save.mapVictories.lumbridge = hostBeat ? 1 : 0;
+            const unlocks = (beat: boolean) => ({
+                maps: ["lumbridge"],
+                endless: beat ? ["lumbridge"] : [],
+                hard: beat ? ["lumbridge"] : [],
+            });
+            const members = [
+                {
+                    id: "host",
+                    name: "Host",
+                    characterId: "warrior",
+                    ready: true,
+                    unlocks: unlocks(hostBeat),
+                },
+                {
+                    id: "guest",
+                    name: "Guest",
+                    characterId: "ranger",
+                    ready: true,
+                    unlocks: unlocks(guestBeat),
+                },
+            ];
+            const room = { mapId: "lumbridge", members, endless: false, hard: false };
+            const start = vi.fn();
+            Object.assign(client, { coop: { room, isHost: true, start } });
+            client.startCoopRun();
+            expect(start).toHaveBeenCalledOnce();
+            return start.mock.calls[0][0].invocations;
+        };
+        expect(started(true, true)).toEqual(["run_glass_cannon"]);
+        expect(started(true, false)).toEqual([]);
+        expect(started(false, true)).toEqual([]);
+    });
+
     test("the co-op host plays an adventurer it hasn't got (a newer guest's) as the first", () => {
         const { client } = createSaving(true);
         const members = [

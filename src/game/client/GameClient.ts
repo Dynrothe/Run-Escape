@@ -1727,13 +1727,11 @@ export class GameClient implements GameFrameHandler {
     // Whether a run's invocations go on in the room: once everyone in it has beaten the map, as
     // hard mode's switch goes (unless the relay takes anyone). The relay doesn't check them, so the
     // host does: on a map that takes them, having hard mode is having beaten it.
-    private roomHasInvocations(mapId: string): boolean {
-        const { room, anyMap } = this.store.getSnapshot().coop;
+    private roomHasInvocations(room: RoomView, mapId: string): boolean {
         return (
-            anyMap ||
+            this.store.getSnapshot().coop.anyMap ||
             (isInvocationsUnlocked(this.save, mapId) &&
-                (room?.members.every((member) => member.unlocks?.hard?.includes(mapId) === true) ??
-                    true))
+                room.members.every((member) => member.unlocks?.hard?.includes(mapId) === true))
         );
     }
 
@@ -1970,7 +1968,7 @@ export class GameClient implements GameFrameHandler {
             // remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
             ...(takesInvocations(map) && {
-                invocations: this.roomHasInvocations(map.id)
+                invocations: this.roomHasInvocations(room, map.id)
                     ? (this.save.runInvocations ?? [])
                     : [],
             }),
