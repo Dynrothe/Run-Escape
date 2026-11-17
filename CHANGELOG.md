@@ -7,7 +7,7 @@ the version in the corner).
 
 ### Changed
 
-- Cards have a new back, with a trail of footprints, the same shape as their fronts.
+- Cards have a new back, by trippy22: a trail of footprints, the same shape as their fronts.
 
 ### Fixed
 
