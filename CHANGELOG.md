@@ -9,8 +9,8 @@ the version in the corner).
 
 - Čeština, by Kitashikun-lab: the game in Czech, with OSRS's names kept as they are. Pick it in
   Settings, or it's chosen for a browser in Czech.
-- High alching plays a brief casting gesture and the original spell's glow and sound, including
-  for replaced gear, without hiding weapon attacks. By Deivid Smarzaro.
+- High alching, by Deivid Smarzaro: the spell's glow and sound when you alch an item, or swap out
+  a piece of gear.
 
 ### Changed
 

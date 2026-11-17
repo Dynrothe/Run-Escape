@@ -33,7 +33,6 @@ import {
     GameAssets,
     HIGH_ALCH_SPOTANIM,
     HINT_ARROW_SPRITE,
-    PLAYER_SEQS,
     PRAYER_HEADICON_FRAME_IDS,
     PRAYER_HEADICON_SPRITE,
     getCannonModelKey,
@@ -399,27 +398,12 @@ describe("a run's enemies, baked and freed", () => {
 });
 
 describe("player bakes", () => {
-    test("never merges a short gesture with a full cast or a different running blend", () => {
-        const { request } = GameAssets.getLookRequest(getCharacterAppearance("wizard"), []);
-        const full = { ...request, key: "full", seqFrameLimits: undefined };
-        const noBlend = { ...request, key: "no-blend", runPoses: undefined };
-        const duplicate = { ...request, key: "duplicate" };
-        const { requests, aliases } = GameAssets.mergeRequests([request, full, noBlend, duplicate]);
-        expect(requests).toHaveLength(3);
-        expect([...aliases]).toEqual([["duplicate", request.key]]);
-    });
-
-    test("keep the alchemy cast with every player look and its effect and sound for deployment", () => {
-        for (const character of CHARACTERS.filter((character) => !character.npcLook)) {
-            const { request } = GameAssets.getLookRequest(getCharacterAppearance(character.id), []);
-            expect(request.seqIds).toContain(PLAYER_SEQS.alch);
-            expect(request.runPoses?.casts).toContain(PLAYER_SEQS.alch);
-            expect(request.runPoses?.runSeqId).toBe(
-                GameAssets.getLookRequest(getCharacterAppearance(character.id), []).stance.run,
-            );
-        }
+    test("High Alchemy's glow is baked and its sound synthesized, and no look plays the cast", () => {
         expect(getSpotAnimIds()).toContain(HIGH_ALCH_SPOTANIM);
         expect(getGameSoundIds()).toContain(SOUNDS.alch);
+        // The cast's hands cost every look its frames, over the run too, for a few pixels
+        const { request } = GameAssets.getLookRequest(getCharacterAppearance("wizard"), []);
+        expect(request.seqIds).not.toContain(713);
     });
 
     function createRun(party: number, hero = CHARACTERS[0].id): Sim {
