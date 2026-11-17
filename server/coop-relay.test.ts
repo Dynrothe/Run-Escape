@@ -164,10 +164,9 @@ describe("multiplayer toggle", () => {
     it("is on unless it's turned off", () => {
         expect(isMultiplayerOn({}, [])).toBe(true);
         expect(isMultiplayerOn({ MULTIPLAYER: "on" }, [])).toBe(true);
-        expect(isMultiplayerOn({ MULTIPLAYER: "off" }, [])).toBe(false);
-        expect(isMultiplayerOn({ MULTIPLAYER: "0" }, [])).toBe(false);
-        expect(isMultiplayerOn({ npm_lifecycle_event: "serve" }, [])).toBe(true);
-        expect(isMultiplayerOn({ npm_lifecycle_event: "serve:singleplayer" }, [])).toBe(false);
+        for (const value of ["off", "0", "false", "no", " OFF "]) {
+            expect(isMultiplayerOn({ MULTIPLAYER: value }, [])).toBe(false);
+        }
         expect(isMultiplayerOn({}, ["node", "serve.mjs", "--no-multiplayer"])).toBe(false);
     });
 

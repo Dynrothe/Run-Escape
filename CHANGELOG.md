@@ -13,6 +13,7 @@ the version in the corner).
 ### Changed
 
 - Cards have a new back, by trippy22: a trail of footprints, the same shape as their fronts.
+- Single-player hosting no longer depends on package-manager metadata.
 
 ### Fixed
 
