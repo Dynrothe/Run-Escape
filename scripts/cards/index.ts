@@ -239,7 +239,7 @@ async function itemLayer(pixels: Int32Array, size: number): Promise<ItemImage> {
 export async function createCardGenerator(options: { cacheDir?: string; backPath?: string } = {}) {
     const [frame, back, newBadge] = await Promise.all([
         readFile(path.join(media, "run-escape-card-front-frame.png")),
-        readFile(options.backPath ?? path.join(media, "run-escape-card-back-vampire.png")),
+        readFile(options.backPath ?? path.join(media, "run-escape-card-back-footprints-clean.png")),
         badge(),
     ]);
     if (options.backPath) {

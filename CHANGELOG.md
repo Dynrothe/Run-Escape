@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Changed
+
+- Cards have a new back, with a trail of footprints, the same shape as their fronts.
+
 ### Fixed
 
 - Last Recall's icon is a Phoenix, for its revival, where it was blank. Fixed by Deivid Smarzaro.
