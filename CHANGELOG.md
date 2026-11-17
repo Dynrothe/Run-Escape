@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Čeština, by Kitashikun-lab: the game in Czech, with OSRS's names kept as they are. Pick it in
+  Settings, or it's chosen for a browser in Czech.
+
 ### Changed
 
 - Cards have a new back, by trippy22: a trail of footprints, the same shape as their fronts.

@@ -1,6 +1,5 @@
 {
     "ui.common.cancel": "Zrušit",
-    "ui.common.ok": "OK",
     "ui.common.short_by": "Chybí {n}",
     "confirm.quit.title": "Vzdát tuto výpravu?",
     "confirm.quit.body": "Vzdáním výpravu ukončíte a zobrazíte její výsledek. Při restartu se také ukončí, ale hned vyrazíte znovu od začátku. V obou případech vám nalezené mince zůstanou.",

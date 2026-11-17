@@ -6,7 +6,7 @@ export type Lang = "en" | "pt-BR" | "cs";
 export const LANGS: { id: Lang; label: string; translator?: string; country: string }[] = [
     { id: "en", label: "English", country: "GB" },
     { id: "pt-BR", label: "Português (BR)", translator: "Iakee", country: "BR" },
-    { id: "cs", label: "Čeština", country: "CZ" },
+    { id: "cs", label: "Čeština", translator: "Kitashikun-lab", country: "CZ" },
 ];
 
 export type Params = Record<string, string | number>;

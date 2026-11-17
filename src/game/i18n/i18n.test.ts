@@ -94,22 +94,6 @@ describe("language files", () => {
             }
         }
     });
-
-    it("covers every English key in the matching Czech namespace", () => {
-        for (const [ns, english] of Object.entries(files.en)) {
-            const czech = files.cs[ns];
-            expect(czech, ns).toBeDefined();
-            expect(Object.keys(english).filter((key) => !czech[key]), ns).toEqual([]);
-        }
-    });
-
-    it("keeps original item names in Czech", () => {
-        for (const [key, text] of Object.entries(files.cs.items)) {
-            if (/^(weapon|gear|util|trophy|passive|powerup|set|casket|cosmetic)\..*\.name$/.test(key)) {
-                expect(text, key).toBe(files.en.items[key]);
-            }
-        }
-    });
 });
 
 describe("Czech content", () => {

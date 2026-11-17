@@ -3516,18 +3516,7 @@ bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and
 
 ### Languages
 
-The game is in English, Português (BR), and Čeština. The Czech catalog preserves original item,
-weapon, map, enemy, and quest names, plus the Melee, Ranged, and Magic combat style labels,
-including references in descriptions, while translating their properties and
-the interface. The initial machine translation has been extensively edited in Czech, including
-combat warnings, dialogue, rewards, save/cloud messages, and map descriptions. Preserve the
-reviewed wording: do not regenerate Czech catalogs from machine translations. Use "výprava"
-for a run, "truhla" for a reward casket (but "rakev" for a coffin), and "Zpět" for Back.
-Player banter deliberately keeps informal OSRS slang; instructions use clear, polite Czech.
-The UI fonts in `src/index.css` use the `*-Czech.ttf` variants, which add the missing Czech
-carons and rings on the original pixel grid while preserving existing glyphs. Rebuild them from
-the original fonts with `python scripts/i18n/extend-czech-fonts.py` (requires Python `fonttools`).
-Only English is checked: the other languages are
+The game is in English, Português (BR) and Čeština. Only English is checked: the others are
 their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
 wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
 dropdown, and the title's globe). The first time the game is in another language, picked or the
@@ -3535,6 +3524,14 @@ browser's, `ui/LanguageNotice.tsx` says so,
 once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
 text is written in English only unless the developer asks for a translation (CLAUDE.md,
 Conventions), and a language without a key shows the English.
+
+Czech keeps OSRS's names in English (items, weapons, maps, monsters, quests, and Melee, Ranged
+and Magic), so its files leave those keys out and they show the English, and translates what's
+round them. It was machine translated first, then edited by hand, so never regenerate it. Its
+translator's words: "výprava" for a run, "truhla" for a casket ("rakev" is a coffin), "Zpět" for
+Back. The UI's fonts in `src/index.css` are `*-Czech.ttf` copies of the originals with Czech's
+carons and rings drawn on their pixel grid, every original glyph as it was:
+`python scripts/i18n/extend-czech-fonts.py` (Python's `fonttools`) makes them again.
 
 Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`. A
 new language is a folder of them, an entry in `LANGS` and `Lang`, and its browser-language match
