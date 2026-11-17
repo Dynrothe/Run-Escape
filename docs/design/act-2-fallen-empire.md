@@ -346,8 +346,11 @@ Built in #159 as build order step 6. Where it differs from the above, and why:
   of it for the margin, set down at squares 62 to 66 by 104 to 108; the realm is the same cut of 36 to 39, set down six
   squares west of it (`MapRecipe.twin`, `MapDef.twin`). The city's one-tile clutter (crates, barrels, rubble, stalls'
   shelves) and doors come off, but its lamps and braziers: in OSRS they cut its streets into pockets that don't join, and
-  without them it's one piece of 21,900 open tiles. Ground a rise south of it hides from the camera (its steps down to
-  the water) is blocked. The realm's locs come off wherever their city twins do, so both are drawn alike.
+  without them its connected streets have room for crowds. Bare hidden floors and missing floors are
+  blocked before sealing from the forecourt, so the black void and streets reached only through it
+  (including the south-east plaza) are scenery, not playable ground. Bridge decks stay open.
+  Ground a rise south of it hides from the camera (its steps down to the water) is blocked.
+  The realm's locs come off wherever their city twins do, so both are drawn alike.
 - **The twin on screen**: the renderer keeps both sets of squares loaded and, while the party's in the realm, draws each
   city square's twin in its place (`MapManager.twin`, `WebGLMapSquare.drawAt`). The swap is instant, with the realm's
   brightness (0.75 of the city's: 0.6 hid its Shadows) and violet wash. Memory: both sets are loaded, about twice a one-world map's geometry.
