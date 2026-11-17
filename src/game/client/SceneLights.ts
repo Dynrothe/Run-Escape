@@ -15,7 +15,8 @@ import type { PlayerPose } from "./PlayerPose";
 // off is drawn, and handed to the LightBudget to pick what's drawn. The sim's lights (players,
 // the map's, enemies') are what weapons aim by; the rest are only drawn and never touch the sim:
 // glowing scenery, spells and effects (SPOT_LIGHTS), burning ground and a floor's tiles
-// (FLOOR_LIGHTS), bosses' windups and marks, and a boss's exposed core. Flicker and pulse are drawn only, too.
+// (FLOOR_LIGHTS), bosses' windups and marks, and a boss's exposed core. Flicker and pulse are
+// drawn only, too.
 
 // Tiles at a dark pocket's edge over which it fades into the day
 const POCKET_EDGE = 2.5;
