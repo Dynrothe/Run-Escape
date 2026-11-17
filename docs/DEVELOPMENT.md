@@ -2526,6 +2526,9 @@ windups, loot beams) was never lit.
   (`content/lights.ts`): `[100, { radius: 2.5, color: 0xff8a3a, intensity: 0.9, flicker: 0.25 }]`.
 - **A floor's tiles** (drawn only), by their effect in `FLOOR_LIGHTS`:
   `burn: { radius: 2, color: 0xff6a1a, intensity: 0.7 }`.
+- **A weapon's burning ground** (drawn only): `SceneLights` gathers `sim.fires` until each
+  patch's `endTick`, using `FLOOR_LIGHTS.burn` with its radius added to the patch's own.
+  One light covers each patch, not each flame, and fades out through the usual light budget.
 - **A boss's attack**: `light: { radius: 2, color: 0xff3030 }` on the `BossAttackDef` glows on
   each spot as it winds up, growing as the hit comes; on a `GroundPatternDef`, on each mark while
   it's down. `look: { exposedLight: { radius: 3, color: 0xffe08a, pulse: { amount: 0.3, seconds: 1 } } }`

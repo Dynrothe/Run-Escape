@@ -10,6 +10,7 @@ the version in the corner).
 - Last Recall's icon is a Phoenix, for its revival, where it was blank. Fixed by Deivid Smarzaro.
 - A raid's supply chest, the Forgotten Four's camp blessings and the Crondis room's trap show
   their icons, which were blank.
+- Toktz-mej-tal's ground fire now lights its surroundings on dark maps for as long as it burns.
 
 ## 0.34.1 - 2026-11-16
 

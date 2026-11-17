@@ -107,6 +107,65 @@ describe("SceneLights", () => {
         expect(glow.r).toBeGreaterThan(glow.b);
     });
 
+    test("Toktz-mej-tal's ground fire stays lit until it goes out, without changing the sim", () => {
+        const sim = new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            mapId: MAP.id,
+            characterId: "wizard",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: SPAWN.x,
+            spawnY: SPAWN.y,
+        });
+        sim.weapons.length = 0;
+        sim.addWeapon("toktz_mej_tal");
+        for (let i = 0; i < 100 && sim.fires.length === 0; i++) {
+            sim.step(0, 0);
+        }
+        expect(sim.fires).toHaveLength(1);
+        const fire = sim.fires[0];
+        sim.weapons.length = 0;
+
+        const lights = new SceneLights(new LightBudget(8));
+        const target = new Target();
+        const update = () => {
+            const before = syncHash(sim);
+            lights.update(
+                target,
+                sim,
+                LIGHTING,
+                0,
+                0,
+                undefined,
+                SPAWN.x,
+                SPAWN.y,
+                0.05,
+                undefined,
+            );
+            expect(syncHash(sim)).toBe(before);
+        };
+        const glow = () => target.lights.find((l) => l.x === fire.x && l.y === fire.y);
+        while (sim.tick < fire.endTick) {
+            update();
+            expect(glow()).toBeDefined();
+            expect(glow()!.radius).toBeGreaterThan(fire.radius);
+            expect(glow()!.r).toBeGreaterThan(glow()!.g);
+            expect(glow()!.g).toBeGreaterThan(glow()!.b);
+            sim.step(0, 0);
+        }
+        expect(sim.fires).toHaveLength(0);
+        // The shared light budget fades a departing light out over a quarter of a second.
+        for (let i = 0; i < 10; i++) {
+            update();
+        }
+        expect(glow()).toBeUndefined();
+        // A stopped run can keep expired fire entries, but no longer draws their flames.
+        sim.fires.push(fire);
+        lights.reset();
+        update();
+        expect(glow()).toBeUndefined();
+    });
+
     test("bosses' windups, marks and exposed cores, and a floor's lava, each where it is", () => {
         const look = (color: number) => ({ radius: 2, color });
         const boss = {
@@ -141,6 +200,7 @@ describe("SceneLights", () => {
             projectiles: [],
             enemyProjectiles: [],
             effects: [],
+            fires: [],
             enemies: [boss],
             bullets: { count: 0 },
             hazards: [
