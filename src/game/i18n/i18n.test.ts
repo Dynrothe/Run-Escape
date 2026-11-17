@@ -49,12 +49,14 @@ describe("language files", () => {
     // (b) a translation is of a key that exists, with the placeholders it has
     it("only translates keys that exist in English, with the same placeholders", () => {
         const english: Record<string, string> = Object.assign({}, ...Object.values(files.en));
-        for (const lang of ["pt-BR"] as const) {
+        for (const lang of ["pt-BR", "cs"] as const) {
             for (const [ns, messages] of Object.entries(files[lang])) {
                 for (const [key, text] of Object.entries(messages)) {
-                    expect(english, `${lang}/${ns}: ${key}`).toHaveProperty(key);
+                    const sourceKey =
+                        key in english ? key : key.replace(/\.(few|many|two)$/, ".other");
+                    expect(english, `${lang}/${ns}: ${key}`).toHaveProperty(sourceKey);
                     expect(placeholders(text), `${lang}/${ns}: ${key}`).toEqual(
-                        placeholders(english[key]),
+                        placeholders(english[sourceKey]),
                     );
                 }
             }
@@ -85,12 +87,48 @@ describe("language files", () => {
         }
     });
 
-    it("has no keys in pt-BR files that English lacks as a file", () => {
-        for (const lang of ["pt-BR"] as const) {
+    it("only uses English namespaces for translations", () => {
+        for (const lang of ["pt-BR", "cs"] as const) {
             for (const ns of Object.keys(files[lang])) {
                 expect(namespaces, `${lang}/${ns}.json`).toContain(ns);
             }
         }
+    });
+
+    it("covers every English key in the matching Czech namespace", () => {
+        for (const [ns, english] of Object.entries(files.en)) {
+            const czech = files.cs[ns];
+            expect(czech, ns).toBeDefined();
+            expect(Object.keys(english).filter((key) => !czech[key]), ns).toEqual([]);
+        }
+    });
+
+    it("keeps original item names in Czech", () => {
+        for (const [key, text] of Object.entries(files.cs.items)) {
+            if (/^(weapon|gear|util|trophy|passive|powerup|set|casket|cosmetic)\..*\.name$/.test(key)) {
+                expect(text, key).toBe(files.en.items[key]);
+            }
+        }
+    });
+});
+
+describe("Czech content", () => {
+    afterEach(() => setLang("en"));
+
+    it("translates properties while retaining weapon names", () => {
+        setLang("cs");
+        expect(t("weapon.scimitar.level.1.name")).toBe("Bronze scimitar");
+        expect(tl("Bronze scimitar")).toBe("Bronze scimitar");
+        expect(t("stat.might.label")).toBe("poškození");
+        expect(t("weapon.scimitar.level.2.desc")).toBe("Seká také za vámi.");
+    });
+
+    it("uses Czech one, few and other plurals", () => {
+        setLang("cs");
+        expect(tp("chest.queued", 1)).toBe("Zbývá otevřít 1 truhlu");
+        expect(tp("chest.queued", 3)).toBe("Zbývá otevřít 3 truhly");
+        expect(tp("chest.queued", 5)).toBe("Zbývá otevřít 5 truhel");
+        expect(tp("chest.queued", 0)).toBe("Zbývá otevřít 0 truhel");
     });
 });
 
@@ -303,8 +341,8 @@ describe("the active language", () => {
     });
 
     it("lists the languages", () => {
-        expect(LANGS.map((lang) => lang.id)).toEqual(["en", "pt-BR"]);
-        expect(LANGS.map((lang) => lang.label)).toEqual(["English", "Português (BR)"]);
+        expect(LANGS.map((lang) => lang.id)).toEqual(["en", "pt-BR", "cs"]);
+        expect(LANGS.map((lang) => lang.label)).toEqual(["English", "Português (BR)", "Čeština"]);
     });
 
     it("saves the choice, sets <html lang> and tells subscribers", () => {
@@ -358,6 +396,8 @@ describe("the active language", () => {
             return (await import("./index")).getLang();
         };
         expect(await startsAs("pt-PT")).toBe("pt-BR");
+        expect(await startsAs("cs-CZ")).toBe("cs");
+        expect(await startsAs("cs")).toBe("cs");
         expect(await startsAs("es-MX")).toBe("en");
         expect(await startsAs("de-DE")).toBe("en");
         expect(await startsAs("en-US")).toBe("en");

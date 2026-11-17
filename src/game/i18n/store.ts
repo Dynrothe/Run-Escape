@@ -34,6 +34,9 @@ function browserLang(): Lang {
         language = navigator.language ?? "";
     } catch (e) {}
     language = language.toLowerCase();
+    if (language === "cs" || language.startsWith("cs-")) {
+        return "cs";
+    }
     if (language.startsWith("pt")) {
         return "pt-BR";
     }

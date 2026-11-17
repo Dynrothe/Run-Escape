@@ -3516,7 +3516,18 @@ bought costs (`getHiltRefund`), once, as loading drops them from `cosmetics` and
 
 ### Languages
 
-The game is in English and Português (BR). Only English is checked: the other languages are
+The game is in English, Português (BR), and Čeština. The Czech catalog preserves original item,
+weapon, map, enemy, and quest names, plus the Melee, Ranged, and Magic combat style labels,
+including references in descriptions, while translating their properties and
+the interface. The initial machine translation has been extensively edited in Czech, including
+combat warnings, dialogue, rewards, save/cloud messages, and map descriptions. Preserve the
+reviewed wording: do not regenerate Czech catalogs from machine translations. Use "výprava"
+for a run, "truhla" for a reward casket (but "rakev" for a coffin), and "Zpět" for Back.
+Player banter deliberately keeps informal OSRS slang; instructions use clear, polite Czech.
+The UI fonts in `src/index.css` use the `*-Czech.ttf` variants, which add the missing Czech
+carons and rings on the original pixel grid while preserving existing glyphs. Rebuild them from
+the original fonts with `python scripts/i18n/extend-czech-fonts.py` (requires Python `fonttools`).
+Only English is checked: the other languages are
 their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
 wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
 dropdown, and the title's globe). The first time the game is in another language, picked or the

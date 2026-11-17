@@ -1,10 +1,10 @@
 @font-face {
     font-family: "OSRS Bold";
-    src: url(./media/RuneScape-Bold-12.ttf);
+    src: url(./media/RuneScape-Bold-12-Czech.ttf?v=1);
 }
 @font-face {
     font-family: "OSRS Small";
-    src: url(./media/RuneScape-Plain-11.ttf);
+    src: url(./media/RuneScape-Plain-11-Czech.ttf?v=1);
 }
 /* The cards' text (the card generator's face) */
 @font-face {

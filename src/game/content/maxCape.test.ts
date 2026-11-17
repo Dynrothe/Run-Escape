@@ -54,7 +54,7 @@ describe("the customisable max cape", () => {
         );
         expect(COSMETIC_BY_ID.has(13280)).toBe(true);
         const capes = COSMETICS.filter((c) => c.slot === EquipSlot.CAPE).map((c) => c.name);
-        expect(capes).toEqual([...capes].sort((a, b) => a.localeCompare(b)));
+        expect(capes).toEqual([...capes].sort((a, b) => a.localeCompare(b, "en")));
         const save = createSave();
         save.coins = 24_999;
         expect(buyCosmetic(save, CUSTOM_MAX_CAPE)).toBe(false);

@@ -27,6 +27,7 @@ describe("LanguageSetting", () => {
         expect(options.map((option) => option.textContent)).toEqual([
             "English",
             "Português (BR)Translated by Iakee",
+            "Čeština",
         ]);
         expect(options[0].getAttribute("aria-selected")).toBe("true");
         expect(screen.queryByRole("option", { name: /Español/ })).toBeNull();
