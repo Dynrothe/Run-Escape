@@ -24,7 +24,8 @@ const SHIPPED_HASHES: Record<string, string> = {
     phosani: "4f6fcdf2dee1830db95a1c3e1cac27549d1bcaac9ccc1242fce3c148479625c1",
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
     zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
-    stranglewood: "933870d4549c12b99897d02a53df4bacaa7ca194f32fa0708068799b39641ef4",
+    // Mountain rock and steep faces stay blocked when the undergrowth opens
+    stranglewood: "a8411caeae6087241190cbb1486d51050b7e93d86214593b9b44adc1e9cdce1c",
     // The city and its Shadow Realm (MapRecipe.twin) together. Its walls stand whole since the
     // houses read as bare floors with them thinned
     lassar_undercity: "0eb0f70b84d7ab8b3b935d6cf538fefc75620483d585b83eddf5ba4614ff6c18",

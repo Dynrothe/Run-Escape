@@ -50,7 +50,9 @@ const THICKET = 0.66;
 const THICKET_SCALE = 14;
 const THICKET_SEED = 52;
 // Ground this steep stays blocked (the hills' faces), in height units a tile
-const STEEP = 48;
+const STEEP = 16;
+// The mountain rock's overlay, as the map files store it (cache id 82)
+const MOUNTAIN_ROCK = 83;
 // None near the clearing: the safe circle's ground is open all round it
 const CLEAR_OF_CLEARING = 14;
 // The undergrowth (soft scenery that blocks: plants, bushes, ferns, mushrooms) comes off the opened
@@ -182,10 +184,16 @@ function buildDetail(context: BuildContext): GeneratedMap {
     const ground = new Ground(SIZE, SIZE);
     const wood = cutPrefab(context.maps, REAL_X, REAL_Y, SIZE, SIZE);
     const noise = createNoise(THICKET_SEED, 2);
+    const mountain = (x: number, y: number) =>
+        wood.levels[0].overlays[x + y * SIZE] === MOUNTAIN_ROCK ||
+        getTileSlope(wood.levels[0].heights, SIZE + 1, x, y) > STEEP;
     // Whether a tile's ground is opened up: inside the arena, past the edge's band of wood, out of
     // the thickets and off the hills' faces; and always round the clearing
     const opened = (x: number, y: number): boolean => {
         if (x < ARENA_0 || x > ARENA_1 || y < ARENA_0 || y > ARENA_1) {
+            return false;
+        }
+        if (mountain(x, y)) {
             return false;
         }
         if (Math.hypot(x - CLEARING.x, y - CLEARING.y) < CLEAR_OF_CLEARING) {
@@ -193,8 +201,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
         }
         const edge = Math.min(x - ARENA_0, ARENA_1 - x, y - ARENA_0, ARENA_1 - y);
         const thicket = noise(x / THICKET_SCALE, y / THICKET_SCALE) > THICKET;
-        const steep = getTileSlope(wood.levels[0].heights, SIZE + 1, x, y) > STEEP;
-        return edge >= EDGE_WOOD && !thicket && !steep;
+        return edge >= EDGE_WOOD && !thicket;
     };
     // The same hash for a loc wherever it's built, so the map's the same every time
     const hash = (x: number, y: number, id = 0) =>
@@ -288,7 +295,7 @@ function buildDetail(context: BuildContext): GeneratedMap {
     for (let y = ARENA_0; y <= ARENA_1; y++) {
         for (let x = ARENA_0; x <= ARENA_1; x++) {
             const i = x + y * SIZE;
-            if (WATER_OVERLAYS.has(level.overlays[i])) {
+            if (WATER_OVERLAYS.has(level.overlays[i]) || mountain(x, y)) {
                 level.flags[i] |= TILE_BLOCKED;
             } else if (opened(x, y)) {
                 level.flags[i] &= ~TILE_BLOCKED;

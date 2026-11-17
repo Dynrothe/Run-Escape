@@ -2093,6 +2093,9 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 - A boss fight on a shipped map's own ground (Awakened Vardorvis in the Stranglewood, the Awakened Whisperer in the
   Lassar Undercity) is a `MapDef` of its own with the map's `arena`; name it in that recipe's `fights`, or the game
   (`getRecipe`, `installRecipe`) and the slim cache won't find the recipe for the fight's id and draw nothing there.
+- Opening a cut's undergrowth (the Stranglewood) must not open its mountains: exclude rock overlays as well as
+  steep faces, and explicitly block them before `sealFrom`. Leaving their original flags alone isn't enough;
+  some real faces have no floor block. Bridges still use their deck's collision, not the slope below them.
 - A map whose rule reads places off it (Ghorrock's braziers, vents, ice pools and the statues that hide you from the
   Duke's gaze, `maps/ghorrock.ts`) exports them in grid tiles, and the content turns them into world tiles for the rule
   (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
