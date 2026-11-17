@@ -425,7 +425,7 @@ it.runIf(mapChecks && !hasCache)("have the game's cache to run the map checks on
 describe.skipIf(!mapChecks || !hasCache)("generated maps", () => {
     // Not to block the test runner, which gives up on a worker that goes quiet for a minute
     const run = promisify(execFile);
-    // Node itself, as Windows has no plain `npx` to start
+    // Start Node directly so the script runs on Windows too
     const tsx = (script: string) => ["--import", "tsx", script];
 
     // Five to six minutes on the release workflow's runner, and one runner can be a third slower

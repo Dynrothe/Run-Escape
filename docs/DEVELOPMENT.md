@@ -3,9 +3,9 @@
 How the code is laid out, the tools that come with it, how to host a build, and the desktop app.
 The [README](../README.md) covers getting it running.
 
-**A checkout that was installed with npm** needs `node_modules` deleted before `bun install`.
-Bun leaves npm's nested package folders where they are, so Babel finds an old `lru-cache` without
-its `yallist`, and the dev server fails with `Yallist is not a constructor`.
+**If the dev server fails with `Yallist is not a constructor`**, delete `node_modules` and run
+`bun install --frozen-lockfile`. Stale nested dependencies from older installs can make Babel
+load an incompatible `lru-cache` and `yallist`.
 
 ## Hosting
 
@@ -310,7 +310,9 @@ mostly Node writing to sockets.
 
 Or build with `VITE_COOP_URL=wss://relay.example.com/coop bun run build` to point it anywhere
 else. `bun run start` and `bun run preview` run a relay of their own at `/coop`
-(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without).
+(`bun run start:singleplayer`, or `MULTIPLAYER=off`, without). The `start:singleplayer` and
+`serve:singleplayer` scripts export `MULTIPLAYER=off` in Bun's shell, so it overrides an inherited
+value on Windows too.
 
 **On Cloudflare instead.** [server/cloudflare/](../server/cloudflare/README.md) is the same relay
 as a Cloudflare Worker with Durable Objects: a lobby for the rooms list and names, and each room its

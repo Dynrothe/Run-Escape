@@ -115,7 +115,7 @@ never crash or desync another player, or cost the maintainer money.
   loosens one needs a reason in the description.
 - **Workflows**: `permissions: {}` at the top and only what each job needs, actions pinned to
   commits (Dependabot updates them, so don't by hand), and no `pull_request_target`. A job that
-  holds a secret or a write token runs no npm packages and downloads no build plugins.
+  holds a secret or a write token runs no third-party packages and downloads no build plugins.
 - **Dependencies**: a new package needs a reason in the description, and fewer is better. Run
   `bun install` in the package you changed (the repository root or `server/cloudflare`) and commit
   its `bun.lock`, which should change only as installing it changes it.

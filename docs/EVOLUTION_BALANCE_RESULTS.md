@@ -7,7 +7,7 @@ Before: upstream `main` at `40a0460`, original weapon levels. After: this PR's w
 1,026 planned seed cases per revision: every shipped map, warrior/ranger/wizard, seeds 1–3, solo/2/4 players, normal/hard, `META=max`, `ARMOURY=max`. There are 1,014 matched completed pairs; 12 pairs with a simulator error on either side are excluded from both sides' statistics and listed below. The unchanged baseline results are retained from the original comparison; all after cases use the current curves. Standard `scripts/game/simulate-run.ts` progression and decisions are used, with per-seed error capture, no forced evolutions and no shortened run limit. One process per map runs each party/difficulty/adventurer combination. Each case uses these settings:
 
 ```sh
-MAP=barrows META=max ARMOURY=max PARTY=2 HARD=1 npx tsx scripts/game/simulate-run.ts wizard 3
+MAP=barrows META=max ARMOURY=max PARTY=2 HARD=1 bun run tsx scripts/game/simulate-run.ts wizard 3
 ```
 
 The standard limit is 17 minutes (`RUN_LENGTH + 120` seconds). Fun maps are endless and have no victory, so their time-cap completions are reported separately. Mean run length includes deaths, wins and timeouts; a longer run alone does not establish better balance. Three seeds per adventurer/case are a small sample, and the bot handles strike weapons and co-op teamwork poorly. Changing damage also changes later RNG paths.
@@ -171,7 +171,7 @@ The standard bot can reach a pending co-op level-up with no choices and throw at
 
 The tuning targets a 60% reduction of the positive gain above the strongest maxed parent: `base DPS + 0.4 × (original evolution DPS − base DPS)`. The smallest integer damage meeting that target against both normal and boss targets is chosen, also keeping primary hit damage and damage/cooldown above the maxed parent and each evolution level above its previous level. These guards and integer rounding can retain more than 40% of the original gain. This is not a 60% reduction of total damage, and it is calculated from the original levels rather than stacked onto an earlier nerf.
 
-`npx tsx scripts/game/measure-weapon-dps.ts` exercises real attacks for 60 seconds on seeds 1–3: a stationary target at an ideal distance, normal/boss max HP of 200/10,000, no Might or gear, and no waves. The target's current HP is held high enough to survive. It includes specials, multi-hits, projectiles and DoTs, but does not measure crowd clearing, movement, healing value or full-run performance. Damage arrays list levels 1/2/3; DPS cells are normal/boss. Parent DPS uses the strongest parent in each scenario.
+`bun run tsx scripts/game/measure-weapon-dps.ts` exercises real attacks for 60 seconds on seeds 1–3: a stationary target at an ideal distance, normal/boss max HP of 200/10,000, no Might or gear, and no waves. The target's current HP is held high enough to survive. It includes specials, multi-hits, projectiles and DoTs, but does not measure crowd clearing, movement, healing value or full-run performance. Damage arrays list levels 1/2/3; DPS cells are normal/boss. Parent DPS uses the strongest parent in each scenario.
 
 | Evolution                     | Old damage      | New damage   | Max parent DPS | Old level 1 DPS | New level 1 DPS |
 | ----------------------------- | --------------- | ------------ | -------------- | --------------- | --------------- |
