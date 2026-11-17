@@ -56,4 +56,4 @@ Use `--preview` or `await cards.renderFoilPreview({ itemId: 2415 })` for a loopi
 
 ## The back
 
-`bun run tsx scripts/cards/make-back.ts` makes the shared back, `src/media/run-escape-card-back-footprints-clean.png`, and the game's pictures of it (`src/game/ui/cards/card-back-*.webp`, at the fronts' sizes) from `src/media/run-escape-card-back-footprints.png`. It fits that picture's card to the front's plate, so a card has one outline on both sides, and draws the banner's Run Escape again with a clean edge in one colour, as the painted letters are ragged. Run it again after changing either picture.
+`bun run tsx scripts/cards/make-back.ts` fits `src/media/run-escape-card-back-footprints.png` to the front frame and writes `src/media/run-escape-card-back-footprints-clean.png` and both `src/game/ui/cards/card-back-*.webp` sizes. It draws the gold lettering from [banner-words.svg](banner-words.svg) at each output size after smoothing the cloth. Rerun it after editing the artwork, lettering or frame.

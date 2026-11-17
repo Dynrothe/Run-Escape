@@ -8,8 +8,8 @@
 // - The card is fitted to the fronts' plate (run-escape-card-front-frame.png): stretched the few
 //   pixels to its size and cut to its shape, so a card face down has the outline of one face up,
 //   and the game's pictures are the fronts' sizes.
-// - The banner's Run Escape is drawn again: the painted letters are ragged and mottled, so the
-//   cloth is painted in under them and the same letters are put back smooth-edged, in one colour.
+// - The cloth is filled in under the old lettering. The outlined wordmark is then drawn onto
+//   each finished plate, so the game's paper-grain filter never touches the letters.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -23,8 +23,6 @@ const W = 1073;
 const H = 1466;
 // The banner's lettering on the footprints back, with room round it
 const WORDS = { left: 330, top: 795, width: 350, height: 100 };
-// How many times bigger the letters are drawn before they're shrunk back, for a smooth edge
-const FINE = 4;
 // The game's pictures: the fronts' sizes (card-front-*.webp)
 const SIZES = [
     { name: "card-back-large.webp", width: 720, height: 984 },
@@ -68,12 +66,11 @@ function dilate(mask: Uint8Array, width: number, height: number, r: number): Uin
     return out;
 }
 
-// The banner's words drawn again, as a patch to lay over WORDS
-async function cleanWords(source: Buffer): Promise<Buffer> {
+// Recover the cloth beneath the painted lettering before placing the new wordmark.
+async function bareRibbon(source: Buffer): Promise<Buffer> {
     const { width, height } = WORDS;
     const patch = Buffer.alloc(width * height * 4);
     const letters = new Uint8Array(width * height);
-    const ink = [0, 0, 0];
     let inked = 0;
     for (let y = 0; y < height; y++)
         for (let x = 0; x < width; x++) {
@@ -84,7 +81,6 @@ async function cleanWords(source: Buffer): Promise<Buffer> {
             // The letters are cream, on cloth that's red-brown
             if (r > 112 && r - b > 44 && g / r > 0.64) {
                 letters[p] = 1;
-                for (let c = 0; c < 3; c++) ink[c] += source[s + c];
                 inked++;
             }
         }
@@ -130,43 +126,6 @@ async function cleanWords(source: Buffer): Promise<Buffer> {
     for (let p = 0; p < width * height; p++)
         if (hole[p]) for (let c = 0; c < 3; c++) patch[p * 4 + c] = cloth[p * 4 + c];
 
-    // The same letters with a clean edge: made bigger, rounded off, and cut again
-    const big = { width: width * FINE, height: height * FINE };
-    const soft = await sharp(Buffer.from(letters.map((v) => v * 255)), {
-        raw: { width, height, channels: 1 },
-    })
-        .resize(big.width, big.height, { kernel: "cubic" })
-        .blur(FINE * 0.95)
-        .raw()
-        .toBuffer();
-    const each = soft.length / (big.width * big.height);
-    const hard = Buffer.alloc(big.width * big.height);
-    for (let i = 0; i < hard.length; i++) hard[i] = soft[i * each] > 106 ? 255 : 0;
-    const shape = sharp(hard, { raw: { width: big.width, height: big.height, channels: 1 } });
-    const mask = await shape.clone().resize(width, height).raw().toBuffer();
-    const shadow = await shape
-        .clone()
-        .blur(FINE * 1.4)
-        .resize(width, height)
-        .raw()
-        .toBuffer();
-    const step = mask.length / (width * height);
-    const colour = ink.map((v) => v / inked);
-    for (let y = 0; y < height; y++)
-        for (let x = 0; x < width; x++) {
-            const p = y * width + x;
-            // Their shadow falls down and to the right, as the painted ones' did
-            const from = Math.max(0, y - 2) * width + Math.max(0, x - 1);
-            const dark = (shadow[from * step] / 255) * 0.6;
-            const a = mask[p * step] / 255;
-            // A little lighter at the top of each letter than its foot
-            const light = 1.07 - (0.12 * y) / height;
-            for (let c = 0; c < 3; c++) {
-                const under = patch[p * 4 + c] * (1 - dark) + [40, 18, 10][c] * dark;
-                const letter = Math.min(255, colour[c] * light);
-                patch[p * 4 + c] = Math.round(under * (1 - a) + letter * a);
-            }
-        }
     return sharp(patch, { raw: { width, height, channels: 4 } })
         .png()
         .toBuffer();
@@ -182,10 +141,9 @@ async function main(): Promise<void> {
     for (const { info } of [back, front])
         if (info.width !== W || info.height !== H) throw new Error(`A plate isn't ${W} x ${H}`);
 
-    const words = await cleanWords(back.data);
-    if (DEBUG) await sharp(words).toFile(path.join(DEBUG, "words.png"));
+    const cloth = await bareRibbon(back.data);
     const cleaned = await sharp(back.data, { raw: { width: W, height: H, channels: 4 } })
-        .composite([{ input: words, left: WORDS.left, top: WORDS.top }])
+        .composite([{ input: cloth, left: WORDS.left, top: WORDS.top }])
         .png()
         .toBuffer();
 
@@ -208,18 +166,45 @@ async function main(): Promise<void> {
         ])
         .raw()
         .toBuffer();
-    for (let p = 0; p < W * H; p++) fitted[p * 4 + 3] = front.data[p * 4 + 3];
-    const plate = sharp(fitted, { raw: { width: W, height: H, channels: 4 } });
+    const raw = { width: W, height: H, channels: 4 as const };
+    const wordmarkPath = fileURLToPath(new URL("./banner-words.svg", import.meta.url));
+    async function wordmark(width: number, height: number) {
+        const scaleX = width / W;
+        const scaleY = height / H;
+        const fitX = to.width / from.width;
+        const fitY = to.height / from.height;
+        const left = Math.round((to.left + (WORDS.left - from.left) * fitX) * scaleX);
+        const top = Math.round((to.top + (WORDS.top - from.top) * fitY) * scaleY);
+        const input = await sharp(wordmarkPath, { density: 288 })
+            .resize(
+                Math.round(WORDS.width * fitX * scaleX),
+                Math.round(WORDS.height * fitY * scaleY),
+                {
+                    fit: "fill",
+                },
+            )
+            .png()
+            .toBuffer();
+        return { input, left, top };
+    }
+    const fullWords = await wordmark(W, H);
+    if (DEBUG) await sharp(fullWords.input).toFile(path.join(DEBUG, "words.png"));
+    const printed = await sharp(fitted, { raw }).composite([fullWords]).raw().toBuffer();
+    for (let a = 3; a < fitted.length; a += 4) {
+        printed[a] = front.data[a];
+        fitted[a] = front.data[a];
+    }
     const file = path.join(media, "run-escape-card-back-footprints-clean.png");
-    await plate.clone().png({ compressionLevel: 9 }).toFile(file);
+    await sharp(printed, { raw }).png({ compressionLevel: 9 }).toFile(file);
     console.log(path.relative(root, file));
 
     // The game's: the paper's grain smoothed first, as shrunk it only shows as noise
-    const smooth = await plate.clone().median(3).png().toBuffer();
+    const smooth = await sharp(fitted, { raw }).median(3).png().toBuffer();
     for (const { name, width, height } of SIZES) {
         await sharp(smooth)
             .resize(width, height, { fit: "fill", kernel: "lanczos3" })
             .sharpen({ sigma: 0.6 })
+            .composite([await wordmark(width, height)])
             .webp({ quality: 90, alphaQuality: 100, effort: 6 })
             .toFile(path.join(ui, name));
         console.log(`${name}: ${width} x ${height}`);
