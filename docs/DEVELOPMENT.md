@@ -1123,6 +1123,14 @@ stump model it logs an error and draws no bases, rather than failing the map squ
 decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`. The slim cache's map
 pass runs the same loader, so it collects the stump model by itself.
 
+Braziers drawn by the game (`ColdRule`, including Frozen remixes) also need collision outside the
+map's scenery. `Sim.syncBrazierCollision` gives `ArenaGrid.setObjects` their footprints, including
+fractional tile positions. This run-local layer blocks walking and pathfinding, not projectiles,
+and co-op's movement prediction reads the same grid. It is cleared before a new run places its
+remixes, and while the braziers are hidden in the Shadow Realm. Returning restores them and moves
+anyone overlapping one to free ground. The map's own collision and fallen floor stay separate.
+The simulation bot targets open ground beside a brazier, not its blocked middle.
+
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
 (`ReferenceTable`); a group's files stay in one array (`Archive`), so a file's data can be part of

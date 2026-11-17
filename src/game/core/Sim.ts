@@ -2361,6 +2361,7 @@ export class Sim {
 
     constructor(options: SimOptions) {
         this.grid = options.grid;
+        this.grid.setObjects([]);
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
@@ -2426,6 +2427,7 @@ export class Sim {
         this.realm = this.rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
         this.cold = this.rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
         this.roots = this.rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        this.syncBrazierCollision();
         // Overgrown and Frozen: roots don't grow on ice
         const cold = this.cold;
         if (this.roots && cold) {
@@ -15419,6 +15421,24 @@ export class Sim {
         const along = this.enemies.filter(goes);
         this.otherEnemies = leaving;
         this.enemies = [...coming, ...along];
+        this.syncBrazierCollision();
+        if (to === 0 && this.cold) {
+            // A brazier can reappear where someone stood in the realm.
+            for (const { player } of this.heroes) {
+                const spot = findFreeSpot(this.grid, player.x, player.y, player.radius);
+                if (spot.x !== player.x || spot.y !== player.y) {
+                    player.x = player.prevX = spot.x;
+                    player.y = player.prevY = spot.y;
+                }
+            }
+            for (const enemy of this.enemies) {
+                if (!enemy.def.flies) {
+                    const spot = findFreeSpot(this.grid, enemy.x, enemy.y, enemy.radius);
+                    enemy.x = spot.x;
+                    enemy.y = spot.y;
+                }
+            }
+        }
         const ground = this.pickups.filter((pickup) => pickup.value >= 0);
         this.pickups = this.otherPickups;
         this.otherPickups = ground;
@@ -20946,6 +20966,21 @@ export class Sim {
         this.realm = rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
         this.cold = rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
         this.roots = rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        this.syncBrazierCollision();
+    }
+
+    private syncBrazierCollision(): void {
+        const cold = this.cold;
+        const size = cold?.def.braziers.size ?? 0;
+        const braziers = this.realm?.layer === 1 ? [] : (cold?.braziers ?? []);
+        this.grid.setObjects(
+            braziers.map(({ x, y }) => ({
+                x0: x,
+                y0: y,
+                x1: x + size,
+                y1: y + size,
+            })),
+        );
     }
 
     // An invader keeps within its pocket: pulled back to its edge if it's gone past it

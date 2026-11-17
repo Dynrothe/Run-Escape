@@ -19,6 +19,7 @@ import { Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { syncHash } from "./lockstep";
 import { RuleSet } from "./rules/RunRule";
 import { createSave, getRemixBest, isTaskDone, recordRun } from "./save";
+import { isCircleFree, moveCircle } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
 
 // Remixes (content/remixes.ts, core/rules/remix.ts): an Act II rule on an older map, all four at
@@ -129,7 +130,7 @@ describe("remixes", () => {
                     expect(Math.hypot(a.midX - b.midX, a.midY - b.midY)).toBeGreaterThanOrEqual(10);
                 }
             }
-            expect(sim.grid.isSolid(Math.floor(a.midX), Math.floor(a.midY))).toBe(false);
+            expect(sim.grid.isSolid(Math.floor(a.midX), Math.floor(a.midY))).toBe(true);
         }
         expect(sim.cold!.mask.count).toBeGreaterThan(0);
         expect(sim.remixRun!.fires.length).toBeGreaterThan(0);
@@ -137,6 +138,60 @@ describe("remixes", () => {
         // The easiest map's are gentler: the light bigger, the cold slower
         expect(sim.lighting!.player!.radius).toBeGreaterThan(5);
         expect(sim.cold!.def.cold.rise).toBeLessThan(2);
+    });
+
+    it.each([true, false])("blocks every brazier from every side, lit: %s", (lit) => {
+        const sim = createSim({ remixes: ["frozen"] });
+        const cold = sim.cold!;
+        const half = cold.def.braziers.size / 2;
+        const radius = sim.player.radius;
+        for (const brazier of cold.braziers) {
+            if (!lit) {
+                brazier.litUntil = -1;
+            }
+            expect(cold.isLit(brazier, sim.tick)).toBe(lit);
+            expect(isCircleFree(sim.grid, brazier.midX, brazier.midY, radius)).toBe(false);
+            for (const [dx, dy] of [
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+                [0, -1],
+            ]) {
+                const pos = {
+                    x: brazier.midX - dx * (half + 1),
+                    y: brazier.midY - dy * (half + 1),
+                };
+                moveCircle(sim.grid, pos, dx * (half * 2 + 2), dy * (half * 2 + 2), radius);
+                expect(pos.x).toBeCloseTo(brazier.midX - dx * (half + radius));
+                expect(pos.y).toBeCloseTo(brazier.midY - dy * (half + radius));
+            }
+        }
+    });
+
+    it("removes hidden braziers in the realm and restores them without trapping the party", () => {
+        const sim = createSim({ remixes: ["frozen", "shadow"] });
+        const brazier = sim.cold!.braziers[0];
+        const free = () => isCircleFree(sim.grid, brazier.midX, brazier.midY, sim.player.radius);
+        expect(free()).toBe(false);
+        sim.realm!.turn(sim["ruleHost"], 1);
+        expect(free()).toBe(true);
+        sim.player.x = brazier.midX;
+        sim.player.y = brazier.midY;
+        sim.realm!.turn(sim["ruleHost"], 0);
+        expect(free()).toBe(false);
+        expect(isCircleFree(sim.grid, sim.player.x, sim.player.y, sim.player.radius)).toBe(true);
+    });
+
+    it("clears a previous run's braziers before placing the next run's", () => {
+        const grid = makeGrid(field(), BASE.x, BASE.y);
+        const first = createSim({ grid, remixes: ["frozen"] });
+        const positions = first.cold!.braziers.map(({ midX: x, midY: y }) => ({ x, y }));
+        const next = createSim({ grid, remixes: ["frozen"] });
+        expect(next.cold!.braziers.map(({ midX: x, midY: y }) => ({ x, y }))).toEqual(positions);
+        const normal = createSim({ grid });
+        for (const { x, y } of positions) {
+            expect(isCircleFree(normal.grid, x, y, normal.player.radius)).toBe(true);
+        }
     });
 
     it("share one remix's share of the crowd between them", () => {

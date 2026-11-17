@@ -12,6 +12,7 @@ the version in the corner).
   their icons, which were blank.
 - Toktz-mej-tal's burning ground lights what's round it on dark maps for as long as it burns.
   Fixed by Deivid Smarzaro.
+- Braziers in Frozen remixes now block movement, whether lit or unlit. Fixed by Deivid Smarzaro.
 
 ## 0.34.1 - 2026-11-16
 
