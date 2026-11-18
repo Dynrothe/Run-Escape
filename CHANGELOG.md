@@ -7,8 +7,8 @@ the version in the corner).
 
 ### Added
 
-- Friends for co-op: give a friend your friend code and add theirs, and you're friends once you've
-  both added each other. No account needed.
+- Friends for co-op, by mrdathh: give a friend your friend code and add theirs, and you're friends
+  once you've both added each other. No account needed.
 - See which friends are online and where: in the menus, on a run of their own, or in a room you
   can join with a click.
 - Invite friends into your room from it, and take up or decline their invites from anywhere in the
