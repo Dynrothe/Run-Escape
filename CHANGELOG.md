@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Dragon claws and Burning claws use the claw special attack animation for every four-hit swing, by Deivid Smarzaro.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

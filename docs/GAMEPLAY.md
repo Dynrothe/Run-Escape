@@ -211,8 +211,8 @@ version and how to run it.
       you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
-      slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
-      the undead 50% harder.
+      slash four times at once, the last the hardest, using their special attack animation, as
+      **Burning claws** do. The **Ivandis flail** hits vampyres and the undead 50% harder.
     - **Ranged**: the **Twisted bow** shoots the toughest enemy in range, and hits harder the
       more hitpoints it has (up to +150% on bosses). The **Bow of Faerdhinen** fires crystal
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave

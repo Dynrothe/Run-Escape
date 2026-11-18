@@ -5276,22 +5276,26 @@ describe("the new weapons", () => {
         expect(goblin.frozen).toBeGreaterThan(0);
     });
 
-    test("Dragon claws hit four times a swing, a moment apart, the last the hardest", () => {
-        const sim = armed("dragon_claws");
-        const goblin = standing(sim, "goblin", 1.2, 0);
-        expect(hitsOn(attack(sim), goblin).length).toBe(1);
-        sim.weapons[0].cooldown = 1e9;
-        const later: SimEvent[] = [];
-        for (let i = 0; i < 20; i++) {
-            sim.player.invulnerable = 100;
-            sim.step(0, 0);
-            later.push(...sim.takeEvents());
-        }
-        const hits = hitsOn(later, goblin);
-        expect(hits.length).toBe(3);
-        // 100% of the damage against 40%, give or take 15% each
-        expect(hits[2]).toBeGreaterThan(8 * 0.4 * 1.15);
-    });
+    test.each(["dragon_claws", "burning_claws"])(
+        "%s use the special animation and hit four times a swing, a moment apart, the last the hardest",
+        (weaponId) => {
+            const sim = armed(weaponId);
+            const goblin = standing(sim, "goblin", 1.2, 0);
+            expect(hitsOn(attack(sim), goblin).length).toBe(1);
+            expect(sim.player.attackSeq).toBe(7514);
+            sim.weapons[0].cooldown = 1e9;
+            const later: SimEvent[] = [];
+            for (let i = 0; i < 20; i++) {
+                sim.player.invulnerable = 100;
+                sim.step(0, 0);
+                later.push(...sim.takeEvents());
+            }
+            const hits = hitsOn(later, goblin);
+            expect(hits.length).toBe(3);
+            // 100% of the damage against 40%, give or take 15% each
+            expect(hits[2]).toBeGreaterThan(8 * 0.4 * 1.15);
+        },
+    );
 
     test("the Ivandis flail hits vampyres and the undead harder", () => {
         expect(getEnemy("count_draynor").tags).toEqual(["vampyre"]);
