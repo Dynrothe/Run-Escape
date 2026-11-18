@@ -655,6 +655,8 @@ export type UiSnapshot = {
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
+    // Co-op chat's box is open to type in, mid-run (Enter opens it; GameClient.openChat)
+    chatOpen: boolean;
     party: TeammateView[];
     waitingOn: string[];
     // Co-op: a revive you're part of, as the one down or the one reviving
@@ -758,6 +760,7 @@ export class GameStore {
             expert: false,
             overlay: "none",
             coop: OFFLINE,
+            chatOpen: false,
             party: [],
             waitingOn: [],
             choices: [],

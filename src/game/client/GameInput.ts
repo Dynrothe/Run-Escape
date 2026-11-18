@@ -89,6 +89,12 @@ export class GameInput {
         return wheel;
     }
 
+    // Lets go of every key held, as the focus goes to a box to type in: its
+    // keys never come here, so their releases wouldn't either
+    release(): void {
+        this.down.clear();
+    }
+
     private isTyping(event: KeyboardEvent): boolean {
         const target = event.target as HTMLElement | null;
         return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");

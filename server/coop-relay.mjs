@@ -24,6 +24,7 @@ import {
     viaProxy,
     watchCloudflareRanges,
 } from "./client-ip.mjs";
+import { chatLine } from "./coop-chat.mjs";
 import {
     RUN_CHECKS,
     RunWatch,
@@ -138,9 +139,9 @@ const MAX_WRONG_CODES_PER_NETWORK_PER_MINUTE = 80;
 // A room nobody's done anything in for this long is closed
 const IDLE_MS = 30 * 60_000;
 // Messages that don't count as doing anything in a room, for IDLE_MS: pings,
-// browsing, and a player's own updates and name, which could otherwise be
-// sent now and then to hold a room for ever.
-const IDLE_MESSAGES = new Set(["ping", "list", "me", "rename"]);
+// browsing, and a player's own updates, name and chat, which could otherwise
+// be sent now and then to hold a room for ever.
+const IDLE_MESSAGES = new Set(["ping", "list", "me", "rename", "chat"]);
 // Bigger than any real loadout (the shop's bonuses, unlocked items and
 // Armoury); a bigger one is dropped rather than sent round the room
 export const MAX_LOADOUT_BYTES = 16 * 1024;
@@ -1523,6 +1524,16 @@ export function createRelay(limits = {}) {
                     roomChanged(room);
                 }
                 return;
+            case "chat": {
+                // A line for the whole room, the sender's game too, kept nowhere
+                const line = room && chatLine(client, message, payload.length);
+                if (line) {
+                    for (const member of room.members) {
+                        member.connection.send(line);
+                    }
+                }
+                return;
+            }
             // The game's own traffic, nearly all of what comes through, goes on
             // as it came rather than encoded again: the same JSON, so every
             // player reads what the relay did
@@ -1652,6 +1663,8 @@ export function createRelay(limits = {}) {
             country: client.country,
             // Changes to the open rooms are sent without asking
             listUpdates: true,
+            // Rooms pass on their players' chat
+            chat: true,
         });
         if (head && head.length > 0) {
             client.connection.receive(head);

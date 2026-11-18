@@ -101,6 +101,7 @@ const KEYBOARD_CONTROLS: { keys: () => string; key: string }[] = [
     { keys: () => "Tab", key: "canvas.controls.damage" },
     { keys: () => "Q", key: "canvas.controls.quests" },
     { keys: () => "M", key: "controls.keyboard.sound" },
+    { keys: () => "Enter", key: "controls.keyboard.chat" },
     { keys: () => "R", key: "canvas.reroll_label" },
     { keys: () => "X", key: "canvas.skip_label" },
 ];

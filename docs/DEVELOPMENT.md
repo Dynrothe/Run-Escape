@@ -3130,6 +3130,31 @@ Cloudflare every request costs, so think twice before adding a timer that sends 
 messages and calls between objects are billed (see Cost in `server/cloudflare/README.md`), and what
 the relay sends out is free.
 
+**Chat.** A room's players can talk: their own words, or a quick-chat phrase sent as its id
+(`QUICK_CHAT` in `client/coop/chat.ts`) and shown in each player's own language. A game sends `{ t:
+"chat", text }` or `{ t: "chat", quick }`, and both relays pass it to everyone in the room, the
+sender too, with who said it (`server/coop-chat.mjs`, shared by `coop-relay.mjs` and
+`cloudflare/src/room.mjs`). They keep none of it, so there's nothing to store or log: each game
+keeps its room's lines in `CoopView.chatLines`, in memory, and drops them on leaving the room.
+`chatLine` cleans a line (one line, no control or direction-turning characters, `MAX_CHAT_CHARS` at
+most) and drops it past `CHAT_BURST` at once or `CHAT_PER_SECOND` after; the game keeps to the same
+(`ChatLimiter`), so it never sends one the relay would drop. Chat doesn't count as activity for a
+room's `IDLE_MS`, as a player's own updates don't, or a line now and then could hold a room for
+ever. A relay that passes chat says so in its welcome (`chat: true`), and the game shows chat only
+then, so an older relay never has a box nobody hears. Ids of new phrases only ever get added: a game
+skips one it doesn't know. Chat stays out of `UpMessage` and the run checks: it's said to the room,
+not the run. The `coopChat` display setting shows everything, quick chat only, or nothing, and
+muting someone (the room's member list) lasts while in the room.
+
+In the room the chat is its own panel in the middle column; on a phone it's a tap from the room's
+bar, full screen like the map list. In a run, the last few lines show over the world for a moment
+(`RUN_LINE_MS`), low on the left, and Enter opens the box (`GameClient.openChat`), with nothing over
+the run: on co-op's menu Enter is its buttons', a controller's confirm too. The box shuts as a run
+starts or ends (`setCoopRun`), since its HUD goes with the run. `takesKey` takes that Enter so its
+keypress doesn't reach the box it opens, and the box opening lets go of held keys
+(`GameInput.release`): its own keys never reach `GameInput`, so their releases wouldn't either. On a
+touch screen it's high in the middle instead, clear of the stick, with a Chat button by pause.
+
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own and on each room member. The Cloudflare relay's Worker gets it from
 `request.cf.country` and hands it on as `x-country`, replacing whatever a player sent; the Node

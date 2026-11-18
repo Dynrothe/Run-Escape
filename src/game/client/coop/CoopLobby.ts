@@ -2,6 +2,7 @@ import { MAP_BY_ID } from "../../content/maps";
 import { WardrobeLook } from "../../content/wardrobe";
 import { t, tl } from "../../i18n";
 import { GameStore } from "../GameStore";
+import { ChatLimiter, ChatLine, MAX_CHAT_LINES, cleanChatText, isQuickChat } from "./chat";
 import {
     ClientMessage,
     DownMessage,
@@ -51,6 +52,15 @@ export type CoopView = {
     available?: boolean;
     // The relay lets players into rooms on maps they haven't unlocked
     anyMap: boolean;
+    // The relay passes on chat (an older one doesn't)
+    chat: boolean;
+    // What's been said in this room since joining it, oldest first, and kept
+    // only here (coop/chat.ts)
+    chatLines: ChatLine[];
+    // Who this player's muted in the room, by id: for as long as they're in it
+    muted: string[];
+    // The last line this player's had the chat open for (ChatLine.seq), for the mark on its button
+    chatReadSeq: number;
 };
 
 export const OFFLINE: CoopView = {
@@ -62,6 +72,10 @@ export const OFFLINE: CoopView = {
     roomsFull: false,
     name: "",
     anyMap: false,
+    chat: false,
+    chatLines: [],
+    muted: [],
+    chatReadSeq: 0,
 };
 
 // How long to wait for the relay to say it's there
@@ -168,6 +182,7 @@ const ROOM_MESSAGES: ReadonlySet<ClientMessage["t"]> = new Set([
     "end",
     "up",
     "down",
+    "chat",
 ]);
 
 // The relay's address over plain HTTP, which answers whether it's there
@@ -258,6 +273,8 @@ export class CoopLobby {
     private keptAliveAt = 0;
     private tickAt = 0;
     private view: CoopView;
+    private chatLimiter = new ChatLimiter();
+    private chatSeq = 0;
     // What this player looks like to the room, sent on joining and on change
     private me: Partial<Member> = {};
 
@@ -303,7 +320,15 @@ export class CoopLobby {
         const previousMap = this.view.room?.mapId;
         const previousCardsOnly = roomPlaysCardsOnly(this.view.room);
         const previousHost = this.view.room?.hostId;
+        const previousCode = this.view.room?.code;
         this.view = { ...this.view, ...changes };
+        // A room's chat stays with it: out of it, or into another, it's gone
+        if (
+            this.view.room?.code !== previousCode &&
+            (this.view.chatLines.length > 0 || this.view.muted.length > 0)
+        ) {
+            this.view = { ...this.view, chatLines: [], muted: [], chatReadSeq: this.chatSeq };
+        }
         this.store.set({ coop: this.view });
         if (this.view.room?.mapId !== previousMap) {
             this.onMapChanged?.();
@@ -790,6 +815,7 @@ export class CoopLobby {
                     error: undefined,
                     available: true,
                     anyMap: message.anyMap === true,
+                    chat: message.chat === true,
                 });
                 this.activeAt = Date.now();
                 this.refresh();
@@ -870,6 +896,9 @@ export class CoopLobby {
                 break;
             case "left":
                 this.onLeft?.(message.id);
+                break;
+            case "chat":
+                this.heard(message);
                 break;
         }
     }
@@ -1074,6 +1103,68 @@ export class CoopLobby {
 
     clearError(): void {
         this.update({ error: undefined });
+    }
+
+    // Says a line to the room, if there's anything to say and the relay
+    // would pass it on now. Whether it went.
+    sayChat(text: string): boolean {
+        const clean = cleanChatText(text);
+        if (!clean || !this.canChat() || !this.chatLimiter.take()) {
+            return false;
+        }
+        this.send({ t: "chat", text: clean });
+        return true;
+    }
+
+    sayQuickChat(id: string): boolean {
+        if (!isQuickChat(id) || !this.canChat() || !this.chatLimiter.take()) {
+            return false;
+        }
+        this.send({ t: "chat", quick: id });
+        return true;
+    }
+
+    private canChat(): boolean {
+        return this.view.chat && this.view.room !== undefined;
+    }
+
+    markChatRead(): void {
+        if (this.view.chatReadSeq !== this.chatSeq) {
+            this.update({ chatReadSeq: this.chatSeq });
+        }
+    }
+
+    toggleMute(id: string): void {
+        const muted = this.view.muted.includes(id)
+            ? this.view.muted.filter((other) => other !== id)
+            : [...this.view.muted, id];
+        this.update({ muted });
+    }
+
+    private heard(message: Extract<ServerMessage, { t: "chat" }>): void {
+        if (!this.view.room || typeof message.from !== "string") {
+            return;
+        }
+        const quick = typeof message.quick === "string" ? message.quick : undefined;
+        // A phrase this game doesn't know (a newer one's) says nothing here
+        if (quick !== undefined && !isQuickChat(quick)) {
+            return;
+        }
+        const text = quick === undefined ? cleanChatText(String(message.text ?? "")) : undefined;
+        if (quick === undefined && !text) {
+            return;
+        }
+        const line: ChatLine = {
+            seq: ++this.chatSeq,
+            from: message.from,
+            name: String(message.name ?? "").slice(0, 64),
+            ...(quick !== undefined ? { quick } : { text }),
+            at: Date.now(),
+        };
+        const lines = this.view.chatLines;
+        this.update({
+            chatLines: [...lines.slice(Math.max(0, lines.length - MAX_CHAT_LINES + 1)), line],
+        });
     }
 }
 

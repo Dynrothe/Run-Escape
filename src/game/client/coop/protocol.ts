@@ -205,7 +205,10 @@ export type ClientMessage =
     | { t: "start"; game: GameStart }
     | { t: "end" }
     | { t: "up"; d: UpMessage }
-    | { t: "down"; d: DownMessage };
+    | { t: "down"; d: DownMessage }
+    // A line for the room: the player's own words, or a quick-chat phrase's id
+    // (coop/chat.ts), which each game shows in its own language
+    | { t: "chat"; text?: string; quick?: string };
 
 export type ServerMessage =
     // name: the one the relay's given this player. anyMap: rooms take players
@@ -219,6 +222,8 @@ export type ServerMessage =
           country?: string;
           // The open rooms come again whenever they change, without asking
           listUpdates?: boolean;
+          // Rooms pass on chat (server/coop-chat.mjs). An older relay doesn't.
+          chat?: boolean;
       }
     // This player's new name, after asking for one
     | { t: "named"; name: string }
@@ -254,4 +259,6 @@ export type ServerMessage =
     | { t: "start"; game: GameStart }
     | { t: "left"; id: string }
     | { t: "up"; from: string; d: UpMessage }
-    | { t: "down"; d: DownMessage };
+    | { t: "down"; d: DownMessage }
+    // A line someone in the room said (this player's own too), with who said it
+    | { t: "chat"; from: string; name: string; text?: string; quick?: string };

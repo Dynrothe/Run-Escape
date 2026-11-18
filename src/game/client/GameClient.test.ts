@@ -219,6 +219,69 @@ describe("a co-op player's loadout", () => {
     });
 });
 
+describe("co-op chat's box in a run", () => {
+    function inCoopRun() {
+        vi.stubGlobal("window", { localStorage: { setItem() {} } });
+        const { client, store } = createClient(createSim(), false);
+        const release = vi.fn();
+        Object.assign(client, { coopRun: {}, input: { release } });
+        store.set({
+            coop: {
+                ...store.getSnapshot().coop,
+                chat: true,
+                room: {
+                    code: "ABCDEFGH",
+                    name: "Room",
+                    open: false,
+                    hostId: "host",
+                    mapId: "lumbridge",
+                    endless: false,
+                    hard: false,
+                    started: true,
+                    members: [],
+                },
+            },
+        });
+        const press = (code: string) =>
+            (client as unknown as { pressKey(code: string): void }).pressKey(code);
+        return { client, store, press, release };
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    test("Enter opens it, letting go of held keys, and Escape shuts it without pausing", () => {
+        const { store, press, release } = inCoopRun();
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(true);
+        expect(release).toHaveBeenCalled();
+        // With no box to type in (quick chat only), the keys come here
+        press("Escape");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        expect(store.getSnapshot().overlay).toBe("none");
+        press("Enter");
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("Enter is the menu's over a run, and nothing's open where chat's off", () => {
+        const { client, store, press } = inCoopRun();
+        store.set({ overlay: "paused" });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        store.set({ overlay: "none" });
+        Object.assign(client, { display: { ...getDefaultDisplaySettings(), coopChat: "off" } });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("a box left open as a run ends starts shut in the next", () => {
+        const { client, store, press } = inCoopRun();
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(true);
+        (client as unknown as { setCoopRun(run: undefined): void }).setCoopRun(undefined);
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+});
+
 describe("the co-op flag", () => {
     test("shows unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();

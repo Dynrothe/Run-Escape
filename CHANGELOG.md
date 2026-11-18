@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Co-op chat, by Okaeri: talk to your party in the room and during a run (Enter on a keyboard, the
+  Chat button on a phone), or use quick-chat phrases. Chat is never saved, and Settings can keep it
+  to quick chat or turn it off. You can mute anyone in your room.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

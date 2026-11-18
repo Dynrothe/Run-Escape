@@ -1,0 +1,199 @@
+/* Co-op chat (CoopChat.tsx): the room's panel, and a run's lines over the world */
+
+.ui-coopchat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    line-height: 1.15;
+}
+
+.ui-coopchat-log {
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+}
+
+.ui-coopchat-empty {
+    color: var(--ui-text-disabled);
+}
+
+.ui-coopchat-line {
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-coopchat-name {
+    color: var(--ui-white);
+}
+
+.ui-coopchat-name-you {
+    color: var(--ui-cyan);
+}
+
+/* A player's own words in OSRS's overhead yellow; a quick-chat phrase in its orange */
+.ui-coopchat-text {
+    color: var(--ui-yellow);
+}
+
+.ui-coopchat-quick-text {
+    color: var(--ui-orange);
+}
+
+.ui-coopchat-quick {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+}
+
+.ui-coopchat-quick .ui-button {
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-coopchat-form {
+    display: flex;
+    gap: 4px;
+}
+
+/* The room's: in the middle column, low, under the adventurer standing there */
+.ui-coopchat-room {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    justify-self: center;
+    width: 100%;
+    max-width: 440px;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.ui-coopchat-room .ui-coopchat-log {
+    height: 96px;
+}
+
+/* A phone's: over the room, a tap from its bar, the log taking what's left */
+.ui-phone-picker > .ui-select-panel.ui-coopchat-picker {
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-coopchat-inline {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.ui-coopchat-inline .ui-coopchat-log {
+    flex: 1 1 auto;
+    min-height: 48px;
+}
+
+.ui-coopchat-room-button {
+    position: relative;
+}
+
+/* A run's: low on the left, clear of the party down the left and the bars in the middle */
+.ui-coopchat-run {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    width: min(340px, calc(100vw / var(--ui-scale) - 16px));
+    z-index: 3;
+}
+
+.ui-coopchat-open {
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.ui-coopchat-open .ui-coopchat-log {
+    max-height: 150px;
+    min-height: 60px;
+}
+
+/* Over the world: no panel, nothing to click, the text outlined to read on any ground */
+.ui-coopchat-faded {
+    pointer-events: none;
+    gap: 1px;
+}
+
+.ui-coopchat-faded .ui-coopchat-line {
+    text-shadow: var(--ui-outline);
+    animation: ui-coopchat-fade 10s linear forwards;
+}
+
+@keyframes ui-coopchat-fade {
+    0%,
+    80% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-coopchat-faded .ui-coopchat-line {
+        animation: none;
+    }
+}
+
+.ui-coopchat-close {
+    align-self: flex-end;
+}
+
+/* A touch screen's way in, with a mark for lines not seen yet: beside the pause button, which
+   is placed in Mobile.css (.ui-touch-pause), so the stick's corner stays clear */
+.ui-coopchat-button {
+    position: absolute;
+    right: calc(var(--safe-right, 0px) + 256px);
+    top: 24px;
+    height: 48px;
+    z-index: 3;
+}
+
+/* On a touch screen the run's chat is high in the middle, under the timer, clear of the stick
+   (anywhere low) and the party down the left */
+@media (pointer: coarse) {
+    .ui-coopchat-run {
+        left: 50%;
+        bottom: auto;
+        top: calc(var(--safe-top, 0px) + 80px);
+        transform: translateX(-50%);
+        width: min(380px, calc(100vw / var(--ui-scale) - 32px));
+    }
+
+    .ui-coopchat-open .ui-coopchat-log {
+        max-height: 64px;
+        min-height: 40px;
+    }
+}
+
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-coopchat-button {
+        right: calc(var(--safe-right, 0px) + 170px);
+        top: calc(var(--safe-top, 0px) + 18px);
+        height: 46px;
+    }
+
+    .ui-coopchat-run {
+        top: calc(var(--safe-top, 0px) + 56px);
+    }
+}
+
+.ui-coopchat-unread {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    background: var(--ui-yellow);
+    border: 1px solid #000;
+}
