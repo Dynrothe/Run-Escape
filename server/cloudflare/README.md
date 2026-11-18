@@ -5,7 +5,7 @@ Objects, so each room runs near its host instead of on one server wherever that 
 alternative to hosting the Node relay, not a replacement: the game works with either, and only
 `VITE_COOP_URL` says which.
 
-**This fork's friends aren't here.** Friend codes, friends' presence, invites, rooms for friends
+**Friends aren't here.** Friend codes, friends' presence, invites, rooms for friends
 and a room's chat are only on the Node relay. This one doesn't say it has them (no `friends` in
 its welcome), so a game on it goes without.
 

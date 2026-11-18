@@ -204,7 +204,7 @@ tests below the relay's input limit. `?movementDiagnostics` opts into local pred
 and a bounded sample buffer (see Development, Measuring prediction); don't log or allocate per
 frame for diagnostics, or treat input-to-confirmation time as network ping.
 
-Friends (this fork's) are on the Node relay only; the Cloudflare one hasn't got them. Every bit of
+Friends are on the Node relay only; the Cloudflare one hasn't got them. Every bit of
 their UI stays hidden unless the relay says it has them (`FriendsView.supported`,
 `CoopView.friends`), so on any other relay the game looks exactly as before. **Never rename
 `rune-survivors-friends`, or change how a friend code comes from a game's secret** (`friendCode`

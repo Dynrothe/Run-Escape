@@ -17,22 +17,6 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 > and everything in its game cache belong to Jagex, and the cache isn't part of this repository:
 > you download it yourself (see below).
 
-## This fork
-
-This is a private fork of [Dynrothe/Run-Escape](https://github.com/Dynrothe/Run-Escape), with a
-friends system for co-op. It adds:
-
-- **Friend codes**, with no accounts: share yours, add theirs, and you're friends once you've both
-  added each other.
-- **Who's online**, and where: in the menus, on a run of their own, or in a room to join.
-- **Invites** into your room, and popups for them anywhere in the game.
-- **Rooms for friends**, which friends of anyone in the room can see and join.
-- **Your own name**, a **chat** in each room, and the players you've **recently played with**.
-
-It needs this fork's own Node relay, which `bun run start` runs in development and `bun run serve`
-beside a build. The Cloudflare relay hasn't got friends, and on it the game is as it was. How it
-works is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Co-op, Friends).
-
 ## What's in it
 
 - **12 campaign maps**, each opened by beating the one before, each with its own monsters, three
@@ -56,6 +40,10 @@ works is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Co-op, Friends).
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, live party stats in the menu, and the run going on while anyone's
   standing.
+- **Friends** for co-op, with no accounts: swap friend codes, see who's online and where, invite
+  them into your room or open a room to friends only, with a chat in each room and the players
+  you've recently played with. They're on the Node relay (`bun run start`, `bun run serve`); on
+  the Cloudflare one the game is as it was.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
   picks and no items, only the Inquisitor's crossbow and her, quicker and with more at once.
 - **Justiciar Zachariah**, the next boss fight, in a court hung in the Hallowed Sepulchre's dark

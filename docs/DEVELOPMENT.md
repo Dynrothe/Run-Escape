@@ -308,7 +308,7 @@ makes the relay throw drops that connection, never the relay, and a request whos
 is a 400. `serve.mjs` turns away WebSocket upgrades to any other path rather than leaving them
 open, and answers `Range` with 206, as the cache's download resumes with one.
 
-This fork's friends (friend codes, presence, invites, rooms for friends and chat) are only on this
+Friends (friend codes, presence, invites, rooms for friends and chat) are only on this
 relay, not the Cloudflare one: it says so with `friends` in its welcome and its plain GET. A game
 that's said who it is (`hello`) with `presence` keeps that connection open for as long as it runs,
 to hear about friends, and the relay never closes it for being idle (it still has to answer
@@ -3049,8 +3049,8 @@ from `server/name-gen.mjs`: two words, like "Plucky Chinchompa" or "Moonlit Cros
 lists picked so any pair reads fine. A name it gives is only one player's (or room's) at a time,
 and a number goes on the end once the pairs it tries are all taken. **New name** (`rename`) asks
 for another, except during a run, when everyone's copy of it has the old one. On the Cloudflare
-relay that's all there is: a name a game sends is ignored, so a reconnect gets a new one. This
-fork's Node relay also takes a name the player types, and keeps the one they last had (see
+relay that's all there is: a name a game sends is ignored, so a reconnect gets a new one. The
+Node relay also takes a name the player types, and keeps the one they last had (see
 Friends, below). When adding words, keep them ones that can't make something unfortunate next to
 any word in the other list.
 
@@ -3178,7 +3178,7 @@ game's open in another tab, and Play without saving lets it play (see Saves).
 
 #### Friends
 
-This fork adds friends to co-op, on its Node relay only. There are still no accounts. Each game
+Co-op has friends, on the Node relay only. There are still no accounts. Each game
 makes a secret of its own and keeps it in localStorage under `rune-survivors-friends`
 (`client/coop/FriendsStore.ts`), with its friends list, the requests it's ignored, the players it's
 had a run with and the name it picked. That's apart from the save on purpose, like cloud save's

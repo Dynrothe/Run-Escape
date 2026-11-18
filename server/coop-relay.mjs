@@ -238,7 +238,7 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-// Friends (this fork's). These four are the game's too, in
+// Friends. These four are the game's too, in
 // src/game/client/coop/protocol.ts: change them there as well.
 const FRIEND_CODE_LENGTH = 12;
 const MAX_FRIENDS = 200;
@@ -2268,7 +2268,7 @@ export function createRelay(limits = {}) {
             country: client.country,
             // Changes to the open rooms are sent without asking
             listUpdates: true,
-            // Friend codes, presence, invites and chat (this fork's)
+            // Friend codes, presence, invites and chat
             friends: true,
         });
         if (head && head.length > 0) {

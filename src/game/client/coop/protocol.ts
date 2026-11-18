@@ -35,7 +35,7 @@ export type Loadout = {
 // A relay from before 0.23.0 sends no hard
 export type Unlocks = { maps: string[]; endless: string[]; hard?: string[] };
 
-// Friends (this fork's, on the Node relay only: a relay that has them says so
+// Friends (on the Node relay only: a relay that has them says so
 // with `friends` in its welcome). There are still no accounts. A game keeps a
 // secret of its own (client/coop/FriendsStore.ts) and shows it to the relay in
 // `hello`; the relay works out a friend code from it, which is what players
