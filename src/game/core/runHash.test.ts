@@ -137,8 +137,7 @@ describe("seeded runs", () => {
     test("a party of four in the God Wars, armies fighting each other", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
-        // Every weapon can come up, so a new one (the Nightmare staff) changes it, as does who
-        // drops ashes (they gather apart from bones), and a power-up for the wizard's magic
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0xba201ada);
+        // The warrior's slashes now hit across their full visible arc.
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x719103db);
     }, 60000);
 });

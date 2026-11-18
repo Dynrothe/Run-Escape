@@ -11,6 +11,7 @@ import { emptyStats } from "../content/types";
 import {
     PROJECTILE_ITEM_LOOKS,
     PROJECTILE_SPOT_LOOKS,
+    WEAPONS,
     getProjectileObjId,
     getWeapon,
 } from "../content/weapons";
@@ -19,7 +20,7 @@ import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
 import type { GameAssets } from "./GameAssets";
 import { GameView, RUN_POSE_TICKS, getRunPoseFrame } from "./GameView";
-import type { Overlay } from "./Overlay";
+import { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
@@ -571,6 +572,159 @@ describe("dropped power-up timers", () => {
         expect(ctx.arc.mock.lastCall![2]).toBe(8.25);
         expect(ctx.stroke).toHaveBeenCalledOnce();
     });
+});
+
+describe("slash swooshes", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    function setup(area = 0, weaponId = "rubber_chicken") {
+        vi.spyOn(performance, "now").mockReturnValue(1000);
+        const sim = new Sim({
+            grid: makeGrid(Array(24).fill("........................")),
+            mapId: "thanksgiving",
+            characterId: "avian_assaulter",
+            metaStats: { ...emptyStats(), area },
+            seed: 3,
+            spawnX: 112.5,
+            spawnY: 212.5,
+        });
+        sim.weapons = [];
+        sim.addWeapon(weaponId);
+        const assets: GameAssets = Object.create(GameAssets.prototype);
+        const view = new GameView(assets);
+        const overlay: Overlay = Object.create(Overlay.prototype);
+        Object.defineProperty(overlay, "ctx", {
+            value: { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {} },
+        });
+        const project = vi.spyOn(overlay, "project").mockImplementation((x, _height, y, out) => {
+            out.x = x;
+            out.y = y;
+            out.visible = true;
+            return out;
+        });
+        return { sim, view, overlay, project };
+    }
+
+    const swings = WEAPONS.filter(
+        (weapon) => weapon.kind === "slash" || weapon.kind === "sweep",
+    ).flatMap((weapon) => [
+        { weapon, level: 1, area: 0, angle: 0, special: false },
+        { weapon, level: weapon.levels.length, area: 0.6, angle: Math.PI / 4, special: false },
+    ]);
+
+    test.each(swings.filter(({ weapon }) => weapon.kind === "slash"))(
+        "$weapon.name hits across its full visible arcs (level $level, area $area)",
+        ({ weapon, level, area, angle }) => {
+            const { sim, view, overlay, project } = setup(area, weapon.id);
+            sim.weapons[0].level = level;
+            const effective = sim["getEffectiveLevel"](sim.weapons[0]);
+            const reach = effective.area * (1 + sim.stats.area);
+            const dirX = Math.cos(angle);
+            const dirY = Math.sin(angle);
+            const sides = Math.min(effective.amount, 2);
+            const arcTargets = Array.from({ length: sides }, (_, side) =>
+                [-1.1, -0.55, 0, 0.55, 1.1].map((offset) => {
+                    const a = angle + offset + side * Math.PI;
+                    return [Math.cos(a) * reach * 0.8, Math.sin(a) * reach * 0.8];
+                }),
+            ).flat();
+            const targets = [
+                [dirX * reach * 0.5, dirY * reach * 0.5],
+                [-dirX * reach * 0.6, -dirY * reach * 0.6],
+                [-dirY * reach, dirX * reach],
+                ...arcTargets,
+            ].map(([dx, dy]) => {
+                const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                    x: sim.player.x + dx,
+                    y: sim.player.y + dy,
+                })!;
+                enemy.hp = enemy.maxHp = 1e6;
+                enemy.frozen = 1e6;
+                return enemy;
+            });
+            sim.weapons[0].cooldown = 0;
+            sim.step(0, 0);
+            const events = sim.takeEvents();
+            const slashes = events.filter((event) => event.type === "slash");
+            expect(slashes).toHaveLength(sides);
+            for (const [index, target] of targets.entries()) {
+                expect(
+                    events.some(
+                        (event) => event.type === "damage" && event.enemyUid === target.uid,
+                    ),
+                ).toBe(index !== 2 && (index !== 1 || sides === 2));
+            }
+            for (const slash of slashes) {
+                view.reset();
+                view.onEvents(sim, [slash]);
+                for (const elapsed of [20, 90, 160]) {
+                    project.mockClear();
+                    view["drawSlashes"](overlay, sim, 1, 1000 + elapsed, 1);
+                    expect(project).toHaveBeenCalled();
+                    const points = project.mock.calls;
+                    const base = Math.atan2(slash.dirY, slash.dirX);
+                    for (const [index, [x, _height, y]] of points.entries()) {
+                        const a =
+                            base -
+                            slash.arc +
+                            ((2 * slash.arc * index) / (points.length - 1)) *
+                                Math.min(elapsed / 90, 1);
+                        expect(x - sim.player.x).toBeCloseTo(Math.cos(a) * reach * 0.8);
+                        expect(y - sim.player.y).toBeCloseTo(Math.sin(a) * reach * 0.8);
+                    }
+                }
+            }
+        },
+    );
+
+    test.each([
+        ...swings.filter(({ weapon }) => weapon.kind === "sweep"),
+        ...swings
+            .filter(({ weapon, level }) => weapon.special?.aoe && level > 1)
+            .map((swing) => ({ ...swing, special: true })),
+    ])(
+        "$weapon.name keeps its full arc (level $level, area $area, special $special)",
+        ({ weapon, level, area, angle, special }) => {
+            const { sim, view, overlay, project } = setup(area, weapon.id);
+            sim.weapons[0].level = level;
+            if (special) {
+                sim.weapons[0].uses = weapon.special!.every - 1;
+            }
+            const reach = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+            const target = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                x: sim.player.x + Math.cos(angle) * reach * 0.5,
+                y: sim.player.y + Math.sin(angle) * reach * 0.5,
+            })!;
+            target.hp = target.maxHp = 1e6;
+            target.frozen = 1e6;
+            sim.weapons[0].cooldown = 0;
+            sim.step(0, 0);
+            const events = sim.takeEvents();
+            expect(
+                events.some((event) => event.type === "damage" && event.enemyUid === target.uid),
+            ).toBe(true);
+            const slashes = events.filter((event) => event.type === "slash");
+            expect(slashes.length).toBeGreaterThan(0);
+            for (const slash of slashes) {
+                expect(slash.width).toBe(0);
+                if (special) {
+                    expect(slash.arc).toBe(Math.PI);
+                }
+                view.reset();
+                view.onEvents(sim, [slash]);
+                project.mockClear();
+                view["drawSlashes"](overlay, sim, 1, 1090, 1);
+                const points = project.mock.calls;
+                expect(points.length).toBeGreaterThan(10);
+                const base = Math.atan2(slash.dirY, slash.dirX);
+                for (const [index, [x, _height, y]] of points.entries()) {
+                    const angle = base - slash.arc + (2 * slash.arc * index) / (points.length - 1);
+                    expect(x - sim.player.x).toBeCloseTo(Math.cos(angle) * slash.reach * 0.8);
+                    expect(y - sim.player.y).toBeCloseTo(Math.sin(angle) * slash.reach * 0.8);
+                }
+            }
+        },
+    );
 });
 
 test("slashes and auras follow the displayed body without moving confirmed effects", () => {
