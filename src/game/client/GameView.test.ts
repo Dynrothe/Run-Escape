@@ -18,7 +18,7 @@ import {
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
-import type { GameAssets } from "./GameAssets";
+import { GameAssets } from "./GameAssets";
 import { GameView, RUN_POSE_TICKS, getRunPoseFrame } from "./GameView";
 import { Overlay } from "./Overlay";
 
