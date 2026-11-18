@@ -1387,10 +1387,10 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   cooldowns, with no channel, and not while it's under the ground (`leap`) or its sleepwalkers
   walk (`BossState.walkers`, outside a finale: the ambient's emitters are dropped and it begins
   again the moment they're done, so a player up by it shooting them has nothing to step
-  through). `BossDef.fallSeconds` on a final boss keeps the run going that long after it falls
-  (`Sim.victoryAt`), with nothing landing on the players, so its death animation plays before
-  the victory screen, all of it (the view cuts other deaths at `MAX_DEATH_ANIM_TICKS`, and
-  `corpseTicks` keeps the body that long); the run's time is to the fall (`endRun`'s `at`).
+  through). `BossDef.fallSeconds` on a final boss keeps just the animation clock going after it
+  falls (`Sim.victoryAt`). New level-up, casket and visitor prompts can't interrupt it. The
+  results use the tick the boss fell (`endRun`'s `at`), and if the last player fell in the same
+  tick, the win is recorded straight away instead of showing the death screen.
   Phosani's is her death's 5.4 seconds. `tempo` multiplies
   the boss's interval and its pattern attacks' windups (only those: the big hits keep their
   warnings) in `startBossAttack`, and `speed` its walk, applied as each phase begins. `finale`

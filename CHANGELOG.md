@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Level-ups, caskets and visitors no longer get in the way of the results after a final boss
+  falls. The win also counts if you and the final boss fall at the same time. Fixed by Deivid
+  Smarzaro.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

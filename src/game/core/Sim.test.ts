@@ -40,6 +40,7 @@ import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { DPS_WINDOW_SECONDS, LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent, Visitor } from "./entities";
+import { createSave, recordRun } from "./save";
 import { TestLoc, makeGrid } from "./world/testGrid";
 import { endlessXpForLevel, runXpForLevel } from "./xp";
 
@@ -492,6 +493,47 @@ describe("Sim", () => {
         expect(sim.seconds).toBe(seconds);
     });
 
+    test.each(["level up", "casket", "visitor"])(
+        "the final boss's fall reaches victory on time without waiting on a %s",
+        (decision) => {
+            const sim = createSim();
+            const def = getEnemy("wise_old_man");
+            const { x, y } = sim.player;
+            const boss = sim.spawnEnemy(
+                { ...def, boss: { ...def.boss!, fallSeconds: 1 } },
+                "finalBoss",
+                { x: x + 2, y },
+            )!;
+            boss.hp = 1;
+            sim.weapons = [];
+            sim.dropPickup("powerUp", x, y, 1, { powerUp: "bot_nuke" });
+            if (decision === "level up") {
+                sim.xp = sim.xpForNextLevel;
+            } else if (decision === "casket") {
+                sim.dropPickup("casket", x, y, 1);
+            } else {
+                expect(sim.startRandomEvent(getRandomEvent("quiz_master"))).toBe(true);
+                Object.assign(sim.visitor!, { x, y });
+            }
+
+            sim.step(0, 0);
+            expect(boss.dead).toBe(true);
+            const fell = sim.tick;
+            for (let i = 1; i < TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                expect(sim.state).toBe("playing");
+            }
+            sim.step(0, 0);
+            expect(sim.tick - fell).toBe(TICKS_PER_SECOND);
+            expect(sim.endTick).toBe(fell);
+            const result = sim.getResult();
+            expect(result).toMatchObject({ victory: true, bossesKilled: [def.id] });
+            const save = createSave();
+            recordRun(save, result);
+            expect(save.mapVictories.lumbridge).toBe(1);
+        },
+    );
+
     test("dying ends the run, unless a ring of life saves you", () => {
         const sim = createSim();
         sim.revivesLeft = 1;
@@ -533,34 +575,39 @@ describe("Sim", () => {
         expect(sim.takeEvents().some((e) => e.type === "revive")).toBe(false);
     });
 
-    test("the final boss falling in the tick the player does wins, but not a tick later", () => {
-        const won = createSim();
-        won.revivesLeft = 0;
-        const boss = won.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
-            x: 1040.5,
-            y: 1036.5,
-        })!;
-        won["damagePlayer"](99999, "goblin", false);
-        expect(won.state).toBe("dead");
-        // The player's weapons still fire in the tick they fall
-        won.damageEnemy(boss, 1e9, 0, won.player.x, won.player.y);
-        expect(won.state).toBe("victory");
-        // And they're standing on the victory screen
-        expect(won.heroes[0].down).toBe(false);
-        expect(won.player.deathTick).toBe(-1);
-        expect(won.player.hp).toBeGreaterThan(0);
+    test.each([0, 1])(
+        "the final boss falling in the tick the player does wins, but not a tick later (fallSeconds: %s)",
+        (fallSeconds) => {
+            const def = getEnemy("wise_old_man");
+            const finalBoss = { ...def, boss: { ...def.boss!, fallSeconds } };
+            const won = createSim();
+            won.revivesLeft = 0;
+            const boss = won.spawnEnemy(finalBoss, "finalBoss", {
+                x: 1040.5,
+                y: 1036.5,
+            })!;
+            won["damagePlayer"](99999, "goblin", false);
+            expect(won.state).toBe("dead");
+            // The player's weapons still fire in the tick they fall
+            won.damageEnemy(boss, 1e9, 0, won.player.x, won.player.y);
+            expect(won.state).toBe("victory");
+            // And they're standing on the victory screen
+            expect(won.heroes[0].down).toBe(false);
+            expect(won.player.deathTick).toBe(-1);
+            expect(won.player.hp).toBeGreaterThan(0);
 
-        const lost = createSim();
-        lost.revivesLeft = 0;
-        const late = lost.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
-            x: 1040.5,
-            y: 1036.5,
-        })!;
-        lost["damagePlayer"](99999, "goblin", false);
-        lost.step(0, 0);
-        lost.damageEnemy(late, 1e9, 0, lost.player.x, lost.player.y);
-        expect(lost.state).toBe("dead");
-    });
+            const lost = createSim();
+            lost.revivesLeft = 0;
+            const late = lost.spawnEnemy(finalBoss, "finalBoss", {
+                x: 1040.5,
+                y: 1036.5,
+            })!;
+            lost["damagePlayer"](99999, "goblin", false);
+            lost.step(0, 0);
+            lost.damageEnemy(late, 1e9, 0, lost.player.x, lost.player.y);
+            expect(lost.state).toBe("dead");
+        },
+    );
 
     test("with too many bones lying around, the furthest pile comes to the new ones", () => {
         const sim = createSim();
