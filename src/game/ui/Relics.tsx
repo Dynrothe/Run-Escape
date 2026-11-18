@@ -66,6 +66,13 @@ export function RelicRow({
                     );
                 })}
             </div>
+            <button
+                className="ui-button ui-button-small"
+                disabled={picked.length === 0}
+                onClick={() => client.clearRelics()}
+            >
+                {t("ui.relics.remove_all")}
+            </button>
             {/* Over the whole screen (its .ui-fill), not just the adventurers' panel */}
             {picking !== undefined &&
                 createPortal(

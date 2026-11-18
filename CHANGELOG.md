@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

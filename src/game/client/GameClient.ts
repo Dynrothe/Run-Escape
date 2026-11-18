@@ -1572,6 +1572,12 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ loadout: this.getLoadout() });
     }
 
+    clearRelics(): void {
+        this.save.relics = undefined;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The relics a run here starts with: the open tiers' picks, on a map that takes them
     private runRelics(map: MapDef): string[] | undefined {
         if (!takesRelics(map)) {

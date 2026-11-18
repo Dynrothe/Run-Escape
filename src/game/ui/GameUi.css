@@ -4052,6 +4052,7 @@
 /* The adventurer screen's relics (Relics.tsx): a slot a tier, as the pet's row */
 .ui-relic-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px 8px;
     padding: 4px 2px;
