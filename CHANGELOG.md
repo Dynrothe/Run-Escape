@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Evolutionary registers as soon as you evolve your third weapon, even if you give up straight afterward. Fixed by Deivid Smarzaro.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added
