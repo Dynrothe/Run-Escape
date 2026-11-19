@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { Camera } from "../../mapviewer/Camera";
 import {
     ActorAnim,
     ActorModel,
@@ -27,6 +28,8 @@ import type { Overlay } from "./Overlay";
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
 });
+
+const camera = new Camera(104, -10, 204, 0, 0);
 
 describe("high alchemy", () => {
     afterEach(() => vi.restoreAllMocks());
@@ -412,7 +415,7 @@ test.each([
             sim["addProjectile"]("spell", weapon, level, undefined, angle);
             const projectile = sim.projectiles[0];
             const before = { ...projectile };
-            view.submitActors(actors, sim, 1);
+            view.submitActors(actors, sim, 1, camera, 72);
             const objId = getProjectileObjId(weapon, level);
             expect(assets.get).toHaveBeenLastCalledWith(
                 objId !== undefined ? "obj:" + objId : "spot:" + level.projectileSpotAnim,
@@ -487,7 +490,7 @@ test("an enemy's thrown axes are drawn on their side", () => {
         yaw: 512,
         startTick: sim.tick,
     });
-    view.submitActors(actors, sim, 1);
+    view.submitActors(actors, sim, 1, camera, 72);
     expect(assets.get).toHaveBeenCalledWith("spot:41");
     const call = draw.mock.calls.find((c) => c[3] === 105 && c[5] === 203.5);
     expect(call?.[7]).toMatchObject({ roll: 512, unlit: 1 });
@@ -553,7 +556,8 @@ describe("dropped power-up timers", () => {
             .fn<Overlay["project"]>()
             .mockReturnValue({ x: 100, y: 100, visible: true });
         const overlay = { ctx, project } as unknown as Overlay;
-        const draw = (alpha = 1, scale = 1) => view["drawPickupTimers"](overlay, sim, alpha, scale);
+        const draw = (alpha = 1, scale = 1, eye = camera) =>
+            view["drawPickupTimers"](overlay, sim, alpha, scale, eye, 72);
         return { sim, pickup, assets, view, ctx, project, draw };
     }
 
@@ -577,6 +581,56 @@ describe("dropped power-up timers", () => {
         sim.pickups = [];
         draw();
         expect(ctx.stroke).toHaveBeenCalledTimes(4);
+    });
+
+    test("distant loot stays collectible and its model is requested when the camera approaches", () => {
+        const { view, sim, pickup, assets, draw, project } = setup();
+        const away = new Camera(pickup.x + 150, -10, pickup.y, 0, 0);
+        draw(1, 1, away);
+        expect(assets.get).not.toHaveBeenCalled();
+        expect(project).not.toHaveBeenCalled();
+        pickup.kind = "food";
+        const actors = { draw: vi.fn() } as unknown as ActorRenderer;
+        view.submitActors(actors, sim, 1, away, 72);
+        expect(assets.get).not.toHaveBeenCalledWith("pickup:food");
+        expect(sim.pickups).toEqual([pickup]);
+        away.pos[0] = pickup.x;
+        view.submitActors(actors, sim, 1, away, 72);
+        expect(assets.get).toHaveBeenCalledWith("pickup:food");
+        expect(actors.draw).toHaveBeenCalled();
+    });
+
+    test("limits shouts and escapees while co-op runs without drawing", () => {
+        const { view, sim } = setup();
+        const now = vi.spyOn(performance, "now").mockReturnValue(0);
+        const escape: SimEvent = {
+            type: "polymorphEscape",
+            powerUpId: "polymorph",
+            look: "penguin",
+            x: 100,
+            y: 202,
+        };
+        for (let uid = 1; uid <= 2000; uid++) {
+            view.onEvents(sim, [
+                { type: "bossShout", enemyUid: uid, text: "Hello" },
+                escape,
+                { type: "totemBlast", sound: -1, x: 100, y: 202, toX: 104, toY: 207 },
+            ]);
+        }
+        expect(view["shouts"]).toHaveLength(200);
+        expect(view["escapees"]).toHaveLength(200);
+        expect(view["fight"]["beams"]).toHaveLength(32);
+        now.mockReturnValue(10000);
+        sim.tick += 10 * TICKS_PER_SECOND;
+        view.onEvents(sim, [{ type: "totemBlast", sound: -1, x: 100, y: 202, toX: 104, toY: 207 }]);
+        expect(view["shouts"]).toHaveLength(0);
+        expect(view["escapees"]).toHaveLength(0);
+        expect(view["fight"]["beams"]).toHaveLength(1);
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", sim.player)!;
+        view["enemiesByUid"].set(enemy.uid, enemy);
+        view.reset();
+        expect(view["enemiesByUid"].size).toBe(0);
+        expect(view["shouts"]).toHaveLength(0);
     });
 
     test.each([
@@ -669,13 +723,13 @@ describe("dropped power-up timers", () => {
             }));
             const actorDraw = vi.fn<ActorRenderer["draw"]>();
             const actors = { draw: actorDraw } as unknown as ActorRenderer;
-            view.submitActors(actors, sim, 1);
+            view.submitActors(actors, sim, 1, camera, 72);
             const normalScale = actorDraw.mock.lastCall![7]!.scale!;
             draw();
             const normalTimerY = ctx.arc.mock.lastCall![1];
 
             pickup.powerUp = powerUp;
-            view.submitActors(actors, sim, 1);
+            view.submitActors(actors, sim, 1, camera, 72);
             const enlarged = actorDraw.mock.lastCall!;
             const enlargedScale = enlarged[7]!.scale!;
             expect(enlargedScale).toBeGreaterThan(normalScale);

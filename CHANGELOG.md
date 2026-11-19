@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Long runs use less memory: defeated enemies and collected loot are let go once they're gone.
+  Fixed by trippy22.
+- A co-op game left in a background tab no longer builds up effects waiting to be drawn, and
+  going back to the menus lets go of the run. Fixed by trippy22.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

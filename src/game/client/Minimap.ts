@@ -254,7 +254,6 @@ export class Minimap {
         // Grouped by colour, so a wave of hundreds is a few colour changes rather
         // than two for every dot. Those off the minimap are left out.
         const bosses = this.bosses;
-        bosses.length = 0;
         const enemyDots = this.enemyDots;
         const eliteDots = this.eliteDots;
         enemyDots.clear();
@@ -310,6 +309,7 @@ export class Minimap {
             );
             drawDot(ctx, x, y, marker, outline, BOSS_COLOR);
         }
+        bosses.length = 0;
         for (const hero of sim.heroes) {
             if (hero.index === viewHero || hero.left) {
                 continue;

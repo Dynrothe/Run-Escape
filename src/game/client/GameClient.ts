@@ -1042,7 +1042,7 @@ export class GameClient implements GameFrameHandler {
     private abilityUsed = false;
     // The tick the boss on the bar was first up, in this sim, since there was none: the ability
     // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
-    private bossUp?: { sim: Sim; tick: number };
+    private bossUpTick?: number;
     // The toast saying the sound's on or off, if one's up (see toggleMute)
     private soundToast?: number;
     // Adventurers this run has done the task for, already told about
@@ -2728,6 +2728,7 @@ export class GameClient implements GameFrameHandler {
         this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;
+        this.bossUpTick = undefined;
         // A new run's bosses explain themselves again
         this.instructionsSeen.clear();
         this.instructions = [];
@@ -3257,6 +3258,9 @@ export class GameClient implements GameFrameHandler {
         }
         this.coopRun = undefined;
         this.combat = undefined;
+        this.combatViews = undefined;
+        this.coopBarBoss = undefined;
+        this.bossUpTick = undefined;
         this.stopCoopTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
@@ -4098,21 +4102,21 @@ export class GameClient implements GameFrameHandler {
         };
     }
 
-    // Seconds since the boss on the bar was up (bossUp), or undefined with none living. Another
+    // Seconds since the boss on the bar was up, or undefined with none living. Another
     // boss coming on while one's shown (a co-op copy, the next phase) doesn't start it again.
     private secondsSinceBossUp(sim: Sim): number | undefined {
         const boss = sim.shownBoss;
         if (!boss || boss.dead) {
-            this.bossUp = undefined;
+            this.bossUpTick = undefined;
             return undefined;
         }
-        if (this.bossUp?.sim !== sim) {
+        if (this.bossUpTick === undefined) {
             if (boss.risingEnd > sim.tick) {
                 return undefined;
             }
-            this.bossUp = { sim, tick: sim.tick };
+            this.bossUpTick = sim.tick;
         }
-        return (sim.tick - this.bossUp.tick) / TICKS_PER_SECOND;
+        return (sim.tick - this.bossUpTick) / TICKS_PER_SECOND;
     }
 
     // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
@@ -5565,10 +5569,16 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    submitActors(actors: ActorRenderer, _camera: Camera): void {
+    submitActors(actors: ActorRenderer, camera: Camera): void {
         const sim = this.sim;
         if (sim) {
-            this.view.submitActors(actors, sim, this.getAlpha());
+            this.view.submitActors(
+                actors,
+                sim,
+                this.getAlpha(),
+                camera,
+                this.mapViewer.renderDistance,
+            );
             return;
         }
         // Title screen: just the character, and their pet
@@ -5614,7 +5624,13 @@ export class GameClient implements GameFrameHandler {
             this.view.puzzleHelper =
                 this.display.puzzleHelper &&
                 (this.save.scabarasBeaten === true || getRaidBand(sim.raidLevel) === "Entry");
-            this.view.drawOverlay(overlay, sim, this.getAlpha());
+            this.view.drawOverlay(
+                overlay,
+                sim,
+                this.getAlpha(),
+                camera,
+                this.mapViewer.renderDistance,
+            );
             if (this.minimapCanvas) {
                 this.minimap.draw(
                     this.minimapCanvas,
