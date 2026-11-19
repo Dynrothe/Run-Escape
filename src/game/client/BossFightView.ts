@@ -1,4 +1,5 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { AWAKENED_DUKE_ID } from "../content/duke";
 import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
 import { ZEBAK } from "../content/tombs";
@@ -954,8 +955,7 @@ export class BossFightView {
     }
 
     // The line a wave or a thrown sword will take (BossAttackDef.wave, boomerang),
-    // as wide as what it hits and as far as it goes: from the boss the way it's
-    // aimed, or from each statue throwing it at where the player stood
+    // from the boss the way it's aimed, or from each statue throwing it at where the player stood
     private drawThrowLines(
         overlay: Overlay,
         sim: Sim,
@@ -964,7 +964,10 @@ export class BossFightView {
         t: number,
     ): void {
         const attack = windup.attack;
-        const half = attack.radius ?? 0.35;
+        // Duke's spit lanes show how far your feet have to move, not just how wide the shot is.
+        const half =
+            (attack.radius ?? 0.35) +
+            (enemy.def.id === AWAKENED_DUKE_ID && attack.wave ? sim.player.radius : 0);
         const lines: { x: number; y: number; dirX: number; dirY: number }[] = [];
         if (windup.from) {
             const target = windup.targets[0];

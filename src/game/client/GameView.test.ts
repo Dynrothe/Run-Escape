@@ -18,6 +18,7 @@ import {
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
+import { BossFightView } from "./BossFightView";
 import { GameAssets, HIGH_ALCH_SPOTANIM, PLAYER_SEQS } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameSounds } from "./GameSounds";
@@ -26,6 +27,41 @@ import type { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
+});
+
+describe("fanned boss projectile warnings", () => {
+    test.each([
+        ["Spit", 3],
+        ["Awakened spit", 5],
+    ] as const)("Awakened Duke draws %s to the player-center collision boundary", (name, count) => {
+        const sim = new Sim({
+            grid: makeGrid(Array(24).fill("........................")),
+            characterId: "wizard",
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: 115.5,
+            spawnY: 210.5,
+        });
+        const def = getEnemy("awakened_duke");
+        const boss = sim["spawnBoss"](def, "boss", undefined, { x: 105.5, y: 210.5 })!;
+        const attack = def.boss!.attacks.find((a) => a.name === name)!;
+        sim["startBossAttack"](boss, attack);
+        const view = new BossFightView(Object.create(GameAssets.prototype));
+        const trace = vi.spyOn(view, "traceGround").mockImplementation(() => {});
+        const overlay = { ctx: { fill() {} } } as Overlay;
+
+        view.drawGround(overlay, sim, 0, 0, 1);
+
+        expect(trace).toHaveBeenCalledTimes(count);
+        for (const [, , [startLeft, endLeft, , startRight]] of trace.mock.calls) {
+            expect(Math.hypot(startLeft.x - startRight.x, startLeft.y - startRight.y)).toBeCloseTo(
+                2.3,
+            );
+            expect(Math.hypot(endLeft.x - startLeft.x, endLeft.y - startLeft.y)).toBeCloseTo(
+                attack.wave!.reach,
+            );
+        }
+    });
 });
 
 describe("high alchemy", () => {

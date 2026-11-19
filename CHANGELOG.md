@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Awakened Duke's Spit warnings now show how far you need to step to dodge. Fixed by Deivid Smarzaro.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

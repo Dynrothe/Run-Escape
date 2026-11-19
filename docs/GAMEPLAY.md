@@ -1091,8 +1091,9 @@ version and how to run it.
       alcove. Three phases on his hitpoints, each a bar of its own (a roar at 60% and 25%). His
       **Slam** hits round him when you're near; his **Icicles** fall in a ring round where you
       stood and on it (twice in a row, awakened); his **Spit** is three ice breaths along lines
-      fanned at where you stood as he began (five, awakened); his **Gas** lands where you stood
-      and sets the vent nearest it puffing. From the second phase his **Freezing gaze** (it opens
+      fanned at where you stood as he began (five, awakened). The red lanes show how far off each
+      shot's path your feet need to be. His **Gas** lands where you stood and sets the vent
+      nearest it puffing. From the second phase his **Freezing gaze** (it opens
       each phase, and comes more often in the last) sees the whole room: behind one of the
       prison's statues it can't find you, and finding no one his guard's down for three seconds
       (double damage); in the open it freezes you for two seconds and chills you. Every lit
