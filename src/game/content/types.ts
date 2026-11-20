@@ -2057,8 +2057,8 @@ export type SpecialAttackDef = {
     every: number;
     // Multiplies the attack's damage
     damage: number;
-    // Player animation, and the spot animation on the player
-    playerSeq: number;
+    // Player animation (the weapon's own unless set), and the spot animation on the player
+    playerSeq?: number;
     spotAnim: number;
     // Cache sound effect, the weapon's when unset
     sound?: number;
