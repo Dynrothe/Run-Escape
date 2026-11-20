@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- The map selection button now says “Enter Lumbridge” with a single “Enter”. Fixed by trippy22.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added
