@@ -4162,7 +4162,12 @@
     min-width: 0;
 }
 
+/* Hard mode's title, with its switch beside it */
 .ui-invocations-group-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
     color: #ff981f;
     font-size: 13px;
 }
@@ -4170,6 +4175,15 @@
 .ui-invocation-locked {
     opacity: 0.45;
     cursor: default;
+}
+
+/* Hard mode's four: only to see, so nothing to press */
+.ui-invocation-shown {
+    cursor: default;
+}
+
+.ui-invocation-shown:hover:not(.ui-invocation-on) {
+    border-color: transparent;
 }
 
 /* The badges at 100, 200 and 300 points: lit once a map's been beaten at as many */
