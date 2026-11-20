@@ -3086,8 +3086,9 @@ every control one height, the invocations first and then endless, hard and exper
 `ModeSwitch`es (`GameUi.tsx`), two lines like the invocations'. As on the title, the rest is sunk
 into the stone and the way in is the raised buttons, in green (`ui-setup-go`). In a room,
 whichever is up to you next flashes yellow (`ui-setup-go-now`): Ready until you are, then the
-host's Start once everyone is. Ready is a toggle (`aria-pressed`), sunk and ticked while you're
-ready; alone, Start doesn't flash, as it's always up to you.
+host's Start once it can start (`canStart`: everyone ready, and in a Cards only room with their
+cards, as `startCoopRun` takes it). Ready is a toggle (`aria-pressed`), sunk and ticked while
+you're ready; alone, Start doesn't flash, as it's always up to you.
 
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`

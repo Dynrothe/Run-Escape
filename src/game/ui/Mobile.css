@@ -772,12 +772,6 @@
         padding: 4px 8px;
     }
 
-    .ui-select-go {
-        min-height: 46px;
-        padding: 4px 16px;
-        font-size: 18px;
-    }
-
     /* A phone's run setup (PhoneSetup in GameUi.tsx): the map picked on the left, its switches
        on the right, and the adventurer under the middle, where they stand in view. The whole of
        each card opens its picker. */
@@ -869,9 +863,11 @@
         gap: 6px;
     }
 
+    /* Its name over why, as the switches' over their state */
     .ui-phone-modes .ui-endless {
-        justify-content: space-between;
-        margin-left: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
     }
 
     /* Centred, as the modes' switches under it are */
@@ -1634,7 +1630,7 @@
         font-size: 17px;
     }
 
-    /* The host's six controls have to share one line on a small phone */
+    /* The host's controls share one line on a small phone */
     .ui-coop-bar {
         gap: 6px;
         padding-inline: 8px;
@@ -1649,11 +1645,6 @@
         min-width: 0;
         padding-inline: 8px;
         font-size: 15px;
-    }
-
-    .ui-coop-bar .ui-endless {
-        min-width: 0;
-        gap: 4px;
     }
 
     /* The room laid out for a phone (CoopLobby): the party on the left, the map and your
@@ -1774,8 +1765,9 @@
     }
 
     .ui-coop-map-side .ui-endless {
-        justify-content: space-between;
-        margin-left: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
     }
 
     .ui-coop-map-side .ui-invocations-button {

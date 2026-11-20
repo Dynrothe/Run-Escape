@@ -377,6 +377,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
         isHost && cardsOnly && !map.blessings
             ? room.members.filter((m) => m.id !== you && typeof m.loadout?.cardCaps !== "string")
             : [];
+    // Start as startCoopRun takes it: everyone ready, with their cards
+    const canStart = everyoneReady && withoutCards.length === 0;
     const [needsFor, setNeedsFor] = useState<string>();
     // Escape shuts what's needed, when it's open
     useMenuKeys({ onBack: needsFor ? () => setNeedsFor(undefined) : undefined });
@@ -814,9 +816,9 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 <button
                     className={
                         "ui-button ui-button-go ui-select-go ui-setup-go" +
-                        (everyoneReady ? " ui-setup-go-now" : "")
+                        (canStart ? " ui-setup-go-now" : "")
                     }
-                    disabled={!everyoneReady}
+                    disabled={!canStart}
                     title={everyoneReady ? undefined : t("coop.waiting_ready")}
                     onClick={() => client.startCoopRun()}
                 >

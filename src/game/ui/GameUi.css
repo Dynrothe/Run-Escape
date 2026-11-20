@@ -894,21 +894,12 @@
     padding: 8px 14px;
 }
 
-.ui-select-go {
-    font-size: 20px;
-    padding: 8px 28px;
-}
-
-/* The endless and hard switches, by the start button */
+/* A mode that can't be switched (a fight's one fight, the invocations before the map's beaten):
+   its name, and why */
 .ui-endless {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: auto;
-}
-
-.ui-endless + .ui-endless {
-    margin-left: 0;
 }
 
 .ui-endless-name {
@@ -999,7 +990,6 @@
 .ui-setup-bar .ui-select-go {
     display: block;
     min-width: 200px;
-    max-width: 320px;
     /* The same height as the rest on a phone too */
     min-height: 0;
     padding: 0 24px;
@@ -1032,8 +1022,9 @@
     }
 }
 
-/* Start while it can't be pressed (a room waiting for everyone): still green, dimmed */
-.ui-setup-bar .ui-button-go.ui-select-go:disabled {
+/* Start or Ready while it can't be pressed (a room waiting for everyone, a Cards only room
+   without the cards it takes): still green, dimmed */
+.ui-setup-bar .ui-setup-go:disabled {
     color: var(--ui-green-text);
     opacity: 0.5;
 }
@@ -1588,11 +1579,6 @@
     /* Room for the longest map's name on the button */
     .ui-select-bar .ui-coins {
         display: none;
-    }
-
-    .ui-select-go {
-        font-size: 17px;
-        padding: 8px 14px;
     }
 }
 
