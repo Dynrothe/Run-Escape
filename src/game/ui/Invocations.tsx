@@ -31,6 +31,7 @@ import {
 import { getMap, mapName } from "../content/maps";
 import { isHardUnlocked } from "../core/save";
 import { t, tl } from "../i18n";
+import { Toggle } from "./GameUi";
 import { ItemIcon } from "./ItemIcon";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
@@ -434,7 +435,7 @@ function runBoardOn(ui: UiSnapshot, room?: RoomSetup): string[] {
 
 // The run's board, as the Tombs' is: each invocation's icon lit while it's on, what one does below
 // it, and beside it the points, the coins they add and the badges they're worth. Hard mode's four
-// are a row of their own, which the Hard switch turns on and off together.
+// are a row of their own, only to see: the Hard switch over them turns them on and off together.
 export function RunInvocationBoard({
     ui,
     client,
@@ -457,10 +458,39 @@ export function RunInvocationBoard({
     const pointed = shown === undefined ? undefined : RUN_SET.byId.get(shown);
     const readOnly = useRef(false);
     const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    const hardOn = room ? room.hard : ui.hard && hardOpen;
     const icon = (invocation: RunInvocationDef) => {
         const picked = on.includes(invocation.id);
         const locked = invocation.hard && !hardOpen;
         const name = invocationName(invocation);
+        const sprite = (
+            <ItemIcon
+                objId={-1}
+                spriteId={picked ? invocation.icon : invocation.icon + OFF_SPRITE}
+                size={36}
+            />
+        );
+        // Hard mode's four, only to see (the Hard switch above turns them on): pointed at or
+        // tapped, what one does
+        if (invocation.hard) {
+            return (
+                <span
+                    key={invocation.id}
+                    className={
+                        "ui-invocation ui-invocation-shown" +
+                        (picked ? " ui-invocation-on" : "") +
+                        (locked ? " ui-invocation-locked" : "")
+                    }
+                    role="img"
+                    aria-label={name}
+                    title={name}
+                    onMouseEnter={() => setShown(invocation.id)}
+                    onClick={() => setShown(invocation.id)}
+                >
+                    {sprite}
+                </span>
+            );
+        }
         return (
             <button
                 key={invocation.id}
@@ -486,11 +516,7 @@ export function RunInvocationBoard({
                     }
                 }}
             >
-                <ItemIcon
-                    objId={-1}
-                    spriteId={picked ? invocation.icon : invocation.icon + OFF_SPRITE}
-                    size={36}
-                />
+                {sprite}
             </button>
         );
     };
@@ -508,9 +534,18 @@ export function RunInvocationBoard({
                                 {RUN_INVOCATIONS.filter((i) => !i.hard).map(icon)}
                             </div>
                             <div className="ui-invocations-group-title">
-                                {hardOpen
-                                    ? t("ui.invocations.hard_group")
-                                    : t("ui.hard.tooltip.locked", { map: mapName(map) })}
+                                <span>
+                                    {hardOpen
+                                        ? t("ui.invocations.hard_group")
+                                        : t("ui.hard.tooltip.locked", { map: mapName(map) })}
+                                </span>
+                                {hardOpen && (
+                                    <Toggle
+                                        on={hardOn}
+                                        label={t("ui.hard.name")}
+                                        onToggle={() => client.toggleHard()}
+                                    />
+                                )}
                             </div>
                             <div className="ui-invocations-grid ui-invocations-grid-hard">
                                 {RUN_INVOCATIONS.filter((i) => i.hard).map(icon)}

@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The invocations board has one Hard switch beside hard mode's row, whose four icons only say
+  what they do now. By Jp66600.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

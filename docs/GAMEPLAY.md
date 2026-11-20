@@ -444,7 +444,8 @@ version and how to run it.
   getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
   patterns half as many bullets again, 15), Ancient Haste (the run's clock 25% faster, the final boss
   at 12:00, 10) and Blood Moon (every boss a minute early, 15). Hard mode's four are a row of their
-  own that the Hard switch turns on together. Each point adds 1.5% to the run's coins (hard mode's
+  own, only to see: the Hard switch (on the board over them, or beside its button) turns them on
+  together. Each point adds 1.5% to the run's coins (hard mode's
   four pay its 25% between them); every coin bonus (invocations, hard mode, Act II's steps) adds
   together, up to +300%. A map's card shows its best win at invocations, and badges for winning at
   100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids and the
