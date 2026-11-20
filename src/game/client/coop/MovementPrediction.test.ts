@@ -212,7 +212,7 @@ test("bounds prediction time and history during a stalled connection", () => {
     );
 });
 
-test.each(["frozen", "hold", "down", "left", "menu", "casket", "over"])(
+test.each(["frozen", "hold", "down", "left", "menu", "casket", "over", "falling"])(
     "eases back to confirmed presentation when %s",
     (reason) => {
         const { sim, prediction, time } = setup();
@@ -229,6 +229,9 @@ test.each(["frozen", "hold", "down", "left", "menu", "casket", "over"])(
         if (reason === "menu") sim.state = "levelUp";
         if (reason === "casket") sim.state = "chest";
         if (reason === "over") sim.state = "dead";
+        // A final boss's fall, before the win: the host's players stand still
+        if (reason === "falling")
+            (sim as unknown as { victoryAt: number }).victoryAt = sim.tick + 30;
         time(316);
         const easing = prediction.render()!;
         expect(easing.x).toBeGreaterThan(sim.player.x);

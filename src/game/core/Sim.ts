@@ -4051,7 +4051,8 @@ export class Sim {
             return;
         }
         if (this.victoryAt >= 0) {
-            // Only the final boss's fall is left to play; don't run combat or pickups.
+            // Only the final boss's fall is left to play (falling): nothing else moves, lands or
+            // turns up, and the clock goes on for its death animation
             this.tick++;
             if (this.tick === this.fellTick + 1) {
                 // A final lair still lifts its seal and plays its victory cues.
@@ -4059,10 +4060,21 @@ export class Sim {
                 if (lair?.boss?.dead) {
                     this.beatLair(lair, lair.boss);
                 }
+                // What its fight left goes with it, rather than standing still on the screen
+                if (this.tombsWardens?.three) {
+                    this.endWardensThree(this.tombsWardens);
+                }
+                this.clearBossAttacks();
+                // Idle rather than walk on the spot, as at endRun
                 for (const { player } of this.heroes) {
                     player.prevX = player.x;
                     player.prevY = player.y;
                     player.moving = false;
+                }
+                for (const thrall of this.thralls) {
+                    thrall.prevX = thrall.x;
+                    thrall.prevY = thrall.y;
+                    thrall.moving = false;
                 }
                 for (const enemy of this.enemies) {
                     enemy.prevX = enemy.x;
@@ -8842,16 +8854,7 @@ export class Sim {
         const def = WARDENS.three;
         const warden = this.enemies.find((e) => e.uid === three.wardenUid);
         if (!warden || warden.dead) {
-            if (!three.over) {
-                three.over = true;
-                for (const enemy of this.enemies) {
-                    if (!enemy.dead && enemy.uid !== three.wardenUid) {
-                        this.vanish(enemy);
-                    }
-                }
-                fight.marks = [];
-                this.clearBossAttacks();
-            }
+            this.endWardensThree(fight);
             return;
         }
         const forms = def.forms[three.side];
@@ -8896,6 +8899,23 @@ export class Sim {
                   ? def.quicker
                   : def.every;
         three.nextSlam = this.tick + secondsToTicks(every);
+    }
+
+    // The last Warden's down: its phantoms and the rest go, and its marks and attacks. Once, from
+    // this phase's step, or the tick after it fell (stepRun), as nothing steps during its fall.
+    private endWardensThree(fight: WardensFight): void {
+        const three = fight.three!;
+        if (three.over) {
+            return;
+        }
+        three.over = true;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead && enemy.uid !== three.wardenUid) {
+                this.vanish(enemy);
+            }
+        }
+        fight.marks = [];
+        this.clearBossAttacks();
     }
 
     // It charges: siphons land over the floor, and with the second and third a phantom joins
@@ -20669,8 +20689,10 @@ export class Sim {
                     if (this.map.tombs) {
                         this.openTombsChest();
                     }
-                    // A same-tick death must be replaced before the client records it.
                     if (!this.runOver) {
+                        // Its death first, standing still meanwhile (stepRun). A level up or casket
+                        // this tick opened is let go, as at a win without a fall: nothing waits on
+                        // a choice now, and no new one opens (falling).
                         this.victoryAt = this.tick + secondsToTicks(fall);
                         this.state = "playing";
                         return;
@@ -20679,6 +20701,8 @@ export class Sim {
                     this.scoreRaidRoom();
                     this.openRaidChest();
                 }
+                // Also when the last player fell this same tick: the win replaces the death, in
+                // the tick the client records it, and the boss's fall goes unplayed
                 this.endRun("victory");
             }
         }
@@ -25873,6 +25897,12 @@ export class Sim {
 
     get runOver(): boolean {
         return this.state === "dead" || this.state === "victory";
+    }
+
+    // The final boss's fall is playing out before the win (BossDef.fallSeconds): the run stands
+    // still, though its state is still "playing"
+    get falling(): boolean {
+        return this.victoryAt >= 0 && !this.runOver;
     }
 
     // The power-up whose look the player has on; it's off when the run ends

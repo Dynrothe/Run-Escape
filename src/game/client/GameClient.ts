@@ -4952,7 +4952,8 @@ export class GameClient implements GameFrameHandler {
 
     private getAlpha(): number {
         const sim = this.sim;
-        if (!sim || (this.paused && !this.coopRun) || sim.state !== "playing") {
+        // Nothing moves during a final boss's fall: what's in the air stays where it is
+        if (!sim || (this.paused && !this.coopRun) || sim.state !== "playing" || sim.falling) {
             return 1;
         }
         return Math.min(1, this.accumulator / TICK_MS);

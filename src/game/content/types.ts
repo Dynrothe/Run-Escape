@@ -1635,7 +1635,8 @@ export type BossDef = {
     // otherwise turn to 1s
     armorCap?: number;
     // A final boss: its death animation plays this many seconds before the
-    // victory screen, without gameplay or prompts getting in the way.
+    // victory screen, with the run standing still (Sim.falling; the run's time
+    // is to the fall)
     fallSeconds?: number;
     // On a raid's expert mode, once enraged, it stares one way every `every` seconds, a quarter
     // turn at a time: a weapon's hit from within arc radians of that way does nothing to it and

@@ -4631,6 +4631,15 @@ describe("the Wardens' second and last phases", () => {
         expect(warden.dead).toBe(true);
         // The chest opened as it fell, on the victory screen
         expect(sim.heroes[0].raidChest?.level).toBe(0);
+        // Its phantoms, marks and lightning go as it falls, though nothing steps meanwhile
+        const phantoms = sim.enemies.filter((e) => three.phantoms.includes(e.uid));
+        expect(phantoms.some((e) => !e.dead)).toBe(true);
+        step(sim, 0.1);
+        expect(sim.falling).toBe(true);
+        expect(three.over).toBe(true);
+        expect(phantoms.every((e) => e.dead)).toBe(true);
+        expect(fight.marks).toEqual([]);
+        expect(sim.hazards).toEqual([]);
         step(sim, 6);
         expect(sim.state).toBe("victory");
         expect(sim.getResult().raidChest).toBeDefined();

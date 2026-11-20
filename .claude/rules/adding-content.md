@@ -236,11 +236,11 @@ it, and a test with the cache fails until that's run.
   pattern's `channel` is how long the boss stands still for it (the whole pattern unless set),
   its `burst` fires so many volleys and then pauses (holes along a sweep's arm), a
   boss's `bulletGrace` how long after a bullet hits before another can (a second), a final
-  boss's `fallSeconds` how long its death plays before the victory screen without prompts, and a
-  phased boss's phases each take an `ambient` pattern it keeps up on its own, a `tempo` and a
-  `speed`, with a `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
-  (`until`, `threshold`, Justiciar Zachariah's), and a `finale` is a last stand at none (the
-  Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
+  boss's `fallSeconds` how long its death plays before the victory screen (the run standing
+  still), and a phased boss's phases each take an `ambient` pattern it keeps up on its own, a
+  `tempo` and a `speed`, with a `finale` after the last blast. Without `totems` its phases go by
+  its hitpoints instead (`until`, `threshold`, Justiciar Zachariah's), and a `finale` is a last
+  stand at none (the Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
   under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
   (a lunge, a blast, a ground mark, a wave, a charge across; a lunge's `line.track` turns it

@@ -217,6 +217,7 @@ export class MovementPrediction {
             this.confirmed &&
             sim.state === "playing" &&
             !sim.runOver &&
+            !sim.falling &&
             sim.isUp(sim.heroes[sim.focus]) &&
             player.frozen <= 0;
         const stalled = time - this.receivedAt > STALE_MS;

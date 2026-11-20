@@ -366,6 +366,18 @@ describe("power-up timers", () => {
         Object.assign(client, { paused: true });
         expect(getAlpha()).toBe(1);
     });
+
+    // Nothing steps then, so what's in the air would slide back and on again every tick
+    test("stand still while a final boss falls", () => {
+        const sim = createSim();
+        sim.state = "playing";
+        const { client } = createClient(sim, false);
+        const getAlpha = () => (client as unknown as { getAlpha(): number }).getAlpha();
+        Object.assign(client, { accumulator: TICK_MS / 2 });
+        Object.assign(sim, { victoryAt: sim.tick + 30 });
+        expect(sim.falling).toBe(true);
+        expect(getAlpha()).toBe(1);
+    });
 });
 
 function displayOf(client: GameClient): DisplaySettings {
