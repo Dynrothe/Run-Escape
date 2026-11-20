@@ -31,7 +31,7 @@ import {
 import { getMap, mapName } from "../content/maps";
 import { isHardUnlocked } from "../core/save";
 import { t, tl } from "../i18n";
-import { Toggle } from "./GameUi";
+import { ModeSwitch } from "./GameUi";
 import { ItemIcon } from "./ItemIcon";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
@@ -484,7 +484,10 @@ export function RunInvocationBoard({
                     role="img"
                     aria-label={name}
                     title={name}
+                    // A controller's highlight and Tab reach it, to read it as the others
+                    tabIndex={0}
                     onMouseEnter={() => setShown(invocation.id)}
+                    onFocus={() => setShown(invocation.id)}
                     onClick={() => setShown(invocation.id)}
                 >
                     {sprite}
@@ -540,9 +543,9 @@ export function RunInvocationBoard({
                                         : t("ui.hard.tooltip.locked", { map: mapName(map) })}
                                 </span>
                                 {hardOpen && (
-                                    <Toggle
+                                    <ModeSwitch
+                                        name={t("ui.hard.name")}
                                         on={hardOn}
-                                        label={t("ui.hard.name")}
                                         onToggle={() => client.toggleHard()}
                                     />
                                 )}

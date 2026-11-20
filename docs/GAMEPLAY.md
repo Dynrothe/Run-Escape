@@ -439,20 +439,19 @@ version and how to run it.
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
   records of its own. A win counts as a win on the map, and turns its tick gold. On campaign
   and Act II maps, hard mode is a preset of four invocations (below) worth 180 points.
-- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone
-  in the room), the Invocations button beside Hard opens a board of opt-in handicaps, as the Tombs
-  of Amascut's: Walk the Path (enemies 15%
-  faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
-  rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
-  getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
-  patterns half as many bullets again, 15), Ancient Haste (the run's clock 25% faster, the final boss
-  at 12:00, 10) and Blood Moon (every boss a minute early, 15). Hard mode's four are a row of their
-  own, only to see: the Hard switch (on the board over them, or beside its button) turns them on
-  together. Each point adds 1.5% to the run's coins (hard mode's
-  four pay its 25% between them); every coin bonus (invocations, hard mode, Act II's steps) adds
-  together, up to +300%. A map's card shows its best win at invocations, and badges for winning at
-  100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids and the
-  gauntlet don't take them (their Hard is their own).
+- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone in
+  the room), the Invocations button in the setup bar opens a board of opt-in handicaps, as the Tombs
+  of Amascut's: Walk the Path (enemies 15% faster, 10 points), Upset Stomach (no food drops, no
+  Sandwich lady, 15), Overly Draining (no rerolls or banishes, 10), Glass Cannon (half your
+  hitpoints, 20), Hardcore (no Ring of life, and no getting back up in co-op, 15), Feeling Special?
+  (bosses enrage at 75%, 10), Aerial Assault (bosses' patterns half as many bullets again, 15),
+  Ancient Haste (the run's clock 25% faster, the final boss at 12:00, 10) and Blood Moon (every boss
+  a minute early, 15). Hard mode's four are a row of their own, only to see: the Hard switch (on the
+  board over them, or in the setup bar) turns them on together. Each point adds 1.5% to the run's
+  coins (hard mode's four pay its 25% between them); every coin bonus (invocations, hard mode, Act
+  II's steps) adds together, up to +300%. A map's card shows its best win at invocations, and badges
+  for winning at 100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids
+  and the gauntlet don't take them (their Hard is their own).
 - **Relics**: once Act II is open, a row of four slots on the adventurer screen. Each Act II map
   beaten opens the next tier, and one relic a tier stays picked across runs: tier 1 Endless Harvest
   (bones within 10 tiles fly to you every 20 s), Production Prodigy (caskets never stop the run:

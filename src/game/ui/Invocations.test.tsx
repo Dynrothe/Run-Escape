@@ -115,10 +115,15 @@ test("a run's board: hard mode's four are only to see, and one switch turns them
     for (const invocation of hardFour) {
         const name = invocationName(invocation);
         expect(screen.queryByRole("button", { name })).toBeNull();
-        // Pressed, it only says what it does
-        fireEvent.click(screen.getByRole("img", { name }));
+        // Reached by a controller's highlight or Tab, it says what it does
+        const icon = screen.getByRole("img", { name });
+        expect(icon).toHaveAttribute("tabindex", "0");
+        fireEvent.focus(icon);
         expect(screen.getByText(invocationDescription(invocation))).toBeVisible();
     }
+    // Pressed, it only says what it does too
+    fireEvent.click(screen.getByRole("img", { name: invocationName(hardFour[0]) }));
+    expect(screen.getByText(invocationDescription(hardFour[0]))).toBeVisible();
     expect(client.toggleRunInvocation).not.toHaveBeenCalled();
     const hard = screen.getByRole("button", { name: "Hard" });
     expect(hard).toHaveAttribute("aria-pressed", "false");
