@@ -4050,6 +4050,30 @@ export class Sim {
             this.tick++;
             return;
         }
+        if (this.victoryAt >= 0) {
+            // Only the final boss's fall is left to play; don't run combat or pickups.
+            this.tick++;
+            if (this.tick === this.fellTick + 1) {
+                // A final lair still lifts its seal and plays its victory cues.
+                const lair = this.lair;
+                if (lair?.boss?.dead) {
+                    this.beatLair(lair, lair.boss);
+                }
+                for (const { player } of this.heroes) {
+                    player.prevX = player.x;
+                    player.prevY = player.y;
+                    player.moving = false;
+                }
+                for (const enemy of this.enemies) {
+                    enemy.prevX = enemy.x;
+                    enemy.prevY = enemy.y;
+                }
+            }
+            if (this.tick >= this.victoryAt) {
+                this.endRun("victory", this.fellTick);
+            }
+            return;
+        }
         if (this.state !== "playing") {
             return;
         }
@@ -4057,12 +4081,6 @@ export class Sim {
         // The Wardens' fight is on the clock, though it's no path
         if (this.map.tombs && this.tombsPath === undefined && !this.tombsWardens) {
             this.nexusTicks++;
-        }
-        // The final boss has fallen (BossDef.fallSeconds): its death plays out,
-        // and then the run's won, from when it fell
-        if (this.victoryAt >= 0 && this.tick >= this.victoryAt) {
-            this.endRun("victory", this.fellTick);
-            return;
         }
         for (const hero of this.heroes) {
             hero.recentDamage[this.tick % DPS_WINDOW_TICKS] = 0;
@@ -20645,15 +20663,19 @@ export class Sim {
             const lairWin = this.lairs.some((lair) => lair.def.final && lair.boss === enemy);
             if (this.endless && !lairWin) {
                 this.nextRound();
-            } else if (fall) {
-                // Its death first, with nothing landing meanwhile (stepRun)
-                this.victoryAt = this.tick + secondsToTicks(fall);
-                this.fellTick = this.tick;
-                if (this.map.tombs) {
-                    this.openTombsChest();
-                }
-            } else {
-                if (this.map.raid) {
+            } else if (!this.runOver || this.endTick === this.tick) {
+                if (fall) {
+                    this.fellTick = this.tick;
+                    if (this.map.tombs) {
+                        this.openTombsChest();
+                    }
+                    // A same-tick death must be replaced before the client records it.
+                    if (!this.runOver) {
+                        this.victoryAt = this.tick + secondsToTicks(fall);
+                        this.state = "playing";
+                        return;
+                    }
+                } else if (this.map.raid) {
                     this.scoreRaidRoom();
                     this.openRaidChest();
                 }
@@ -25231,7 +25253,7 @@ export class Sim {
 
     private stepRandomEvents(): void {
         const visitor = this.visitor;
-        if (this.runOver) {
+        if (this.runOver || this.victoryAt >= 0) {
             return;
         }
         if (visitor) {
@@ -25656,7 +25678,7 @@ export class Sim {
         }
         this.chests.push(chest);
         this.emit({ type: "chest", tier, itemId, coins });
-        if (this.state === "playing") {
+        if (this.state === "playing" && this.victoryAt < 0) {
             this.state = "chest";
         }
     }
@@ -25720,7 +25742,7 @@ export class Sim {
             }
             this.emit({ type: "levelUp", level });
         }
-        if (this.state === "playing" && this.anyoneToChoose()) {
+        if (this.state === "playing" && this.victoryAt < 0 && this.anyoneToChoose()) {
             this.state = "levelUp";
             this.rollMissingChoices();
         }

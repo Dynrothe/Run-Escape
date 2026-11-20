@@ -1634,9 +1634,8 @@ export type BossDef = {
     // of it, down to 1, when unset): the Theatre's bosses, whose many small hits armour would
     // otherwise turn to 1s
     armorCap?: number;
-    // A final boss: the run goes on this many seconds after it falls, for its
-    // death animation to play before the victory screen, with nothing
-    // landing on the players meanwhile (the run's time is to the fall)
+    // A final boss: its death animation plays this many seconds before the
+    // victory screen, without gameplay or prompts getting in the way.
     fallSeconds?: number;
     // On a raid's expert mode, once enraged, it stares one way every `every` seconds, a quarter
     // turn at a time: a weapon's hit from within arc radians of that way does nothing to it and
