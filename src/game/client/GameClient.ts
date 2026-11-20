@@ -2846,7 +2846,8 @@ export class GameClient implements GameFrameHandler {
         switch (action.kind) {
             case "choose":
                 if (done) {
-                    // Another level-up can keep the sim paused after an evolution.
+                    // An evolution's events now, not when the run goes on: another level up can
+                    // keep it paused, and a Give up there banks Combat Achievements without them
                     this.handleEvents(sim, sim.takeEvents());
                 }
                 this.syncOverlay();
