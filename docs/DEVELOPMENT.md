@@ -2590,10 +2590,8 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   and `scripts`, unpacked into a folder inside the checkout (so it finds `node_modules` and
   `caches/`), with the current `simulate-run.ts` copied over its own and run from the checkout's
   root. Delete the folder before running the tests.
-- **What a crowd costs**: a p99 tick is a millisecond or two on a desktop, most of it pathfinding
-  (`FlowField.update`). In the browser (`frameProbe.sample`), 800 enemies against 400 is about
-  twice the triangles and 60% more main-thread time a frame, at the same draw calls: under a
-  third of a millisecond on a desktop. That's why bosses' summons aren't capped.
+- **What a crowd costs**: most of a long tick is pathfinding (`FlowField.update`). In the
+  browser, more enemies cost triangles and main-thread time, not draw calls.
 - The enemy and pickup spatial hashes empty their used cells' slots on rebuild, so what was in
   them the tick before can be collected. Each cell keeps its array and a count of what's in it:
   setting an array's length to 0 has V8 drop its storage, and the rebuild then allocates for
@@ -2602,7 +2600,6 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   four-tile margin. The simulation still handles every pickup for the whole party, and the
   minimap and loot arrows can point to distant rewards. Background co-op bounds shouts, escapees
   and totem beams even when draw calls stop.
-
 - **Frame cap**: `GameClient.update` sets `Renderer.fpsLimit` every frame from the Frame rate
   setting (`DisplaySettings.frameRate`, in Settings and the pause menu), through `frameCap`. Auto,
   the default and what older saved settings get, is 60 on a touch screen (90 and 120 Hz phones

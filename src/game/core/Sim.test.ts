@@ -229,6 +229,19 @@ describe("Sim", () => {
         },
     );
 
+    test("a pile picked up this tick doesn't count towards the limit", () => {
+        const sim = createSim();
+        const { x, y } = sim.player;
+        for (let i = 0; i < 400; i++) {
+            sim.dropPickup("bones", x + 5 + (i % 20), y + 5 + Math.floor(i / 20), 1);
+        }
+        // As collect leaves it until stepPickups drops it at the tick's end
+        sim.pickups[0].value = -1;
+        sim.dropPickup("bones", x + 1, y, 7);
+        expect(sim.pickups).toHaveLength(401);
+        expect(sim.pickups[400]).toMatchObject({ value: 7, x: x + 1, y });
+    });
+
     test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
         expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
         const peck = getEnemy("evil_chicken").boss!.attacks[0];

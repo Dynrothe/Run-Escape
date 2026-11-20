@@ -24017,7 +24017,8 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                // (one picked up this tick is gone: it isn't counted, and takes nothing on)
+                // (one picked up this tick, its value -1 until stepPickups drops it, is gone and
+                // isn't counted)
                 if (pickup.kind !== kind || pickup.value < 0) {
                     continue;
                 }

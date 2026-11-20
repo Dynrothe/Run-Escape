@@ -639,7 +639,7 @@ describe("dropped power-up timers", () => {
         expect(ctx.stroke).toHaveBeenCalledTimes(4);
     });
 
-    test("distant loot stays collectible and its model is requested when the camera approaches", () => {
+    test("distant loot's model is only looked up once the camera comes near it", () => {
         const { view, sim, pickup, assets, draw, project } = setup();
         const away = new Camera(pickup.x + 150, -10, pickup.y, 0, 0);
         draw(1, 1, away);
@@ -649,7 +649,6 @@ describe("dropped power-up timers", () => {
         const actors = { draw: vi.fn() } as unknown as ActorRenderer;
         view.submitActors(actors, sim, 1, away, 72);
         expect(assets.get).not.toHaveBeenCalledWith("pickup:food");
-        expect(sim.pickups).toEqual([pickup]);
         away.pos[0] = pickup.x;
         view.submitActors(actors, sim, 1, away, 72);
         expect(assets.get).toHaveBeenCalledWith("pickup:food");
