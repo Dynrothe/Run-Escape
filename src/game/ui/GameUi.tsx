@@ -369,6 +369,50 @@ export function Toggle({
     );
 }
 
+// A mode (endless, hard, expert) as a button of two lines like the invocations' beside it: its
+// name, and whether it's on or why it can't be turned on yet. A run's setup bar and a co-op
+// room's have them.
+export function ModeSwitch({
+    name,
+    on,
+    locked,
+    tooltip,
+    onToggle,
+}: {
+    name: string;
+    on: boolean;
+    locked?: string;
+    // What it does, or what opens it, on hover (else the reason it's locked)
+    tooltip?: string;
+    onToggle: () => void;
+}): JSX.Element {
+    return (
+        <button
+            className="ui-button ui-mode-switch"
+            // The mode's name, pressed or not; locked, the reason's read out with it
+            aria-label={locked === undefined ? name : undefined}
+            aria-pressed={locked === undefined ? on : undefined}
+            disabled={locked !== undefined}
+            title={tooltip ?? locked}
+            onClick={(e) => {
+                onToggle();
+                // Give Enter and Space back to the screen
+                releaseFocus(e);
+            }}
+        >
+            <span className="ui-mode-switch-name">{name}</span>
+            <span
+                className={
+                    "ui-mode-switch-state" +
+                    (locked !== undefined ? "" : on ? " ui-mode-switch-on" : " ui-mode-switch-off")
+                }
+            >
+                {locked ?? (on ? t("ui.common.on") : t("ui.common.off"))}
+            </span>
+        </button>
+    );
+}
+
 // music: the run's map has music, so it gets its own volume
 function SoundSettings({
     ui,
@@ -1341,10 +1385,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
         <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
     ) : (
         <>
-            {/* A raid ends with its last room: no endless */}
-            {!map.raid && <EndlessSwitch ui={ui} client={client} />}
-            <HardSwitch ui={ui} client={client} />
-            {expertShown && <ExpertSwitch ui={ui} client={client} />}
+            {/* The invocations first, as in a co-op room's bar */}
             {runBoard && (
                 <RunInvocationsButton
                     ui={ui}
@@ -1352,6 +1393,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     onOpen={() => setBoard(true)}
                 />
             )}
+            {/* A raid ends with its last room: no endless */}
+            {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+            <HardSwitch ui={ui} client={client} />
+            {expertShown && <ExpertSwitch ui={ui} client={client} />}
         </>
     );
     const back = (
@@ -1361,7 +1406,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     );
     const enter = (
         <button
-            className="ui-button ui-button-go ui-select-go"
+            className="ui-button ui-button-go ui-select-go ui-setup-go"
             // From the Cards only tab, not without the cards it takes (isCardRunBlocked)
             disabled={isCardRunBlocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
             onClick={() => client.startRun()}
@@ -1414,11 +1459,13 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 onCardNeeds={setNeedsFor}
             />
             <MapPanel ui={ui} client={client} />
-            <div className="ui-panel rs-border rs-background ui-select-bar">
-                {back}
-                <Coins amount={ui.save.coins} />
-                {modes}
-                {enter}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {back}
+                    <Coins amount={ui.save.coins} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-modes">{modes}</div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{enter}</div>
             </div>
             {boards}
         </div>
@@ -1477,10 +1524,12 @@ function PhoneSetup({
             <PhoneMapCard ui={ui} onOpen={() => onPicker("map")} />
             <PhoneAdventurerCard ui={ui} map={map} onOpen={() => onPicker("adventurer")} />
             <div className="ui-panel rs-border rs-background ui-phone-modes">{modes}</div>
-            <div className="ui-panel rs-border rs-background ui-select-bar">
-                {back}
-                <Coins amount={ui.save.coins} />
-                {enter}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {back}
+                    <Coins amount={ui.save.coins} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{enter}</div>
             </div>
             {children}
         </div>
@@ -1605,25 +1654,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
     }
     const open = isEndlessUnlocked(ui.save, ui.mapId);
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.endless.name")}
+            on={ui.endless}
+            locked={open ? undefined : t("ui.endless.beat_map")}
+            tooltip={
                 open
                     ? t("ui.endless.tooltip.open")
                     : t("ui.endless.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.endless.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.endless}
-                    label={t("ui.endless.name")}
-                    onToggle={() => client.toggleEndless()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleEndless()}
+        />
     );
 }
 
@@ -1633,25 +1674,17 @@ function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isHardUnlocked(ui.save, ui.mapId);
     const shownMapName = mapName(getMap(ui.mapId));
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.hard.name")}
+            on={ui.hard}
+            locked={open ? undefined : t("ui.endless.beat_map")}
+            tooltip={
                 open
                     ? t("ui.hard.tooltip.open")
                     : t("ui.hard.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.hard.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.hard}
-                    label={t("ui.hard.name")}
-                    onToggle={() => client.toggleHard()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleHard()}
+        />
     );
 }
 
@@ -1716,25 +1749,17 @@ function ExpertSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isExpertUnlocked(ui.save, ui.mapId);
     const shownMapName = mapName(getMap(ui.mapId));
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.expert.name")}
+            on={ui.expert}
+            locked={open ? undefined : t("ui.expert.beat_hard")}
+            tooltip={
                 open
                     ? t("ui.expert.tooltip.open")
                     : t("ui.expert.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.expert.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.expert}
-                    label={t("ui.expert.name")}
-                    onToggle={() => client.toggleExpert()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.expert.beat_hard")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleExpert()}
+        />
     );
 }
 

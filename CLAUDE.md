@@ -146,6 +146,7 @@ go stale. Add anything that cost you time to work out.
 | Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | The lobby's Menu: Skills, Settings, back to the room   | `GameClient.openMenu`, `backToRoom`, `CoopScreen.tsx` (`LobbyMenu`)    |
+| A run's setup bar, solo and co-op, and its mode switch | `GameUi.css` (`ui-setup-bar`), `GameUi.tsx` (`ModeSwitch`)             |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |

@@ -13,6 +13,11 @@ the version in the corner).
 
 ### Changed
 
+- The bar along the bottom of a run's setup, alone or in a co-op room, has its buttons one
+  height on one line: the way out on the left, the invocations, endless and hard mode in the
+  middle, and Start the biggest on the right. Start (and Ready) stand out as the title's buttons
+  do, and in a room whichever is up to you next flashes; Ready stays pressed, with a tick, while
+  you're ready. By Jp66600.
 - The Collection log has a Back button along its bottom, as every other menu does, in place of
   its X. By Jp66600.
 
