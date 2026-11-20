@@ -44,6 +44,12 @@ export type Screen =
     | "vault"
     | "run";
 
+// The title's tiles, which a co-op room opens too without leaving it (GameClient.openMenu)
+export type MenuScreen = Extract<
+    Screen,
+    "shop" | "armoury" | "wardrobe" | "quests" | "combatAchievements" | "collectionLog" | "cards"
+>;
+
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
 
 export type SlotView = {
@@ -716,6 +722,9 @@ export type UiSnapshot = {
     // the screen it was opened from, which its Back goes back to
     cardShopPack?: string;
     cardShopFrom?: Screen;
+    // The co-op room whose Menu is open (its code), kept while a menu screen opened from it is up,
+    // so that screen's Back comes back to the Menu (GameClient.setRoomMenu)
+    roomMenu?: string;
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
     toastLog: ToastLogEntry[];
     debug: boolean;

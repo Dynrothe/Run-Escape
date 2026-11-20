@@ -213,7 +213,6 @@
     "collection.entries": "Položky",
     "collection.entry_complete": "{name} – dokončeno",
     "collection.items": "Předměty",
-    "collection.close": "Zavřít",
     "collection.obtained": "Získáno: {count}",
     "collection.item_found": "Získáno",
     "collection.item_missing": "Dosud nezískáno",

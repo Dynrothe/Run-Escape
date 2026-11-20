@@ -64,7 +64,7 @@ function orderQuestGroups(save: SaveData, groups: QuestGroup[]): QuestGroup[] {
 export function QuestScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [hideDone, setHideDone] = useState(false);
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     const groups = orderQuestGroups(save, getQuestGroups())
         .map((group) => ({
             ...group,
@@ -99,7 +99,7 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
                     ))}
                 </div>
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("canvas.back")}
                     </button>
                     <button

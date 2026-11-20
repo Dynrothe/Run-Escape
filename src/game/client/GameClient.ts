@@ -223,6 +223,7 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    MenuScreen,
     PlayerResultView,
     QuestTrackView,
     ReviveView,
@@ -953,6 +954,10 @@ export class GameClient implements GameFrameHandler {
     private previewedLook?: WardrobeLook;
     // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
     private bareMenuLook = false;
+    // Where a menu screen's Back goes: the title, or the co-op room it was opened from (openMenu)
+    private menuHome: "title" | "coop" = "title";
+    // The co-op room this player was ready in when they stepped away from it (stepAwayFromRoom)
+    private readyAway?: string;
     // Which way the adventurer's turned in the Wardrobe (an actor's yaw), and the way they face
     // now, on their way round to it (and back to the front once it's left)
     private wardrobeTurn = 0;
@@ -1212,6 +1217,57 @@ export class GameClient implements GameFrameHandler {
             this.previewedLook = undefined;
             this.bareMenuLook = false;
             this.refreshMenuLook();
+        }
+        if (screen === "coop" && was !== "coop") {
+            this.backToRoom();
+        }
+    }
+
+    // A menu screen (Skills, the Armoury and the rest), from the title, or from a co-op room
+    // without leaving it (stepAwayFromRoom)
+    openMenu(screen: MenuScreen): void {
+        const from = this.store.getSnapshot().screen;
+        this.menuHome = from === "coop" ? "coop" : "title";
+        if (this.menuHome === "coop") {
+            this.stepAwayFromRoom();
+        }
+        this.showScreen(screen);
+    }
+
+    // A menu screen's Back: to where it was opened (the room, or the rooms' list if it's gone)
+    leaveMenu(): void {
+        this.showScreen(this.menuHome);
+    }
+
+    // The co-op room's Menu, open or shut. It stays open under what's opened from it, so a menu
+    // screen's Back or Settings' comes back to it; a run starting shuts it (beginCoopRun).
+    setRoomMenu(open: boolean): void {
+        this.store.set({ roomMenu: open ? this.coop.room?.code : undefined });
+    }
+
+    // Out of a co-op room's own screen, to a menu or its Settings, with the room still open. A
+    // player who was ready isn't while away, so the host's start waits for them rather than
+    // pulling them out of a shop with their loadout half changed (backToRoom readies them again).
+    stepAwayFromRoom(): void {
+        const room = this.coop.room;
+        if (room?.members.find((m) => m.id === this.coop.id)?.ready) {
+            this.readyAway = room.code;
+            this.coop.setReady(false);
+        }
+    }
+
+    // Back in the room: what was bought or changed meanwhile is the room's, and whoever was
+    // ready is again (unless the room's Cards only now takes cards they haven't got)
+    backToRoom(): void {
+        const room = this.coop.room;
+        const wasReady = room !== undefined && this.readyAway === room.code;
+        this.readyAway = undefined;
+        if (!room) {
+            return;
+        }
+        this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
+        if (wasReady && this.coopCardBlock() === undefined) {
+            this.coop.setReady(true);
         }
     }
 
@@ -2383,6 +2439,10 @@ export class GameClient implements GameFrameHandler {
             this.previewedLook = undefined;
             this.refreshMenuLook();
         }
+        // In a co-op room (an import from its Settings, or cloud save's), the room hears of it
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
+        }
     }
 
     // Whether the save's written here: this tab has the lock, and the save isn't a newer game's or
@@ -2616,6 +2676,8 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.coopInbox = [];
+        // The room's Menu, if it was open, isn't there after the run
+        this.store.set({ roomMenu: undefined });
         // A map or adventurer this game hasn't got (another player's game
         // could be newer, or made up): it can't play along
         if (

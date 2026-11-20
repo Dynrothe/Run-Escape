@@ -15,14 +15,15 @@ afterEach(cleanup);
 // The screen over a save that the client's packs change, as GameClient's do
 function Harness({
     start,
-    showScreen = vi.fn(),
+    leaveMenu = vi.fn(),
 }: {
     start: SaveData;
-    showScreen?: () => void;
+    leaveMenu?: () => void;
 }): JSX.Element {
     const [save, setSave] = useState(start);
     const client = {
-        showScreen,
+        showScreen: vi.fn(),
+        leaveMenu,
         revealCard: vi.fn(),
         openCardPack: () => {
             const next = structuredClone(save);
@@ -148,18 +149,18 @@ test("sells each pack for platinum tokens, and says why one can't be bought", ()
 });
 
 test("previews a pack: its cards' hit rates for the save, locked ones and where to unlock them", () => {
-    const showScreen = vi.fn();
+    const leaveMenu = vi.fn();
     // The odds are worked out a chunk at a time, on timers
     vi.useFakeTimers();
     try {
-        previewPack(showScreen);
+        previewPack(leaveMenu);
     } finally {
         vi.useRealTimers();
     }
 });
 
-function previewPack(showScreen: () => void): void {
-    render(<Harness start={createSave()} showScreen={showScreen} />);
+function previewPack(leaveMenu: () => void): void {
+    render(<Harness start={createSave()} leaveMenu={leaveMenu} />);
     fireEvent.click(screen.getByRole("button", { name: "Card shop" }));
     const weapons = PACK_BY_ID.get("weapons")!;
     fireEvent.click(screen.getByRole("button", { name: `Preview the ${packName(weapons)}` }));
@@ -221,7 +222,7 @@ function previewPack(showScreen: () => void): void {
     // Escape shuts the preview, not the screen
     fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(showScreen).not.toHaveBeenCalled();
+    expect(leaveMenu).not.toHaveBeenCalled();
     // Opened again, on the tab it was left on
     fireEvent.click(screen.getByRole("button", { name: `Preview the ${packName(weapons)}` }));
     expect(screen.getByRole("button", { name: /^Rare \(\d+\)$/ })).toHaveAttribute(
@@ -231,15 +232,16 @@ function previewPack(showScreen: () => void): void {
 }
 
 test("shuts the pack's window on Escape before leaving the screen", () => {
-    const showScreen = vi.fn();
-    render(<Harness start={createSave()} showScreen={showScreen} />);
+    const leaveMenu = vi.fn();
+    render(<Harness start={createSave()} leaveMenu={leaveMenu} />);
     fireEvent.click(screen.getByRole("button", { name: "Open your free pack (1)" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(showScreen).not.toHaveBeenCalled();
+    expect(leaveMenu).not.toHaveBeenCalled();
+    // Back where the menu was opened from (the title, or a co-op room)
     fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
-    expect(showScreen).toHaveBeenCalledWith("title");
+    expect(leaveMenu).toHaveBeenCalled();
 });
 
 test("shows a found card big in a window when it's pressed, at any size, and no card beside the grid", () => {

@@ -439,7 +439,7 @@
     }
 }
 
-/* The Collection log's tabs, entries, items and X, the Cards screen's tabs and what Cards only
+/* The Collection log's tabs, entries and items, the Cards screen's tabs and what Cards only
    needs, big enough for a finger (a pack preview's buttons too) */
 @media (pointer: coarse) {
     .ui-card-needs-head .ui-button,
@@ -451,27 +451,10 @@
         min-height: 44px;
     }
 
-    .ui-log-head {
-        min-height: 44px;
-    }
-
     /* A pack preview's info icon */
     .ui-info-icon {
         width: 44px;
         height: 44px;
-    }
-
-    .ui-log-counts {
-        padding-right: 52px;
-    }
-
-    .ui-log-close {
-        width: 44px;
-        height: 44px;
-    }
-
-    .ui-log-close-sprite {
-        background-size: 34px 30px;
     }
 
     .ui-log-grid {

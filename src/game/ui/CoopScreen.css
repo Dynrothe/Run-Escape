@@ -460,3 +460,70 @@
     margin-top: 6px;
     text-align: center;
 }
+
+/* The title's menu from the room (LobbyMenu): a row for each of the title's tiles, as a game's
+   pause menu, Settings a step apart after them, and the coins, the language and cloud save by
+   Close */
+.ui-coop-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(340px, calc(94vw / var(--ui-scale)));
+    box-sizing: border-box;
+}
+
+.ui-coop-menu h2 {
+    margin: 0;
+}
+
+.ui-coop-menu-list {
+    display: grid;
+    gap: 4px;
+}
+
+.ui-coop-menu .ui-coop-menu-row {
+    gap: 10px;
+    min-height: 40px;
+    padding: 4px 12px;
+}
+
+.ui-coop-menu-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-orange);
+}
+
+.ui-coop-menu-row:hover .ui-coop-menu-name,
+.ui-coop-menu-row:focus-visible .ui-coop-menu-name {
+    color: var(--ui-yellow);
+}
+
+.ui-coop-menu .ui-coop-menu-settings {
+    margin-top: 6px;
+}
+
+.ui-coop-menu .ui-coop-menu-note {
+    margin: 0;
+}
+
+.ui-coop-menu-foot {
+    justify-content: space-between;
+    margin-top: 0;
+}
+
+.ui-coop-menu-options {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* A phone held sideways hasn't the height for a row each: two columns */
+@media (max-height: 520px) {
+    .ui-coop-menu {
+        width: min(560px, calc(94vw / var(--ui-scale)));
+    }
+
+    .ui-coop-menu-list {
+        grid-template-columns: 1fr 1fr;
+    }
+}

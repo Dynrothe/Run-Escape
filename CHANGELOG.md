@@ -3,6 +3,19 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- A Menu in co-op rooms, by Jp66600: Skills, the Armoury, Settings and the rest without leaving
+  the room. The run waits for you while you're in one, and you're ready again when
+  you're back.
+
+### Changed
+
+- The Collection log has a Back button along its bottom, as every other menu does, in place of
+  its X. By Jp66600.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

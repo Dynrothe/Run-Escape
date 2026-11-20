@@ -145,6 +145,7 @@ go stale. Add anything that cost you time to work out.
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
+| The lobby's Menu: Skills, Settings, back to the room   | `GameClient.openMenu`, `backToRoom`, `CoopScreen.tsx` (`LobbyMenu`)    |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |
