@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Adventurers' boots no longer pick up a pale rim where they touch the ground. Fixed by trippy22.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added
