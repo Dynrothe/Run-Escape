@@ -109,6 +109,38 @@ function fingerprint(sim: Sim): string {
 describe("co-op", () => {
     afterEach(() => usePortableMath(false));
 
+    it("a guest hero's slash hits across its arc and credits that hero", () => {
+        usePortableMath(true);
+        const sim = createParty(["warrior", "warrior"]);
+        sim.heroes[0].weapons = [];
+        const guest = sim.heroes[1];
+        guest.player.x += 8;
+        const enemies = [
+            [1, 0],
+            [1.1, 1.4],
+        ].map(([dx, dy]) => {
+            const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                x: guest.player.x + dx,
+                y: guest.player.y + dy,
+            })!;
+            enemy.hp = enemy.maxHp = 1e6;
+            enemy.frozen = 1e6;
+            return enemy;
+        });
+        guest.weapons[0].cooldown = 0;
+        sim.step();
+        const events = sim.takeEvents();
+        const damage = events.filter((event) => event.type === "damage");
+        for (const enemy of enemies) {
+            const hits = damage.filter((event) => event.enemyUid === enemy.uid);
+            expect(hits).toHaveLength(1);
+        }
+        expect(guest.damageBySource["weapon:scimitar"]).toBe(
+            damage.reduce((total, event) => total + event.amount, 0),
+        );
+        expect(sim.heroes[0].damageBySource).toEqual({});
+    });
+
     it("the Imbued heart boosts only its collector and follows that hero on screen", () => {
         const sim = createParty(["wizard", "wizard"]);
         const [a, b] = sim.heroes;

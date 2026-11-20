@@ -700,7 +700,7 @@ const SHOOTER_KEEP = 0.75;
 const CHAT_RANGE = 14;
 // Utility blasts show their explosion on this many of the enemies they hit
 const MAX_BLAST_EFFECTS = 14;
-// Slashes' swooshes cover this much either side of where they aim, radians
+// Slashes and their swooshes cover this much either side of where they aim, radians
 const SLASH_ARC = 1.1;
 // How wide a slash's strip is, in tiles
 const SLASH_WIDTH = 1.5;
@@ -21651,31 +21651,74 @@ export class Sim {
                 weaponId: def.id,
             });
             this.rule?.onSwing(player.x, player.y, dirX, dirY, reach + this.cutReach(), 0, width);
+            this.rule?.onSwing(
+                player.x,
+                player.y,
+                dirX,
+                dirY,
+                reach + this.cutReach(),
+                SLASH_ARC,
+                0,
+            );
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const along = ox * dirX + oy * dirY;
                 const across = Math.abs(ox * -dirY + oy * dirX);
-                if (
-                    along < -0.3 ||
-                    along > reach + enemy.radius ||
-                    across > width / 2 + enemy.radius
-                ) {
-                    return;
-                }
+                let hitStrip =
+                    along >= -0.3 &&
+                    along <= reach + enemy.radius &&
+                    across <= width / 2 + enemy.radius;
                 // A big one only if its edge reaches the box: past a corner, the box widened by
                 // its radius takes in what's well clear of it
-                if (enemy.radius > 1) {
+                if (hitStrip && enemy.radius > 1) {
                     const pastEnd = Math.max(0, along - reach);
                     const pastSide = Math.max(0, across - width / 2);
-                    if (pastEnd * pastEnd + pastSide * pastSide > enemy.radius * enemy.radius) {
-                        return;
-                    }
+                    hitStrip =
+                        pastEnd * pastEnd + pastSide * pastSide <= enemy.radius * enemy.radius;
+                }
+                // Keep the old contact strip, and include everything under the visible arc.
+                if (!hitStrip && !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, SLASH_ARC)) {
+                    return;
                 }
                 hit.push(enemy);
             });
         }
         this.meleeHits(def, level, hit, special);
+    }
+
+    private inMeleeArc(
+        enemy: Enemy,
+        ox: number,
+        oy: number,
+        dirX: number,
+        dirY: number,
+        reach: number,
+        arc: number,
+    ): boolean {
+        const dist = fm.hypot(ox, oy);
+        if (dist > reach + enemy.radius) {
+            return false;
+        }
+        // Anything right on top of the player is in the way of the swing.
+        if (dist <= 0.8) {
+            return true;
+        }
+        const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
+        const angle = fm.acos(Math.max(-1, Math.min(1, along)));
+        if (angle > arc + enemy.radius / dist) {
+            return false;
+        }
+        // Past a far corner, a widened angle alone can catch a big enemy clear of the arc.
+        if (enemy.radius > 1 && angle > arc) {
+            const sideAlong = dist * fm.cos(angle - arc);
+            const sideOff = dist * fm.sin(angle - arc);
+            const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
+            if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Everything within reach in an arc either side of where it aims (and
@@ -21720,27 +21763,12 @@ export class Sim {
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
-                const dist = fm.hypot(ox, oy);
-                if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
+                if (
+                    enemy.dead ||
+                    hit.has(enemy) ||
+                    !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, arc)
+                ) {
                     return;
-                }
-                // Anything right on top of the player is in the way of the
-                // swing, whichever way it goes
-                const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
-                const angle = fm.acos(Math.max(-1, Math.min(1, along)));
-                if (dist > 0.8 && angle > arc + enemy.radius / dist) {
-                    return;
-                }
-                // A big one off to the side only if its edge reaches the arc's nearer side, a line
-                // out to reach: past the arc's far corners, the widened angle takes in what's
-                // well clear of it
-                if (enemy.radius > 1 && dist > 0.8 && angle > arc) {
-                    const sideAlong = dist * fm.cos(angle - arc);
-                    const sideOff = dist * fm.sin(angle - arc);
-                    const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
-                    if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
-                        return;
-                    }
                 }
                 hit.add(enemy);
             });

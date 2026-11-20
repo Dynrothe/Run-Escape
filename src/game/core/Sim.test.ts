@@ -40,6 +40,7 @@ import { RUN_LENGTH } from "../content/waves";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { DPS_WINDOW_SECONDS, LEVEL_MIGHT_LEVELS, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent, Visitor } from "./entities";
+import { CELL_ROOTED } from "./rules/RootRule";
 import { TestLoc, makeGrid } from "./world/testGrid";
 import { endlessXpForLevel, runXpForLevel } from "./xp";
 
@@ -724,6 +725,48 @@ describe("melee", () => {
         const goblin = dummy(sim, 0.1, 0);
         goblin.frozen = 1e6;
         expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
+    });
+
+    test("a slash keeps its old strip's far corner without hitting a target twice", () => {
+        const sim = armed("scimitar");
+        const reach = sim["getEffectiveLevel"](sim.weapons[0]).area;
+        const front = dummy(sim, 1, 0);
+        const corner = dummy(sim, reach + 0.3, 0.9);
+        for (const enemy of [front, corner]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, front)).toHaveLength(1);
+        expect(hitsOn(events, corner)).toHaveLength(1);
+    });
+
+    test("a slash hits a big enemy by its edge along the wider arc", () => {
+        const sim = armed("rubber_chicken", "avian_assaulter");
+        const front = dummy(sim, 1, 0);
+        const big = dummy(sim, 3.5, 6, "boss");
+        big.radius = 3;
+        for (const enemy of [front, big]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, big)).toHaveLength(1);
+    });
+
+    test("a slash clears roots under its wider arc, but not off to the side", () => {
+        const sim = createSim("avian_assaulter", 1, "stranglewood");
+        const roots = sim.roots!;
+        roots.state.fill(CELL_ROOTED);
+        roots.rootedCount = roots.state.length;
+        const { x, y } = sim.player;
+        const inArc = { x: x + 2.5, y: y + 2.5 };
+        const outside = { x: x + 0.5, y: y + 4.5 };
+        expect(roots.isRooted(inArc.x, inArc.y)).toBe(true);
+        expect(roots.isRooted(outside.x, outside.y)).toBe(true);
+        const front = dummy(sim, 1, 0);
+        front.frozen = 1e6;
+        attack(sim);
+        expect(roots.isRooted(inArc.x, inArc.y)).toBe(false);
+        expect(roots.isRooted(outside.x, outside.y)).toBe(true);
     });
 
     test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(

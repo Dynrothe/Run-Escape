@@ -44,6 +44,8 @@ version and how to run it.
   rune (air, water, earth, fire) every other level. A maxed scimitar with Piety evolves
   into the Abyssal whip; maxed Ice Burst with Protect from Melee becomes Ice Barrage. The weapon in your
   hand and passives like the Graceful outfit or Amulet of glory show up on your character.
+- Melee slashes hit across the whole visible arc. A weapon that swings both ways can still
+  hit an enemy right on top of you with each side.
 - **The Ancient bursts**: Ice Burst freezes what's around you, Smoke Burst poisons it, Shadow
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
   Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of

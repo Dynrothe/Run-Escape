@@ -26,6 +26,7 @@ the version in the corner).
   after. Fixed by Deivid Smarzaro.
 - Long runs, and co-op games left in a background tab, use less memory, and going back to the
   menus lets go of the run. Fixed by trippy22.
+- Slash attacks hit enemies across their full animation, including Thanksgiving's Rubber chicken. Fixed by braiansmarzaro.
 
 ## 0.35.0 - 2026-11-17
 
