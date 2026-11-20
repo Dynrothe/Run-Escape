@@ -44,6 +44,7 @@
     "controls.keyboard.ability": "Use a fight's own button",
     "controls.keyboard.pause": "Pause and resume",
     "controls.keyboard.sound": "Sound on or off",
+    "controls.keyboard.chat": "Chat to your co-op party, in a run",
     "controls.key.move": "WASD / Arrows",
     "controls.key.space": "Space",
     "ui.hud.poisoned": "Poisoned",

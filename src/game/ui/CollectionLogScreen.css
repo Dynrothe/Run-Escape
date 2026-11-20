@@ -1,17 +1,17 @@
-/* Collection log, as OSRS's client draws it: a stone window with its total in the title and a
-   close X, tabs along the top, the tab's entries down the left in dark inset rows and the entry's
-   items on the right, dimmed till they're obtained */
+/* Collection log, as OSRS's client draws it: a stone window with its total in the title, tabs
+   along the top, the tab's entries down the left in dark inset rows and the entry's items on the
+   right, dimmed till they're obtained; Back along the bottom, as on every other menu screen */
 
 .ui-log {
     width: min(780px, calc(94vw / var(--ui-scale)));
-    height: min(580px, calc(92vh / var(--ui-scale)));
+    height: min(620px, calc(92vh / var(--ui-scale)));
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-/* A page of the pause menu: as big as the page, with no X to keep its counts clear of */
+/* A page of the pause menu: as big as the page */
 .ui-log.ui-log-in-pause {
     flex: 1 1 auto;
     width: auto;
@@ -19,15 +19,9 @@
     min-height: 0;
 }
 
-.ui-log-in-pause .ui-log-counts {
-    padding-right: 0;
-}
-
-/* The title, the tabs and the X, which comes after the tabs in the page but is drawn on the
-   title's row */
+/* The title and the tabs */
 .ui-log-top {
     flex-shrink: 0;
-    position: relative;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -39,8 +33,8 @@
     min-height: 28px;
 }
 
-/* The log's total on the left, the cards' on the right, clear of the X; they stack where both
-   won't fit on one line */
+/* The log's total on the left, the cards' on the right; they stack where both won't fit on one
+   line */
 .ui-log-counts {
     flex: 1;
     min-width: 0;
@@ -49,7 +43,6 @@
     justify-content: space-between;
     align-items: center;
     column-gap: 16px;
-    padding-right: 36px;
 }
 
 .ui-log .ui-log-title {
@@ -60,37 +53,9 @@
     color: var(--ui-orange);
 }
 
-/* As tall as the title's row, its sprite centred in it */
-.ui-log-close {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 26px;
-    height: 28px;
-    padding: 0;
-    font: inherit;
-    font-family: "OSRS Bold", sans-serif;
-    color: var(--ui-text);
-    cursor: pointer;
-    background: var(--ui-card);
-    border: 1px solid #000;
-}
-
-.ui-log-close-sprite {
-    background: var(--rs-close) center / 26px 23px no-repeat;
-    border: none;
-    image-rendering: pixelated;
-}
-
-.ui-log-close-sprite:focus-visible {
-    background-image: var(--rs-close-lit);
-}
-
-/* Not on a touch screen, where a tap would leave it lit */
-@media (hover: hover) {
-    .ui-log-close-sprite:hover {
-        background-image: var(--rs-close-lit);
-    }
+.ui-log-foot {
+    flex-shrink: 0;
+    margin-top: 6px;
 }
 
 .ui-log-tabs {

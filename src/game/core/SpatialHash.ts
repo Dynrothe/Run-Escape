@@ -4,22 +4,23 @@ export type Positioned = { x: number; y: number };
 export type HashBounds = { baseX: number; baseY: number; sizeX: number; sizeY: number };
 
 // Buckets things by grid cell for "what's near here" queries. Rebuilt every
-// tick: clear() keeps the buckets and their arrays, so it doesn't allocate.
+// tick: clear() keeps the in-bounds buckets and their arrays, so it doesn't
+// allocate, and empties their slots, so nothing that's gone is kept alive.
 export class SpatialHash<T extends Positioned> {
     // The cells in the bounds, x then y: each one's things, and how many of
-    // them are in it now (a bucket's array only grows)
+    // them are in it now. A bucket's array only grows (setting its length to 0
+    // would have the engine drop its storage and build it again every tick).
     private readonly originX: number = 0;
     private readonly originY: number = 0;
     private readonly width: number = 0;
     private readonly height: number = 0;
-    private readonly buckets: (T[] | undefined)[];
+    private readonly buckets: ((T | undefined)[] | undefined)[];
     private readonly counts: Int32Array;
     // The cells with anything in, to clear
     private readonly used: Int32Array;
     private usedCount = 0;
     // Cells beyond the bounds
     private readonly outside = new Map<number, T[]>();
-    private readonly usedOutside: T[][] = [];
 
     constructor(
         readonly cellSize: number,
@@ -32,7 +33,7 @@ export class SpatialHash<T extends Positioned> {
             this.height = Math.floor((bounds.baseY + bounds.sizeY) / cellSize) - this.originY + 1;
         }
         const cells = this.width * this.height;
-        this.buckets = new Array<T[] | undefined>(cells).fill(undefined);
+        this.buckets = new Array<(T | undefined)[] | undefined>(cells).fill(undefined);
         this.counts = new Int32Array(cells);
         this.used = new Int32Array(cells);
     }
@@ -50,13 +51,16 @@ export class SpatialHash<T extends Positioned> {
 
     clear(): void {
         for (let i = 0; i < this.usedCount; i++) {
-            this.counts[this.used[i]] = 0;
+            const index = this.used[i];
+            const bucket = this.buckets[index]!;
+            const count = this.counts[index];
+            for (let j = 0; j < count; j++) {
+                bucket[j] = undefined;
+            }
+            this.counts[index] = 0;
         }
         this.usedCount = 0;
-        for (const bucket of this.usedOutside) {
-            bucket.length = 0;
-        }
-        this.usedOutside.length = 0;
+        this.outside.clear();
     }
 
     insert(item: T): void {
@@ -82,9 +86,6 @@ export class SpatialHash<T extends Positioned> {
             bucket = [];
             this.outside.set(key, bucket);
         }
-        if (bucket.length === 0) {
-            this.usedOutside.push(bucket);
-        }
         bucket.push(item);
     }
 
@@ -103,7 +104,7 @@ export class SpatialHash<T extends Positioned> {
                     const count = this.counts[index];
                     const bucket = this.buckets[index];
                     for (let i = 0; i < count; i++) {
-                        callback(bucket![i]);
+                        callback(bucket![i]!);
                     }
                     continue;
                 }

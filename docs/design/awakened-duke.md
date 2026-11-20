@@ -95,6 +95,12 @@ A big hit takes about a sixth of a full save's, his gaze a quarter.
 | The vents: each puffs a 3 by 3 every 6 s, out of step                                      | 2% a 0.6 s, the cold 6 a second | 1 s, its frost   | off it                    |
 | The cold: rising 3 a second (the Snow ranger's 1.8)                                        | 10% at 100, frozen 1.5 s        | the bar          | a lit brazier, 3 tiles    |
 
+**Icicles' warning** keeps the cache's ice effect, with the full circular damage area outlined
+from the start (`GroundPatternDef.edge`), including the awakened repeat, Ghorrock's Duke and
+the Duke who invades older maps. The effect is narrow: scaling its longest dimension to the
+radius leaves much of the circle unmarked. The outline is each hazard's own position and radius,
+which the player's body has to clear before it lands.
+
 **The gaze** is the fight's question: it can't be stepped out of in the open, only hidden from.
 Behind a statue it finds no one, and his guard's down for 3 s (double damage). And every lit brazier
 it can see goes out: two of the four stand where a statue hides them from him, two don't.

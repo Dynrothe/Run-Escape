@@ -138,7 +138,8 @@ describe("seeded runs", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
         // Every weapon can come up, so a new one (the Nightmare staff) changes it, as does who
-        // drops ashes (they gather apart from bones), and a power-up for the wizard's magic
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0xba201ada);
+        // drops ashes (they gather apart from bones), a power-up for the wizard's magic, and the
+        // warrior's slashes hitting under the whole of their swoosh
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x5b34d538);
     }, 60000);
 });

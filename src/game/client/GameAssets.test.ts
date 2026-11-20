@@ -441,6 +441,25 @@ describe("player bakes", () => {
         expect(getRunAttackSeqs(sim)).not.toContain(REVIVE_SEQ);
     });
 
+    test("claws share one attack bake for normal swings, Burning Slice and evolution offers", () => {
+        const claws = getWeapon("dragon_claws").playerSeq;
+        expect(getWeapon("burning_claws").playerSeq).toBe(claws);
+        const sim = createRun(1, "werewolf");
+        expect(getCharacterAttackSeqs("werewolf")).toEqual([claws]);
+        expect(getRunAttackSeqs(sim)).toEqual([claws]);
+        sim.choices = [{ kind: "evolve", weaponId: "dragon_claws", into: "burning_claws" }];
+        expect(getOfferedAttackSeqs(sim)).toEqual([]);
+        sim.weapons = [];
+        sim.addWeapon("burning_claws");
+        const seqs = getRunAttackSeqs(sim);
+        expect(seqs).toEqual([claws]);
+        const { request } = GameAssets.getLookRequest(getRunAppearance(sim), seqs);
+        expect(request.seqIds.filter((id) => id === claws)).toHaveLength(1);
+        // Not the scratch the claws had before
+        expect(request.seqIds).not.toContain(393);
+        expect(request.runPoses).toBeUndefined();
+    });
+
     test("a look asked for again while another bakes keeps it, not the other (Retry)", async () => {
         // The bake itself, faked: each look's model, once it's let go
         const waiting = new Map<string, () => void>();

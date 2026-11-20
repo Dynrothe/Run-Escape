@@ -44,6 +44,10 @@
 //                    # speed tasks' times), and how often each task was done over all the runs
 //   REACT=0.25 ...   # moves as a person reacts: each step it decides is taken this many seconds
 //                    # later (by default the tick a boss's windup starts)
+//   TICKS=1 ...      # what each tick cost: the median, p95, p99, p99.9 and worst tick in ms,
+//                    # the most enemies and pickups there were at once, and the heap at the end
+//                    # (after a collection, with node --expose-gc). For before-and-after tables:
+//                    # see Development, Keeping it light on a phone
 //   FROM=101 ...     # the first seed (1 by default), to split a long sweep across processes
 //   GAZE=never ...   # a hero with their own buttons (the Battle for Varrock's Justiciar) never
 //                    # casts the Owl's gaze; GAZE=waste casts it whenever it's ready, not only at
@@ -1905,6 +1909,10 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     const recentHits: { tick: number; event: SimEvent }[] = [];
     const invasionLog: { from?: number; down?: number } = {};
     const startTime = performance.now();
+    // Each tick's cost in ms (TICKS=1), and the most there was at once
+    const tickMs: number[] | undefined = process.env.TICKS === "1" ? [] : undefined;
+    let mostEnemies = 0;
+    let mostPickups = 0;
     if (fresh && finalBoss) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
     }
@@ -2057,7 +2065,15 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             taken = reacting.shift()!.move;
         }
         const pressed = uncursed(sim, taken);
-        sim.step(pressed.x, pressed.y);
+        if (tickMs) {
+            const before = performance.now();
+            sim.step(pressed.x, pressed.y);
+            tickMs.push(performance.now() - before);
+            mostEnemies = Math.max(mostEnemies, sim.enemies.length);
+            mostPickups = Math.max(mostPickups, sim.pickups.length);
+        } else {
+            sim.step(pressed.x, pressed.y);
+        }
         if (sim.rule?.hurtsAt(sim.player.x, sim.player.y)) {
             rootTicks++;
         }
@@ -2324,6 +2340,18 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     const result = sim.getResult();
     tombsLog?.report(sim);
     const ms = performance.now() - startTime;
+    if (tickMs && tickMs.length > 0) {
+        tickMs.sort((a, b) => a - b);
+        const at = (share: number) =>
+            tickMs[Math.min(tickMs.length - 1, Math.floor(tickMs.length * share))].toFixed(3);
+        const mean = tickMs.reduce((sum, t) => sum + t, 0) / tickMs.length;
+        (globalThis as { gc?: () => void }).gc?.();
+        console.log(
+            `  ticks: ${tickMs.length}, mean ${mean.toFixed(3)}ms, p50 ${at(0.5)}, p95 ${at(0.95)}, ` +
+                `p99 ${at(0.99)}, p99.9 ${at(0.999)}, worst ${at(1)}; most enemies ${mostEnemies}, ` +
+                `most pickups ${mostPickups}; heap ${(process.memoryUsage().heapUsed / 1048576).toFixed(1)} MB`,
+        );
+    }
     runs++;
     for (const set of started) {
         setsStarted.set(set, (setsStarted.get(set) ?? 0) + 1);

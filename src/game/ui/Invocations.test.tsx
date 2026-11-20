@@ -2,10 +2,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
-import { UiSnapshot } from "../client/GameStore";
-import { InvocationPreset, MAX_INVOCATION_PRESETS, getRaidLevel } from "../content/invocations";
+import { GameStore, UiSnapshot } from "../client/GameStore";
+import {
+    InvocationPreset,
+    MAX_INVOCATION_PRESETS,
+    RUN_INVOCATIONS,
+    getRaidLevel,
+    invocationDescription,
+    invocationName,
+} from "../content/invocations";
 import { createSave } from "../core/save";
-import { InvocationPresets } from "./Invocations";
+import { InvocationPresets, RunInvocationBoard } from "./Invocations";
 
 afterEach(cleanup);
 
@@ -85,4 +92,41 @@ test("full, save only over one by its name", () => {
     fireEvent.click(screen.getByRole("button", { name: "Replace" }));
     expect(client.saveInvocationPreset).toHaveBeenCalledWith("Set 2");
     expect(screen.getByRole("textbox", { name: "Preset name" })).toHaveValue("");
+});
+
+test("a run's board: hard mode's four are only to see, and one switch turns them on", () => {
+    const save = createSave();
+    save.mapVictories.lumbridge = 1;
+    const client = {
+        toggleHard: vi.fn(),
+        toggleRunInvocation: vi.fn(),
+        clearRunInvocations: vi.fn(),
+    };
+    render(
+        <RunInvocationBoard
+            ui={new GameStore(save).getSnapshot()}
+            client={client as unknown as GameClient}
+            room={{ mapId: "lumbridge", hard: false }}
+            onClose={() => {}}
+        />,
+    );
+    const hardFour = RUN_INVOCATIONS.filter((invocation) => invocation.hard);
+    expect(hardFour).toHaveLength(4);
+    for (const invocation of hardFour) {
+        const name = invocationName(invocation);
+        expect(screen.queryByRole("button", { name })).toBeNull();
+        // Reached by a controller's highlight or Tab, it says what it does
+        const icon = screen.getByRole("img", { name });
+        expect(icon).toHaveAttribute("tabindex", "0");
+        fireEvent.focus(icon);
+        expect(screen.getByText(invocationDescription(invocation))).toBeVisible();
+    }
+    // Pressed, it only says what it does too
+    fireEvent.click(screen.getByRole("img", { name: invocationName(hardFour[0]) }));
+    expect(screen.getByText(invocationDescription(hardFour[0]))).toBeVisible();
+    expect(client.toggleRunInvocation).not.toHaveBeenCalled();
+    const hard = screen.getByRole("button", { name: "Hard" });
+    expect(hard).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(hard);
+    expect(client.toggleHard).toHaveBeenCalledOnce();
 });

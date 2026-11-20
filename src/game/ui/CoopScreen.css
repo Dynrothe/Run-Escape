@@ -439,14 +439,46 @@
     }
 }
 
-/* Over on the right of the room's bar, by Start (after the endless switch
-   when there is one) */
-.ui-coop-ready {
-    margin-left: auto;
+/* The room's bar is a run's setup bar (ui-setup-bar, in GameUi.css), with Ready by Start. Ready
+   keeps its width whether it's pressed or not. */
+.ui-coop-bar .ui-coop-ready {
+    min-width: 120px;
+    font-size: 18px;
 }
 
-.ui-endless + .ui-coop-ready {
-    margin-left: 0;
+@media (pointer: fine) {
+    .ui-coop-bar .ui-coop-ready {
+        font-size: 20px;
+    }
+}
+
+/* Ready while you are: sunk into the stone and ticked, and pressed again to stop */
+.ui-coop-bar .ui-coop-ready[aria-pressed="true"] {
+    color: var(--ui-green-text);
+    background: rgba(0, 0, 0, 0.3);
+    border-width: 1px;
+    box-shadow:
+        inset 0 0 0 1px rgba(107, 94, 74, 0.5),
+        inset 2px 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* The Collection log's tick (ui-log-check), a little bigger */
+.ui-coop-ready-tick {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 5px;
+    height: 11px;
+    margin: 0 10px 4px 2px;
+    vertical-align: middle;
+    border: solid currentColor;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+    filter: drop-shadow(1px 1px 0 #000);
+}
+
+/* A phone's map list: across its side, as the invocations' button is */
+.ui-coop-map-side .ui-mode-switch {
+    align-self: stretch;
 }
 
 /* A Cards only room's player without the cards their adventurer needs: why they can't ready, and
@@ -459,4 +491,71 @@
     gap: 6px;
     margin-top: 6px;
     text-align: center;
+}
+
+/* The title's menu from the room (LobbyMenu): a row for each of the title's tiles, as a game's
+   pause menu, Settings a step apart after them, and the coins, the language and cloud save by
+   Close */
+.ui-coop-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(340px, calc(94vw / var(--ui-scale)));
+    box-sizing: border-box;
+}
+
+.ui-coop-menu h2 {
+    margin: 0;
+}
+
+.ui-coop-menu-list {
+    display: grid;
+    gap: 4px;
+}
+
+.ui-coop-menu .ui-coop-menu-row {
+    gap: 10px;
+    min-height: 40px;
+    padding: 4px 12px;
+}
+
+.ui-coop-menu-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-orange);
+}
+
+.ui-coop-menu-row:hover .ui-coop-menu-name,
+.ui-coop-menu-row:focus-visible .ui-coop-menu-name {
+    color: var(--ui-yellow);
+}
+
+.ui-coop-menu .ui-coop-menu-settings {
+    margin-top: 6px;
+}
+
+.ui-coop-menu .ui-coop-menu-note {
+    margin: 0;
+}
+
+.ui-coop-menu-foot {
+    justify-content: space-between;
+    margin-top: 0;
+}
+
+.ui-coop-menu-options {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* A phone held sideways hasn't the height for a row each: two columns */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-coop-menu {
+        width: min(560px, calc(94vw / var(--ui-scale)));
+    }
+
+    .ui-coop-menu-list {
+        grid-template-columns: 1fr 1fr;
+    }
 }

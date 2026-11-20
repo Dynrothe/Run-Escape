@@ -2,6 +2,7 @@ import { once } from "node:events";
 import { Server, createServer } from "node:http";
 import { AddressInfo, Socket, connect as connectTcp } from "node:net";
 
+import { CHAT_BURST } from "./coop-chat.mjs";
 import {
     RELAY_PATH,
     addressKey,
@@ -423,6 +424,40 @@ describe("co-op relay", () => {
         expect((await guests[1].next("gone")).reason).toBe("disbanded");
         expect((await host.next("gone")).reason).toBe("disbanded");
         expect(relay.roomCount).toBe(0);
+    });
+
+    it("passes chat to everyone in the room, the sender too, and no one else", async () => {
+        const { host, guests } = await party(1);
+        const outsider = await party(0);
+        guests[0].send({ t: "chat", text: "  ready \n when you are " });
+        for (const player of [host, guests[0]]) {
+            expect(await player.next("chat")).toEqual({
+                t: "chat",
+                from: expect.any(String),
+                name: guests[0].name,
+                text: "ready when you are",
+            });
+        }
+        host.send({ t: "chat", quick: "go" });
+        expect((await guests[0].next("chat")).quick).toBe("go");
+        expect(outsider.host.messages.some((m) => m.t === "chat")).toBe(false);
+    });
+
+    it("drops chat past a few lines at once", async () => {
+        const { host, guests } = await party(1);
+        for (let i = 0; i < 10; i++) {
+            host.send({ t: "chat", text: `line ${i}` });
+        }
+        host.send({ t: "ping" });
+        await host.next("pong");
+        // After the host's lines, on the guest's own connection
+        guests[0].send({ t: "ping" });
+        await guests[0].next("pong");
+        // The burst, and not all ten however long a busy machine took over them (the pace
+        // itself is coop-chat.test.ts's, on a clock it sets)
+        const lines = guests[0].messages.filter((m) => m.t === "chat").length;
+        expect(lines).toBeGreaterThanOrEqual(CHAT_BURST);
+        expect(lines).toBeLessThan(10);
     });
 
     it("only lets the host change the room", async () => {

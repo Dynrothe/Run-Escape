@@ -194,9 +194,9 @@ describe("stat icons on the screens that show stats", () => {
         };
     }
 
-    function renderChest(chest: ChestView) {
+    function renderChest(chest: ChestView, overrides: Record<string, unknown> = {}) {
         const store = new GameStore(createSave());
-        const client = createMockClient(store, { playChestSound: vi.fn() });
+        const client = createMockClient(store, { playChestSound: vi.fn(), ...overrides });
         const view = render(<ChestModal chest={chest} rerolls={0} banishes={0} client={client} />);
         // On to the card
         act(() => {
@@ -249,6 +249,31 @@ describe("stat icons on the screens that show stats", () => {
             expect(view.container.querySelector(".ui-chest-summary")).toBeNull();
             expect(view.container.textContent).toContain("Nothing in your body slot yet.");
         } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    test("ChestModal leaves keys typed in a box alone", () => {
+        vi.useFakeTimers();
+        // Co-op's chat box, open as the casket came
+        const box = document.createElement("input");
+        document.body.appendChild(box);
+        try {
+            const resolveChest = vi.fn();
+            renderChest(gearChest(), { resolveChest });
+            const press = (target: HTMLElement, code: string) =>
+                act(() => {
+                    target.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+                });
+
+            press(box, "Enter");
+            press(box, "Digit1");
+            expect(resolveChest).not.toHaveBeenCalled();
+
+            press(document.body, "Enter");
+            expect(resolveChest).toHaveBeenCalledWith("take");
+        } finally {
+            box.remove();
             vi.useRealTimers();
         }
     });

@@ -223,6 +223,7 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    MenuScreen,
     PlayerResultView,
     QuestTrackView,
     ReviveView,
@@ -259,6 +260,7 @@ import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecord
 import { CoopLobby, makeLoadout, roomPlaysCardsOnly } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
+import { ChatMode } from "./coop/chat";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
 import { saveFile } from "./saveFile";
 
@@ -953,6 +955,10 @@ export class GameClient implements GameFrameHandler {
     private previewedLook?: WardrobeLook;
     // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
     private bareMenuLook = false;
+    // Where a menu screen's Back goes: the title, or the co-op room it was opened from (openMenu)
+    private menuHome: "title" | "coop" = "title";
+    // The co-op room this player was ready in when they stepped away from it (stepAwayFromRoom)
+    private readyAway?: string;
     // Which way the adventurer's turned in the Wardrobe (an actor's yaw), and the way they face
     // now, on their way round to it (and back to the front once it's left)
     private wardrobeTurn = 0;
@@ -1042,7 +1048,7 @@ export class GameClient implements GameFrameHandler {
     private abilityUsed = false;
     // The tick the boss on the bar was first up, in this sim, since there was none: the ability
     // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
-    private bossUp?: { sim: Sim; tick: number };
+    private bossUpTick?: number;
     // The toast saying the sound's on or off, if one's up (see toggleMute)
     private soundToast?: number;
     // Adventurers this run has done the task for, already told about
@@ -1089,7 +1095,11 @@ export class GameClient implements GameFrameHandler {
         this.overlay = new Overlay(overlayCanvas);
         this.input = new GameInput(renderer.canvas);
         this.input.onPress = (code) => this.pressKey(code);
-        this.input.takesKey = (code) => code === "Tab" && this.isPlaying();
+        // Enter's keypress would otherwise reach the chat's box it opens and send it empty, or
+        // press a button in the open box
+        this.input.takesKey = (code) =>
+            (code === "Tab" && this.isPlaying()) ||
+            (code === "Enter" && (this.canOpenChat() || this.store.getSnapshot().chatOpen));
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
                 pad.standard
@@ -1212,6 +1222,62 @@ export class GameClient implements GameFrameHandler {
             this.previewedLook = undefined;
             this.bareMenuLook = false;
             this.refreshMenuLook();
+        }
+        if (screen === "coop" && was !== "coop") {
+            this.backToRoom();
+        }
+    }
+
+    // A menu screen (Skills, the Armoury and the rest), from the title, or from a co-op room
+    // without leaving it (stepAwayFromRoom)
+    openMenu(screen: MenuScreen): void {
+        const from = this.store.getSnapshot().screen;
+        this.menuHome = from === "coop" ? "coop" : "title";
+        if (this.menuHome === "coop") {
+            this.stepAwayFromRoom();
+        }
+        this.showScreen(screen);
+    }
+
+    // A menu screen's Back: to where it was opened (the room, or the rooms' list if it's gone)
+    leaveMenu(): void {
+        this.showScreen(this.menuHome);
+    }
+
+    // The co-op room's Menu, open or shut. It stays open under what's opened from it, so a menu
+    // screen's Back or Settings' comes back to it; a run starting shuts it (beginCoopRun).
+    setRoomMenu(open: boolean): void {
+        this.store.set({ roomMenu: open ? this.coop.room?.code : undefined });
+    }
+
+    // Out of a co-op room's own screen, to a menu or its Settings, with the room still open. A
+    // player who was ready isn't while away, so the host's start waits for them rather than
+    // pulling them out of a shop with their loadout half changed (backToRoom readies them again).
+    stepAwayFromRoom(): void {
+        const room = this.coop.room;
+        if (!room) {
+            return;
+        }
+        if (room.members.find((m) => m.id === this.coop.id)?.ready) {
+            this.readyAway = room.code;
+        }
+        // Even if the room doesn't show them ready yet: a Ready still on its way would land
+        // while they're away
+        this.coop.setReady(false);
+    }
+
+    // Back in the room: what was bought or changed meanwhile is the room's, and whoever was
+    // ready is again (unless the room's Cards only now takes cards they haven't got)
+    backToRoom(): void {
+        const room = this.coop.room;
+        const wasReady = room !== undefined && this.readyAway === room.code;
+        this.readyAway = undefined;
+        if (!room) {
+            return;
+        }
+        this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
+        if (wasReady && !room.started && this.coopCardBlock() === undefined) {
+            this.coop.setReady(true);
         }
     }
 
@@ -1568,6 +1634,12 @@ export class GameClient implements GameFrameHandler {
         }
         const relics = pickRelic(this.save.relics ?? [], tier, relicId);
         this.save.relics = relics.length > 0 ? relics : undefined;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
+    clearRelics(): void {
+        this.save.relics = undefined;
         this.persist();
         this.coop.setMe({ loadout: this.getLoadout() });
     }
@@ -2015,7 +2087,7 @@ export class GameClient implements GameFrameHandler {
                     sim.leave(hero.index);
                 }
             }
-            this.coopRun = undefined;
+            this.setCoopRun(undefined);
             // Solo now: rendering steps it, as any solo run
             this.stopCoopTicker();
             this.store.toast(t("toast.coop_lost_others"), 6000);
@@ -2206,6 +2278,70 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ hideCountry: !this.display.coopFlag });
     }
 
+    // Co-op chat (coop/chat.ts): what this player sees of it, and says
+    setChatMode(coopChat: ChatMode): void {
+        this.setDisplay({ coopChat });
+        if (coopChat !== "all") {
+            this.closeChat();
+        }
+    }
+
+    sayChat(text: string): boolean {
+        return this.display.coopChat === "all" && this.coop.sayChat(text);
+    }
+
+    sayQuickChat(id: string): boolean {
+        return this.display.coopChat !== "off" && this.coop.sayQuickChat(id);
+    }
+
+    toggleChatMute(id: string): void {
+        this.coop.toggleMute(id);
+    }
+
+    markChatRead(): void {
+        this.coop.markChatRead();
+    }
+
+    // Mid-run, Enter opens the chat's box to type in: in a co-op run with
+    // nothing over it. Not on co-op's menu, where Enter presses its buttons (a
+    // controller's confirm too). Only where the HUD shows the chat (GameUi's
+    // CoopChatRun): with someone else in the party, and no cinematic.
+    private canOpenChat(): boolean {
+        const { overlay, coop, chatOpen, party, cinematic } = this.store.getSnapshot();
+        return (
+            !chatOpen &&
+            party.length > 0 &&
+            !cinematic &&
+            this.coopRun !== undefined &&
+            this.sim !== undefined &&
+            !this.sim.runOver &&
+            overlay === "none" &&
+            coop.chat &&
+            coop.room !== undefined &&
+            this.display.coopChat !== "off"
+        );
+    }
+
+    // The co-op run this game's in, if any. The chat's box shuts with each change: one left
+    // open as a run ended, its HUD gone with it, would start the next run open.
+    private setCoopRun(run: CoopRun | undefined): void {
+        this.coopRun = run;
+        this.closeChat();
+    }
+
+    openChat(): void {
+        if (this.canOpenChat()) {
+            this.input.release();
+            this.store.set({ chatOpen: true });
+        }
+    }
+
+    closeChat(): void {
+        if (this.store.getSnapshot().chatOpen) {
+            this.store.set({ chatOpen: false });
+        }
+    }
+
     // Takes hold from the next frame (update)
     setFrameRate(frameRate: FrameRate): void {
         this.setDisplay({ frameRate });
@@ -2382,6 +2518,10 @@ export class GameClient implements GameFrameHandler {
         if (JSON.stringify(save.look) !== lookWas) {
             this.previewedLook = undefined;
             this.refreshMenuLook();
+        }
+        // In a co-op room (an import from its Settings, or cloud save's), the room hears of it
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
         }
     }
 
@@ -2603,6 +2743,9 @@ export class GameClient implements GameFrameHandler {
     // A co-op run, as the host started it: everyone builds the same Sim, each
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
+        // A start that crossed this player stepping away: the run's begun, and they aren't
+        // readied for the next one when they're back
+        this.readyAway = undefined;
         if (!isGameStart(game, MAX_PARTY)) {
             this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;
@@ -2616,6 +2759,8 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.coopInbox = [];
+        // The room's Menu, if it was open, isn't there after the run
+        this.store.set({ roomMenu: undefined });
         // A map or adventurer this game hasn't got (another player's game
         // could be newer, or made up): it can't play along
         if (
@@ -2697,7 +2842,7 @@ export class GameClient implements GameFrameHandler {
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
         run.prediction?.setDiagnostics(this.movementDiagnostics);
-        this.coopRun = run;
+        this.setCoopRun(run);
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];
         this.coopInbox = undefined;
@@ -2728,6 +2873,7 @@ export class GameClient implements GameFrameHandler {
         this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;
+        this.bossUpTick = undefined;
         // A new run's bosses explain themselves again
         this.instructionsSeen.clear();
         this.instructions = [];
@@ -2839,6 +2985,11 @@ export class GameClient implements GameFrameHandler {
         }
         switch (action.kind) {
             case "choose":
+                if (done) {
+                    // An evolution's events now, not when the run goes on: another level up can
+                    // keep it paused, and a Give up there banks Combat Achievements without them
+                    this.handleEvents(sim, sim.takeEvents());
+                }
                 this.syncOverlay();
                 break;
             case "chest":
@@ -3255,8 +3406,11 @@ export class GameClient implements GameFrameHandler {
             // The room's open for the next run
             this.coop.end();
         }
-        this.coopRun = undefined;
+        this.setCoopRun(undefined);
         this.combat = undefined;
+        this.combatViews = undefined;
+        this.coopBarBoss = undefined;
+        this.bossUpTick = undefined;
         this.stopCoopTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
@@ -3783,6 +3937,16 @@ export class GameClient implements GameFrameHandler {
             this.toggleDamagePanel();
             return;
         }
+        // The chat's box, open without its own box to type in (quick chat only, or the focus
+        // gone back to the world): Escape and Enter shut it, and Escape doesn't pause too
+        if ((code === "Escape" || code === "Enter") && this.store.getSnapshot().chatOpen) {
+            this.closeChat();
+            return;
+        }
+        if (code === "Enter" && this.canOpenChat()) {
+            this.openChat();
+            return;
+        }
         const sim = this.sim;
         if (!sim) {
             return;
@@ -4098,21 +4262,21 @@ export class GameClient implements GameFrameHandler {
         };
     }
 
-    // Seconds since the boss on the bar was up (bossUp), or undefined with none living. Another
+    // Seconds since the boss on the bar was up, or undefined with none living. Another
     // boss coming on while one's shown (a co-op copy, the next phase) doesn't start it again.
     private secondsSinceBossUp(sim: Sim): number | undefined {
         const boss = sim.shownBoss;
         if (!boss || boss.dead) {
-            this.bossUp = undefined;
+            this.bossUpTick = undefined;
             return undefined;
         }
-        if (this.bossUp?.sim !== sim) {
+        if (this.bossUpTick === undefined) {
             if (boss.risingEnd > sim.tick) {
                 return undefined;
             }
-            this.bossUp = { sim, tick: sim.tick };
+            this.bossUpTick = sim.tick;
         }
-        return (sim.tick - this.bossUp.tick) / TICKS_PER_SECOND;
+        return (sim.tick - this.bossUpTick) / TICKS_PER_SECOND;
     }
 
     // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
@@ -4788,7 +4952,8 @@ export class GameClient implements GameFrameHandler {
 
     private getAlpha(): number {
         const sim = this.sim;
-        if (!sim || (this.paused && !this.coopRun) || sim.state !== "playing") {
+        // Nothing moves during a final boss's fall: what's in the air stays where it is
+        if (!sim || (this.paused && !this.coopRun) || sim.state !== "playing" || sim.falling) {
             return 1;
         }
         return Math.min(1, this.accumulator / TICK_MS);
@@ -5565,10 +5730,16 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    submitActors(actors: ActorRenderer, _camera: Camera): void {
+    submitActors(actors: ActorRenderer, camera: Camera): void {
         const sim = this.sim;
         if (sim) {
-            this.view.submitActors(actors, sim, this.getAlpha());
+            this.view.submitActors(
+                actors,
+                sim,
+                this.getAlpha(),
+                camera,
+                this.mapViewer.renderDistance,
+            );
             return;
         }
         // Title screen: just the character, and their pet
@@ -5614,7 +5785,13 @@ export class GameClient implements GameFrameHandler {
             this.view.puzzleHelper =
                 this.display.puzzleHelper &&
                 (this.save.scabarasBeaten === true || getRaidBand(sim.raidLevel) === "Entry");
-            this.view.drawOverlay(overlay, sim, this.getAlpha());
+            this.view.drawOverlay(
+                overlay,
+                sim,
+                this.getAlpha(),
+                camera,
+                this.mapViewer.renderDistance,
+            );
             if (this.minimapCanvas) {
                 this.minimap.draw(
                     this.minimapCanvas,

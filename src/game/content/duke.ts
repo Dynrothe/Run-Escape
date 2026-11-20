@@ -115,6 +115,8 @@ const ICICLES_ATTACK: BossAttackDef = {
         radius: 1.1,
         spotAnim: ICICLES,
         alpha: 0.35,
+        // The narrow ice effect can't show the circular hit's width.
+        edge: true,
     },
     impact: { shake: 0.2 },
     message: "Icicles crack overhead...",

@@ -38,6 +38,7 @@ import { Overlay, ScreenPoint } from "./Overlay";
 // it is warned on the ground, so anything here that's hard to read is a bug.
 
 const BEAM_MS = 700;
+const MAX_TOTEM_BEAMS = 32;
 // Tiles either way from the player that flowers and lines are drawn: enough to
 // fill the screen at the widest zoom, and no more
 const VIEW_REACH = 44;
@@ -207,6 +208,9 @@ export class BossFightView {
     onEvent(event: SimEvent, now: number, tick: number): void {
         if (event.type === "totemBlast") {
             const { x, y, toX, toY } = event;
+            if (this.beams.length === MAX_TOTEM_BEAMS) {
+                this.beams.shift();
+            }
             this.beams.push({ x, y, toX, toY, start: now });
         } else if (event.type === "statueSeq") {
             this.statueSeqs.set(statueKey(event.locId, event), { seq: event.seq, tick });
@@ -1407,10 +1411,20 @@ export class BossFightView {
         ctx.fillRect(0, 0, width, height);
     }
 
+    pruneBeams(now: number): void {
+        let expired = 0;
+        while (expired < this.beams.length && now - this.beams[expired].start >= BEAM_MS) {
+            expired++;
+        }
+        if (expired > 0) {
+            this.beams.splice(0, expired);
+        }
+    }
+
     // Each totem's blast, across to her
     private drawBeams(overlay: Overlay, sim: Sim, now: number, scale: number): void {
         const ctx = overlay.ctx;
-        this.beams = this.beams.filter((beam) => now - beam.start < BEAM_MS);
+        this.pruneBeams(now);
         for (const beam of this.beams) {
             const t = (now - beam.start) / BEAM_MS;
             const from = overlay.project(

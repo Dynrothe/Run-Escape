@@ -207,8 +207,9 @@ more browsing the room list) took at most 13% of one core and 64 MB. A small VPS
 serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
-packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from) and
-`server/client-ip.mjs` to the server and run it.
+packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from),
+`server/client-ip.mjs`, `server/coop-checks.mjs` and `server/coop-chat.mjs` to the server and run
+it.
 
 ```
 PORT=8787 node server/coop-relay.mjs
@@ -272,23 +273,24 @@ can't tell where anyone is, and nobody gets a flag.
 
 Its limits, at the top of `server/coop-relay.mjs`:
 
-| What                          | Limit                                                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it) |
-| Connections from one address  | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                           |
-| Rooms hosted from one address | 4, and 16 from one IPv6 /48                                                                           |
-| Rooms made from one address   | 10 a minute                                                                                           |
-| Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                           |
-| Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                           |
-| A room with nothing happening | closed after 30 minutes (pings, looking at the list, and players' own updates and names don't count)  |
-| A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                   |
-| What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                    |
-| A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                               |
-| A player's own update         | 40 KB, or it's ignored                                                                                |
-| A player's loadout            | 16 KB, or it's dropped                                                                                |
-| A message                     | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames         |
-| One connection                | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped              |
-| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                      |
+| What                          | Limit                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it)      |
+| Connections from one address  | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                                |
+| Rooms hosted from one address | 4, and 16 from one IPv6 /48                                                                                |
+| Rooms made from one address   | 10 a minute                                                                                                |
+| Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                                |
+| Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                                |
+| A room with nothing happening | closed after 30 minutes (pings, looking at the list, chat, and players' own updates and names don't count) |
+| A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                        |
+| What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                         |
+| A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                                    |
+| A player's own update         | 40 KB, or it's ignored                                                                                     |
+| A player's loadout            | 16 KB, or it's dropped                                                                                     |
+| A chat line                   | 2 KB and 200 characters; 3 at once, then one each 2 seconds, on each connection; past that it's dropped    |
+| A message                     | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames              |
+| One connection                | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped                   |
+| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                           |
 
 An IPv6 address counts by its /64, which is what one home or server gets, and its /48 has looser
 limits of its own: one person can easily have all of a /48's /64s, but a mobile provider can put
@@ -887,11 +889,13 @@ src/game/
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
             off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
             checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
+            CoopChat (co-op's chat, in the room and in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
   coop-checks.mjs  both relays' checks on a run's frames
+  coop-chat.mjs    both relays' chat: what a line can be, and how often
   cloudflare/  the same relay on Cloudflare Durable Objects, each room near its host (README.md)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per segment and pass (without
@@ -1387,10 +1391,13 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   cooldowns, with no channel, and not while it's under the ground (`leap`) or its sleepwalkers
   walk (`BossState.walkers`, outside a finale: the ambient's emitters are dropped and it begins
   again the moment they're done, so a player up by it shooting them has nothing to step
-  through). `BossDef.fallSeconds` on a final boss keeps the run going that long after it falls
-  (`Sim.victoryAt`), with nothing landing on the players, so its death animation plays before
-  the victory screen, all of it (the view cuts other deaths at `MAX_DEATH_ANIM_TICKS`, and
-  `corpseTicks` keeps the body that long); the run's time is to the fall (`endRun`'s `at`).
+  through). `BossDef.fallSeconds` on a final boss plays its death that long before the victory
+  screen, all of it (the view cuts other deaths at `MAX_DEATH_ANIM_TICKS`, and `corpseTicks` keeps
+  the body that long), with the run standing still (`Sim.falling`, from `Sim.victoryAt`): only
+  the clock goes on, nothing moves or lands, no level up, casket or visitor opens, and the client
+  draws everything where it is. The tick after the fall, a final lair is beaten and what the fight
+  left goes (`clearBossAttacks`, the Wardens' phantoms). The run's time is to the fall (`endRun`'s
+  `at`), and a last player falling in the same tick wins at once, with no fall played.
   Phosani's is her death's 5.4 seconds. `tempo` multiplies
   the boss's interval and its pattern attacks' windups (only those: the big hits keep their
   warnings) in `startBossAttack`, and `speed` its walk, applied as each phase begins. `finale`
@@ -1489,6 +1496,11 @@ adventurer can have:
   stagger. `getSpotAnimIds` collects `hit`. The `meleeSpeed` stat speeds melee weapons only,
   on top of the sets' speed (`Sim.weaponSpeed`, capped with the rest in `cooldownTicks`):
   Saradomin bracers give it, and a Saradomin platebody `meleeKnockback`.
+- **Slashes and sweeps** (`Sim.fireSlash`, `fireSweep`): a slash hits its strip (`SLASH_WIDTH`)
+  and everything under its swoosh (`SLASH_ARC`, as `GameView.drawSlashes` draws it), each side
+  once, so what's right beside the player takes both. A `WeaponDef.stab` hits only its strip.
+  A sweep hits each enemy once across its arcs, and what's touching the player whichever way it
+  goes. Both go by `Sim.inMeleeArc` (big enemies by their edge), and cut roots where they hit.
 - **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
   as a loc can't play a skeletal animation, and the map opens with a cinematic
   (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening
@@ -2387,6 +2399,11 @@ more isn't baked again: the ones not picked go at the next re-bake. The menus' l
 starting weapon's swings (`setCharacterLook`), so a solo run starts with it baked.
 `getPlayerAttackSeqs` is every weapon's, for the slim cache.
 
+Dragon claws and Burning claws swing with the claws' special attack, Burning Slice included, so a
+look holding either bakes that one attack. It's 34 frames more than the scratch they had, which a
+look holding Dragon claws (the Werewolf's from the menus on) pays. Each attack starts it over, so
+at a fast cooldown only its start is seen.
+
 A weapon with a `runPose` (the Armadyl crossbow) shows each shot on the move too: the upper body
 takes that one frame of its swing, its aim, for a moment (`RUN_POSE_TICKS`) after each shot, while
 the legs go on with the run. It's baked over each of the stance's run frames
@@ -2582,6 +2599,24 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
 
 ### Keeping it light on a phone
 
+- **Measuring the sim**: `TICKS=1` on `scripts/game/simulate-run.ts` prints, for each run, what a
+  tick cost (mean, p50, p95, p99, p99.9 and the worst, in ms), the most enemies and pickups there
+  were at once, and the heap at the end (after a collection, when Node has `--expose-gc`). For a
+  before and after, run the same seeds on both sides at once, so each has the same load, on long
+  runs (`GOD=1`, `ENDLESS=1`, 60 minutes). The old side is `git archive` of its commit's `src`
+  and `scripts`, unpacked into a folder inside the checkout (so it finds `node_modules` and
+  `caches/`), with the current `simulate-run.ts` copied over its own and run from the checkout's
+  root. Delete the folder before running the tests.
+- **What a crowd costs**: most of a long tick is pathfinding (`FlowField.update`). In the
+  browser, more enemies cost triangles and main-thread time, not draw calls.
+- The enemy and pickup spatial hashes empty their used cells' slots on rebuild, so what was in
+  them the tick before can be collected. Each cell keeps its array and a count of what's in it:
+  setting an array's length to 0 has V8 drop its storage, and the rebuild then allocates for
+  every cell, every tick (it took about twice as long, measured).
+- Pickup models skip lookup and terrain sampling beyond the camera's draw distance plus a
+  four-tile margin. The simulation still handles every pickup for the whole party, and the
+  minimap and loot arrows can point to distant rewards. Background co-op bounds shouts, escapees
+  and totem beams even when draw calls stop.
 - **Frame cap**: `GameClient.update` sets `Renderer.fpsLimit` every frame from the Frame rate
   setting (`DisplaySettings.frameRate`, in Settings and the pause menu), through `frameCap`. Auto,
   the default and what older saved settings get, is 60 on a touch screen (90 and 120 Hz phones
@@ -3040,6 +3075,29 @@ from the host to everyone else. The host leaving a run ends it for everyone; in 
 room goes to the next player. The balance bot plays a party with `PARTY=4`, each player on their
 own, so it can't show teamwork.
 
+The lobby's **Menu** (`LobbyMenu` in `CoopScreen.tsx`) is a list, as a game's pause menu: a row
+for each of the title's tiles (`menuItems`), then Settings, with the language and cloud save by
+Close (not What's new, Discord or GitHub), without leaving the room. A menu screen opens through
+`GameClient.openMenu`, and its Back goes through `leaveMenu`, back to the room (or the rooms'
+list, if the room went meanwhile) rather than the title. The Menu's open state is the store's
+(`roomMenu`, by the room's code, `setRoomMenu`), so it's still open when a menu screen comes back;
+a run starting shuts it. Settings and cloud save show in the room's place, and shut back to the
+Menu. Stepping away unreadies a player (`stepAwayFromRoom`, even when the room doesn't show them
+ready yet), so the host can't start a run with them halfway through a shop. Back in the room
+(`backToRoom`), their loadout and unlocks go again, for what was bought, and a player who was
+ready is again, unless a run started meanwhile. A new menu screen goes in `MenuScreen` and
+`menuItems`, with `leaveMenu` for its Back.
+
+A run's **setup bar**, alone (`CharacterScreen`) or in a room, is the same (`ui-setup-bar` in
+`GameUi.css`): three groups on a grid (`ui-setup-bar-out`, `-modes`, `-go`), the modes centred and
+every control one height, the invocations first and then endless, hard and expert as
+`ModeSwitch`es (`GameUi.tsx`), two lines like the invocations'. As on the title, the rest is sunk
+into the stone and the way in is the raised buttons, in green (`ui-setup-go`). In a room,
+whichever is up to you next flashes yellow (`ui-setup-go-now`): Ready until you are, then the
+host's Start once it can start (`canStart`: everyone ready, and in a Cards only room with their
+cards, as `startCoopRun` takes it). Ready is a toggle (`aria-pressed`), sunk and ticked while
+you're ready; alone, Start doesn't flash, as it's always up to you.
+
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`
 then makes or joins the room on that room's own connection, at `coop/room/<code>`. What's said in
@@ -3129,6 +3187,37 @@ It asks every 5 seconds of a relay without `listUpdates`, so either can be deplo
 Cloudflare every request costs, so think twice before adding a timer that sends something: incoming
 messages and calls between objects are billed (see Cost in `server/cloudflare/README.md`), and what
 the relay sends out is free.
+
+**Chat.** A room's players can talk: their own words, or a quick-chat phrase sent as its id
+(`QUICK_CHAT` in `client/coop/chat.ts`) and shown in each player's own language. A game sends `{ t:
+"chat", text }` or `{ t: "chat", quick }`, and both relays pass it to everyone in the room, the
+sender too, with who said it (`server/coop-chat.mjs`, shared by `coop-relay.mjs` and
+`cloudflare/src/room.mjs`). They keep none of it, so there's nothing to store or log: each game
+keeps its room's lines in `CoopView.chatLines`, in memory, and drops them on leaving the room.
+`chatLine` cleans a line (one line, no control, direction-turning or invisible characters,
+`MAX_CHAT_CHARS` at most; the game's `cleanChatText` is the same, which `chat.test.ts` checks) and
+drops it past `CHAT_BURST` at once or `CHAT_PER_SECOND` after, counted for each connection: only the
+room hears it, and joins and connections are already limited by address. The game's `ChatLimiter`
+fills a little slower, so a line held up on the way still fits. Chat doesn't count as activity for a
+room's `IDLE_MS`, as a player's own updates don't, or a line now and then could hold a room for
+ever. A relay that passes chat says so in its welcome (`chat: true`), and the game shows chat only
+then, so an older relay never has a box nobody hears. Ids of new phrases only ever get added: a game
+skips one it doesn't know. Chat stays out of `UpMessage` and the run checks: it's said to the room,
+not the run. The `coopChat` display setting shows everything, quick chat only, or nothing, and
+muting someone (the room's member list) lasts while in the room.
+
+In the room the chat is its own panel in the middle column; on a phone it's a tap from the room's
+bar, full screen like the map list. In a run, the last few lines show over the world for a moment
+(`RUN_LINE_MS`), low on the left, and Enter opens the box (`GameClient.openChat`), with nothing over
+the run: on co-op's menu Enter is its buttons', a controller's confirm too. It opens only where the
+HUD draws it (`canOpenChat`, as `CoopChatRun` is mounted): not for a host playing their room alone,
+nor in a cinematic, where it would hide and take Escape's first press. The box shuts as a run
+starts or ends (`setCoopRun`), since its HUD goes with the run. `takesKey` takes that Enter so its
+keypress doesn't reach the box it opens, and the box opening lets go of held keys
+(`GameInput.release`): its own keys never reach `GameInput`, so their releases wouldn't either. On a
+touch screen it's high in the middle instead, clear of the stick, with a Chat button by pause.
+Anything coming up over the run (a level up, a casket, the menu) shuts the box, so what's being
+typed can't press its keys. A controller has no way into the run's chat yet.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own and on each room member. The Cloudflare relay's Worker gets it from
@@ -3327,8 +3416,8 @@ of its own.
   one. The first button is the screen's own: the game's canvas behind it is no stop for the
   highlight or for Tab (`RendererCanvas`'s `focusable={false}`, as the game reads its keys from the
   window), though a click still focuses it. So keep a screen's way out (Back, an X) after what's on
-  it in the page, or the first press lands there and a second leaves: the Collection log's X comes
-  after its tabs, drawn on the title's row. Start clicks the `.ui-button-go` (Enter the map,
+  it in the page, or the first press lands there and a second leaves: the Collection log's Back
+  comes after the whole log, along its bottom. Start clicks the `.ui-button-go` (Enter the map,
   Resume, a casket's best choice) wherever the focus is, so starting a run doesn't mean walking
   the highlight across the screen. A click can't open a dropdown (`<select>`), so left and right
   step through its options while it's highlighted (the Collection log's entries on a narrow

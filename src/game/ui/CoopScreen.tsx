@@ -23,6 +23,7 @@ import {
     isCoopMap,
     takesInvocations,
 } from "../content/maps";
+import { TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { getVault } from "../content/vault";
 import { isCardRunBlocked } from "../core/cardRuns";
 import {
@@ -33,15 +34,20 @@ import {
 } from "../core/save";
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
 import { CardNeedsWindow } from "./CardNeeds";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel } from "./CloudSave";
+import { Coins } from "./Coins";
 import { useConfirm } from "./ConfirmDialog";
+import { CoopChatPanel, useUnreadChat } from "./CoopChat";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import {
     AdventurerPanel,
+    ModeSwitch,
     PhoneAdventurerCard,
     PickerHeading,
-    Toggle,
+    SettingsPanel,
     getStartingWeaponIcon,
+    menuItems,
 } from "./GameUi";
 import {
     InvocationBoard,
@@ -50,7 +56,9 @@ import {
     RunInvocationsButton,
 } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
+import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { useMenuKeys } from "./menuKeys";
+import { useDialog } from "./useDialog";
 import { usePhoneLayout } from "./usePhoneLayout";
 
 // Co-op: finding a room or making one, then the room itself, where everyone
@@ -369,9 +377,45 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
         isHost && cardsOnly && !map.blessings
             ? room.members.filter((m) => m.id !== you && typeof m.loadout?.cardCaps !== "string")
             : [];
+    // Start as startCoopRun takes it: everyone ready, with their cards
+    const canStart = everyoneReady && withoutCards.length === 0;
     const [needsFor, setNeedsFor] = useState<string>();
     // Escape shuts what's needed, when it's open
     useMenuKeys({ onBack: needsFor ? () => setNeedsFor(undefined) : undefined });
+    // The title's menu, from the room without leaving it (LobbyMenu). The store keeps it open, so
+    // a menu screen opened from it comes back to it (GameClient.setRoomMenu). Settings and cloud
+    // save show in the room's place, and shut back to the Menu. Escape shuts each.
+    const menuOpen = ui.roomMenu === room.code;
+    const [panel, setPanel] = useState<"settings" | "cloud">();
+    const openPanel = (next: "settings" | "cloud") => {
+        setPanel(next);
+        client.stepAwayFromRoom();
+    };
+    const closePanel = () => {
+        setPanel(undefined);
+        client.backToRoom();
+    };
+    // Cloud save asking which save to keep, over its panel (as on the title)
+    const choosing = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
+    useMenuKeys({
+        // Escape answers cloud save's question first (Later), as on the title
+        onBack: panel
+            ? choosing
+                ? () => client.cloud?.later()
+                : closePanel
+            : menuOpen
+              ? () => {
+                    // The language list shuts first, on its own
+                    if (!document.querySelector(".ui-title-language-tooltip")) {
+                        client.setRoomMenu(false);
+                    }
+                }
+              : undefined,
+    });
+    const cloudChoice =
+        choosing && ui.cloud ? (
+            <CloudChoicePanel cloud={ui.cloud} save={ui.save} client={client} />
+        ) : undefined;
     const hostInvocations = isHost ? ui.save.invocations : host?.loadout?.invocations;
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
@@ -402,6 +446,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     if (board && runBoard && !runBoardOpen) {
         setBoard(false);
     }
+    // Muting is for the chat, so only where there is one
+    const chatOn = ui.coop.chat && ui.display.coopChat !== "off";
     const [confirm, confirmDialog] = useConfirm();
     const disband = async () => {
         if (
@@ -430,7 +476,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     };
     // A phone's lists over the whole screen (as PhoneSetup's): Escape and Enter close them
     const phone = usePhoneLayout();
-    const [picker, setPicker] = useState<"adventurer" | "map">();
+    const [picker, setPicker] = useState<"adventurer" | "map" | "chat">();
     // Only the host picks the map: a guest's list closes if they stop being it
     const picking = phone && (picker !== "map" || isHost) ? picker : undefined;
     const closePicker = () => setPicker(undefined);
@@ -529,6 +575,22 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                     onClick={() => client.renameCoop()}
                                 >
                                     {t("coop.new_name")}
+                                </button>
+                            )}
+                            {chatOn && member.id !== you && (
+                                <button
+                                    className="ui-button ui-button-small"
+                                    aria-label={t(
+                                        ui.coop.muted.includes(member.id)
+                                            ? "coop.unmute_player"
+                                            : "coop.mute_player",
+                                        { name: member.name },
+                                    )}
+                                    onClick={() => client.toggleChatMute(member.id)}
+                                >
+                                    {ui.coop.muted.includes(member.id)
+                                        ? t("coop.unmute")
+                                        : t("coop.mute")}
                                 </button>
                             )}
                         </div>
@@ -670,6 +732,13 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     {t("coop.disband")}
                 </button>
             )}
+            <button
+                className="ui-button"
+                aria-haspopup="dialog"
+                onClick={() => client.setRoomMenu(true)}
+            >
+                {t("coop.menu")}
+            </button>
         </>
     );
     // The host's switches for how the map's played
@@ -694,72 +763,62 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 />
             )}
             {isHost && !map.fun && !map.tombs && (
-                <div
-                    className={
-                        "ui-endless" +
-                        (isEndlessUnlocked(ui.save, map.id) ? "" : " ui-endless-locked")
+                <ModeSwitch
+                    name={t("coop.endless")}
+                    on={room.endless}
+                    locked={
+                        !isEndlessUnlocked(ui.save, map.id)
+                            ? t("coop.beat_the_map")
+                            : !room.endless && withoutEndless
+                              ? // It can be turned off, but only on once everyone's beaten it
+                                t("coop.member_hasnt_beaten", { name: withoutEndless.name })
+                              : undefined
                     }
-                >
-                    <span className="ui-endless-name">{t("coop.endless")}</span>
-                    {!isEndlessUnlocked(ui.save, map.id) ? (
-                        <span className="ui-endless-hint">{t("coop.beat_the_map")}</span>
-                    ) : !room.endless && withoutEndless ? (
-                        // It can be turned off, but only on once everyone's beaten it
-                        <span className="ui-endless-hint">
-                            {t("coop.member_hasnt_beaten", { name: withoutEndless.name })}
-                        </span>
-                    ) : (
-                        <Toggle
-                            on={room.endless}
-                            label={t("coop.endless")}
-                            onToggle={() => client.toggleEndless()}
-                        />
-                    )}
-                </div>
+                    onToggle={() => client.toggleEndless()}
+                />
             )}
             {isHost && !map.tombs && (
-                <div
-                    className={
-                        "ui-endless" + (isHardUnlocked(ui.save, map.id) ? "" : " ui-endless-locked")
+                <ModeSwitch
+                    name={t("coop.hard")}
+                    on={room.hard}
+                    locked={
+                        !isHardUnlocked(ui.save, map.id)
+                            ? t("coop.beat_the_map")
+                            : !room.hard && withoutHard
+                              ? t("coop.member_hasnt_beaten", { name: withoutHard.name })
+                              : undefined
                     }
-                >
-                    <span className="ui-endless-name">{t("coop.hard")}</span>
-                    {!isHardUnlocked(ui.save, map.id) ? (
-                        <span className="ui-endless-hint">{t("coop.beat_the_map")}</span>
-                    ) : !room.hard && withoutHard ? (
-                        // It can be turned off, but only on once everyone's beaten it
-                        <span className="ui-endless-hint">
-                            {t("coop.member_hasnt_beaten", { name: withoutHard.name })}
-                        </span>
-                    ) : (
-                        <Toggle
-                            on={room.hard}
-                            label={t("coop.hard")}
-                            onToggle={() => client.toggleHard()}
-                        />
-                    )}
-                </div>
+                    onToggle={() => client.toggleHard()}
+                />
             )}
         </>
     );
     const ready = (
         <>
+            {/* Pressed while you're ready, with a tick, and pressed again to stop. Whichever of it
+                and Start is up to you next flashes (ui-setup-go-now). */}
             <button
                 className={
                     "ui-button ui-coop-ready" +
                     (isHost ? "" : " ui-select-go") +
-                    (me?.ready ? "" : " ui-button-go")
+                    (me?.ready ? "" : " ui-button-go ui-setup-go") +
+                    (!me?.ready && !cardBlocked ? " ui-setup-go-now" : "")
                 }
+                aria-pressed={!!me?.ready}
                 // A Cards only room without the cards it takes (cardBlocked): not ready
                 disabled={!me?.ready && cardBlocked}
                 onClick={() => client.setCoopReady(!me?.ready)}
             >
-                {me?.ready ? t("coop.not_ready") : t("coop.ready")}
+                {me?.ready && <span className="ui-coop-ready-tick" aria-hidden="true" />}
+                {t("coop.ready")}
             </button>
             {isHost && (
                 <button
-                    className="ui-button ui-button-go ui-select-go"
-                    disabled={!everyoneReady}
+                    className={
+                        "ui-button ui-button-go ui-select-go ui-setup-go" +
+                        (canStart ? " ui-setup-go-now" : "")
+                    }
+                    disabled={!canStart}
                     title={everyoneReady ? undefined : t("coop.waiting_ready")}
                     onClick={() => client.startCoopRun()}
                 >
@@ -792,8 +851,35 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     onClose={() => setNeedsFor(undefined)}
                 />
             )}
+            {menuOpen && (
+                <LobbyMenu
+                    ui={ui}
+                    client={client}
+                    onPanel={openPanel}
+                    onClose={() => client.setRoomMenu(false)}
+                />
+            )}
         </>
     );
+    // Settings or cloud save in the room's place, as the title shows them; the room
+    // carries on behind
+    if (panel) {
+        return (
+            <div className="ui-fill ui-center">
+                {panel === "settings" ? (
+                    <SettingsPanel ui={ui} client={client} onClose={closePanel} />
+                ) : (
+                    <CloudSavePanel
+                        cloud={ui.cloud}
+                        client={client}
+                        saving={!ui.saveBlock}
+                        onClose={closePanel}
+                    />
+                )}
+                {cloudChoice}
+            </div>
+        );
+    }
     if (!phone) {
         return (
             <div className="ui-fill ui-select">
@@ -812,10 +898,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     {isHost ? mapList : <div className="ui-select-details">{mapSummary}</div>}
                     {notes}
                 </div>
-                <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
-                    {leave}
-                    {modes}
-                    {ready}
+                {/* In the middle, under the adventurer: the party panel has no room to spare */}
+                <CoopChatPanel ui={ui} client={client} />
+                <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar ui-coop-bar">
+                    <div className="ui-setup-bar-group ui-setup-bar-out">{leave}</div>
+                    <div className="ui-setup-bar-group ui-setup-bar-modes">{modes}</div>
+                    <div className="ui-setup-bar-group ui-setup-bar-go">{ready}</div>
                 </div>
                 {overlays}
             </div>
@@ -862,6 +950,20 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             </div>
         );
     }
+    if (picking === "chat") {
+        return (
+            <div className="ui-fill ui-phone-picker">
+                <div className="ui-panel rs-border rs-background ui-select-panel ui-coopchat-picker">
+                    <PickerHeading
+                        heading={<h2 className="ui-select-heading">{t("chat.log")}</h2>}
+                        onDone={closePicker}
+                    />
+                    <CoopChatPanel ui={ui} client={client} framed={false} />
+                </div>
+                {overlays}
+            </div>
+        );
+    }
     // A phone's room: the party beside the map and your adventurer, each a tap from its list
     const mapLabel = (
         <span className="ui-phone-card-label">
@@ -895,11 +997,97 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 )}
                 <PhoneAdventurerCard ui={ui} map={map} onOpen={() => setPicker("adventurer")} />
             </div>
-            <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
-                {leave}
-                {ready}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar ui-coop-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {leave}
+                    <ChatButton ui={ui} client={client} onOpen={() => setPicker("chat")} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{ready}</div>
             </div>
             {overlays}
+        </div>
+    );
+}
+
+// A phone room's way into its chat, marked when someone's said something since it was last open
+function ChatButton({ ui, client, onOpen }: Props & { onOpen: () => void }): JSX.Element | null {
+    const unread = useUnreadChat(ui, client, false);
+    if (!ui.coop.chat || ui.display.coopChat === "off") {
+        return null;
+    }
+    return (
+        <button className="ui-button ui-coopchat-room-button" onClick={onOpen}>
+            {t("chat.button")}
+            {unread && <span className="ui-coopchat-unread" />}
+        </button>
+    );
+}
+
+// The title's menu from a co-op room, which stays open behind: a row for each of the title's
+// tiles, as a game's pause menu, then Settings, with the language and cloud save by Close. A menu
+// screen comes back to the room with this still open (GameClient.openMenu, setRoomMenu), and
+// Settings and cloud save show in the room's place (onPanel).
+function LobbyMenu({
+    ui,
+    client,
+    onPanel,
+    onClose,
+}: Props & {
+    onPanel: (panel: "settings" | "cloud") => void;
+    onClose: () => void;
+}): JSX.Element {
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
+    return (
+        <div className="ui-modal" onClick={onClose}>
+            <div
+                {...dialogProps}
+                className="ui-panel rs-border rs-background ui-coop-menu"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 id={titleId}>{t("coop.menu")}</h2>
+                <div className="ui-coop-menu-list">
+                    {menuItems().map((item) => (
+                        <button
+                            key={item.screen}
+                            className="ui-card ui-coop-menu-row"
+                            onClick={() => client.openMenu(item.screen)}
+                        >
+                            <ItemIcon objId={item.objId ?? -1} spriteId={item.spriteId} size={28} />
+                            <span className="ui-coop-menu-name">{item.name}</span>
+                        </button>
+                    ))}
+                    <button
+                        className="ui-card ui-coop-menu-row ui-coop-menu-settings"
+                        onClick={() => onPanel("settings")}
+                    >
+                        <ItemIcon objId={-1} spriteId={TITLE_TAB_SPRITES.settings} size={28} />
+                        <span className="ui-coop-menu-name">{t("ui.title.settings")}</span>
+                    </button>
+                </div>
+                <p className="ui-subtle ui-coop-menu-note">{t("coop.menu_note")}</p>
+                <div className="ui-row ui-coop-menu-foot">
+                    <Coins amount={ui.save.coins} />
+                    <div className="ui-coop-menu-options">
+                        {ui.saveBlock && ui.saveBlockClosed && (
+                            <button
+                                className="ui-version ui-save-off"
+                                onClick={() => client.showSaveBlock()}
+                            >
+                                {t("ui.title.not_saving")}
+                            </button>
+                        )}
+                        <TitleLanguageMenu />
+                        <CloudSaveButton
+                            cloud={ui.cloud}
+                            client={client}
+                            onOpen={() => onPanel("cloud")}
+                        />
+                        <button className="ui-button" onClick={onClose}>
+                            {t("coop.menu_close")}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

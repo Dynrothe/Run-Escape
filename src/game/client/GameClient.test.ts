@@ -9,6 +9,7 @@ import { getMap } from "../content/maps";
 import { Rarity } from "../content/rarity";
 import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
+import { CombatTracker } from "../core/CombatTracker";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { encodeCardCaps } from "../core/cardRuns";
 import { GauntletRun, loseGauntletFight, startGauntlet } from "../core/gauntlet";
@@ -44,7 +45,7 @@ import {
     partyLoadouts,
 } from "./GameClient";
 import { padHints } from "./GamePad";
-import { GameStore } from "./GameStore";
+import { GameStore, TeammateView } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
@@ -219,6 +220,85 @@ describe("a co-op player's loadout", () => {
     });
 });
 
+describe("co-op chat's box in a run", () => {
+    function inCoopRun() {
+        vi.stubGlobal("window", { localStorage: { setItem() {} } });
+        const { client, store } = createClient(createSim(), false);
+        const release = vi.fn();
+        Object.assign(client, { coopRun: {}, input: { release } });
+        store.set({
+            // Someone else to talk to
+            party: [{ id: "bob" } as unknown as TeammateView],
+            coop: {
+                ...store.getSnapshot().coop,
+                chat: true,
+                room: {
+                    code: "ABCDEFGH",
+                    name: "Room",
+                    open: false,
+                    hostId: "host",
+                    mapId: "lumbridge",
+                    endless: false,
+                    hard: false,
+                    started: true,
+                    members: [],
+                },
+            },
+        });
+        const press = (code: string) =>
+            (client as unknown as { pressKey(code: string): void }).pressKey(code);
+        return { client, store, press, release };
+    }
+    afterEach(() => vi.unstubAllGlobals());
+
+    test("Enter opens it, letting go of held keys, and Escape shuts it without pausing", () => {
+        const { store, press, release } = inCoopRun();
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(true);
+        expect(release).toHaveBeenCalled();
+        // With no box to type in (quick chat only), the keys come here
+        press("Escape");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        expect(store.getSnapshot().overlay).toBe("none");
+        press("Enter");
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("Enter is the menu's over a run, and nothing's open where chat's off", () => {
+        const { client, store, press } = inCoopRun();
+        store.set({ overlay: "paused" });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        store.set({ overlay: "none" });
+        Object.assign(client, { display: { ...getDefaultDisplaySettings(), coopChat: "off" } });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("nothing opens where the HUD has no chat: a party of one, or a cinematic", () => {
+        const { store, press } = inCoopRun();
+        const party = store.getSnapshot().party;
+        store.set({ party: [] });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        // So Escape still pauses
+        press("Escape");
+        expect(store.getSnapshot().overlay).not.toBe("none");
+        store.set({ overlay: "none", party, cinematic: true });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("a box left open as a run ends starts shut in the next", () => {
+        const { client, store, press } = inCoopRun();
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(true);
+        (client as unknown as { setCoopRun(run: undefined): void }).setCoopRun(undefined);
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+});
+
 describe("the co-op flag", () => {
     test("shows unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();
@@ -284,6 +364,18 @@ describe("power-up timers", () => {
         Object.assign(client, { accumulator: TICK_MS / 2 });
         expect(getAlpha()).toBe(0.5);
         Object.assign(client, { paused: true });
+        expect(getAlpha()).toBe(1);
+    });
+
+    // Nothing steps then, so what's in the air would slide back and on again every tick
+    test("stand still while a final boss falls", () => {
+        const sim = createSim();
+        sim.state = "playing";
+        const { client } = createClient(sim, false);
+        const getAlpha = () => (client as unknown as { getAlpha(): number }).getAlpha();
+        Object.assign(client, { accumulator: TICK_MS / 2 });
+        Object.assign(sim, { victoryAt: sim.tick + 30 });
+        expect(sim.falling).toBe(true);
         expect(getAlpha()).toBe(1);
     });
 });
@@ -1470,6 +1562,52 @@ describe("auto alch", () => {
         expect(sim.chests.length).toBe(1);
         expect(sim.coins).toBe(coins);
     });
+});
+
+test("Evolutionary registers on the third evolution and banks even if the run ends before another tick", () => {
+    const sim = createSim();
+    const { client, store, sync } = createClient(sim, false);
+    const combat = CombatTracker.forRun(sim, client.save)!;
+    Object.assign(client, {
+        combat,
+        finishRun: GameClient.prototype["finishRun"],
+        persist: vi.fn(),
+        coop: { setMe() {} },
+    });
+    const taskDone = vi.fn();
+    Object.assign(client["sounds"], { taskDone });
+
+    sim.addWeapon("fire_spells");
+    sim.addWeapon("shortbow");
+    for (const weapon of sim.weapons) {
+        weapon.level = weapon.def.levels.length;
+        const passiveId = weapon.def.evolution!.requiresPassive;
+        sim.apply({ kind: "newPassive", passiveId, quality: "common" });
+    }
+    sim.xp = sim.xpForNextLevel;
+    sim.step(0, 0);
+    sim.takeEvents();
+    sim.pendingLevelUps = 4;
+    sync();
+    const tick = sim.tick;
+
+    for (let count = 1; count <= 3; count++) {
+        const choice = sim.choices.findIndex((choice) => choice.kind === "evolve");
+        expect(choice).toBeGreaterThanOrEqual(0);
+        client.choose(choice);
+        expect(sim.evolutionsMade).toHaveLength(count);
+        expect(combat.done).toEqual(count < 3 ? [] : ["evolutionary"]);
+        expect(taskDone).toHaveBeenCalledTimes(count < 3 ? 0 : 1);
+    }
+    expect(store.getSnapshot().overlay).toBe("levelUp");
+    expect(client.save.combatTasks).not.toContain("evolutionary");
+
+    client.quitRun();
+    expect(sim.tick).toBe(tick);
+    expect(client.save.combatTasks).toContain("evolutionary");
+    expect(store.getSnapshot().result?.combatTasks).toEqual([
+        expect.objectContaining({ name: "Evolutionary" }),
+    ]);
 });
 
 describe("saving", () => {
@@ -2941,5 +3079,120 @@ describe("a co-op player's Card collection only pet", () => {
         expect(cleanLoadout(loadout(encodeCardCaps(caps))).pet).toBeUndefined();
         // Not playing Cards only: their found pet, as before
         expect(cleanLoadout(loadout()).pet).toBe(butch);
+    });
+});
+
+describe("the menus from a co-op room", () => {
+    // In a room of two, with this player ready or not: what's told to the relay
+    function inRoom(ready: boolean) {
+        const { client, store } = createClient(createSim(), false);
+        const room = {
+            code: "ABCDE",
+            hostId: "host",
+            mapId: "lumbridge",
+            members: [
+                { id: "host", name: "Host", ready: true },
+                { id: "me", name: "Me", ready },
+            ],
+        };
+        const coop = {
+            room: room as typeof room | undefined,
+            id: "me",
+            isHost: false,
+            setReady: vi.fn((on: boolean) => {
+                room.members[1].ready = on;
+            }),
+            setMe: vi.fn(),
+        };
+        Object.assign(client, { sim: undefined, coop, menuHome: "title" });
+        store.set({ screen: "coop" });
+        return { client, store, coop };
+    }
+
+    it("opens a menu without leaving the room, and comes back to it", () => {
+        const { client, store, coop } = inRoom(false);
+        client.openMenu("shop");
+        expect(store.getSnapshot().screen).toBe("shop");
+        client.leaveMenu();
+        expect(store.getSnapshot().screen).toBe("coop");
+        // What was bought there is the room's, and they're as ready as they were
+        expect(coop.setMe).toHaveBeenLastCalledWith({
+            loadout: expect.objectContaining({ metaStats: expect.any(Object) }),
+            unlocks: expect.objectContaining({ maps: expect.arrayContaining(["lumbridge"]) }),
+        });
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
+    });
+
+    it("unreadies a Ready the room doesn't show yet, as they step away", () => {
+        const { client, coop } = inRoom(false);
+        client.openMenu("shop");
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+    });
+
+    it("isn't readied again after a run the host started as they stepped away", async () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("shop");
+        // The start, which crossed their unready (one this game can't play, over at once)
+        Object.assign(coop, { leave: vi.fn() });
+        const starts = client as unknown as { beginCoopRun(game: unknown): Promise<void> };
+        await starts.beginCoopRun({});
+        client.leaveMenu();
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
+    });
+
+    it("isn't readied in a room whose run is under way", () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("shop");
+        Object.assign(coop.room!, { started: true });
+        client.leaveMenu();
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
+    });
+
+    it("isn't ready while away, so the start waits, and is ready again once back", () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("armoury");
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+        client.leaveMenu();
+        expect(coop.setReady).toHaveBeenLastCalledWith(true);
+        expect(coop.setReady).toHaveBeenCalledTimes(2);
+    });
+
+    it("does the same for Settings over the room", () => {
+        const { client, coop } = inRoom(true);
+        client.stepAwayFromRoom();
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+        client.backToRoom();
+        expect(coop.setReady).toHaveBeenLastCalledWith(true);
+    });
+
+    it("readies no one in a room they're no longer in", () => {
+        const { client, store, coop } = inRoom(true);
+        client.openMenu("wardrobe");
+        coop.room = undefined;
+        client.leaveMenu();
+        // The rooms' list, where the room was
+        expect(store.getSnapshot().screen).toBe("coop");
+        expect(coop.setReady).toHaveBeenCalledTimes(1);
+        expect(coop.setMe).not.toHaveBeenCalled();
+    });
+
+    it("comes back to the title from the title's own tiles", () => {
+        const { client, store, coop } = inRoom(true);
+        coop.room = undefined;
+        store.set({ screen: "title" });
+        client.openMenu("quests");
+        client.leaveMenu();
+        expect(store.getSnapshot().screen).toBe("title");
+    });
+
+    it("keeps the room's Menu open under a menu screen opened from it, till it's shut", () => {
+        const { client, store } = inRoom(false);
+        client.setRoomMenu(true);
+        expect(store.getSnapshot().roomMenu).toBe("ABCDE");
+        client.openMenu("collectionLog");
+        client.leaveMenu();
+        expect(store.getSnapshot().roomMenu).toBe("ABCDE");
+        client.setRoomMenu(false);
+        expect(store.getSnapshot().roomMenu).toBeUndefined();
     });
 });

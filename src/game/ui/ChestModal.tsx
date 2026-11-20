@@ -212,7 +212,12 @@ export function ChestModal({ chest, rerolls, banishes, client }: Props): JSX.Ele
 
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
-            if (event.repeat) {
+            // Nor what's typed in a box (co-op's chat, open as the casket came)
+            if (
+                event.repeat ||
+                event.target instanceof HTMLInputElement ||
+                event.target instanceof HTMLTextAreaElement
+            ) {
                 return;
             }
             const confirm = event.code === "Space" || event.code === "Enter";

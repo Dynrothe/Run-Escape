@@ -1634,9 +1634,9 @@ export type BossDef = {
     // of it, down to 1, when unset): the Theatre's bosses, whose many small hits armour would
     // otherwise turn to 1s
     armorCap?: number;
-    // A final boss: the run goes on this many seconds after it falls, for its
-    // death animation to play before the victory screen, with nothing
-    // landing on the players meanwhile (the run's time is to the fall)
+    // A final boss: its death animation plays this many seconds before the
+    // victory screen, with the run standing still (Sim.falling; the run's time
+    // is to the fall)
     fallSeconds?: number;
     // On a raid's expert mode, once enraged, it stares one way every `every` seconds, a quarter
     // turn at a time: a weapon's hit from within arc radians of that way does nothing to it and
@@ -1906,6 +1906,9 @@ export type WeaponDef = {
     family?: string;
     // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
     pickOnly?: boolean;
+    // A slash that stabs straight ahead (the keris partisans, the fang, the rapier): it hits only
+    // its strip, not the whole arc of its swoosh as other slashes do
+    stab?: boolean;
     // Blows that land heavy (the Saradomin sword's; a sweep's or a slash's): a swing that hits
     // shakes the camera (ImpactDef.shake, once a swing) and shows hit, if any, on each of the
     // first few it hits, and they stagger for stagger seconds (longer with meleeKnockback): they
@@ -2054,8 +2057,8 @@ export type SpecialAttackDef = {
     every: number;
     // Multiplies the attack's damage
     damage: number;
-    // Player animation, and the spot animation on the player
-    playerSeq: number;
+    // Player animation (the weapon's own unless set), and the spot animation on the player
+    playerSeq?: number;
     spotAnim: number;
     // Cache sound effect, the weapon's when unset
     sound?: number;

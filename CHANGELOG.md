@@ -3,6 +3,44 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.36.0 - 2026-11-20
+
+### Added
+
+- Co-op chat, by Okaeri: talk to your party in the room and during a run (Enter on a keyboard, the
+  Chat button on a phone), or use quick-chat phrases. Chat is never saved, and Settings can keep it
+  to quick chat or turn it off. You can mute anyone in your room.
+- A Menu in co-op rooms, by Jp66600: Skills, the Armoury, Settings and the rest without leaving
+  the room. The run waits for you while you're in one, and you're ready again when you're back.
+- Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
+
+### Changed
+
+- A run's setup bar, alone or in a co-op room, is one row of buttons the same height, with Start
+  and Ready standing out. Ready stays pressed, with a tick, while you're ready. By Jp66600.
+- The Collection log has a Back button along its bottom, as every other menu does, in place of
+  its X. By Jp66600.
+- Slashes, by Deivid Smarzaro: they hit everything under their swoosh, not only a strip straight
+  ahead (the Rubber chicken's too). Stabs, such as the keris partisans', are as they were.
+- The invocations board has one Hard switch beside hard mode's row, whose four icons only say
+  what they do now. By Jp66600.
+- Dragon claws and Burning claws, by Deivid Smarzaro: every swing uses the claws' special attack
+  animation.
+- The Kodai wand, by Deivid Smarzaro: Kourend gives the Wand in its place, which climbs from the
+  Beginner wand to the Master wand and Water Strike to Water Surge, and evolves with Augury. If you
+  had the Kodai wand's card, you have the Master wand's.
+
+### Fixed
+
+- Duke Sucellus's icicle warnings now show their full damage area. Fixed by Deivid Smarzaro.
+- Evolutionary counts as soon as you evolve your third weapon, even if you give up straight
+  after. Fixed by Deivid Smarzaro.
+- Long runs, and co-op games left in a background tab, use less memory, and going back to the
+  menus lets go of the run. Fixed by trippy22.
+- Level-ups, caskets and visitors no longer get in the way of the results after a final boss
+  falls. The win also counts if you and the final boss fall at the same time. Fixed by Deivid
+  Smarzaro.
+
 ## 0.35.0 - 2026-11-17
 
 ### Added

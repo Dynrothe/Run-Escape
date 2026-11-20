@@ -1,3 +1,4 @@
+import type { Camera } from "../../mapviewer/Camera";
 import {
     ActorAnim,
     ActorDrawOptions,
@@ -469,6 +470,12 @@ function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
 
+// Match the camera's fog bounds, with a margin for the edge of a large ground model.
+function pickupInRange(x: number, y: number, camera: Camera, renderDistance: number): boolean {
+    const reach = renderDistance + 4;
+    return Math.abs(x - camera.pos[0]) <= reach && Math.abs(y - camera.pos[2]) <= reach;
+}
+
 // How far a windup that started at tick from and lands at to has come, alpha into this tick: 0 to 1
 function windupProgress(sim: Sim, alpha: number, from: number, to: number): number {
     return Math.min(1, Math.max(0, (sim.tick + alpha - from) / Math.max(1, to - from)));
@@ -572,11 +579,13 @@ export class GameView {
         this.fight.reset();
         this.hitsplats = [];
         this.slashes = [];
+        this.trees = [];
         this.auras = [];
         this.blasts = [];
         this.swings = [];
         this.shouts = [];
         this.escapees = [];
+        this.enemiesByUid.clear();
         this.alchs.clear();
         this.flash = undefined;
     }
@@ -618,6 +627,9 @@ export class GameView {
 
     onEvents(sim: Sim, events: SimEvent[]): void {
         const now = performance.now();
+        this.pruneShouts(now);
+        this.pruneEscapees(sim.tick);
+        this.fight.pruneBeams(now);
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
@@ -692,9 +704,7 @@ export class GameView {
                     break;
                 case "bossShout":
                 case "enemyShout":
-                    // A new line replaces what it was saying
-                    this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
-                    this.shouts.push({
+                    this.addShout({
                         enemyUid: event.enemyUid,
                         text: event.text,
                         start: now,
@@ -706,8 +716,7 @@ export class GameView {
                     break;
                 case "playerShout": {
                     const key = -(event.hero ?? sim.focus);
-                    this.shouts = this.shouts.filter((s) => s.enemyUid !== key);
-                    this.shouts.push({ enemyUid: key, text: event.text, start: now });
+                    this.addShout({ enemyUid: key, text: event.text, start: now });
                     break;
                 }
                 case "polymorphEscape": {
@@ -726,7 +735,7 @@ export class GameView {
                     for (let i = 0; i < count; i++) {
                         const angle =
                             away + (count > 1 ? (i / (count - 1) - 0.5) * ESCAPEE_SPREAD : 0);
-                        this.escapees.push({
+                        pushCapped(this.escapees, {
                             powerUpId: event.powerUpId,
                             look: event.look,
                             escapees,
@@ -740,8 +749,7 @@ export class GameView {
                     break;
                 }
                 case "visitorShout":
-                    this.shouts = this.shouts.filter((s) => s.enemyUid !== VISITOR_SHOUT);
-                    this.shouts.push({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
+                    this.addShout({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
                     break;
                 case "treeFall":
                     pushCapped(this.trees, {
@@ -832,7 +840,13 @@ export class GameView {
         return middle + Math.min(top - middle, 0) * BIG_ACTOR_LIFT;
     }
 
-    submitActors(actors: ActorRenderer, sim: Sim, alpha: number): void {
+    submitActors(
+        actors: ActorRenderer,
+        sim: Sim,
+        alpha: number,
+        camera: Camera,
+        renderDistance: number,
+    ): void {
         const tick = sim.tick;
         for (const hero of sim.heroes) {
             if (!hero.left) {
@@ -949,12 +963,15 @@ export class GameView {
         }
 
         for (const pickup of sim.pickups) {
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            if (!pickupInRange(x, y, camera, renderDistance)) {
+                continue;
+            }
             const model = this.assets.get(getPickupModelKey(pickup));
             if (!model) {
                 continue;
             }
-            const x = lerp(pickup.prevX, pickup.x, alpha);
-            const y = lerp(pickup.prevY, pickup.y, alpha);
             // Ground items turn slowly so they catch the eye
             let yaw = (pickup.uid * 331 + tick * 6) & 2047;
             let height = this.ground(sim, x, y);
@@ -2884,17 +2901,22 @@ export class GameView {
         });
     }
 
-    // A polymorphed animal's escapees (the penguin's), running off fast till they're well off the
-    // screen (pruned in place, as keepWhile does)
-    private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
+    private pruneEscapees(tick: number): void {
         let kept = 0;
         for (const escapee of this.escapees) {
-            const { speed, seconds, walkSeq, scale } = escapee.escapees;
-            const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
-            if (t > seconds) {
-                continue;
+            if (tick - escapee.startTick <= escapee.escapees.seconds * TICKS_PER_SECOND) {
+                this.escapees[kept++] = escapee;
             }
-            this.escapees[kept++] = escapee;
+        }
+        this.escapees.length = kept;
+    }
+
+    // A polymorphed animal's escapees (the penguin's), running off till they're out of sight.
+    private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        this.pruneEscapees(sim.tick + alpha);
+        for (const escapee of this.escapees) {
+            const { speed, walkSeq, scale } = escapee.escapees;
+            const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
             const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId, escapee.look));
             if (!model) {
                 continue;
@@ -2920,7 +2942,6 @@ export class GameView {
                 options,
             );
         }
-        this.escapees.length = kept;
     }
 
     // The model of the animal a polymorphed enemy's been turned into; undefined until it's in
@@ -3079,7 +3100,13 @@ export class GameView {
         actors.draw(model, anim, frame, x, height, y, enemy.yaw, options);
     }
 
-    drawOverlay(overlay: Overlay, sim: Sim, alpha: number): void {
+    drawOverlay(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        camera: Camera,
+        renderDistance: number,
+    ): void {
         const ctx = overlay.ctx;
         const now = performance.now();
         const scale = overlay.uiScale;
@@ -3100,7 +3127,7 @@ export class GameView {
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
-        this.drawPickupTimers(overlay, sim, alpha, scale);
+        this.drawPickupTimers(overlay, sim, alpha, scale, camera, renderDistance);
         this.drawScabarasHelper(overlay, sim, now, scale);
         if (sim.litTargetsOnly) {
             this.drawDarkArrows(overlay, sim, alpha, scale);
@@ -3156,7 +3183,14 @@ export class GameView {
     // A RuneLite-style pie over each power-up on the ground, draining clockwise as
     // its time runs out. Attracted ones no longer expire (ordinary loot never
     // does), and once the run's over nothing on the ground does.
-    private drawPickupTimers(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+    private drawPickupTimers(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        scale: number,
+        camera: Camera,
+        renderDistance: number,
+    ): void {
         if (!this.pickupTimers || sim.runOver) {
             return;
         }
@@ -3168,6 +3202,11 @@ export class GameView {
             if (pickup.kind !== "powerUp" || pickup.attracted) {
                 continue;
             }
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            if (!pickupInRange(x, y, camera, renderDistance)) {
+                continue;
+            }
             const remaining = Math.min(1, Math.max(0, 1 - (tick - pickup.spawnTick) / lifetime));
             // (one whose model isn't drawn yet has nothing to time)
             const model = this.assets.get(getPickupModelKey(pickup));
@@ -3175,8 +3214,6 @@ export class GameView {
                 continue;
             }
             const modelScale = getPowerUpScale(model, pickup.powerUp);
-            const x = lerp(pickup.prevX, pickup.x, alpha);
-            const y = lerp(pickup.prevY, pickup.y, alpha);
             const top =
                 this.ground(sim, x, y) -
                 getPowerUpBob(pickup, sim.tick) -
@@ -3229,6 +3266,24 @@ export class GameView {
         overlay.ctx.fillRect(0, 0, overlay.width, overlay.height);
     }
 
+    private addShout(shout: Shout): void {
+        const previous = this.shouts.findIndex((s) => s.enemyUid === shout.enemyUid);
+        if (previous >= 0) {
+            this.shouts.splice(previous, 1);
+        }
+        pushCapped(this.shouts, shout);
+    }
+
+    private pruneShouts(now: number): void {
+        let kept = 0;
+        for (const shout of this.shouts) {
+            if (now - shout.start < (shout.ms ?? SHOUT_MS)) {
+                this.shouts[kept++] = shout;
+            }
+        }
+        this.shouts.length = kept;
+    }
+
     // Overhead chat: yellow text over the speaker's head, like the client's
     private drawShouts(
         overlay: Overlay,
@@ -3238,14 +3293,7 @@ export class GameView {
         scale: number,
     ): void {
         const ctx = overlay.ctx;
-        // (in place, as keepWhile does, each shout for its own time)
-        let kept = 0;
-        for (const shout of this.shouts) {
-            if (now - shout.start < (shout.ms ?? SHOUT_MS)) {
-                this.shouts[kept++] = shout;
-            }
-        }
-        this.shouts.length = kept;
+        this.pruneShouts(now);
         const pixel = Math.max(1, Math.round(scale));
         ctx.font = `${16 * pixel}px "OSRS Bold", sans-serif`;
         ctx.textAlign = "center";

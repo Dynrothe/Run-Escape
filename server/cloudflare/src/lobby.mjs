@@ -124,6 +124,8 @@ export class Lobby extends DurableObject {
                 anyMap: this.anyMap,
                 country: countryCode(request.headers.get("x-country")),
                 listUpdates: true,
+                // Rooms pass on their players' chat
+                chat: true,
             }),
         );
         return new Response(null, { status: 101, webSocket: client });

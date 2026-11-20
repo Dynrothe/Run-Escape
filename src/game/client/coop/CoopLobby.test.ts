@@ -160,3 +160,40 @@ describe("loadouts", () => {
         ]);
     });
 });
+
+test("a room's chat is kept only while in that room, and ignores what it can't show", () => {
+    const store = new GameStore(createSave());
+    const lobby = new CoopLobby(store);
+    const internals = lobby as unknown as {
+        update(changes: Partial<CoopView>): void;
+        receive(message: unknown): void;
+    };
+    const room: RoomView = {
+        code: "ABCDEFGH",
+        name: "Test room",
+        open: false,
+        hostId: "host",
+        mapId: "lumbridge",
+        endless: false,
+        hard: false,
+        started: false,
+        members: [],
+    };
+    const lines = () => store.getSnapshot().coop.chatLines;
+    // Nothing's kept out of a room
+    internals.receive({ t: "chat", from: "host", name: "Host", text: "early" });
+    expect(lines()).toEqual([]);
+    internals.update({ room, chat: true });
+    internals.receive({ t: "chat", from: "host", name: "Host", text: " hi\u202E " });
+    internals.receive({ t: "chat", from: "host", name: "Host", quick: "gg" });
+    // A newer game's phrase, and an empty line
+    internals.receive({ t: "chat", from: "host", name: "Host", quick: "some_new_phrase" });
+    internals.receive({ t: "chat", from: "host", name: "Host", text: "   " });
+    expect(lines().map((line) => line.text ?? line.quick)).toEqual(["hi", "gg"]);
+    lobby.toggleMute("host");
+    expect(store.getSnapshot().coop.muted).toEqual(["host"]);
+    // Another room starts with none of it
+    internals.update({ room: { ...room, code: "ZZZZZZZZ" } });
+    expect(lines()).toEqual([]);
+    expect(store.getSnapshot().coop.muted).toEqual([]);
+});

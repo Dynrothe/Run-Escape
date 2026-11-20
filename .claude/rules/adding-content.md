@@ -44,6 +44,11 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   its 3 levels, and `style`/`family` kept from what it evolves from. Set `damage` to a three-value
   array for a tuned curve, or a number for the default progression. Recipes in `evolutions.ts`
   and the Collection log come from these fields, so they need no extra entry.
+- Keep a weapon's id when its progression changes: saves and cards refer to it. Naming the levels of
+  a weapon that had one name gives it tiers (`weaponTiers`), and its one card becomes the first
+  tier's, so a save that had it needs a step to keep what the card gave: the Wand kept `kodai_wand`
+  when the Kodai wand became its evolution (`kodai_wand_evolved`), and save version 13 gave the
+  Kodai wand's card holders the Master wand's.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round. A missile's special is `siphon` instead: a
   chance each attack, rolled on the sim's `Rng`, of harder shots that heal (the Toxic blowpipe's).
@@ -61,6 +66,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
+- A `slash` hits its strip and everything under its swoosh. Set `stab` on one that stabs straight
+  ahead (the keris partisans, the fang, the rapier): it hits only its strip.
 - To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
   projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
   Use `projectileObjId` for a real item model instead (the crossbows' bolts); these are baked at
@@ -229,11 +236,11 @@ it, and a test with the cache fails until that's run.
   pattern's `channel` is how long the boss stands still for it (the whole pattern unless set),
   its `burst` fires so many volleys and then pauses (holes along a sweep's arm), a
   boss's `bulletGrace` how long after a bullet hits before another can (a second), a final
-  boss's `fallSeconds` how long its death plays before the victory screen, and a phased boss's
-  phases each take an `ambient` pattern it keeps up on its own, a `tempo` and a `speed`, with a
-  `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
-  (`until`, `threshold`, Justiciar Zachariah's), and a `finale` is a last stand at none (the
-  Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
+  boss's `fallSeconds` how long its death plays before the victory screen (the run standing
+  still), and a phased boss's phases each take an `ambient` pattern it keeps up on its own, a
+  `tempo` and a `speed`, with a `finale` after the last blast. Without `totems` its phases go by
+  its hitpoints instead (`until`, `threshold`, Justiciar Zachariah's), and a `finale` is a last
+  stand at none (the Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
   under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
   (a lunge, a blast, a ground mark, a wave, a charge across; a lunge's `line.track` turns it

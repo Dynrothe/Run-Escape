@@ -894,21 +894,12 @@
     padding: 8px 14px;
 }
 
-.ui-select-go {
-    font-size: 20px;
-    padding: 8px 28px;
-}
-
-/* The endless and hard switches, by the start button */
+/* A mode that can't be switched (a fight's one fight, the invocations before the map's beaten):
+   its name, and why */
 .ui-endless {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: auto;
-}
-
-.ui-endless + .ui-endless {
-    margin-left: 0;
 }
 
 .ui-endless-name {
@@ -924,6 +915,188 @@
 .ui-endless-hint {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
+    color: var(--ui-text-faint);
+}
+
+/* A run's setup bar, alone or in a co-op room (ui-setup-bar): what takes you out on the left, the
+   modes in the middle and the way in (Start, and a room's Ready) on the right, each control the
+   same height on one line. As the title screen has it, the rest is sunk into the stone like its
+   tiles, and the way in is the raised buttons above them, in green. */
+.ui-select-bar.ui-setup-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+
+.ui-setup-bar-group {
+    display: flex;
+    grid-row: 1;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-setup-bar-out {
+    grid-column: 1;
+}
+
+.ui-setup-bar-modes {
+    grid-column: 2;
+    justify-content: center;
+}
+
+.ui-setup-bar-go {
+    grid-column: 3;
+    justify-content: flex-end;
+}
+
+.ui-setup-bar .ui-button,
+.ui-setup-bar .ui-endless {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    margin: 0;
+    padding: 0 14px;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+/* Two lines, the invocations' and each mode's (ModeSwitch), its name over its state */
+.ui-setup-bar .ui-invocations-button,
+.ui-setup-bar .ui-mode-switch,
+.ui-setup-bar .ui-endless {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 12px;
+    line-height: 1.15;
+}
+
+/* What can't be turned on (the invocations before the map's beaten, a fight's one fight): as a
+   mode that's locked */
+.ui-setup-bar .ui-endless {
+    background: var(--ui-card);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+}
+
+.ui-setup-bar .ui-endless-name {
+    font-size: 16px;
+}
+
+.ui-setup-bar .ui-endless-hint {
+    font-size: 13px;
+}
+
+.ui-setup-bar .ui-select-go {
+    display: block;
+    min-width: 200px;
+    /* The same height as the rest on a phone too */
+    min-height: 0;
+    padding: 0 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 20px;
+    line-height: 40px;
+}
+
+.ui-setup-bar-out .ui-button,
+.ui-setup-bar-modes .ui-button,
+.ui-setup-bar-modes .ui-endless {
+    background: rgba(0, 0, 0, 0.3);
+    border-width: 1px;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.5);
+}
+
+.ui-setup-bar .ui-setup-go {
+    color: var(--ui-green-text);
+    box-shadow:
+        inset 0 0 0 1px var(--ui-edge-light),
+        inset 0 2px 0 rgba(255, 255, 255, 0.1),
+        0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* As big as there's room for, where it isn't a phone's */
+@media (pointer: fine) {
+    .ui-setup-bar .ui-select-go {
+        font-size: 23px;
+    }
+}
+
+/* Start or Ready while it can't be pressed (a room waiting for everyone, a Cards only room
+   without the cards it takes): still green, dimmed */
+.ui-setup-bar .ui-setup-go:disabled {
+    color: var(--ui-green-text);
+    opacity: 0.5;
+}
+
+/* In a room, whichever is up to you next flashes yellow, as a tab does in the game: Ready until
+   you are, then the host's Start once everyone is */
+.ui-setup-bar .ui-setup-go-now {
+    animation: ui-setup-go-flash 1.2s linear infinite;
+}
+
+@keyframes ui-setup-go-flash {
+    0%,
+    49.9% {
+        color: var(--ui-green-text);
+    }
+    50%,
+    100% {
+        color: var(--ui-yellow);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-setup-bar .ui-setup-go-now {
+        animation: none;
+        color: var(--ui-yellow);
+    }
+}
+
+/* A window too narrow for one line: the modes on a line of their own, under the rest */
+@media (max-width: 1000px) {
+    .ui-select-bar.ui-setup-bar {
+        grid-template-columns: auto 1fr;
+        row-gap: 8px;
+    }
+
+    .ui-setup-bar-modes {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    .ui-setup-bar-go {
+        grid-column: 2;
+    }
+
+    .ui-setup-bar-modes:empty {
+        display: none;
+    }
+}
+
+/* A mode (ModeSwitch): its name, and whether it's on or why it can't be yet */
+.ui-mode-switch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ui-mode-switch-state {
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+}
+
+.ui-mode-switch-off {
+    color: var(--ui-state-red);
+}
+
+.ui-mode-switch-on {
+    color: var(--ui-state-green);
+}
+
+.ui-mode-switch:disabled .ui-mode-switch-state {
     color: var(--ui-text-faint);
 }
 
@@ -1406,11 +1579,6 @@
     /* Room for the longest map's name on the button */
     .ui-select-bar .ui-coins {
         display: none;
-    }
-
-    .ui-select-go {
-        font-size: 17px;
-        padding: 8px 14px;
     }
 }
 
@@ -3994,7 +4162,12 @@
     min-width: 0;
 }
 
+/* Hard mode's title, with its switch beside it */
 .ui-invocations-group-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
     color: #ff981f;
     font-size: 13px;
 }
@@ -4002,6 +4175,15 @@
 .ui-invocation-locked {
     opacity: 0.45;
     cursor: default;
+}
+
+/* Hard mode's four: only to see, so nothing to press */
+.ui-invocation-shown {
+    cursor: default;
+}
+
+.ui-invocation-shown:hover:not(.ui-invocation-on) {
+    border-color: transparent;
 }
 
 /* The badges at 100, 200 and 300 points: lit once a map's been beaten at as many */
@@ -4052,6 +4234,7 @@
 /* The adventurer screen's relics (Relics.tsx): a slot a tier, as the pet's row */
 .ui-relic-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px 8px;
     padding: 4px 2px;

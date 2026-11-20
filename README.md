@@ -30,10 +30,10 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   K'ril Tsutsaroth in the church, in either order, and then Yama in the palace.
 - **34 adventurers**, each with a starting weapon and a bonus, unlocked by beating maps and doing
   tasks on them.
-- **Weapons that upgrade the OSRS way** (bronze to dragon, Fire Strike to Fire Wave) and
-  **evolve** with the right passive (a maxed dragon scimitar with Piety becomes the Abyssal whip),
-  plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a Godsword whose hilt you
-  pick.
+- **Weapons that upgrade the OSRS way** (bronze to dragon, Fire Strike to Fire Wave, Beginner
+  wand to Master wand) and **evolve** with the right passive (a maxed dragon scimitar with Piety
+  becomes the Abyssal whip), plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a
+  Godsword whose hilt you pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
   and passive effects, levels and unlocks.
@@ -92,10 +92,10 @@ loads are quick.
 **WASD** or the arrow keys to move; weapons fire on their own. **1-4** use your utility items (and
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage; click anywhere in
-the open panel to close it. **M** mutes and the mouse wheel zooms. In a boss fight with its own
-button (Justiciar Zachariah's Smite), **Space** uses it; on a controller it's A (cross), and on a
-touch screen the round button. In the menus, **Esc** goes back and **Enter** starts the run, or
-plays again from the results.
+the open panel to close it. **M** mutes and the mouse wheel zooms. In co-op, **Enter** opens the
+chat (**Esc** closes it). In a boss fight with its own button (Justiciar Zachariah's Smite),
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button. In the
+menus, **Esc** goes back and **Enter** starts the run, or plays again from the results.
 
 Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
 upgrades) to read their descriptions.

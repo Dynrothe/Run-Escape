@@ -16,7 +16,9 @@ import {
     packCards,
     packFoilChance,
     parseVersionKey,
+    tierCardId,
     versionKey,
+    weaponTiers,
 } from "../content/cards";
 import { getGear } from "../content/items";
 import { PASSIVES } from "../content/passives";
@@ -438,4 +440,19 @@ export function migrateCards(data: Partial<CardFields>): CardFields {
         out.platinum = points;
     }
     return out;
+}
+
+// Until save version 13 the Kodai wand had one card, for all its levels. Its id is now the
+// Beginner wand's, the first of the wand's tiers, so a save that had it is given the Master wand's
+// (and the tiers between), to keep the wand to its top in a Cards only run.
+export function migrateKodaiCard(cards: Record<string, number>): void {
+    const owns = (card: CardDef) =>
+        cardVersions(card).some((rarity) => (cards[versionKey(card, rarity)] ?? 0) > 0);
+    const wand = getWeapon("kodai_wand");
+    const master = CARD_BY_ID.get(tierCardId(wand.id, weaponTiers(wand).length - 1))!;
+    if (!owns(CARD_BY_ID.get(tierCardId(wand.id, 0))!) || owns(master)) {
+        return;
+    }
+    cards[versionKey(master, master.rarity)] = 1;
+    giveLowerTiers(cards, master);
 }

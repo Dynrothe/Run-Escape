@@ -9,7 +9,7 @@ import { getCharacter } from "../content/characters";
 import { CAMPAIGN_MAPS, getMap } from "../content/maps";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
-import { GameUi } from "./GameUi";
+import { GameUi, ModeSwitch } from "./GameUi";
 import { PHONE_QUERY } from "./usePhoneLayout";
 
 vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
@@ -512,6 +512,45 @@ test("a room's invocations open once everyone in it has beaten the map", () => {
     room(true, true);
     expect(screen.getByRole("button", { name: /^Invocations/ })).toHaveTextContent("20 points");
 }, 30000);
+
+test("a room's Ready is pressed while you're ready, and what's up to you next glows", () => {
+    // The host, not ready yet: Ready glows, and Start waits for them
+    renderRoom("alice");
+    const ready = screen.getByRole("button", { name: "Ready" });
+    expect(ready).toHaveAttribute("aria-pressed", "false");
+    expect(ready).toHaveClass("ui-setup-go-now");
+    const start = screen.getByRole("button", { name: "Start · Lumbridge" });
+    expect(start).toBeDisabled();
+    expect(start).not.toHaveClass("ui-setup-go-now");
+    cleanup();
+    // A guest who's ready: pressed and ticked, and nothing glows
+    renderRoom("bob");
+    const pressed = screen.getByRole("button", { name: "Ready" });
+    expect(pressed).toHaveAttribute("aria-pressed", "true");
+    expect(pressed).not.toHaveClass("ui-setup-go-now");
+    expect(pressed.querySelector(".ui-coop-ready-tick")).not.toBeNull();
+}, 30000);
+
+test("a mode's switch is pressed while it's on, and says why while it's locked", () => {
+    const onToggle = vi.fn();
+    const view = render(<ModeSwitch name="Hard" on={false} onToggle={onToggle} />);
+    const hard = screen.getByRole("button", { name: "Hard" });
+    expect(hard).toHaveAttribute("aria-pressed", "false");
+    expect(hard).toHaveTextContent("Off");
+    fireEvent.click(hard);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    view.rerender(<ModeSwitch name="Hard" on onToggle={onToggle} />);
+    expect(hard).toHaveAttribute("aria-pressed", "true");
+    expect(hard).toHaveTextContent("On");
+
+    // Locked: not a switch at all, its reason read with its name
+    view.rerender(<ModeSwitch name="Hard" on={false} locked="Beat the map" onToggle={onToggle} />);
+    const locked = screen.getByRole("button", { name: "Hard Beat the map" });
+    expect(locked).toBeDisabled();
+    expect(locked).not.toHaveAttribute("aria-pressed");
+    expect(locked).toHaveAttribute("title", "Beat the map");
+});
 
 test("the map screen opens on the picked map's tab, and a map on another tab can be picked", () => {
     expect.hasAssertions();

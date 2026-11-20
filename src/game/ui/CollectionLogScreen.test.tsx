@@ -28,7 +28,7 @@ afterEach(() => {
 
 // The log open on a new save, each item's icon its object id
 function openLog(): {
-    showScreen: ReturnType<typeof vi.fn>;
+    leaveMenu: ReturnType<typeof vi.fn>;
     getRunLogSaves: ReturnType<typeof vi.fn>;
     log: HTMLElement;
 } {
@@ -37,17 +37,17 @@ function openLog(): {
     vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
     const store = new GameStore(createSave());
     store.set({ screen: "collectionLog" });
-    const showScreen = vi.fn();
+    const leaveMenu = vi.fn();
     // A run's finds, which the title's log never asks for
     const withRun = createSave();
     withRun.trophies.push(...TROPHIES.map((trophy) => trophy.id));
     const getRunLogSaves = vi.fn(() => ({ saved: createSave(), withRun }));
     const client = new Proxy(
-        { showScreen, getRunLogSaves },
+        { leaveMenu, getRunLogSaves },
         { get: (target, key) => target[key as keyof typeof target] ?? vi.fn() },
     );
     render(<GameUi store={store} client={client as unknown as GameClient} />);
-    return { showScreen, getRunLogSaves, log: screen.getByRole("dialog") };
+    return { leaveMenu, getRunLogSaves, log: screen.getByRole("dialog") };
 }
 
 function pageTitle(log: HTMLElement): string | null {
@@ -55,14 +55,14 @@ function pageTitle(log: HTMLElement): string | null {
 }
 
 describe("the Collection log's screen", () => {
-    test("closes with its X, back to the title", () => {
-        const { showScreen, log } = openLog();
-        fireEvent.click(within(log).getByRole("button", { name: "Close" }));
-        expect(showScreen).toHaveBeenCalledWith("title");
+    test("closes with Back, to where it was opened (the title, or a co-op room)", () => {
+        const { leaveMenu, log } = openLog();
+        fireEvent.click(within(log).getByRole("button", { name: "Back" }));
+        expect(leaveMenu).toHaveBeenCalled();
     });
 
     test("gives a pad's first highlight to the open tab, so pressing A twice stays in the log", () => {
-        const { showScreen, log } = openLog();
+        const { leaveMenu, log } = openLog();
         // jsdom lays nothing out, so give everything a size
         for (const el of log.querySelectorAll<HTMLElement>("button, select")) {
             el.getBoundingClientRect = () =>
@@ -95,7 +95,7 @@ describe("the Collection log's screen", () => {
         pads.dispose();
         expect(document.activeElement).toHaveClass("ui-log-tab");
         expect(document.activeElement).toHaveAttribute("aria-pressed", "true");
-        expect(showScreen).not.toHaveBeenCalled();
+        expect(leaveMenu).not.toHaveBeenCalled();
     });
 
     test("keeps each tab's entry, and the dropdown picks one as the list does", () => {

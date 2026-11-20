@@ -20,6 +20,7 @@ import {
     packCards,
     packFoilChance,
     parseVersionKey,
+    tierCardId,
     weaponTiers,
 } from "../content/cards";
 import { RARITY_ORDER, atLeast } from "../content/rarity";
@@ -456,6 +457,35 @@ describe("cards in the save", () => {
             migrateCards({ cards: ["weapon:scimitar"] as unknown as Record<string, number> }),
         ).toEqual({});
         expect(migrateCards({ cardPacks: 1e9 })).toEqual({ cardPacks: MAX_CARD_PACKS });
+    });
+
+    it("gives a save that had the Kodai wand's one card the Master wand's, once", () => {
+        const tiers = weaponTiers(getWeapon("kodai_wand"));
+        const wand = (tier: number) => card(tierCardId("kodai_wand", tier));
+        const master = wand(tiers.length - 1);
+        expect(master.name()).toBe("Master wand");
+        // Its card at any version, a foil too
+        const rarer = RARITY_ORDER[RARITY_ORDER.indexOf(wand(0).rarity) + 1];
+        const old = migrateSave({
+            version: 12,
+            cards: { [`${wand(0).id}@${rarer}`]: 2 },
+            cardFoils: { [`${wand(0).id}@${rarer}`]: 1 },
+        });
+        expect(getCardCopies(old, master.id)).toBe(1);
+        for (let tier = 0; tier < tiers.length - 1; tier++) {
+            expect(getOwnedVersions(old, wand(tier)).length).toBeGreaterThan(0);
+        }
+        expect(old.cards![`${wand(0).id}@${rarer}`]).toBe(2);
+        expect(old.cardFoils).toEqual({ [`${wand(0).id}@${rarer}`]: 1 });
+        // Not to a save from 13 on, where the card is the Beginner wand's
+        const now = migrateSave({ version: 13, cards: { [wand(0).id]: 1 } });
+        expect(now.cards).toEqual({ [wand(0).id]: 1 });
+        // Nor a second copy to one with the Master wand already, nor anything to one without it
+        const has = migrateSave({ version: 12, cards: { [wand(0).id]: 1, [master.id]: 3 } });
+        expect(getCardCopies(has, master.id)).toBe(3);
+        expect(migrateSave({ version: 12, cards: { "trophy:scythe": 1 } }).cards).toEqual({
+            "trophy:scythe": 1,
+        });
     });
 });
 

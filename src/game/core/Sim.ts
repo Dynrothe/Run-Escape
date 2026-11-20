@@ -700,7 +700,7 @@ const SHOOTER_KEEP = 0.75;
 const CHAT_RANGE = 14;
 // Utility blasts show their explosion on this many of the enemies they hit
 const MAX_BLAST_EFFECTS = 14;
-// Slashes' swooshes cover this much either side of where they aim, radians
+// Slashes and their swooshes cover this much either side of where they aim, radians
 const SLASH_ARC = 1.1;
 // How wide a slash's strip is, in tiles
 const SLASH_WIDTH = 1.5;
@@ -4050,6 +4050,42 @@ export class Sim {
             this.tick++;
             return;
         }
+        if (this.victoryAt >= 0) {
+            // Only the final boss's fall is left to play (falling): nothing else moves, lands or
+            // turns up, and the clock goes on for its death animation
+            this.tick++;
+            if (this.tick === this.fellTick + 1) {
+                // A final lair still lifts its seal and plays its victory cues.
+                const lair = this.lair;
+                if (lair?.boss?.dead) {
+                    this.beatLair(lair, lair.boss);
+                }
+                // What its fight left goes with it, rather than standing still on the screen
+                if (this.tombsWardens?.three) {
+                    this.endWardensThree(this.tombsWardens);
+                }
+                this.clearBossAttacks();
+                // Idle rather than walk on the spot, as at endRun
+                for (const { player } of this.heroes) {
+                    player.prevX = player.x;
+                    player.prevY = player.y;
+                    player.moving = false;
+                }
+                for (const thrall of this.thralls) {
+                    thrall.prevX = thrall.x;
+                    thrall.prevY = thrall.y;
+                    thrall.moving = false;
+                }
+                for (const enemy of this.enemies) {
+                    enemy.prevX = enemy.x;
+                    enemy.prevY = enemy.y;
+                }
+            }
+            if (this.tick >= this.victoryAt) {
+                this.endRun("victory", this.fellTick);
+            }
+            return;
+        }
         if (this.state !== "playing") {
             return;
         }
@@ -4057,12 +4093,6 @@ export class Sim {
         // The Wardens' fight is on the clock, though it's no path
         if (this.map.tombs && this.tombsPath === undefined && !this.tombsWardens) {
             this.nexusTicks++;
-        }
-        // The final boss has fallen (BossDef.fallSeconds): its death plays out,
-        // and then the run's won, from when it fell
-        if (this.victoryAt >= 0 && this.tick >= this.victoryAt) {
-            this.endRun("victory", this.fellTick);
-            return;
         }
         for (const hero of this.heroes) {
             hero.recentDamage[this.tick % DPS_WINDOW_TICKS] = 0;
@@ -8824,16 +8854,7 @@ export class Sim {
         const def = WARDENS.three;
         const warden = this.enemies.find((e) => e.uid === three.wardenUid);
         if (!warden || warden.dead) {
-            if (!three.over) {
-                three.over = true;
-                for (const enemy of this.enemies) {
-                    if (!enemy.dead && enemy.uid !== three.wardenUid) {
-                        this.vanish(enemy);
-                    }
-                }
-                fight.marks = [];
-                this.clearBossAttacks();
-            }
+            this.endWardensThree(fight);
             return;
         }
         const forms = def.forms[three.side];
@@ -8878,6 +8899,23 @@ export class Sim {
                   ? def.quicker
                   : def.every;
         three.nextSlam = this.tick + secondsToTicks(every);
+    }
+
+    // The last Warden's down: its phantoms and the rest go, and its marks and attacks. Once, from
+    // this phase's step, or the tick after it fell (stepRun), as nothing steps during its fall.
+    private endWardensThree(fight: WardensFight): void {
+        const three = fight.three!;
+        if (three.over) {
+            return;
+        }
+        three.over = true;
+        for (const enemy of this.enemies) {
+            if (!enemy.dead && enemy.uid !== three.wardenUid) {
+                this.vanish(enemy);
+            }
+        }
+        fight.marks = [];
+        this.clearBossAttacks();
     }
 
     // It charges: siphons land over the floor, and with the second and third a phantom joins
@@ -20645,18 +20683,26 @@ export class Sim {
             const lairWin = this.lairs.some((lair) => lair.def.final && lair.boss === enemy);
             if (this.endless && !lairWin) {
                 this.nextRound();
-            } else if (fall) {
-                // Its death first, with nothing landing meanwhile (stepRun)
-                this.victoryAt = this.tick + secondsToTicks(fall);
-                this.fellTick = this.tick;
-                if (this.map.tombs) {
-                    this.openTombsChest();
-                }
-            } else {
-                if (this.map.raid) {
+            } else if (!this.runOver || this.endTick === this.tick) {
+                if (fall) {
+                    this.fellTick = this.tick;
+                    if (this.map.tombs) {
+                        this.openTombsChest();
+                    }
+                    if (!this.runOver) {
+                        // Its death first, standing still meanwhile (stepRun). A level up or casket
+                        // this tick opened is let go, as at a win without a fall: nothing waits on
+                        // a choice now, and no new one opens (falling).
+                        this.victoryAt = this.tick + secondsToTicks(fall);
+                        this.state = "playing";
+                        return;
+                    }
+                } else if (this.map.raid) {
                     this.scoreRaidRoom();
                     this.openRaidChest();
                 }
+                // Also when the last player fell this same tick: the win replaces the death, in
+                // the tick the client records it, and the boss's fall goes unplayed
                 this.endRun("victory");
             }
         }
@@ -21651,31 +21697,83 @@ export class Sim {
                 weaponId: def.id,
             });
             this.rule?.onSwing(player.x, player.y, dirX, dirY, reach + this.cutReach(), 0, width);
+            if (!def.stab) {
+                this.rule?.onSwing(
+                    player.x,
+                    player.y,
+                    dirX,
+                    dirY,
+                    reach + this.cutReach(),
+                    SLASH_ARC,
+                    0,
+                );
+            }
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const along = ox * dirX + oy * dirY;
                 const across = Math.abs(ox * -dirY + oy * dirX);
-                if (
-                    along < -0.3 ||
-                    along > reach + enemy.radius ||
-                    across > width / 2 + enemy.radius
-                ) {
-                    return;
-                }
+                let hitStrip =
+                    along >= -0.3 &&
+                    along <= reach + enemy.radius &&
+                    across <= width / 2 + enemy.radius;
                 // A big one only if its edge reaches the box: past a corner, the box widened by
                 // its radius takes in what's well clear of it
-                if (enemy.radius > 1) {
+                if (hitStrip && enemy.radius > 1) {
                     const pastEnd = Math.max(0, along - reach);
                     const pastSide = Math.max(0, across - width / 2);
-                    if (pastEnd * pastEnd + pastSide * pastSide > enemy.radius * enemy.radius) {
-                        return;
-                    }
+                    hitStrip =
+                        pastEnd * pastEnd + pastSide * pastSide <= enemy.radius * enemy.radius;
+                }
+                // The strip, and what's under the swoosh's arc (a stab hits only its strip)
+                if (
+                    !hitStrip &&
+                    (def.stab ||
+                        !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, SLASH_ARC, false))
+                ) {
+                    return;
                 }
                 hit.push(enemy);
             });
         }
         this.meleeHits(def, level, hit, special);
+    }
+
+    // Whether an enemy (ox, oy from the player) is within reach and arc radians either side of
+    // dir, a big one by its edge. allRound: anything right on top of the player is in the way of
+    // the swing, whichever way it goes (a sweep's); a slash hits only what's in its swoosh
+    private inMeleeArc(
+        enemy: Enemy,
+        ox: number,
+        oy: number,
+        dirX: number,
+        dirY: number,
+        reach: number,
+        arc: number,
+        allRound: boolean,
+    ): boolean {
+        const dist = fm.hypot(ox, oy);
+        if (dist > reach + enemy.radius) {
+            return false;
+        }
+        if (allRound && dist <= 0.8) {
+            return true;
+        }
+        const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
+        const angle = fm.acos(Math.max(-1, Math.min(1, along)));
+        if (angle > arc + enemy.radius / dist) {
+            return false;
+        }
+        // Past a far corner, a widened angle alone can catch a big enemy clear of the arc.
+        if (enemy.radius > 1 && angle > arc) {
+            const sideAlong = dist * fm.cos(angle - arc);
+            const sideOff = dist * fm.sin(angle - arc);
+            const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
+            if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Everything within reach in an arc either side of where it aims (and
@@ -21720,27 +21818,12 @@ export class Sim {
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
-                const dist = fm.hypot(ox, oy);
-                if (enemy.dead || hit.has(enemy) || dist > reach + enemy.radius) {
+                if (
+                    enemy.dead ||
+                    hit.has(enemy) ||
+                    !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, arc, true)
+                ) {
                     return;
-                }
-                // Anything right on top of the player is in the way of the
-                // swing, whichever way it goes
-                const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
-                const angle = fm.acos(Math.max(-1, Math.min(1, along)));
-                if (dist > 0.8 && angle > arc + enemy.radius / dist) {
-                    return;
-                }
-                // A big one off to the side only if its edge reaches the arc's nearer side, a line
-                // out to reach: past the arc's far corners, the widened angle takes in what's
-                // well clear of it
-                if (enemy.radius > 1 && dist > 0.8 && angle > arc) {
-                    const sideAlong = dist * fm.cos(angle - arc);
-                    const sideOff = dist * fm.sin(angle - arc);
-                    const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
-                    if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
-                        return;
-                    }
                 }
                 hit.add(enemy);
             });
@@ -24017,7 +24100,9 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                if (pickup.kind !== kind) {
+                // (one picked up this tick, its value -1 until stepPickups drops it, is gone and
+                // isn't counted)
+                if (pickup.kind !== kind || pickup.value < 0) {
                     continue;
                 }
                 // Ashes and bones count as one towards the limit, but only gather with their own
@@ -25192,7 +25277,7 @@ export class Sim {
 
     private stepRandomEvents(): void {
         const visitor = this.visitor;
-        if (this.runOver) {
+        if (this.runOver || this.victoryAt >= 0) {
             return;
         }
         if (visitor) {
@@ -25617,7 +25702,7 @@ export class Sim {
         }
         this.chests.push(chest);
         this.emit({ type: "chest", tier, itemId, coins });
-        if (this.state === "playing") {
+        if (this.state === "playing" && this.victoryAt < 0) {
             this.state = "chest";
         }
     }
@@ -25681,7 +25766,7 @@ export class Sim {
             }
             this.emit({ type: "levelUp", level });
         }
-        if (this.state === "playing" && this.anyoneToChoose()) {
+        if (this.state === "playing" && this.victoryAt < 0 && this.anyoneToChoose()) {
             this.state = "levelUp";
             this.rollMissingChoices();
         }
@@ -25812,6 +25897,12 @@ export class Sim {
 
     get runOver(): boolean {
         return this.state === "dead" || this.state === "victory";
+    }
+
+    // The final boss's fall is playing out before the win (BossDef.fallSeconds): the run stands
+    // still, though its state is still "playing"
+    get falling(): boolean {
+        return this.victoryAt >= 0 && !this.runOver;
     }
 
     // The power-up whose look the player has on; it's off when the run ends

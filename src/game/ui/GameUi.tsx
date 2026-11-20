@@ -32,12 +32,14 @@ import {
     HudNumbers,
     HudView,
     InventorySlotView,
+    MenuScreen,
     QuestTrackView,
     SlotView,
     ToastLogEntry,
     UiSnapshot,
 } from "../client/GameStore";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
+import { CHAT_MODES } from "../client/coop/chat";
 import {
     ACT_BY_ID,
     ActDef,
@@ -157,6 +159,7 @@ import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
 import { CombatBreakdown, CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
+import { CoopChatRun } from "./CoopChat";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { DirectorPanel } from "./DirectorPanel";
@@ -364,6 +367,50 @@ export function Toggle({
             }}
         >
             {on ? t("ui.common.on") : t("ui.common.off")}
+        </button>
+    );
+}
+
+// A mode (endless, hard, expert) as a button of two lines like the invocations' beside it: its
+// name, and whether it's on or why it can't be turned on yet. A run's setup bar and a co-op
+// room's have them.
+export function ModeSwitch({
+    name,
+    on,
+    locked,
+    tooltip,
+    onToggle,
+}: {
+    name: string;
+    on: boolean;
+    locked?: string;
+    // What it does, or what opens it, on hover (else the reason it's locked)
+    tooltip?: string;
+    onToggle: () => void;
+}): JSX.Element {
+    return (
+        <button
+            className="ui-button ui-mode-switch"
+            // The mode's name, pressed or not; locked, the reason's read out with it
+            aria-label={locked === undefined ? name : undefined}
+            aria-pressed={locked === undefined ? on : undefined}
+            disabled={locked !== undefined}
+            title={tooltip ?? locked}
+            onClick={(e) => {
+                onToggle();
+                // Give Enter and Space back to the screen
+                releaseFocus(e);
+            }}
+        >
+            <span className="ui-mode-switch-name">{name}</span>
+            <span
+                className={
+                    "ui-mode-switch-state" +
+                    (locked !== undefined ? "" : on ? " ui-mode-switch-on" : " ui-mode-switch-off")
+                }
+            >
+                {locked ?? (on ? t("ui.common.on") : t("ui.common.off"))}
+            </span>
         </button>
     );
 }
@@ -603,6 +650,29 @@ function CoopFlagSetting({ ui, client }: ScreenProps): JSX.Element {
                 label={t("settings.coop_flag.name")}
                 onToggle={() => client.toggleCoopFlag()}
             />
+        </Setting>
+    );
+}
+
+function CoopChatSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting name={t("settings.coop_chat.name")} text={t("settings.coop_chat.desc")}>
+            {CHAT_MODES.map((mode) => (
+                <button
+                    key={mode}
+                    className={
+                        "ui-button ui-button-small ui-frame-rate" +
+                        (ui.display.coopChat === mode ? " ui-frame-rate-on" : "")
+                    }
+                    aria-pressed={ui.display.coopChat === mode}
+                    onClick={(e) => {
+                        client.setChatMode(mode);
+                        releaseFocus(e);
+                    }}
+                >
+                    {t(`settings.coop_chat.${mode}`)}
+                </button>
+            ))}
         </Setting>
     );
 }
@@ -871,7 +941,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
 // Behind the title screen's Settings button: the pause menu's sections and cards, with what only
 // the title has besides (the save, the menu's camera, screen shake, run stats and co-op's flag).
 // The save on the left, first, as it's what a player can lose.
-function SettingsPanel({
+export function SettingsPanel({
     ui,
     client,
     onClose,
@@ -947,6 +1017,7 @@ function SettingsPanel({
                     >
                         <MovePredictionSetting ui={ui} client={client} />
                         <CoopFlagSetting ui={ui} client={client} />
+                        <CoopChatSetting ui={ui} client={client} />
                     </SettingsSection>
                     {padKind ? (
                         <SettingsSection
@@ -993,6 +1064,42 @@ function TitleTile({
             <ItemIcon objId={objId} spriteId={spriteId} />
             <span className="ui-title-tile-name">{name}</span>
         </button>
+    );
+}
+
+export type MenuItem = { screen: MenuScreen; name: string; objId?: number; spriteId?: number };
+
+// The title's tiles, each a menu screen: a co-op room's Menu opens them too, without leaving the
+// room (GameClient.openMenu)
+export function menuItems(): MenuItem[] {
+    return [
+        { screen: "shop", name: t("ui.title.skills"), spriteId: TITLE_TAB_SPRITES.skills },
+        { screen: "armoury", name: t("ui.title.armoury"), spriteId: TITLE_TAB_SPRITES.armoury },
+        { screen: "wardrobe", name: t("ui.title.wardrobe"), objId: WARDROBE_ICON_OBJ },
+        { screen: "quests", name: t("ui.title.quests"), spriteId: TITLE_TAB_SPRITES.quests },
+        {
+            screen: "combatAchievements",
+            name: t("ui.title.combat_achievements"),
+            objId: COMBAT_ACHIEVEMENTS_OBJ,
+        },
+        { screen: "collectionLog", name: t("ui.title.collection_log"), objId: COLLECTION_LOG_OBJ },
+        { screen: "cards", name: t("ui.title.cards"), objId: CARDS_ICON_OBJ },
+    ];
+}
+
+function MenuTiles({ client }: { client: GameClient }): JSX.Element {
+    return (
+        <>
+            {menuItems().map((item) => (
+                <TitleTile
+                    key={item.screen}
+                    name={item.name}
+                    objId={item.objId}
+                    spriteId={item.spriteId}
+                    onClick={() => client.openMenu(item.screen)}
+                />
+            ))}
+        </>
     );
 }
 
@@ -1140,41 +1247,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         )}
                     </div>
                     <div className="ui-title-tiles">
-                        <TitleTile
-                            name={t("ui.title.skills")}
-                            spriteId={TITLE_TAB_SPRITES.skills}
-                            onClick={() => client.showScreen("shop")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.armoury")}
-                            spriteId={TITLE_TAB_SPRITES.armoury}
-                            onClick={() => client.showScreen("armoury")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.wardrobe")}
-                            objId={WARDROBE_ICON_OBJ}
-                            onClick={() => client.showScreen("wardrobe")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.quests")}
-                            spriteId={TITLE_TAB_SPRITES.quests}
-                            onClick={() => client.showScreen("quests")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.combat_achievements")}
-                            objId={COMBAT_ACHIEVEMENTS_OBJ}
-                            onClick={() => client.showScreen("combatAchievements")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.collection_log")}
-                            objId={COLLECTION_LOG_OBJ}
-                            onClick={() => client.showScreen("collectionLog")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.cards")}
-                            objId={CARDS_ICON_OBJ}
-                            onClick={() => client.showScreen("cards")}
-                        />
+                        <MenuTiles client={client} />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
@@ -1338,10 +1411,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
         <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
     ) : (
         <>
-            {/* A raid ends with its last room: no endless */}
-            {!map.raid && <EndlessSwitch ui={ui} client={client} />}
-            <HardSwitch ui={ui} client={client} />
-            {expertShown && <ExpertSwitch ui={ui} client={client} />}
+            {/* The invocations first, as in a co-op room's bar */}
             {runBoard && (
                 <RunInvocationsButton
                     ui={ui}
@@ -1349,6 +1419,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     onOpen={() => setBoard(true)}
                 />
             )}
+            {/* A raid ends with its last room: no endless */}
+            {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+            <HardSwitch ui={ui} client={client} />
+            {expertShown && <ExpertSwitch ui={ui} client={client} />}
         </>
     );
     const back = (
@@ -1358,7 +1432,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     );
     const enter = (
         <button
-            className="ui-button ui-button-go ui-select-go"
+            className="ui-button ui-button-go ui-select-go ui-setup-go"
             // From the Cards only tab, not without the cards it takes (isCardRunBlocked)
             disabled={isCardRunBlocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
             onClick={() => client.startRun()}
@@ -1411,11 +1485,13 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 onCardNeeds={setNeedsFor}
             />
             <MapPanel ui={ui} client={client} />
-            <div className="ui-panel rs-border rs-background ui-select-bar">
-                {back}
-                <Coins amount={ui.save.coins} />
-                {modes}
-                {enter}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {back}
+                    <Coins amount={ui.save.coins} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-modes">{modes}</div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{enter}</div>
             </div>
             {boards}
         </div>
@@ -1474,10 +1550,12 @@ function PhoneSetup({
             <PhoneMapCard ui={ui} onOpen={() => onPicker("map")} />
             <PhoneAdventurerCard ui={ui} map={map} onOpen={() => onPicker("adventurer")} />
             <div className="ui-panel rs-border rs-background ui-phone-modes">{modes}</div>
-            <div className="ui-panel rs-border rs-background ui-select-bar">
-                {back}
-                <Coins amount={ui.save.coins} />
-                {enter}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {back}
+                    <Coins amount={ui.save.coins} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{enter}</div>
             </div>
             {children}
         </div>
@@ -1602,25 +1680,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
     }
     const open = isEndlessUnlocked(ui.save, ui.mapId);
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.endless.name")}
+            on={ui.endless}
+            locked={open ? undefined : t("ui.endless.beat_map")}
+            tooltip={
                 open
                     ? t("ui.endless.tooltip.open")
                     : t("ui.endless.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.endless.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.endless}
-                    label={t("ui.endless.name")}
-                    onToggle={() => client.toggleEndless()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleEndless()}
+        />
     );
 }
 
@@ -1630,25 +1700,17 @@ function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isHardUnlocked(ui.save, ui.mapId);
     const shownMapName = mapName(getMap(ui.mapId));
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.hard.name")}
+            on={ui.hard}
+            locked={open ? undefined : t("ui.endless.beat_map")}
+            tooltip={
                 open
                     ? t("ui.hard.tooltip.open")
                     : t("ui.hard.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.hard.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.hard}
-                    label={t("ui.hard.name")}
-                    onToggle={() => client.toggleHard()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleHard()}
+        />
     );
 }
 
@@ -1713,25 +1775,17 @@ function ExpertSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isExpertUnlocked(ui.save, ui.mapId);
     const shownMapName = mapName(getMap(ui.mapId));
     return (
-        <div
-            className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={
+        <ModeSwitch
+            name={t("ui.expert.name")}
+            on={ui.expert}
+            locked={open ? undefined : t("ui.expert.beat_hard")}
+            tooltip={
                 open
                     ? t("ui.expert.tooltip.open")
                     : t("ui.expert.tooltip.locked", { map: shownMapName })
             }
-        >
-            <span className="ui-endless-name">{t("ui.expert.name")}</span>
-            {open ? (
-                <Toggle
-                    on={ui.expert}
-                    label={t("ui.expert.name")}
-                    onToggle={() => client.toggleExpert()}
-                />
-            ) : (
-                <span className="ui-endless-hint">{t("ui.expert.beat_hard")}</span>
-            )}
-        </div>
+            onToggle={() => client.toggleExpert()}
+        />
     );
 }
 
@@ -3199,7 +3253,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
     const [confirm, confirmDialog] = useConfirm();
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
@@ -3335,7 +3389,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                     {t(isCoarsePointer ? "ui.shop.hint.touch" : "ui.shop.hint.mouse")}
                 </p>
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("ui.common.back")}
                     </button>
                     <span className="ui-shop-balance">
@@ -3383,6 +3437,10 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
+            {ui.party.length > 0 &&
+                !ui.cinematic &&
+                ui.overlay !== "dead" &&
+                ui.overlay !== "victory" && <CoopChatRun ui={ui} client={client} />}
             {import.meta.env.DEV && ui.director ? (
                 // Dev only: the shot editor, over a cinematic held where it's put
                 <DirectorPanel director={ui.director} client={client} trailer={ui.trailer} />
@@ -5379,6 +5437,7 @@ function PauseSettings({ ui, client }: ScreenProps): JSX.Element {
                     title={t("settings.group.coop")}
                 >
                     <MovePredictionSetting ui={ui} client={client} />
+                    <CoopChatSetting ui={ui} client={client} />
                 </SettingsSection>
                 {padKind ? (
                     <SettingsSection

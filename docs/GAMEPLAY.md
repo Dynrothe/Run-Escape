@@ -44,6 +44,9 @@ version and how to run it.
   rune (air, water, earth, fire) every other level. A maxed scimitar with Piety evolves
   into the Abyssal whip; maxed Ice Burst with Protect from Melee becomes Ice Barrage. The weapon in your
   hand and passives like the Graceful outfit or Amulet of glory show up on your character.
+- Melee slashes hit everything under their swoosh, and stabs (the keris partisans, Osmumten's
+  fang and the Ghrazi rapier) what's straight ahead. A weapon that swings both ways hits an enemy
+  right beside you with each side.
 - **The Ancient bursts**: Ice Burst freezes what's around you, Smoke Burst poisons it, Shadow
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
   Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of
@@ -81,8 +84,9 @@ version and how to run it.
   **Dinh's blazing bulwark**, whose Shield Bash reaches further and burns; the Twisted bow with Rigour
   becomes the **Corrupted twisted bow**; Tumeken's shadow with Augury becomes the **Corrupted
   tumeken's shadow**; the Sanguinesti staff with Rapid Heal becomes the **Holy sanguinesti staff**;
-  and the Harmonised nightmare staff with the Amulet of glory becomes the **Eldritch nightmare staff**,
-  whose surges split where they hit.
+  the Master wand with Augury becomes the **Kodai wand**, whose three surges pass through an enemy
+  and splash further; and the Harmonised nightmare staff with the Amulet of glory becomes the
+  **Eldritch nightmare staff**, whose surges split where they hit.
 - **Evolving**: a weapon at its last level with its passive (at any level) offers its evolution first
   on every level up. An evolved weapon has three levels of its own and keeps the weapon's bonus
   damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
@@ -211,8 +215,8 @@ version and how to run it.
       you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
-      slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
-      the undead 50% harder.
+      slash four times at once, the last the hardest, using their special attack animation, as
+      **Burning claws** do. The **Ivandis flail** hits vampyres and the undead 50% harder.
     - **Ranged**: the **Twisted bow** shoots the toughest enemy in range, and hits harder the
       more hitpoints it has (up to +150% on bosses). The **Bow of Faerdhinen** fires crystal
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
@@ -230,8 +234,9 @@ version and how to run it.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half
-      its damage, up to 2 hitpoints. From the new maps: the **Kodai wand**, Water Surge at two
-      enemies at once, and the **Blue moon spear**, ice that crashes down and freezes. The
+      its damage, up to 2 hitpoints. From the new maps: the **Wand**, splashing water spells at two
+      enemies at once, from the Beginner wand to the Master wand and Water Strike to Water Surge,
+      and the **Blue moon spear**, ice that crashes down and freezes. The
       **Crystal staff** grows from basic to attuned (level 4) and perfected (level 7), and
       **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning. The
       **Volatile Nightmare staff** casts Immolate at the toughest enemy in range, slow and heavier
@@ -250,7 +255,7 @@ version and how to run it.
     | Desert             | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik          | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja            | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend            | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Kourend            | Wand, Dinh's bulwark                             | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
     | Varlamore          | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania          | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars           | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
@@ -436,19 +441,19 @@ version and how to run it.
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
   records of its own. A win counts as a win on the map, and turns its tick gold. On campaign
   and Act II maps, hard mode is a preset of four invocations (below) worth 180 points.
-- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone
-  in the room), the Invocations button beside Hard opens a board of opt-in handicaps, as the Tombs
-  of Amascut's: Walk the Path (enemies 15%
-  faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
-  rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
-  getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
-  patterns half as many bullets again, 15), Ancient Haste (the run's clock 25% faster, the final boss
-  at 12:00, 10) and Blood Moon (every boss a minute early, 15). Hard mode's four are a row of their
-  own that the Hard switch turns on together. Each point adds 1.5% to the run's coins (hard mode's
-  four pay its 25% between them); every coin bonus (invocations, hard mode, Act II's steps) adds
-  together, up to +300%. A map's card shows its best win at invocations, and badges for winning at
-  100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids and the
-  gauntlet don't take them (their Hard is their own).
+- **Invocations**: on campaign and Act II maps, once the map's been beaten (in co-op, by everyone in
+  the room), the Invocations button in the setup bar opens a board of opt-in handicaps, as the Tombs
+  of Amascut's: Walk the Path (enemies 15% faster, 10 points), Upset Stomach (no food drops, no
+  Sandwich lady, 15), Overly Draining (no rerolls or banishes, 10), Glass Cannon (half your
+  hitpoints, 20), Hardcore (no Ring of life, and no getting back up in co-op, 15), Feeling Special?
+  (bosses enrage at 75%, 10), Aerial Assault (bosses' patterns half as many bullets again, 15),
+  Ancient Haste (the run's clock 25% faster, the final boss at 12:00, 10) and Blood Moon (every boss
+  a minute early, 15). Hard mode's four are a row of their own, only to see: the Hard switch (on the
+  board over them, or in the setup bar) turns them on together. Each point adds 1.5% to the run's
+  coins (hard mode's four pay its 25% between them); every coin bonus (invocations, hard mode, Act
+  II's steps) adds together, up to +300%. A map's card shows its best win at invocations, and badges
+  for winning at 100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids
+  and the gauntlet don't take them (their Hard is their own).
 - **Relics**: once Act II is open, a row of four slots on the adventurer screen. Each Act II map
   beaten opens the next tier, and one relic a tier stays picked across runs: tier 1 Endless Harvest
   (bones within 10 tiles fly to you every 20 s), Production Prodigy (caskets never stop the run:
@@ -461,7 +466,7 @@ version and how to run it.
   what's there) or Reloaded (twice a run, keep a level up's offer and take it at a later level up).
   They're on campaign and Act II maps, each player's own in co-op, and off in boss fights, raids and
   the Tombs. A win with a relic on counts, but sets no hard-mode record; records show the relics
-  they were set with.
+  they were set with. Use Remove all beside the slots to unequip every relic at once.
 - **Remixes**: beating an Act II map opens its rule on every first-campaign map, a switch for each
   on the map's card (under its records): Overgrown (the Stranglewood's roots, creeping in from
   blocked ground), Shadow (Lassar's puddles into the Shadow Realm, drawn as the map darker and

@@ -67,8 +67,9 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
         ui.cardShopPack !== undefined ? "shop" : "album",
     );
     const [focusPack] = useState(ui.cardShopPack || undefined);
-    // Opened from the run screen (Card collection only's needs): Back goes back there
-    const [backTo] = useState(ui.cardShopFrom ?? "title");
+    // Opened from the run screen or a co-op room (Card collection only's needs): Back goes back
+    // there, and otherwise to where the menu was opened from
+    const [backTo] = useState(ui.cardShopFrom);
     useEffect(() => {
         if (ui.cardShopPack !== undefined) {
             client.cardShopShown();
@@ -108,7 +109,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
             setViewing({ card });
         }
     };
-    const back = () => client.showScreen(backTo);
+    const back = () => (backTo ? client.showScreen(backTo) : client.leaveMenu());
     const openHeld = () => {
         const cards = client.openCardPack();
         if (cards) {

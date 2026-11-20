@@ -89,6 +89,12 @@ export class GameInput {
         return wheel;
     }
 
+    // Lets go of every key held, as the focus goes to a box to type in: its
+    // keys never come here, so their releases wouldn't either
+    release(): void {
+        this.down.clear();
+    }
+
     private isTyping(event: KeyboardEvent): boolean {
         const target = event.target as HTMLElement | null;
         return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
@@ -108,7 +114,11 @@ export class GameInput {
         }
         if (!this.down.has(event.code)) {
             this.down.add(event.code);
-            this.onPress?.(event.code);
+            // A key held down in a box to type in, repeating once the box has gone, is held but
+            // not pressed again: a held Enter that sent a chat line would open the box again
+            if (!event.repeat) {
+                this.onPress?.(event.code);
+            }
         }
     };
 

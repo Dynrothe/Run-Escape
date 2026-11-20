@@ -55,7 +55,7 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
     const [place, setPlace] = useState(0);
     const [hideDone, setHideDone] = useState(false);
     const [onlyPinned, setOnlyPinned] = useState(false);
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     const pinned = save.combatPinned ?? [];
     const points = getCombatPoints(save.combatTasks);
     const thresholds = getTierThresholds();
@@ -193,7 +193,7 @@ export function CombatAchievementsScreen({ ui, client }: Props): JSX.Element {
                     </>
                 )}
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("canvas.back")}
                     </button>
                     <span className="ui-ca-count">
