@@ -3080,6 +3080,15 @@ ready yet), so the host can't start a run with them halfway through a shop. Back
 ready is again, unless a run started meanwhile. A new menu screen goes in `MenuScreen` and
 `menuItems`, with `leaveMenu` for its Back.
 
+A run's **setup bar**, alone (`CharacterScreen`) or in a room, is the same (`ui-setup-bar` in
+`GameUi.css`): three groups on a grid (`ui-setup-bar-out`, `-modes`, `-go`), the modes centred and
+every control one height, the invocations first and then endless, hard and expert as
+`ModeSwitch`es (`GameUi.tsx`), two lines like the invocations'. As on the title, the rest is sunk
+into the stone and the way in is the raised buttons, in green (`ui-setup-go`). In a room,
+whichever is up to you next flashes yellow (`ui-setup-go-now`): Ready until you are, then the
+host's Start once everyone is. Ready is a toggle (`aria-pressed`), sunk and ticked while you're
+ready; alone, Start doesn't flash, as it's always up to you.
+
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`
 then makes or joins the room on that room's own connection, at `coop/room/<code>`. What's said in

@@ -42,10 +42,10 @@ import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import {
     AdventurerPanel,
+    ModeSwitch,
     PhoneAdventurerCard,
     PickerHeading,
     SettingsPanel,
-    Toggle,
     getStartingWeaponIcon,
     menuItems,
 } from "./GameUi";
@@ -761,71 +761,61 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 />
             )}
             {isHost && !map.fun && !map.tombs && (
-                <div
-                    className={
-                        "ui-endless" +
-                        (isEndlessUnlocked(ui.save, map.id) ? "" : " ui-endless-locked")
+                <ModeSwitch
+                    name={t("coop.endless")}
+                    on={room.endless}
+                    locked={
+                        !isEndlessUnlocked(ui.save, map.id)
+                            ? t("coop.beat_the_map")
+                            : !room.endless && withoutEndless
+                              ? // It can be turned off, but only on once everyone's beaten it
+                                t("coop.member_hasnt_beaten", { name: withoutEndless.name })
+                              : undefined
                     }
-                >
-                    <span className="ui-endless-name">{t("coop.endless")}</span>
-                    {!isEndlessUnlocked(ui.save, map.id) ? (
-                        <span className="ui-endless-hint">{t("coop.beat_the_map")}</span>
-                    ) : !room.endless && withoutEndless ? (
-                        // It can be turned off, but only on once everyone's beaten it
-                        <span className="ui-endless-hint">
-                            {t("coop.member_hasnt_beaten", { name: withoutEndless.name })}
-                        </span>
-                    ) : (
-                        <Toggle
-                            on={room.endless}
-                            label={t("coop.endless")}
-                            onToggle={() => client.toggleEndless()}
-                        />
-                    )}
-                </div>
+                    onToggle={() => client.toggleEndless()}
+                />
             )}
             {isHost && !map.tombs && (
-                <div
-                    className={
-                        "ui-endless" + (isHardUnlocked(ui.save, map.id) ? "" : " ui-endless-locked")
+                <ModeSwitch
+                    name={t("coop.hard")}
+                    on={room.hard}
+                    locked={
+                        !isHardUnlocked(ui.save, map.id)
+                            ? t("coop.beat_the_map")
+                            : !room.hard && withoutHard
+                              ? t("coop.member_hasnt_beaten", { name: withoutHard.name })
+                              : undefined
                     }
-                >
-                    <span className="ui-endless-name">{t("coop.hard")}</span>
-                    {!isHardUnlocked(ui.save, map.id) ? (
-                        <span className="ui-endless-hint">{t("coop.beat_the_map")}</span>
-                    ) : !room.hard && withoutHard ? (
-                        // It can be turned off, but only on once everyone's beaten it
-                        <span className="ui-endless-hint">
-                            {t("coop.member_hasnt_beaten", { name: withoutHard.name })}
-                        </span>
-                    ) : (
-                        <Toggle
-                            on={room.hard}
-                            label={t("coop.hard")}
-                            onToggle={() => client.toggleHard()}
-                        />
-                    )}
-                </div>
+                    onToggle={() => client.toggleHard()}
+                />
             )}
         </>
     );
     const ready = (
         <>
+            {/* Pressed while you're ready, with a tick, and pressed again to stop. Whichever of it
+                and Start is up to you next flashes (ui-setup-go-now). */}
             <button
                 className={
                     "ui-button ui-coop-ready" +
                     (isHost ? "" : " ui-select-go") +
-                    (me?.ready ? "" : " ui-button-go")
+                    (me?.ready ? "" : " ui-button-go ui-setup-go") +
+                    (!me?.ready && !cardBlocked ? " ui-setup-go-now" : "")
                 }
+                aria-pressed={!!me?.ready}
                 // A Cards only room without the cards it takes (cardBlocked): not ready
                 disabled={!me?.ready && cardBlocked}
                 onClick={() => client.setCoopReady(!me?.ready)}
             >
-                {me?.ready ? t("coop.not_ready") : t("coop.ready")}
+                {me?.ready && <span className="ui-coop-ready-tick" aria-hidden="true" />}
+                {t("coop.ready")}
             </button>
             {isHost && (
                 <button
-                    className="ui-button ui-button-go ui-select-go"
+                    className={
+                        "ui-button ui-button-go ui-select-go ui-setup-go" +
+                        (everyoneReady ? " ui-setup-go-now" : "")
+                    }
                     disabled={!everyoneReady}
                     title={everyoneReady ? undefined : t("coop.waiting_ready")}
                     onClick={() => client.startCoopRun()}
@@ -908,10 +898,10 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 </div>
                 {/* In the middle, under the adventurer: the party panel has no room to spare */}
                 <CoopChatPanel ui={ui} client={client} />
-                <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
-                    {leave}
-                    {modes}
-                    {ready}
+                <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar ui-coop-bar">
+                    <div className="ui-setup-bar-group ui-setup-bar-out">{leave}</div>
+                    <div className="ui-setup-bar-group ui-setup-bar-modes">{modes}</div>
+                    <div className="ui-setup-bar-group ui-setup-bar-go">{ready}</div>
                 </div>
                 {overlays}
             </div>
@@ -1005,10 +995,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 )}
                 <PhoneAdventurerCard ui={ui} map={map} onOpen={() => setPicker("adventurer")} />
             </div>
-            <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
-                {leave}
-                <ChatButton ui={ui} client={client} onOpen={() => setPicker("chat")} />
-                {ready}
+            <div className="ui-panel rs-border rs-background ui-select-bar ui-setup-bar ui-coop-bar">
+                <div className="ui-setup-bar-group ui-setup-bar-out">
+                    {leave}
+                    <ChatButton ui={ui} client={client} onOpen={() => setPicker("chat")} />
+                </div>
+                <div className="ui-setup-bar-group ui-setup-bar-go">{ready}</div>
             </div>
             {overlays}
         </div>

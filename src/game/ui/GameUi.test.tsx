@@ -513,6 +513,24 @@ test("a room's invocations open once everyone in it has beaten the map", () => {
     expect(screen.getByRole("button", { name: /^Invocations/ })).toHaveTextContent("20 points");
 }, 30000);
 
+test("a room's Ready is pressed while you're ready, and what's up to you next glows", () => {
+    // The host, not ready yet: Ready glows, and Start waits for them
+    renderRoom("alice");
+    const ready = screen.getByRole("button", { name: "Ready" });
+    expect(ready).toHaveAttribute("aria-pressed", "false");
+    expect(ready).toHaveClass("ui-setup-go-now");
+    const start = screen.getByRole("button", { name: "Start · Lumbridge" });
+    expect(start).toBeDisabled();
+    expect(start).not.toHaveClass("ui-setup-go-now");
+    cleanup();
+    // A guest who's ready: pressed and ticked, and nothing glows
+    renderRoom("bob");
+    const pressed = screen.getByRole("button", { name: "Ready" });
+    expect(pressed).toHaveAttribute("aria-pressed", "true");
+    expect(pressed).not.toHaveClass("ui-setup-go-now");
+    expect(pressed.querySelector(".ui-coop-ready-tick")).not.toBeNull();
+}, 30000);
+
 test("the map screen opens on the picked map's tab, and a map on another tab can be picked", () => {
     expect.hasAssertions();
     const actions = renderMaps();

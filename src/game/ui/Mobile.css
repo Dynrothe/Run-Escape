@@ -874,8 +874,10 @@
         margin-left: 0;
     }
 
+    /* Centred, as the modes' switches under it are */
     .ui-phone-modes .ui-invocations-button {
         width: 100%;
+        align-items: center;
     }
 
     /* The switches aren't in the bar here, so there's room for the coins after all */
@@ -1778,6 +1780,7 @@
 
     .ui-coop-map-side .ui-invocations-button {
         width: 100%;
+        align-items: center;
     }
 }
 
