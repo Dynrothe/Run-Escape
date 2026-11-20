@@ -21,6 +21,25 @@ function expected(things: Thing[], cellSize: number, x: number, y: number, radiu
 }
 
 describe("SpatialHash", () => {
+    test("clear releases the objects in reused cells and forgets out-of-bounds cells", () => {
+        const hash = new SpatialHash<Thing>(2, { baseX: 0, baseY: 0, sizeX: 8, sizeY: 8 });
+        hash.insert({ x: 1, y: 1, id: 1 });
+        hash.insert({ x: 1, y: 1, id: 2 });
+        hash.insert({ x: -20, y: 1, id: 3 });
+        const bucket = hash["buckets"][0];
+        hash.clear();
+        // Its array's kept, with nothing left in it
+        expect(bucket).toEqual([undefined, undefined]);
+        expect(hash["counts"][0]).toBe(0);
+        expect(hash["outside"].size).toBe(0);
+        hash.insert({ x: 0, y: 0, id: 4 });
+        expect(hash["buckets"][0]).toBe(bucket);
+        expect(bucket).toEqual([{ x: 0, y: 0, id: 4 }, undefined]);
+        const found: number[] = [];
+        hash.query(0, 0, 0.5, (thing) => found.push(thing.id));
+        expect(found).toEqual([4]);
+    });
+
     test("finds things cell by cell in the order they went in, in its bounds and beyond", () => {
         const rng = new Rng(5);
         const bounds = { baseX: 1000, baseY: 2000, sizeX: 40, sizeY: 30 };

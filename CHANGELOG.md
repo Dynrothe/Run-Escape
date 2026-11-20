@@ -14,6 +14,10 @@ the version in the corner).
 - Duke Sucellus's icicle warnings now show their full damage area. Fixed by Deivid Smarzaro.
 - Evolutionary counts as soon as you evolve your third weapon, even if you give up straight
   after. Fixed by Deivid Smarzaro.
+- Long runs use less memory: defeated enemies and collected loot are let go once they're gone.
+  Fixed by trippy22.
+- A co-op game left in a background tab no longer builds up effects waiting to be drawn, and
+  going back to the menus lets go of the run. Fixed by trippy22.
 
 ## 0.35.0 - 2026-11-17
 

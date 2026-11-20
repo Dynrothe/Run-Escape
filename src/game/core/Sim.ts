@@ -24017,7 +24017,8 @@ export class Sim {
             let pile: Pickup | undefined;
             let furthest = -1;
             for (const pickup of this.pickups) {
-                if (pickup.kind !== kind) {
+                // (one picked up this tick is gone: it isn't counted, and takes nothing on)
+                if (pickup.kind !== kind || pickup.value < 0) {
                     continue;
                 }
                 // Ashes and bones count as one towards the limit, but only gather with their own
