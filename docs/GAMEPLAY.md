@@ -84,8 +84,9 @@ version and how to run it.
   **Dinh's blazing bulwark**, whose Shield Bash reaches further and burns; the Twisted bow with Rigour
   becomes the **Corrupted twisted bow**; Tumeken's shadow with Augury becomes the **Corrupted
   tumeken's shadow**; the Sanguinesti staff with Rapid Heal becomes the **Holy sanguinesti staff**;
-  and the Harmonised nightmare staff with the Amulet of glory becomes the **Eldritch nightmare staff**,
-  whose surges split where they hit.
+  the Master wand with Augury becomes the **Kodai wand**, whose three surges pass through an enemy
+  and splash further; and the Harmonised nightmare staff with the Amulet of glory becomes the
+  **Eldritch nightmare staff**, whose surges split where they hit.
 - **Evolving**: a weapon at its last level with its passive (at any level) offers its evolution first
   on every level up. An evolved weapon has three levels of its own and keeps the weapon's bonus
   damage. Most other class weapons, like the Toxic blowpipe and the Thunder khopesh, don't evolve.
@@ -233,13 +234,9 @@ version and how to run it.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half
-      its damage, up to 2 hitpoints. From the new maps: the **Beginner wand**, splashing water
-      spells at two enemies at once, growing through Apprentice, Teacher and Dragon hunter to
-      **Master wand**, with Water Strike, Bolt, Blast, Wave and Surge at successive levels.
-      Its original damage, projectile counts and cooldowns are unchanged. A maxed Master wand
-      with **Augury** evolves into the **Kodai wand**: three Water Surges every 0.95 seconds,
-      each passing through an enemy, with a 1.6-tile splash and 20, 22 and 24 damage across its
-      three levels. The **Blue moon spear** brings ice that crashes down and freezes. The
+      its damage, up to 2 hitpoints. From the new maps: the **Wand**, splashing water spells at two
+      enemies at once, from the Beginner wand to the Master wand and Water Strike to Water Surge,
+      and the **Blue moon spear**, ice that crashes down and freezes. The
       **Crystal staff** grows from basic to attuned (level 4) and perfected (level 7), and
       **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning. The
       **Volatile Nightmare staff** casts Immolate at the toughest enemy in range, slow and heavier
@@ -258,7 +255,7 @@ version and how to run it.
     | Desert             | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik          | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja            | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend            | Beginner wand, Dinh's bulwark                    | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Kourend            | Wand, Dinh's bulwark                             | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
     | Varlamore          | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania          | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars           | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |

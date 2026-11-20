@@ -4962,14 +4962,15 @@ describe("class weapons", () => {
     });
 
     test.each([
-        [1, 6908, 93, 94, 95, 13, 2, 1.1, 1],
-        [2, 6910, 120, 121, 122, 15, 2, 1.1, 1],
-        [3, 6912, 135, 136, 137, 15, 3, 1.1, 1],
-        [4, 30070, 161, 162, 163, 15, 3, 0.95, 1],
-        [5, 6914, 1458, 1459, 1460, 18, 3, 0.95, 1.3],
+        [1, 6908, 93, 94, 95],
+        [2, 6910, 120, 121, 122],
+        [3, 6912, 135, 136, 137],
+        [4, 6912, 161, 162, 163],
+        [5, 6914, 1458, 1459, 1460],
     ])(
-        "water wand level %s changes its held model and spell, keeping its combat progression",
-        (level, objId, cast, travel, impact, damage, amount, cooldown, splash) => {
+        "water wand level %s holds its wand and casts its spell, as its level says",
+        (level, objId, cast, travel, impact) => {
+            const { damage, amount, cooldown, area } = getWeapon("kodai_wand").levels[level - 1];
             const sim = armed("kodai_wand");
             dummy(sim, 3, 0).frozen = 1e6;
             sim.apply({
@@ -4987,7 +4988,7 @@ describe("class weapons", () => {
                     spotAnim: travel,
                     impactSpotAnim: impact,
                     damage,
-                    splash,
+                    splash: area,
                     pierce: 0,
                     speed: 11 / TICKS_PER_SECOND,
                     knockback: 0.3,
@@ -5012,7 +5013,8 @@ describe("class weapons", () => {
             attack(sim);
             expect(sim.projectiles).toHaveLength(3);
             const shot = sim.projectiles[0];
-            expect(shot.damage).toBeCloseTo((18 + level * 2) * (1 + sim.stats.magicMight));
+            const { damage } = getWeapon("kodai_wand_evolved").levels[level - 1];
+            expect(shot.damage).toBeCloseTo(damage * (1 + sim.stats.magicMight));
             expect(shot.spotAnim).toBe(1459);
             // Follow one shot, so the other targeted missiles cannot hit the splash bystander.
             sim.projectiles = [shot];

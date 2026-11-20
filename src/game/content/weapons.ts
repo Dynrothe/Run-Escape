@@ -2796,10 +2796,10 @@ export const WEAPONS: WeaponDef[] = [
     {
         // Keep the original id for saves and cards; Kodai itself is now the evolution.
         id: "kodai_wand",
-        name: "Beginner wand",
+        name: "Wand",
         kind: "missile",
         description:
-            "Casts splashing water spells at the nearest enemies. Each level upgrades the wand and its spell, from Water Strike to Water Surge.",
+            "Casts splashing water spells at the nearest enemies. Upgrades from the Beginner wand to the Master, and Water Strike to Water Surge.",
         iconObjId: 6908,
         // The staff cast; Fire Wave's sounds stand in for the water spells'
         playerSeq: 7855,
@@ -2828,21 +2828,20 @@ export const WEAPONS: WeaponDef[] = [
                 ...WATER_BOLT,
                 objId: 6910,
                 damage: 15,
-                description: "+2 damage.",
+                description: "Learns Water Bolt: +2 damage.",
             },
             {
                 name: "Teacher wand",
                 ...WATER_BLAST,
                 objId: 6912,
                 amount: 3,
-                description: "Casts one more Water Blast.",
+                description: "Learns Water Blast: casts one more.",
             },
+            // Still the Teacher wand: the Mage Training Arena has four, Beginner to Master
             {
-                name: "Dragon hunter wand",
                 ...WATER_WAVE,
-                objId: 30070,
                 cooldown: 0.95,
-                description: "Casts a little faster.",
+                description: "Learns Water Wave: casts a little faster.",
             },
             {
                 name: "Master wand",
@@ -2850,7 +2849,7 @@ export const WEAPONS: WeaponDef[] = [
                 objId: 6914,
                 damage: 18,
                 area: 1.3,
-                description: "+3 damage, bigger splash.",
+                description: "Learns Water Surge: +3 damage, bigger splash.",
             },
         ),
     },
@@ -2870,7 +2869,8 @@ export const WEAPONS: WeaponDef[] = [
         evolved: true,
         levels: evolvedLevels({
             ...WATER_SURGE,
-            damage: [20, 22, 24],
+            // Under most evolutions' rise in damage, as its pierce and wider splash add the rest
+            damage: [19, 21, 22],
             cooldown: 0.95,
             amount: 3,
             area: 1.6,

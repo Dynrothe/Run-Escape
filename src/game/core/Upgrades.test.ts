@@ -1,3 +1,4 @@
+import { tierCardId, weaponTiers } from "../content/cards";
 import { EVOLUTIONS } from "../content/evolutions";
 import { PASSIVES, canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarity } from "../content/rarity";
@@ -157,7 +158,8 @@ describe("evolutions", () => {
         ]);
         const passives = new Set(["augury"]);
         expect(canEvolve(wand, passives, undefined, cards)).toBe(false);
-        cards.set("weapon:kodai_wand.5", "veryRare");
+        const master = weaponTiers(getWeapon("kodai_wand")).length - 1;
+        cards.set(tierCardId("kodai_wand", master), "veryRare");
         expect(canEvolve(wand, passives, undefined, cards)).toBe(true);
         cards.delete("weapon:kodai_wand_evolved");
         expect(canEvolve(wand, passives, undefined, cards)).toBe(false);

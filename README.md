@@ -31,10 +31,9 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
 - **34 adventurers**, each with a starting weapon and a bonus, unlocked by beating maps and doing
   tasks on them.
 - **Weapons that upgrade the OSRS way** (bronze to dragon, Fire Strike to Fire Wave, Beginner
-  wand to Master wand) and
-  **evolve** with the right passive (a maxed dragon scimitar with Piety becomes the Abyssal whip),
-  plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a Godsword whose hilt you
-  pick.
+  wand to Master wand) and **evolve** with the right passive (a maxed dragon scimitar with Piety
+  becomes the Abyssal whip), plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a
+  Godsword whose hilt you pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
   Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
   and passive effects, levels and unlocks.

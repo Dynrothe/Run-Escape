@@ -75,7 +75,7 @@ import {
 } from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
 import { getStarterCards } from "./cardRuns";
-import { addPlatinum, giveStarterCards, migrateCards } from "./cards";
+import { addPlatinum, giveStarterCards, migrateCards, migrateKodaiCard } from "./cards";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -91,7 +91,8 @@ import { addPlatinum, giveStarterCards, migrateCards } from "./cards";
 // 10: Skills by combat style (skillPages), the old shared page becoming Melee's
 // 11: each page can spend the whole budget (the most any page has spent is what's held back)
 // 12: Combat Achievements, done and under way (old saves get the ones they'd done, unpaid)
-export const SAVE_VERSION = 12;
+// 13: the Kodai wand's card is the Beginner wand's, so a save that had it gets the Master wand's
+export const SAVE_VERSION = 13;
 
 export type SkillPage = {
     upgrades: Record<string, number>;
@@ -669,6 +670,9 @@ export function migrateSave(raw: unknown): SaveData {
         save.outfits = outfits;
     }
     Object.assign(save, migrateCards(data));
+    if ((data.version ?? 0) < 13 && save.cards) {
+        migrateKodaiCard(save.cards);
+    }
     // Card collection only's pet: a pet (its card is checked as it's taken, getCardsOnlyPet)
     if (typeof data.cardsOnlyPet === "string" && PET_BY_ID.has(data.cardsOnlyPet)) {
         save.cardsOnlyPet = data.cardsOnlyPet;

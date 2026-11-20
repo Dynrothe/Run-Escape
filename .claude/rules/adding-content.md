@@ -44,9 +44,11 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   its 3 levels, and `style`/`family` kept from what it evolves from. Set `damage` to a three-value
   array for a tuned curve, or a number for the default progression. Recipes in `evolutions.ts`
   and the Collection log come from these fields, so they need no extra entry.
-- Keep an existing weapon's id when changing its progression: saves and cards refer to it.
-  The water wands retain `kodai_wand` for Beginner through Master; their Kodai evolution has
-  the separate id `kodai_wand_evolved`.
+- Keep a weapon's id when its progression changes: saves and cards refer to it. Naming the levels of
+  a weapon that had one name gives it tiers (`weaponTiers`), and its one card becomes the first
+  tier's, so a save that had it needs a step to keep what the card gave: the Wand kept `kodai_wand`
+  when the Kodai wand became its evolution (`kodai_wand_evolved`), and save version 13 gave the
+  Kodai wand's card holders the Master wand's.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round. A missile's special is `siphon` instead: a
   chance each attack, rolled on the sim's `Rng`, of harder shots that heal (the Toxic blowpipe's).

@@ -30,11 +30,6 @@ Full-run sweeps are still needed alongside this stationary check.
 See [the before/after validation](EVOLUTION_BALANCE_RESULTS.md) for the authored curves and full
 progression runs across every shipped map, difficulty and tested party size.
 
-The water wand progression keeps the former unevolved Kodai's combat values, from Beginner to
-Master wand. Its new Kodai evolution with Augury has an authored damage curve of 20/22/24,
-one pierce and a 1.6-tile splash, retaining the Master wand's three shots and 0.95-second cooldown.
-It is a new evolution, not one of the historical nerfs above.
-
 These are developer settings, not player options. Restart the run after changing them; every
 co-op player must use the same build. Tests and offline comparisons can pass `SimOptions.balance`
 without mutating the shared config. Live runs use the shipped settings.

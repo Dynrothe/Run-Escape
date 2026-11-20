@@ -13,7 +13,6 @@ the version in the corner).
 - A Menu in co-op rooms, by Jp66600: Skills, the Armoury, Settings and the rest without leaving
   the room. The run waits for you while you're in one, and you're ready again when you're back.
 - Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
-- Kodai evolution, by Deivid Smarzaro: a Master wand with Augury fires harder Water Surges that pierce and splash further.
 
 ### Changed
 
@@ -27,7 +26,9 @@ the version in the corner).
   what they do now. By Jp66600.
 - Dragon claws and Burning claws, by Deivid Smarzaro: every swing uses the claws' special attack
   animation.
-- Water wand progression, by Deivid Smarzaro: Beginner through Apprentice, Teacher and Dragon hunter to Master, with Water Strike through Surge effects and unchanged upgrade stats.
+- The Kodai wand, by Deivid Smarzaro: Kourend gives the Wand in its place, which climbs from the
+  Beginner wand to the Master wand and Water Strike to Water Surge, and evolves with Augury. If you
+  had the Kodai wand's card, you have the Master wand's.
 
 ### Fixed
 
