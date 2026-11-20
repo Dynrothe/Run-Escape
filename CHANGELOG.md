@@ -12,6 +12,7 @@ the version in the corner).
 ### Fixed
 
 - Duke Sucellus's icicle warnings now show their full damage area. Fixed by Deivid Smarzaro.
+- Evolutionary registers as soon as you evolve your third weapon, even if you give up straight afterward. Fixed by Deivid Smarzaro.
 
 ## 0.35.0 - 2026-11-17
 

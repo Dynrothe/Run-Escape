@@ -1301,7 +1301,8 @@ version and how to run it.
   under a restriction, or kill it fast. What no one can dodge (a parasite bursting, the
   sleepwalkers' blast) never counts against one. Each pays its tier's coins once (100 to 3,000)
   when the run it's done in ends, with a toast as it's done, and its points earn each tier's reward,
-  Ghommal's hilt 1 to 6, for the Collection log. Kill counts add up over solo runs. Co-op runs,
+  Ghommal's hilt 1 to 6, for the Collection log. Evolutionary is completed on the third weapon
+  evolution in one run, even if you give up straight afterward. Kill counts add up over solo runs. Co-op runs,
   the Forgotten Four's gauntlet, the fun maps and dev maps don't count. Saves from before them get the kill counts, wins and
   endless rounds they'd already done, without the coins. The screen has an overview of the tiers
   and every task, with filters by tier, type and map. Some take more than one run: wins with a

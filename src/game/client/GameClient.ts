@@ -2845,6 +2845,10 @@ export class GameClient implements GameFrameHandler {
         }
         switch (action.kind) {
             case "choose":
+                if (done) {
+                    // Another level-up can keep the sim paused after an evolution.
+                    this.handleEvents(sim, sim.takeEvents());
+                }
                 this.syncOverlay();
                 break;
             case "chest":

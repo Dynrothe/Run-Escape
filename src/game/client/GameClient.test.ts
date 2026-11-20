@@ -9,6 +9,7 @@ import { getMap } from "../content/maps";
 import { Rarity } from "../content/rarity";
 import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
+import { CombatTracker } from "../core/CombatTracker";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { encodeCardCaps } from "../core/cardRuns";
 import { GauntletRun, loseGauntletFight, startGauntlet } from "../core/gauntlet";
@@ -1470,6 +1471,52 @@ describe("auto alch", () => {
         expect(sim.chests.length).toBe(1);
         expect(sim.coins).toBe(coins);
     });
+});
+
+test("Evolutionary registers on the third evolution and banks even if the run ends before another tick", () => {
+    const sim = createSim();
+    const { client, store, sync } = createClient(sim, false);
+    const combat = CombatTracker.forRun(sim, client.save)!;
+    Object.assign(client, {
+        combat,
+        finishRun: GameClient.prototype["finishRun"],
+        persist: vi.fn(),
+        coop: { setMe() {} },
+    });
+    const taskDone = vi.fn();
+    Object.assign(client["sounds"], { taskDone });
+
+    sim.addWeapon("fire_spells");
+    sim.addWeapon("shortbow");
+    for (const weapon of sim.weapons) {
+        weapon.level = weapon.def.levels.length;
+        const passiveId = weapon.def.evolution!.requiresPassive;
+        sim.apply({ kind: "newPassive", passiveId, quality: "common" });
+    }
+    sim.xp = sim.xpForNextLevel;
+    sim.step(0, 0);
+    sim.takeEvents();
+    sim.pendingLevelUps = 4;
+    sync();
+    const tick = sim.tick;
+
+    for (let count = 1; count <= 3; count++) {
+        const choice = sim.choices.findIndex((choice) => choice.kind === "evolve");
+        expect(choice).toBeGreaterThanOrEqual(0);
+        client.choose(choice);
+        expect(sim.evolutionsMade).toHaveLength(count);
+        expect(combat.done).toEqual(count < 3 ? [] : ["evolutionary"]);
+        expect(taskDone).toHaveBeenCalledTimes(count < 3 ? 0 : 1);
+    }
+    expect(store.getSnapshot().overlay).toBe("levelUp");
+    expect(client.save.combatTasks).not.toContain("evolutionary");
+
+    client.quitRun();
+    expect(sim.tick).toBe(tick);
+    expect(client.save.combatTasks).toContain("evolutionary");
+    expect(store.getSnapshot().result?.combatTasks).toEqual([
+        expect.objectContaining({ name: "Evolutionary" }),
+    ]);
 });
 
 describe("saving", () => {
