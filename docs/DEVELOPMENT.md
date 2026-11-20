@@ -3201,7 +3201,9 @@ muting someone (the room's member list) lasts while in the room.
 In the room the chat is its own panel in the middle column; on a phone it's a tap from the room's
 bar, full screen like the map list. In a run, the last few lines show over the world for a moment
 (`RUN_LINE_MS`), low on the left, and Enter opens the box (`GameClient.openChat`), with nothing over
-the run: on co-op's menu Enter is its buttons', a controller's confirm too. The box shuts as a run
+the run: on co-op's menu Enter is its buttons', a controller's confirm too. It opens only where the
+HUD draws it (`canOpenChat`, as `CoopChatRun` is mounted): not for a host playing their room alone,
+nor in a cinematic, where it would hide and take Escape's first press. The box shuts as a run
 starts or ends (`setCoopRun`), since its HUD goes with the run. `takesKey` takes that Enter so its
 keypress doesn't reach the box it opens, and the box opening lets go of held keys
 (`GameInput.release`): its own keys never reach `GameInput`, so their releases wouldn't either. On a

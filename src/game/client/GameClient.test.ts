@@ -45,7 +45,7 @@ import {
     partyLoadouts,
 } from "./GameClient";
 import { padHints } from "./GamePad";
-import { GameStore } from "./GameStore";
+import { GameStore, TeammateView } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
@@ -227,6 +227,8 @@ describe("co-op chat's box in a run", () => {
         const release = vi.fn();
         Object.assign(client, { coopRun: {}, input: { release } });
         store.set({
+            // Someone else to talk to
+            party: [{ id: "bob" } as unknown as TeammateView],
             coop: {
                 ...store.getSnapshot().coop,
                 chat: true,
@@ -270,6 +272,20 @@ describe("co-op chat's box in a run", () => {
         expect(store.getSnapshot().chatOpen).toBe(false);
         store.set({ overlay: "none" });
         Object.assign(client, { display: { ...getDefaultDisplaySettings(), coopChat: "off" } });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+    });
+
+    test("nothing opens where the HUD has no chat: a party of one, or a cinematic", () => {
+        const { store, press } = inCoopRun();
+        const party = store.getSnapshot().party;
+        store.set({ party: [] });
+        press("Enter");
+        expect(store.getSnapshot().chatOpen).toBe(false);
+        // So Escape still pauses
+        press("Escape");
+        expect(store.getSnapshot().overlay).not.toBe("none");
+        store.set({ overlay: "none", party, cinematic: true });
         press("Enter");
         expect(store.getSnapshot().chatOpen).toBe(false);
     });

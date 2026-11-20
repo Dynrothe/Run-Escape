@@ -2304,11 +2304,14 @@ export class GameClient implements GameFrameHandler {
 
     // Mid-run, Enter opens the chat's box to type in: in a co-op run with
     // nothing over it. Not on co-op's menu, where Enter presses its buttons (a
-    // controller's confirm too).
+    // controller's confirm too). Only where the HUD shows the chat (GameUi's
+    // CoopChatRun): with someone else in the party, and no cinematic.
     private canOpenChat(): boolean {
-        const { overlay, coop, chatOpen } = this.store.getSnapshot();
+        const { overlay, coop, chatOpen, party, cinematic } = this.store.getSnapshot();
         return (
             !chatOpen &&
+            party.length > 0 &&
+            !cinematic &&
             this.coopRun !== undefined &&
             this.sim !== undefined &&
             !this.sim.runOver &&
