@@ -1043,7 +1043,7 @@ export function menuItems(): MenuItem[] {
     ];
 }
 
-export function MenuTiles({ client }: { client: GameClient }): JSX.Element {
+function MenuTiles({ client }: { client: GameClient }): JSX.Element {
     return (
         <>
             {menuItems().map((item) => (

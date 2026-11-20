@@ -3092,7 +3092,32 @@ describe("the menus from a co-op room", () => {
             loadout: expect.objectContaining({ metaStats: expect.any(Object) }),
             unlocks: expect.objectContaining({ maps: expect.arrayContaining(["lumbridge"]) }),
         });
-        expect(coop.setReady).not.toHaveBeenCalled();
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
+    });
+
+    it("unreadies a Ready the room doesn't show yet, as they step away", () => {
+        const { client, coop } = inRoom(false);
+        client.openMenu("shop");
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+    });
+
+    it("isn't readied again after a run the host started as they stepped away", async () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("shop");
+        // The start, which crossed their unready (one this game can't play, over at once)
+        Object.assign(coop, { leave: vi.fn() });
+        const starts = client as unknown as { beginCoopRun(game: unknown): Promise<void> };
+        await starts.beginCoopRun({});
+        client.leaveMenu();
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
+    });
+
+    it("isn't readied in a room whose run is under way", () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("shop");
+        Object.assign(coop.room!, { started: true });
+        client.leaveMenu();
+        expect(coop.setReady).not.toHaveBeenCalledWith(true);
     });
 
     it("isn't ready while away, so the start waits, and is ready again once back", () => {

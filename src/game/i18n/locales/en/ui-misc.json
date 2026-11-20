@@ -376,7 +376,7 @@
     "coop.member_missing_map": "{name} hasn't got {map} unlocked",
     "coop.menu": "Menu",
     "coop.menu_close": "Close",
-    "coop.menu_note": "The room stays open. While you're in one of these the run waits for you, and you're ready again when you're back.",
+    "coop.menu_note": "The room stays open. The run waits while you're in any of these, and you're ready again when you're back.",
     "coop.missing_map": "{map}{hard}{endless}",
     "coop.new_name": "New name",
     "coop.new_room": "New room",

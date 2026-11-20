@@ -1255,10 +1255,15 @@ export class GameClient implements GameFrameHandler {
     // pulling them out of a shop with their loadout half changed (backToRoom readies them again).
     stepAwayFromRoom(): void {
         const room = this.coop.room;
-        if (room?.members.find((m) => m.id === this.coop.id)?.ready) {
-            this.readyAway = room.code;
-            this.coop.setReady(false);
+        if (!room) {
+            return;
         }
+        if (room.members.find((m) => m.id === this.coop.id)?.ready) {
+            this.readyAway = room.code;
+        }
+        // Even if the room doesn't show them ready yet: a Ready still on its way would land
+        // while they're away
+        this.coop.setReady(false);
     }
 
     // Back in the room: what was bought or changed meanwhile is the room's, and whoever was
@@ -1271,7 +1276,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
-        if (wasReady && this.coopCardBlock() === undefined) {
+        if (wasReady && !room.started && this.coopCardBlock() === undefined) {
             this.coop.setReady(true);
         }
     }
@@ -2735,6 +2740,9 @@ export class GameClient implements GameFrameHandler {
     // A co-op run, as the host started it: everyone builds the same Sim, each
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
+        // A start that crossed this player stepping away: the run's begun, and they aren't
+        // readied for the next one when they're back
+        this.readyAway = undefined;
         if (!isGameStart(game, MAX_PARTY)) {
             this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;

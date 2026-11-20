@@ -518,7 +518,7 @@
 }
 
 /* A phone held sideways hasn't the height for a row each: two columns */
-@media (max-height: 520px) {
+@media (pointer: coarse) and (max-height: 520px) {
     .ui-coop-menu {
         width: min(560px, calc(94vw / var(--ui-scale)));
     }

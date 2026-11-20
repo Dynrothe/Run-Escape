@@ -3069,9 +3069,10 @@ Close (not What's new, Discord or GitHub), without leaving the room. A menu scre
 list, if the room went meanwhile) rather than the title. The Menu's open state is the store's
 (`roomMenu`, by the room's code, `setRoomMenu`), so it's still open when a menu screen comes back;
 a run starting shuts it. Settings and cloud save show in the room's place, and shut back to the
-Menu. A player who was ready isn't while away (`stepAwayFromRoom`), so the host's start can't pull
-them out of a shop halfway through, and is again once back (`backToRoom`), which sends their
-loadout and unlocks again for what was bought. A new menu screen goes in `MenuScreen` and
+Menu. Stepping away unreadies a player (`stepAwayFromRoom`, even when the room doesn't show them
+ready yet), so the host can't start a run with them halfway through a shop. Back in the room
+(`backToRoom`), their loadout and unlocks go again, for what was bought, and a player who was
+ready is again, unless a run started meanwhile. A new menu screen goes in `MenuScreen` and
 `menuItems`, with `leaveMenu` for its Back.
 
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it

@@ -393,9 +393,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
         setPanel(undefined);
         client.backToRoom();
     };
+    // Cloud save asking which save to keep, over its panel (as on the title)
+    const choosing = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     useMenuKeys({
+        // Escape answers cloud save's question first (Later), as on the title
         onBack: panel
-            ? closePanel
+            ? choosing
+                ? () => client.cloud?.later()
+                : closePanel
             : menuOpen
               ? () => {
                     // The language list shuts first, on its own
@@ -405,9 +410,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 }
               : undefined,
     });
-    // Cloud save asking which save to keep, over its panel (as on the title)
     const cloudChoice =
-        ui.cloud?.choice !== undefined && !ui.cloud.choice.closed ? (
+        choosing && ui.cloud ? (
             <CloudChoicePanel cloud={ui.cloud} save={ui.save} client={client} />
         ) : undefined;
     const hostInvocations = isHost ? ui.save.invocations : host?.loadout?.invocations;
