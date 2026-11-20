@@ -5,6 +5,10 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
+
 ### Fixed
 
 - Duke Sucellus's icicle warnings now show their full damage area. Fixed by Deivid Smarzaro.

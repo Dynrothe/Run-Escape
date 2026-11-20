@@ -461,7 +461,7 @@ version and how to run it.
   what's there) or Reloaded (twice a run, keep a level up's offer and take it at a later level up).
   They're on campaign and Act II maps, each player's own in co-op, and off in boss fights, raids and
   the Tombs. A win with a relic on counts, but sets no hard-mode record; records show the relics
-  they were set with.
+  they were set with. Use Remove all beside the slots to unequip every relic at once.
 - **Remixes**: beating an Act II map opens its rule on every first-campaign map, a switch for each
   on the map's card (under its records): Overgrown (the Stranglewood's roots, creeping in from
   blocked ground), Shadow (Lassar's puddles into the Shadow Realm, drawn as the map darker and
