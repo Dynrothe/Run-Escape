@@ -233,8 +233,13 @@ version and how to run it.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half
-      its damage, up to 2 hitpoints. From the new maps: the **Kodai wand**, Water Surge at two
-      enemies at once, and the **Blue moon spear**, ice that crashes down and freezes. The
+      its damage, up to 2 hitpoints. From the new maps: the **Beginner wand**, splashing water
+      spells at two enemies at once, growing through Apprentice, Teacher and Dragon hunter to
+      **Master wand**, with Water Strike, Bolt, Blast, Wave and Surge at successive levels.
+      Its original damage, projectile counts and cooldowns are unchanged. A maxed Master wand
+      with **Augury** evolves into the **Kodai wand**: three Water Surges every 0.95 seconds,
+      each passing through an enemy, with a 1.6-tile splash and 20, 22 and 24 damage across its
+      three levels. The **Blue moon spear** brings ice that crashes down and freezes. The
       **Crystal staff** grows from basic to attuned (level 4) and perfected (level 7), and
       **Toktz-mej-tal** pulses obsidian heat around you that leaves the ground burning. The
       **Volatile Nightmare staff** casts Immolate at the toughest enemy in range, slow and heavier
@@ -253,7 +258,7 @@ version and how to run it.
     | Desert             | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik          | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja            | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend            | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Kourend            | Beginner wand, Dinh's bulwark                    | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
     | Varlamore          | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
     | Morytania          | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
     | God Wars           | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |

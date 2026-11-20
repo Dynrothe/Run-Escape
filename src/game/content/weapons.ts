@@ -110,6 +110,32 @@ const FIRE_SURGE = {
     hitSound: 163,
 };
 
+const WATER_STRIKE = {
+    castSpotAnim: 93,
+    projectileSpotAnim: 94,
+    impactSpotAnim: 95,
+};
+const WATER_BOLT = {
+    castSpotAnim: 120,
+    projectileSpotAnim: 121,
+    impactSpotAnim: 122,
+};
+const WATER_BLAST = {
+    castSpotAnim: 135,
+    projectileSpotAnim: 136,
+    impactSpotAnim: 137,
+};
+const WATER_WAVE = {
+    castSpotAnim: 161,
+    projectileSpotAnim: 162,
+    impactSpotAnim: 163,
+};
+const WATER_SURGE = {
+    castSpotAnim: 1458,
+    projectileSpotAnim: 1459,
+    impactSpotAnim: 1460,
+};
+
 // Crystal spells from the Gauntlet: the projectile and its impact, bigger as
 // the staff is attuned, and the Hunllef's own orb once it's perfected
 const CRYSTAL_STAFF = {
@@ -2768,20 +2794,25 @@ export const WEAPONS: WeaponDef[] = [
         }),
     },
     {
+        // Keep the original id for saves and cards; Kodai itself is now the evolution.
         id: "kodai_wand",
-        name: "Kodai wand",
+        name: "Beginner wand",
         kind: "missile",
-        description: "Casts Water Surge at the nearest enemies, two at a time, with a splash.",
-        iconObjId: 21006,
-        // The staff cast; Fire Wave's sounds stand in for Water Surge's
+        description:
+            "Casts splashing water spells at the nearest enemies. Each level upgrades the wand and its spell, from Water Strike to Water Surge.",
+        iconObjId: 6908,
+        // The staff cast; Fire Wave's sounds stand in for the water spells'
         playerSeq: 7855,
         sound: 162,
         hitSound: 163,
         rarity: "rare",
         style: "magic",
         unlock: { kind: "beatMap", mapId: "kourend" },
+        evolution: { into: "kodai_wand_evolved", requiresPassive: "augury" },
         levels: levels(
             {
+                name: "Beginner wand",
+                ...WATER_STRIKE,
                 damage: 13,
                 cooldown: 1.1,
                 amount: 2,
@@ -2790,16 +2821,66 @@ export const WEAPONS: WeaponDef[] = [
                 speed: 11,
                 duration: 0,
                 knockback: 0.3,
-                objId: 21006,
-                castSpotAnim: 1458,
-                projectileSpotAnim: 1459,
-                impactSpotAnim: 1460,
+                objId: 6908,
             },
-            { damage: 15, description: "+2 damage." },
-            { amount: 3, description: "Casts one more Water Surge." },
-            { cooldown: 0.95, description: "Casts a little faster." },
-            { damage: 18, area: 1.3, description: "+3 damage, bigger splash." },
+            {
+                name: "Apprentice wand",
+                ...WATER_BOLT,
+                objId: 6910,
+                damage: 15,
+                description: "+2 damage.",
+            },
+            {
+                name: "Teacher wand",
+                ...WATER_BLAST,
+                objId: 6912,
+                amount: 3,
+                description: "Casts one more Water Blast.",
+            },
+            {
+                name: "Dragon hunter wand",
+                ...WATER_WAVE,
+                objId: 30070,
+                cooldown: 0.95,
+                description: "Casts a little faster.",
+            },
+            {
+                name: "Master wand",
+                ...WATER_SURGE,
+                objId: 6914,
+                damage: 18,
+                area: 1.3,
+                description: "+3 damage, bigger splash.",
+            },
         ),
+    },
+    {
+        id: "kodai_wand_evolved",
+        name: "Kodai wand",
+        kind: "missile",
+        description:
+            "Evolved Master wand. Casts three Water Surges that pass through an enemy and splash further.",
+        iconObjId: 21006,
+        playerSeq: 7855,
+        // Fire Wave's sounds stand in for Water Surge's
+        sound: 162,
+        hitSound: 163,
+        rarity: "veryRare",
+        style: "magic",
+        evolved: true,
+        levels: evolvedLevels({
+            ...WATER_SURGE,
+            damage: [20, 22, 24],
+            cooldown: 0.95,
+            amount: 3,
+            area: 1.6,
+            pierce: 1,
+            speed: 11,
+            duration: 0,
+            knockback: 0.3,
+            objId: 21006,
+            description: "Evolved from the Master wand with Augury.",
+        }),
     },
     {
         id: "crystal_staff",

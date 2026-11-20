@@ -114,7 +114,10 @@ export const WEAPON_EXAMINE: Record<string, string> = {
     sanguinesti_staff: "A staff that thirsts for blood. Its blasts can heal you.",
     holy_sanguinesti_staff:
         "A sanguinesti staff, made holy. Splashing blasts that heal you more often.",
-    kodai_wand: "A wand of Kodai's order. Water Surge, two at a time, with a splash.",
+    kodai_wand:
+        "A wand that grows with its wielder. Water Strike to Water Surge, from Beginner to Master.",
+    kodai_wand_evolved:
+        "A wand of Kodai's order. Stronger Water Surges pass through enemies and splash further.",
     crystal_staff: "A staff of living crystal. It starts plain, and grows into something perfect.",
     toktz_mej_tal: "A staff of obsidian heat. Its pulses leave the ground burning.",
     blue_moon_spear:

@@ -9,6 +9,7 @@ import {
     MAX_PASSIVES,
     MAX_WEAPONS,
     UpgradeChoice,
+    canEvolve,
     describeChoice,
     getEvolutionHint,
     hiltChoices,
@@ -130,6 +131,38 @@ describe("rollChoices", () => {
 });
 
 describe("evolutions", () => {
+    test("water wands evolve only at Master wand with Augury, at any rank", () => {
+        for (let level = 1; level <= 5; level++) {
+            const wand = weapon("kodai_wand", level);
+            expect(canEvolve(wand, new Set(["augury"]))).toBe(level === 5);
+            expect(canEvolve(wand, new Set(["tome_of_fire"]))).toBe(false);
+        }
+        const wand = weapon("kodai_wand", 5);
+        expect(rollChoices(new Rng(1), [wand], [passive("augury", 1)], 0, "magic")[0]).toEqual({
+            kind: "evolve",
+            weaponId: "kodai_wand",
+            into: "kodai_wand_evolved",
+        });
+        const recipe = EVOLUTIONS.find((e) => e.into.id === "kodai_wand_evolved")!;
+        expect(recipe.name).toBe("Master wand");
+        expect(recipe.iconObjId).toBe(6914);
+    });
+
+    test("Cards only needs the Master wand tier and Kodai evolution cards", () => {
+        const wand = weapon("kodai_wand", 5);
+        const cards = new Map<string, Rarity>([
+            ["weapon:kodai_wand", "rare"],
+            ["passive:augury", "uncommon"],
+            ["weapon:kodai_wand_evolved", "veryRare"],
+        ]);
+        const passives = new Set(["augury"]);
+        expect(canEvolve(wand, passives, undefined, cards)).toBe(false);
+        cards.set("weapon:kodai_wand.5", "veryRare");
+        expect(canEvolve(wand, passives, undefined, cards)).toBe(true);
+        cards.delete("weapon:kodai_wand_evolved");
+        expect(canEvolve(wand, passives, undefined, cards)).toBe(false);
+    });
+
     test("an evolution never pushes less than the maxed weapon it came from", () => {
         for (const def of WEAPONS) {
             if (def.evolution) {

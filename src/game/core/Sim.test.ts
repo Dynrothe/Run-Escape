@@ -4961,6 +4961,73 @@ describe("class weapons", () => {
         expect(specials).toBeLessThan(16);
     });
 
+    test.each([
+        [1, 6908, 93, 94, 95, 13, 2, 1.1, 1],
+        [2, 6910, 120, 121, 122, 15, 2, 1.1, 1],
+        [3, 6912, 135, 136, 137, 15, 3, 1.1, 1],
+        [4, 30070, 161, 162, 163, 15, 3, 0.95, 1],
+        [5, 6914, 1458, 1459, 1460, 18, 3, 0.95, 1.3],
+    ])(
+        "water wand level %s changes its held model and spell, keeping its combat progression",
+        (level, objId, cast, travel, impact, damage, amount, cooldown, splash) => {
+            const sim = armed("kodai_wand");
+            dummy(sim, 3, 0).frozen = 1e6;
+            sim.apply({
+                kind: "weaponLevel",
+                weaponId: "kodai_wand",
+                level,
+                quality: "common",
+            });
+            expect(sim.getHeldObjId()).toBe(objId);
+            attack(sim);
+            expect(sim.effects.some((e) => e.spotAnim === cast)).toBe(true);
+            expect(sim.projectiles).toHaveLength(amount);
+            for (const shot of sim.projectiles) {
+                expect(shot).toMatchObject({
+                    spotAnim: travel,
+                    impactSpotAnim: impact,
+                    damage,
+                    splash,
+                    pierce: 0,
+                    speed: 11 / TICKS_PER_SECOND,
+                    knockback: 0.3,
+                });
+            }
+            expect(sim.weapons[0].cooldown).toBe(Math.round(cooldown * TICKS_PER_SECOND));
+        },
+    );
+
+    test.each([1, 2, 3])(
+        "Kodai level %s pierces one enemy and splashes further than the Master wand",
+        (level) => {
+            const sim = armed("kodai_wand");
+            sim.apply({ kind: "newPassive", passiveId: "augury", quality: "common" });
+            sim.apply({ kind: "evolve", weaponId: "kodai_wand", into: "kodai_wand_evolved" });
+            sim.weapons[0].level = level;
+            expect(sim.getHeldObjId()).toBe(21006);
+            const front = dummy(sim, 3, 0);
+            const behind = dummy(sim, 6, 0);
+            const beside = dummy(sim, 3, 1.5);
+            const beyond = dummy(sim, 9, 0);
+            attack(sim);
+            expect(sim.projectiles).toHaveLength(3);
+            const shot = sim.projectiles[0];
+            expect(shot.damage).toBeCloseTo((18 + level * 2) * (1 + sim.stats.magicMight));
+            expect(shot.spotAnim).toBe(1459);
+            // Follow one shot, so the other targeted missiles cannot hit the splash bystander.
+            sim.projectiles = [shot];
+            for (let tick = 0; tick < TICKS_PER_SECOND; tick++) {
+                sim.tick++;
+                sim["stepProjectiles"]();
+            }
+            expect(front.hp).toBeLessThan(front.maxHp);
+            expect(behind.hp).toBeLessThan(behind.maxHp);
+            expect(beside.hp).toBeLessThan(beside.maxHp);
+            expect(beyond.hp).toBe(beyond.maxHp);
+            expect(shot.hit).toEqual(new Set([front.uid, behind.uid]));
+        },
+    );
+
     test("the Sanguinesti staff heals now and then, a little", () => {
         const sim = armed("sanguinesti_staff", "wizard");
         dummy(sim, 3, 0).frozen = 1e6;
