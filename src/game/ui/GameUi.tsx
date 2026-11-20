@@ -1435,10 +1435,10 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
             className="ui-button ui-button-go ui-select-go ui-setup-go"
             // From the Cards only tab, not without the cards it takes (isCardRunBlocked)
             disabled={isCardRunBlocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
+            aria-keyshortcuts="Enter"
             onClick={() => client.startRun()}
         >
-            <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
-            {t(enterKey, { map: shownMapName })}
+            <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
         </button>
     );
     const boards = (

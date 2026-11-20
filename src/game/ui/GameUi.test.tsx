@@ -362,7 +362,7 @@ test("a phone sets a run up from what's picked, with each list over the whole sc
         const press = (code: string) => fireEvent.keyDown(window, { code });
         // What's picked, and no list till a card's opened
         expect(screen.queryByRole("tablist")).toBeNull();
-        expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Enter Lumbridge" })).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Change map: Lumbridge" }));
         fireEvent.click(screen.getByRole("tab", { name: "Bosses" }));
         fireEvent.click(screen.getByRole("button", { name: "Theatre of Blood" }));
@@ -556,6 +556,10 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
     expect.hasAssertions();
     const actions = renderMaps();
     expect(screen.getByRole("tab", { name: "Act I" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Enter Lumbridge" })).toHaveAttribute(
+        "aria-keyshortcuts",
+        "Enter",
+    );
     // The other tabs' maps are laid out, but out of reach
     expect(screen.getByRole("button", { name: "Lumbridge" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Theatre of Blood" })).toBeNull();
@@ -563,7 +567,7 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
     expect(screen.queryByRole("button", { name: "Lumbridge" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Theatre of Blood" }));
     expect(actions.selectMap).toHaveBeenCalledExactlyOnceWith("theatre_of_blood");
-    expect(screen.getByRole("button", { name: /Enter Theatre of Blood/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enter Theatre of Blood" })).toBeInTheDocument();
     cleanup();
     renderMaps("theatre_of_blood");
     expect(screen.getByRole("tab", { name: "Bosses" })).toHaveAttribute("aria-selected", "true");
