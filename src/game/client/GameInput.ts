@@ -114,7 +114,11 @@ export class GameInput {
         }
         if (!this.down.has(event.code)) {
             this.down.add(event.code);
-            this.onPress?.(event.code);
+            // A key held down in a box to type in, repeating once the box has gone, is held but
+            // not pressed again: a held Enter that sent a chat line would open the box again
+            if (!event.repeat) {
+                this.onPress?.(event.code);
+            }
         }
     };
 

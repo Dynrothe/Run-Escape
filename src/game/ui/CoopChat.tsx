@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { GameClient } from "../client/GameClient";
@@ -62,13 +62,29 @@ export function CoopChatRun({ ui, client }: Props): JSX.Element | null {
             client.closeChat();
         }
     }, [shown, client]);
+    // and if anything comes up over the run (a level up, a casket, the menu), whose keys
+    // what's being typed would otherwise press
+    useEffect(() => {
+        if (ui.overlay !== "none") {
+            client.closeChat();
+        }
+    }, [ui.overlay, client]);
     const unread = useUnreadChat(ui, client, chatOpen);
     if (!shown) {
         return null;
     }
     if (chatOpen) {
         return (
-            <div className="ui-coopchat ui-coopchat-run ui-coopchat-open rs-border rs-background">
+            <div
+                className="ui-coopchat ui-coopchat-run ui-coopchat-open rs-border rs-background"
+                // A button pressed keeps the focus in the box: Safari and Firefox don't focus a
+                // clicked button, so the box's blur would shut it before the click landed
+                onMouseDown={(e) => {
+                    if ((e.target as HTMLElement).closest("button")) {
+                        e.preventDefault();
+                    }
+                }}
+            >
                 <ChatLog lines={lines} you={coop.you} />
                 <QuickChat client={client} onSaid={() => client.closeChat()} />
                 {display.coopChat === "all" ? (
@@ -99,7 +115,7 @@ export function CoopChatRun({ ui, client }: Props): JSX.Element | null {
             {recent.length > 0 && (
                 <div className="ui-coopchat ui-coopchat-run ui-coopchat-faded" aria-live="polite">
                     {recent.map((line) => (
-                        <ChatLineView key={line.seq} line={line} you={coop.you} />
+                        <FadingLine key={line.seq} line={line} you={coop.you} />
                     ))}
                 </div>
             )}
@@ -167,9 +183,30 @@ function ChatLog({ lines, you }: { lines: ChatLine[]; you?: string }): JSX.Eleme
     );
 }
 
-function ChatLineView({ line, you }: { line: ChatLine; you?: string }): JSX.Element {
+// A line over the world, fading as it gets to RUN_LINE_MS old: from its age when it's drawn, so
+// one drawn again (the box shut) carries on fading rather than starting over
+function FadingLine({ line, you }: { line: ChatLine; you?: string }): JSX.Element {
+    const [age] = useState(() => Date.now() - line.at);
     return (
-        <div className="ui-coopchat-line">
+        <ChatLineView
+            line={line}
+            you={you}
+            style={{ animationDuration: `${RUN_LINE_MS}ms`, animationDelay: `${-age}ms` }}
+        />
+    );
+}
+
+function ChatLineView({
+    line,
+    you,
+    style,
+}: {
+    line: ChatLine;
+    you?: string;
+    style?: CSSProperties;
+}): JSX.Element {
+    return (
+        <div className="ui-coopchat-line" style={style}>
             <span
                 className={"ui-coopchat-name" + (line.from === you ? " ui-coopchat-name-you" : "")}
             >
@@ -239,7 +276,9 @@ function ChatInput({
                 className="ui-coop-input ui-coopchat-input"
                 type="text"
                 value={text}
-                maxLength={MAX_CHAT_CHARS}
+                // In UTF-16's units, two to some characters (emoji): the line's cut to its
+                // characters as it's sent
+                maxLength={MAX_CHAT_CHARS * 2}
                 placeholder={t("chat.placeholder")}
                 aria-label={t("chat.placeholder")}
                 enterKeyHint="send"

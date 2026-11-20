@@ -207,8 +207,9 @@ more browsing the room list) took at most 13% of one core and 64 MB. A small VPS
 serving the game itself (about 26 MB for each new player) is the bigger cost.
 
 Co-op needs the relay in [server/coop-relay.mjs](../server/coop-relay.mjs): plain Node 20 with no
-packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from) and
-`server/client-ip.mjs` to the server and run it.
+packages, so copy it with `server/name-gen.mjs` (where players' and rooms' names come from),
+`server/client-ip.mjs`, `server/coop-checks.mjs` and `server/coop-chat.mjs` to the server and run
+it.
 
 ```
 PORT=8787 node server/coop-relay.mjs
@@ -272,23 +273,24 @@ can't tell where anyone is, and nobody gets a flag.
 
 Its limits, at the top of `server/coop-relay.mjs`:
 
-| What                          | Limit                                                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it) |
-| Connections from one address  | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                           |
-| Rooms hosted from one address | 4, and 16 from one IPv6 /48                                                                           |
-| Rooms made from one address   | 10 a minute                                                                                           |
-| Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                           |
-| Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                           |
-| A room with nothing happening | closed after 30 minutes (pings, looking at the list, and players' own updates and names don't count)  |
-| A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                   |
-| What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                    |
-| A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                               |
-| A player's own update         | 40 KB, or it's ignored                                                                                |
-| A player's loadout            | 16 KB, or it's dropped                                                                                |
-| A message                     | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames         |
-| One connection                | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped              |
-| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                      |
+| What                          | Limit                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Rooms on the relay            | 500, or `MULTIPLAYER_MAX_ROOMS`; past that, making one says they're all taken (and the menu shows it)      |
+| Connections from one address  | 16 (a household or LAN party behind one address), and 128 from one IPv6 /48                                |
+| Rooms hosted from one address | 4, and 16 from one IPv6 /48                                                                                |
+| Rooms made from one address   | 10 a minute                                                                                                |
+| Rooms joined from one address | 12 a minute (joining and leaving are each a room update for everyone in it)                                |
+| Wrong room codes              | 20 a minute from one address, and 80 from its IPv6 /48, then it has to wait                                |
+| A room with nothing happening | closed after 30 minutes (pings, looking at the list, chat, and players' own updates and names don't count) |
+| A room hearing how it is      | at most once each 250 ms, with the latest, however often it changes                                        |
+| What a host sends its room    | 64 KB/s (a run's start and frames), saving up to 256 KB; a host past it is dropped                         |
+| A guest's input for the host  | 1 KB each and 60 a second; past that it goes no further                                                    |
+| A player's own update         | 40 KB, or it's ignored                                                                                     |
+| A player's loadout            | 16 KB, or it's dropped                                                                                     |
+| A chat line                   | 2 KB and 200 characters; 3 at once, then one each 2 seconds, on each connection; past that it's dropped    |
+| A message                     | 256 KB, in 16 pieces at most, and UTF-8; nested 16 deep at most, apart from the host's frames              |
+| One connection                | 400 frames a second (empty ones and pings included) and 512 KB a second, or it's dropped                   |
+| Waiting to go out to one      | 1 MB: a connection that stops reading is dropped                                                           |
 
 An IPv6 address counts by its /64, which is what one home or server gets, and its /48 has looser
 limits of its own: one person can easily have all of a /48's /64s, but a mobile provider can put
@@ -887,11 +889,13 @@ src/game/
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
             off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
             checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
+            CoopChat (co-op's chat, in the room and in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
   coop-checks.mjs  both relays' checks on a run's frames
+  coop-chat.mjs    both relays' chat: what a line can be, and how often
   cloudflare/  the same relay on Cloudflare Durable Objects, each room near its host (README.md)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per segment and pass (without
@@ -3154,9 +3158,11 @@ the relay sends out is free.
 sender too, with who said it (`server/coop-chat.mjs`, shared by `coop-relay.mjs` and
 `cloudflare/src/room.mjs`). They keep none of it, so there's nothing to store or log: each game
 keeps its room's lines in `CoopView.chatLines`, in memory, and drops them on leaving the room.
-`chatLine` cleans a line (one line, no control or direction-turning characters, `MAX_CHAT_CHARS` at
-most) and drops it past `CHAT_BURST` at once or `CHAT_PER_SECOND` after; the game keeps to the same
-(`ChatLimiter`), so it never sends one the relay would drop. Chat doesn't count as activity for a
+`chatLine` cleans a line (one line, no control, direction-turning or invisible characters,
+`MAX_CHAT_CHARS` at most; the game's `cleanChatText` is the same, which `chat.test.ts` checks) and
+drops it past `CHAT_BURST` at once or `CHAT_PER_SECOND` after, counted for each connection: only the
+room hears it, and joins and connections are already limited by address. The game's `ChatLimiter`
+fills a little slower, so a line held up on the way still fits. Chat doesn't count as activity for a
 room's `IDLE_MS`, as a player's own updates don't, or a line now and then could hold a room for
 ever. A relay that passes chat says so in its welcome (`chat: true`), and the game shows chat only
 then, so an older relay never has a box nobody hears. Ids of new phrases only ever get added: a game
@@ -3172,6 +3178,8 @@ starts or ends (`setCoopRun`), since its HUD goes with the run. `takesKey` takes
 keypress doesn't reach the box it opens, and the box opening lets go of held keys
 (`GameInput.release`): its own keys never reach `GameInput`, so their releases wouldn't either. On a
 touch screen it's high in the middle instead, clear of the stick, with a Chat button by pause.
+Anything coming up over the run (a level up, a casket, the menu) shuts the box, so what's being
+typed can't press its keys. A controller has no way into the run's chat yet.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
 `welcome` for their own and on each room member. The Cloudflare relay's Worker gets it from

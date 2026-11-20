@@ -20,15 +20,23 @@ const QUICK_ID = /^[a-z][a-z0-9_]{0,31}$/;
 
 // Text a line can't carry: control characters, the ones that reverse or
 // isolate the text after them (which could make a line seem to be someone
-// else's), and long runs of combining marks piled on one letter
-const CONTROL = /[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
+// else's), ones that take no room, and long runs of combining marks piled on
+// one letter. The game's cleanChatText is the same (chat.test.ts runs both).
+// The joiners (U+200C, U+200D) stay, for emoji and the scripts that need them.
+const CONTROL =
+    /[\p{Cc}\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/gu;
 const MARK_PILE = /(\p{M}{3})\p{M}+/gu;
+// A line of nothing a player can see (blank fillers, joiners) says nothing
+const BLANK = /^[\s\u115F\u1160\u200C\u200D\u2800\u3164\uFFA0]*$/u;
 
 export function cleanChat(text) {
     if (typeof text !== "string") {
         return "";
     }
     const clean = text.replace(CONTROL, " ").replace(MARK_PILE, "$1").replace(/\s+/gu, " ").trim();
+    if (BLANK.test(clean)) {
+        return "";
+    }
     const chars = Array.from(clean);
     return chars.length > MAX_CHAT_CHARS ? chars.slice(0, MAX_CHAT_CHARS).join("").trim() : clean;
 }

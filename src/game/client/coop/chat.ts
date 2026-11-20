@@ -3,8 +3,7 @@
 // (server/coop-chat.mjs), so there's nothing anywhere to read back later.
 
 // What the relay takes in a line, and how fast (server/coop-chat.mjs, which
-// chat.test.ts holds these to): the game keeps to it, so a line it would drop
-// is never sent
+// chat.test.ts holds these to): the game keeps within it (ChatLimiter)
 export const MAX_CHAT_CHARS = 200;
 export const CHAT_BURST = 3;
 export const CHAT_PER_SECOND = 0.5;
@@ -37,17 +36,30 @@ export type ChatLine = {
     at: number;
 };
 
-// What a line can be: one line, without what the relay strips, cut to its length
+// What a line can be: one line, without what the relay strips, cut to its length. The same as
+// the relay's cleanChat (chat.test.ts runs both over the same lines).
 export function cleanChatText(text: string): string {
     const clean = text
-        .replace(/[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, " ")
+        .replace(
+            /[\p{Cc}\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/gu,
+            " ",
+        )
+        .replace(/(\p{M}{3})\p{M}+/gu, "$1")
         .replace(/\s+/gu, " ")
         .trim();
+    if (/^[\s\u115F\u1160\u200C\u200D\u2800\u3164\uFFA0]*$/u.test(clean)) {
+        return "";
+    }
     const chars = Array.from(clean);
     return chars.length > MAX_CHAT_CHARS ? chars.slice(0, MAX_CHAT_CHARS).join("").trim() : clean;
 }
 
-// The relay's bucket of lines, kept here too
+// The game fills its bucket this much slower than the relay's: a line sent the moment the game
+// allows it, held up on the way longer than the one before it, is then still within the
+// relay's limit
+const CHAT_REFILL_MARGIN = 0.8;
+
+// The relay's bucket of lines, kept here too, a little stricter
 export class ChatLimiter {
     private tokens = CHAT_BURST;
     private at?: number;
@@ -56,7 +68,7 @@ export class ChatLimiter {
         if (this.at !== undefined) {
             this.tokens = Math.min(
                 CHAT_BURST,
-                this.tokens + ((now - this.at) * CHAT_PER_SECOND) / 1000,
+                this.tokens + ((now - this.at) * CHAT_PER_SECOND * CHAT_REFILL_MARGIN) / 1000,
             );
         }
         this.at = now;

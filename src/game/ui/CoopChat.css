@@ -126,6 +126,7 @@
 
 .ui-coopchat-faded .ui-coopchat-line {
     text-shadow: var(--ui-outline);
+    /* Each line's own duration and delay, from its age, are set on it (FadingLine) */
     animation: ui-coopchat-fade 10s linear forwards;
 }
 
