@@ -110,7 +110,7 @@ function useDragToTurn(client: GameClient): void {
 export function WardrobeScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [tab, setTab] = useState<Tab>("body");
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     useDragToTurn(client);
     // Changing the body, the adventurer stands in it alone, so what changes can be seen
     useEffect(() => client.showBareBody(tab === "body"), [client, tab]);
@@ -166,7 +166,7 @@ export function WardrobeScreen({ ui, client }: Props): JSX.Element {
                     )}
                 </div>
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("canvas.back")}
                     </button>
                     <Coins amount={save.coins} />

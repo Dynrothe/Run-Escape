@@ -14,7 +14,6 @@ import {
 import { EvolutionDef } from "../content/evolutions";
 import { passiveName } from "../content/passives";
 import { RARITIES, rarityName } from "../content/rarity";
-import { CLOSE_SPRITES } from "../content/titleIcons";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { weaponDescription, weaponName } from "../content/weapons";
 import { countCardsOwned } from "../core/cards";
@@ -23,7 +22,6 @@ import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
-import { useSpriteFrame } from "./useSpriteFrame";
 
 // The Collection log, laid out as OSRS's client lays it: its total in the title, tabs along the
 // top, the tab's entries down the left (green once complete) and the entry's items on the right,
@@ -32,7 +30,7 @@ import { useSpriteFrame } from "./useSpriteFrame";
 // What's listed comes from content/collectionLog.ts.
 //
 // inRun: a page of the pause menu (from its Collection log button, as the settings are), with
-// what the run has found and not saved yet marked New. No window and no X of its own: the button
+// what the run has found and not saved yet marked New. No window and no Back of its own: the button
 // takes it back to the tab it came from, and Escape and P are the pause menu's. place keeps where
 // it was left, for when a co-op run's level up or casket takes the menu away a moment and it
 // opens again.
@@ -147,7 +145,7 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
             place.current = { tab, entryIds, itemIndex };
         }
     }, [place, tab, entryIds, itemIndex]);
-    const close = () => client.showScreen("title");
+    const close = () => client.leaveMenu();
     useMenuKeys({ onBack: inRun ? undefined : close });
 
     const openTab = (next: LogTab) => {
@@ -166,8 +164,6 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
             role={inRun ? "region" : "dialog"}
             aria-labelledby="ui-log-title"
         >
-            {/* The X comes after the tabs, drawn on the title's row, so a pad's first
-                    highlight and the first Tab are the open tab, not the way out */}
             <div className="ui-log-top">
                 {/* The log's total on the left, its items only; the cards' own on the right,
                         each card once, any version; stacked where they won't fit on one line */}
@@ -203,7 +199,6 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
                         </button>
                     ))}
                 </div>
-                {!inRun && <CloseButton onClose={close} />}
             </div>
             <div className="ui-log-body">
                 <div
@@ -289,31 +284,20 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
                     {item && <ItemDetail item={item} />}
                 </div>
             </div>
+            {/* Back along the bottom, as on every other menu screen; after the log, so a pad's
+                first highlight and the first Tab are the open tab, not the way out */}
+            {!inRun && (
+                <div className="ui-row ui-log-foot">
+                    <button className="ui-button" onClick={close}>
+                        {t("canvas.back")}
+                    </button>
+                </div>
+            )}
         </div>
     );
     // In the pause menu, its page; from the title, a screen of its own
     return inRun ? log : <div className="ui-fill ui-center">{log}</div>;
 });
-
-// The client's own X, lit under the mouse; a plain X till its sprites are drawn
-function CloseButton({ onClose }: { onClose: () => void }): JSX.Element {
-    const off = useSpriteFrame(CLOSE_SPRITES.off, 0);
-    const hover = useSpriteFrame(CLOSE_SPRITES.hover, 0);
-    const style =
-        off && hover
-            ? ({ "--rs-close": `url(${off})`, "--rs-close-lit": `url(${hover})` } as CSSProperties)
-            : undefined;
-    return (
-        <button
-            className={"ui-log-close" + (style ? " ui-log-close-sprite" : "")}
-            style={style}
-            aria-label={t("collection.close")}
-            onClick={onClose}
-        >
-            {style ? null : "X"}
-        </button>
-    );
-}
 
 function ItemSlot({
     item,

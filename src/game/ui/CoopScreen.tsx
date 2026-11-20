@@ -23,6 +23,7 @@ import {
     isCoopMap,
     takesInvocations,
 } from "../content/maps";
+import { TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { getVault } from "../content/vault";
 import { isCardRunBlocked } from "../core/cardRuns";
 import {
@@ -33,6 +34,8 @@ import {
 } from "../core/save";
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
 import { CardNeedsWindow } from "./CardNeeds";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel } from "./CloudSave";
+import { Coins } from "./Coins";
 import { useConfirm } from "./ConfirmDialog";
 import { CoopChatPanel, useUnreadChat } from "./CoopChat";
 import "./CoopScreen.css";
@@ -41,8 +44,10 @@ import {
     AdventurerPanel,
     PhoneAdventurerCard,
     PickerHeading,
+    SettingsPanel,
     Toggle,
     getStartingWeaponIcon,
+    menuItems,
 } from "./GameUi";
 import {
     InvocationBoard,
@@ -51,7 +56,9 @@ import {
     RunInvocationsButton,
 } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
+import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { useMenuKeys } from "./menuKeys";
+import { useDialog } from "./useDialog";
 import { usePhoneLayout } from "./usePhoneLayout";
 
 // Co-op: finding a room or making one, then the room itself, where everyone
@@ -373,6 +380,36 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const [needsFor, setNeedsFor] = useState<string>();
     // Escape shuts what's needed, when it's open
     useMenuKeys({ onBack: needsFor ? () => setNeedsFor(undefined) : undefined });
+    // The title's menu, from the room without leaving it (LobbyMenu). The store keeps it open, so
+    // a menu screen opened from it comes back to it (GameClient.setRoomMenu). Settings and cloud
+    // save show in the room's place, and shut back to the Menu. Escape shuts each.
+    const menuOpen = ui.roomMenu === room.code;
+    const [panel, setPanel] = useState<"settings" | "cloud">();
+    const openPanel = (next: "settings" | "cloud") => {
+        setPanel(next);
+        client.stepAwayFromRoom();
+    };
+    const closePanel = () => {
+        setPanel(undefined);
+        client.backToRoom();
+    };
+    useMenuKeys({
+        onBack: panel
+            ? closePanel
+            : menuOpen
+              ? () => {
+                    // The language list shuts first, on its own
+                    if (!document.querySelector(".ui-title-language-tooltip")) {
+                        client.setRoomMenu(false);
+                    }
+                }
+              : undefined,
+    });
+    // Cloud save asking which save to keep, over its panel (as on the title)
+    const cloudChoice =
+        ui.cloud?.choice !== undefined && !ui.cloud.choice.closed ? (
+            <CloudChoicePanel cloud={ui.cloud} save={ui.save} client={client} />
+        ) : undefined;
     const hostInvocations = isHost ? ui.save.invocations : host?.loadout?.invocations;
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
@@ -689,6 +726,13 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     {t("coop.disband")}
                 </button>
             )}
+            <button
+                className="ui-button"
+                aria-haspopup="dialog"
+                onClick={() => client.setRoomMenu(true)}
+            >
+                {t("coop.menu")}
+            </button>
         </>
     );
     // The host's switches for how the map's played
@@ -811,8 +855,35 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     onClose={() => setNeedsFor(undefined)}
                 />
             )}
+            {menuOpen && (
+                <LobbyMenu
+                    ui={ui}
+                    client={client}
+                    onPanel={openPanel}
+                    onClose={() => client.setRoomMenu(false)}
+                />
+            )}
         </>
     );
+    // Settings or cloud save in the room's place, as the title shows them; the room
+    // carries on behind
+    if (panel) {
+        return (
+            <div className="ui-fill ui-center">
+                {panel === "settings" ? (
+                    <SettingsPanel ui={ui} client={client} onClose={closePanel} />
+                ) : (
+                    <CloudSavePanel
+                        cloud={ui.cloud}
+                        client={client}
+                        saving={!ui.saveBlock}
+                        onClose={closePanel}
+                    />
+                )}
+                {cloudChoice}
+            </div>
+        );
+    }
     if (!phone) {
         return (
             <div className="ui-fill ui-select">
@@ -951,6 +1022,75 @@ function ChatButton({ ui, client, onOpen }: Props & { onOpen: () => void }): JSX
             {t("chat.button")}
             {unread && <span className="ui-coopchat-unread" />}
         </button>
+    );
+}
+
+// The title's menu from a co-op room, which stays open behind: a row for each of the title's
+// tiles, as a game's pause menu, then Settings, with the language and cloud save by Close. A menu
+// screen comes back to the room with this still open (GameClient.openMenu, setRoomMenu), and
+// Settings and cloud save show in the room's place (onPanel).
+function LobbyMenu({
+    ui,
+    client,
+    onPanel,
+    onClose,
+}: Props & {
+    onPanel: (panel: "settings" | "cloud") => void;
+    onClose: () => void;
+}): JSX.Element {
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
+    return (
+        <div className="ui-modal" onClick={onClose}>
+            <div
+                {...dialogProps}
+                className="ui-panel rs-border rs-background ui-coop-menu"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 id={titleId}>{t("coop.menu")}</h2>
+                <div className="ui-coop-menu-list">
+                    {menuItems().map((item) => (
+                        <button
+                            key={item.screen}
+                            className="ui-card ui-coop-menu-row"
+                            onClick={() => client.openMenu(item.screen)}
+                        >
+                            <ItemIcon objId={item.objId ?? -1} spriteId={item.spriteId} size={28} />
+                            <span className="ui-coop-menu-name">{item.name}</span>
+                        </button>
+                    ))}
+                    <button
+                        className="ui-card ui-coop-menu-row ui-coop-menu-settings"
+                        onClick={() => onPanel("settings")}
+                    >
+                        <ItemIcon objId={-1} spriteId={TITLE_TAB_SPRITES.settings} size={28} />
+                        <span className="ui-coop-menu-name">{t("ui.title.settings")}</span>
+                    </button>
+                </div>
+                <p className="ui-subtle ui-coop-menu-note">{t("coop.menu_note")}</p>
+                <div className="ui-row ui-coop-menu-foot">
+                    <Coins amount={ui.save.coins} />
+                    <div className="ui-coop-menu-options">
+                        {ui.saveBlock && ui.saveBlockClosed && (
+                            <button
+                                className="ui-version ui-save-off"
+                                onClick={() => client.showSaveBlock()}
+                            >
+                                {t("ui.title.not_saving")}
+                            </button>
+                        )}
+                        <TitleLanguageMenu />
+                        <CloudSaveButton
+                            cloud={ui.cloud}
+                            client={client}
+                            onOpen={() => onPanel("cloud")}
+                        />
+                        <button className="ui-button" onClick={onClose}>
+                            {t("coop.menu_close")}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
 

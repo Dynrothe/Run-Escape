@@ -10,7 +10,14 @@ the version in the corner).
 - Co-op chat, by Okaeri: talk to your party in the room and during a run (Enter on a keyboard, the
   Chat button on a phone), or use quick-chat phrases. Chat is never saved, and Settings can keep it
   to quick chat or turn it off. You can mute anyone in your room.
+- A Menu in co-op rooms, by Jp66600: Skills, the Armoury, Settings and the rest without leaving
+  the room. The run waits for you while you're in one, and you're ready again when you're back.
 - Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
+
+### Changed
+
+- The Collection log has a Back button along its bottom, as every other menu does, in place of
+  its X. By Jp66600.
 
 ### Fixed
 

@@ -3062,6 +3062,18 @@ from the host to everyone else. The host leaving a run ends it for everyone; in 
 room goes to the next player. The balance bot plays a party with `PARTY=4`, each player on their
 own, so it can't show teamwork.
 
+The lobby's **Menu** (`LobbyMenu` in `CoopScreen.tsx`) is a list, as a game's pause menu: a row
+for each of the title's tiles (`menuItems`), then Settings, with the language and cloud save by
+Close (not What's new, Discord or GitHub), without leaving the room. A menu screen opens through
+`GameClient.openMenu`, and its Back goes through `leaveMenu`, back to the room (or the rooms'
+list, if the room went meanwhile) rather than the title. The Menu's open state is the store's
+(`roomMenu`, by the room's code, `setRoomMenu`), so it's still open when a menu screen comes back;
+a run starting shuts it. Settings and cloud save show in the room's place, and shut back to the
+Menu. A player who was ready isn't while away (`stepAwayFromRoom`), so the host's start can't pull
+them out of a shop halfway through, and is again once back (`backToRoom`), which sends their
+loadout and unlocks again for what was bought. A new menu screen goes in `MenuScreen` and
+`menuItems`, with `leaveMenu` for its Back.
+
 The Cloudflare relay (`server/cloudflare/`) speaks the same protocol, with one more message: it
 answers `create` and `join` with a `goto` (a room code and a one-time ticket), and `CoopLobby`
 then makes or joins the room on that room's own connection, at `coop/room/<code>`. What's said in
@@ -3378,8 +3390,8 @@ of its own.
   one. The first button is the screen's own: the game's canvas behind it is no stop for the
   highlight or for Tab (`RendererCanvas`'s `focusable={false}`, as the game reads its keys from the
   window), though a click still focuses it. So keep a screen's way out (Back, an X) after what's on
-  it in the page, or the first press lands there and a second leaves: the Collection log's X comes
-  after its tabs, drawn on the title's row. Start clicks the `.ui-button-go` (Enter the map,
+  it in the page, or the first press lands there and a second leaves: the Collection log's Back
+  comes after the whole log, along its bottom. Start clicks the `.ui-button-go` (Enter the map,
   Resume, a casket's best choice) wherever the focus is, so starting a run doesn't mean walking
   the highlight across the screen. A click can't open a dropdown (`<select>`), so left and right
   step through its options while it's highlighted (the Collection log's entries on a narrow

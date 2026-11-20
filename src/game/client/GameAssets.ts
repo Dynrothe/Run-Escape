@@ -54,7 +54,6 @@ import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
     CHANGE_SPRITES,
     CHECKBOX_SPRITES,
-    CLOSE_SPRITES,
     CLOUD_SAVE_SPRITES,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
@@ -258,7 +257,6 @@ export function getGameSpriteIds(): number[] {
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
         ...Object.values(CHECKBOX_SPRITES),
-        ...Object.values(CLOSE_SPRITES),
         ...Object.values(CHANGE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         ...LOCKED_GEAR_SLOTS.map((slot) => slot.iconSpriteId),

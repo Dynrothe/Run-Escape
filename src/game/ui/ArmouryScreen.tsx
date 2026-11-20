@@ -40,7 +40,7 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     const [selected, setSelected] = useState(
         () => CASKET_GEAR.find((g) => save.foundGear.includes(g.id))?.id ?? CASKET_GEAR[0].id,
     );
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-armoury">
@@ -104,7 +104,7 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                     <LoadoutCatalogue kind={tab} save={save} />
                 )}
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("canvas.back")}
                     </button>
                     {tab === "gear" && (

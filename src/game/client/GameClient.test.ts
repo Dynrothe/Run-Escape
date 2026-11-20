@@ -3053,3 +3053,93 @@ describe("a co-op player's Card collection only pet", () => {
         expect(cleanLoadout(loadout()).pet).toBe(butch);
     });
 });
+
+describe("the menus from a co-op room", () => {
+    // In a room of two, with this player ready or not: what's told to the relay
+    function inRoom(ready: boolean) {
+        const { client, store } = createClient(createSim(), false);
+        const room = {
+            code: "ABCDE",
+            hostId: "host",
+            mapId: "lumbridge",
+            members: [
+                { id: "host", name: "Host", ready: true },
+                { id: "me", name: "Me", ready },
+            ],
+        };
+        const coop = {
+            room: room as typeof room | undefined,
+            id: "me",
+            isHost: false,
+            setReady: vi.fn((on: boolean) => {
+                room.members[1].ready = on;
+            }),
+            setMe: vi.fn(),
+        };
+        Object.assign(client, { sim: undefined, coop, menuHome: "title" });
+        store.set({ screen: "coop" });
+        return { client, store, coop };
+    }
+
+    it("opens a menu without leaving the room, and comes back to it", () => {
+        const { client, store, coop } = inRoom(false);
+        client.openMenu("shop");
+        expect(store.getSnapshot().screen).toBe("shop");
+        client.leaveMenu();
+        expect(store.getSnapshot().screen).toBe("coop");
+        // What was bought there is the room's, and they're as ready as they were
+        expect(coop.setMe).toHaveBeenLastCalledWith({
+            loadout: expect.objectContaining({ metaStats: expect.any(Object) }),
+            unlocks: expect.objectContaining({ maps: expect.arrayContaining(["lumbridge"]) }),
+        });
+        expect(coop.setReady).not.toHaveBeenCalled();
+    });
+
+    it("isn't ready while away, so the start waits, and is ready again once back", () => {
+        const { client, coop } = inRoom(true);
+        client.openMenu("armoury");
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+        client.leaveMenu();
+        expect(coop.setReady).toHaveBeenLastCalledWith(true);
+        expect(coop.setReady).toHaveBeenCalledTimes(2);
+    });
+
+    it("does the same for Settings over the room", () => {
+        const { client, coop } = inRoom(true);
+        client.stepAwayFromRoom();
+        expect(coop.setReady).toHaveBeenLastCalledWith(false);
+        client.backToRoom();
+        expect(coop.setReady).toHaveBeenLastCalledWith(true);
+    });
+
+    it("readies no one in a room they're no longer in", () => {
+        const { client, store, coop } = inRoom(true);
+        client.openMenu("wardrobe");
+        coop.room = undefined;
+        client.leaveMenu();
+        // The rooms' list, where the room was
+        expect(store.getSnapshot().screen).toBe("coop");
+        expect(coop.setReady).toHaveBeenCalledTimes(1);
+        expect(coop.setMe).not.toHaveBeenCalled();
+    });
+
+    it("comes back to the title from the title's own tiles", () => {
+        const { client, store, coop } = inRoom(true);
+        coop.room = undefined;
+        store.set({ screen: "title" });
+        client.openMenu("quests");
+        client.leaveMenu();
+        expect(store.getSnapshot().screen).toBe("title");
+    });
+
+    it("keeps the room's Menu open under a menu screen opened from it, till it's shut", () => {
+        const { client, store } = inRoom(false);
+        client.setRoomMenu(true);
+        expect(store.getSnapshot().roomMenu).toBe("ABCDE");
+        client.openMenu("collectionLog");
+        client.leaveMenu();
+        expect(store.getSnapshot().roomMenu).toBe("ABCDE");
+        client.setRoomMenu(false);
+        expect(store.getSnapshot().roomMenu).toBeUndefined();
+    });
+});

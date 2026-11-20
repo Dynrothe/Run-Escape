@@ -32,6 +32,7 @@ import {
     HudNumbers,
     HudView,
     InventorySlotView,
+    MenuScreen,
     QuestTrackView,
     SlotView,
     ToastLogEntry,
@@ -896,7 +897,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
 // Behind the title screen's Settings button: the pause menu's sections and cards, with what only
 // the title has besides (the save, the menu's camera, screen shake, run stats and co-op's flag).
 // The save on the left, first, as it's what a player can lose.
-function SettingsPanel({
+export function SettingsPanel({
     ui,
     client,
     onClose,
@@ -1019,6 +1020,42 @@ function TitleTile({
             <ItemIcon objId={objId} spriteId={spriteId} />
             <span className="ui-title-tile-name">{name}</span>
         </button>
+    );
+}
+
+export type MenuItem = { screen: MenuScreen; name: string; objId?: number; spriteId?: number };
+
+// The title's tiles, each a menu screen: a co-op room's Menu opens them too, without leaving the
+// room (GameClient.openMenu)
+export function menuItems(): MenuItem[] {
+    return [
+        { screen: "shop", name: t("ui.title.skills"), spriteId: TITLE_TAB_SPRITES.skills },
+        { screen: "armoury", name: t("ui.title.armoury"), spriteId: TITLE_TAB_SPRITES.armoury },
+        { screen: "wardrobe", name: t("ui.title.wardrobe"), objId: WARDROBE_ICON_OBJ },
+        { screen: "quests", name: t("ui.title.quests"), spriteId: TITLE_TAB_SPRITES.quests },
+        {
+            screen: "combatAchievements",
+            name: t("ui.title.combat_achievements"),
+            objId: COMBAT_ACHIEVEMENTS_OBJ,
+        },
+        { screen: "collectionLog", name: t("ui.title.collection_log"), objId: COLLECTION_LOG_OBJ },
+        { screen: "cards", name: t("ui.title.cards"), objId: CARDS_ICON_OBJ },
+    ];
+}
+
+export function MenuTiles({ client }: { client: GameClient }): JSX.Element {
+    return (
+        <>
+            {menuItems().map((item) => (
+                <TitleTile
+                    key={item.screen}
+                    name={item.name}
+                    objId={item.objId}
+                    spriteId={item.spriteId}
+                    onClick={() => client.openMenu(item.screen)}
+                />
+            ))}
+        </>
     );
 }
 
@@ -1166,41 +1203,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         )}
                     </div>
                     <div className="ui-title-tiles">
-                        <TitleTile
-                            name={t("ui.title.skills")}
-                            spriteId={TITLE_TAB_SPRITES.skills}
-                            onClick={() => client.showScreen("shop")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.armoury")}
-                            spriteId={TITLE_TAB_SPRITES.armoury}
-                            onClick={() => client.showScreen("armoury")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.wardrobe")}
-                            objId={WARDROBE_ICON_OBJ}
-                            onClick={() => client.showScreen("wardrobe")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.quests")}
-                            spriteId={TITLE_TAB_SPRITES.quests}
-                            onClick={() => client.showScreen("quests")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.combat_achievements")}
-                            objId={COMBAT_ACHIEVEMENTS_OBJ}
-                            onClick={() => client.showScreen("combatAchievements")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.collection_log")}
-                            objId={COLLECTION_LOG_OBJ}
-                            onClick={() => client.showScreen("collectionLog")}
-                        />
-                        <TitleTile
-                            name={t("ui.title.cards")}
-                            objId={CARDS_ICON_OBJ}
-                            onClick={() => client.showScreen("cards")}
-                        />
+                        <MenuTiles client={client} />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
@@ -3225,7 +3228,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
     const [confirm, confirmDialog] = useConfirm();
-    useMenuKeys({ onBack: () => client.showScreen("title") });
+    useMenuKeys({ onBack: () => client.leaveMenu() });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
@@ -3361,7 +3364,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                     {t(isCoarsePointer ? "ui.shop.hint.touch" : "ui.shop.hint.mouse")}
                 </p>
                 <div className="ui-row">
-                    <button className="ui-button" onClick={() => client.showScreen("title")}>
+                    <button className="ui-button" onClick={() => client.leaveMenu()}>
                         {t("ui.common.back")}
                     </button>
                     <span className="ui-shop-balance">
