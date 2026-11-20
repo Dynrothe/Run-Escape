@@ -442,17 +442,20 @@ describe("player bakes", () => {
     });
 
     test("claws share one attack bake for normal swings, Burning Slice and evolution offers", () => {
+        const claws = getWeapon("dragon_claws").playerSeq;
+        expect(getWeapon("burning_claws").playerSeq).toBe(claws);
         const sim = createRun(1, "werewolf");
-        expect(getCharacterAttackSeqs("werewolf")).toEqual([7514]);
-        expect(getRunAttackSeqs(sim)).toEqual([7514]);
+        expect(getCharacterAttackSeqs("werewolf")).toEqual([claws]);
+        expect(getRunAttackSeqs(sim)).toEqual([claws]);
         sim.choices = [{ kind: "evolve", weaponId: "dragon_claws", into: "burning_claws" }];
         expect(getOfferedAttackSeqs(sim)).toEqual([]);
         sim.weapons = [];
         sim.addWeapon("burning_claws");
         const seqs = getRunAttackSeqs(sim);
-        expect(seqs).toEqual([7514]);
+        expect(seqs).toEqual([claws]);
         const { request } = GameAssets.getLookRequest(getRunAppearance(sim), seqs);
-        expect(request.seqIds.filter((id) => id === 7514)).toHaveLength(1);
+        expect(request.seqIds.filter((id) => id === claws)).toHaveLength(1);
+        // Not the scratch the claws had before
         expect(request.seqIds).not.toContain(393);
         expect(request.runPoses).toBeUndefined();
     });

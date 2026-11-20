@@ -5384,7 +5384,8 @@ describe("the new weapons", () => {
             const sim = armed(weaponId);
             const goblin = standing(sim, "goblin", 1.2, 0);
             expect(hitsOn(attack(sim), goblin).length).toBe(1);
-            expect(sim.player.attackSeq).toBe(7514);
+            // The claws' special, both of them
+            expect(sim.player.attackSeq).toBe(getWeapon("dragon_claws").playerSeq);
             sim.weapons[0].cooldown = 1e9;
             const later: SimEvent[] = [];
             for (let i = 0; i < 20; i++) {

@@ -1689,8 +1689,7 @@ export const WEAPONS: WeaponDef[] = [
             name: "Burning Slice",
             every: 3,
             damage: 1.25,
-            // The claws' own special
-            playerSeq: 7514,
+            // The claws' own special, as every swing is
             spotAnim: 1171,
             effect: { kind: "burn", damage: 0.4, seconds: 4 },
         },

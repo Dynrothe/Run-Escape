@@ -2395,8 +2395,11 @@ as soon as it's offered (`getOfferedAttackSeqs`), and a look that has the swings
 more isn't baked again: the ones not picked go at the next re-bake. The menus' look has the
 starting weapon's swings (`setCharacterLook`), so a solo run starts with it baked.
 `getPlayerAttackSeqs` is every weapon's, for the slim cache.
-Dragon claws and Burning claws use the same special-attack sequence for every swing, including
-Burning Slice, so each look bakes that attack only once, without a separate scratch or run pose.
+
+Dragon claws and Burning claws swing with the claws' special attack, Burning Slice included, so a
+look holding either bakes that one attack. It's 34 frames more than the scratch they had, which a
+look holding Dragon claws (the Werewolf's from the menus on) pays. Each attack starts it over, so
+at a fast cooldown only its start is seen.
 
 A weapon with a `runPose` (the Armadyl crossbow) shows each shot on the move too: the upper body
 takes that one frame of its swing, its aim, for a moment (`RUN_POSE_TICKS`) after each shot, while
