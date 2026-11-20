@@ -21651,15 +21651,17 @@ export class Sim {
                 weaponId: def.id,
             });
             this.rule?.onSwing(player.x, player.y, dirX, dirY, reach + this.cutReach(), 0, width);
-            this.rule?.onSwing(
-                player.x,
-                player.y,
-                dirX,
-                dirY,
-                reach + this.cutReach(),
-                SLASH_ARC,
-                0,
-            );
+            if (!def.stab) {
+                this.rule?.onSwing(
+                    player.x,
+                    player.y,
+                    dirX,
+                    dirY,
+                    reach + this.cutReach(),
+                    SLASH_ARC,
+                    0,
+                );
+            }
             this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
@@ -21677,8 +21679,12 @@ export class Sim {
                     hitStrip =
                         pastEnd * pastEnd + pastSide * pastSide <= enemy.radius * enemy.radius;
                 }
-                // Keep the old contact strip, and include everything under the visible arc.
-                if (!hitStrip && !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, SLASH_ARC)) {
+                // The strip, and what's under the swoosh's arc (a stab hits only its strip)
+                if (
+                    !hitStrip &&
+                    (def.stab ||
+                        !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, SLASH_ARC, false))
+                ) {
                     return;
                 }
                 hit.push(enemy);
@@ -21687,6 +21693,9 @@ export class Sim {
         this.meleeHits(def, level, hit, special);
     }
 
+    // Whether an enemy (ox, oy from the player) is within reach and arc radians either side of
+    // dir, a big one by its edge. allRound: anything right on top of the player is in the way of
+    // the swing, whichever way it goes (a sweep's); a slash hits only what's in its swoosh
     private inMeleeArc(
         enemy: Enemy,
         ox: number,
@@ -21695,13 +21704,13 @@ export class Sim {
         dirY: number,
         reach: number,
         arc: number,
+        allRound: boolean,
     ): boolean {
         const dist = fm.hypot(ox, oy);
         if (dist > reach + enemy.radius) {
             return false;
         }
-        // Anything right on top of the player is in the way of the swing.
-        if (dist <= 0.8) {
+        if (allRound && dist <= 0.8) {
             return true;
         }
         const along = (ox * dirX + oy * dirY) / Math.max(dist, 0.001);
@@ -21766,7 +21775,7 @@ export class Sim {
                 if (
                     enemy.dead ||
                     hit.has(enemy) ||
-                    !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, arc)
+                    !this.inMeleeArc(enemy, ox, oy, dirX, dirY, reach, arc, true)
                 ) {
                     return;
                 }

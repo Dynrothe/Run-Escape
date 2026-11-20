@@ -1906,6 +1906,9 @@ export type WeaponDef = {
     family?: string;
     // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
     pickOnly?: boolean;
+    // A slash that stabs straight ahead (the keris partisans, the fang, the rapier): it hits only
+    // its strip, not the whole arc of its swoosh as other slashes do
+    stab?: boolean;
     // Blows that land heavy (the Saradomin sword's; a sweep's or a slash's): a swing that hits
     // shakes the camera (ImpactDef.shake, once a swing) and shows hit, if any, on each of the
     // first few it hits, and they stagger for stagger seconds (longer with meleeKnockback): they

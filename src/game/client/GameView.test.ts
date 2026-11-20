@@ -843,7 +843,8 @@ describe("slash swooshes", () => {
         { weapon, level: weapon.levels.length, area: 0.6, angle: Math.PI / 4, special: false },
     ]);
 
-    test.each(swings.filter(({ weapon }) => weapon.kind === "slash"))(
+    // Stabs hit only their strip (Sim.test)
+    test.each(swings.filter(({ weapon }) => weapon.kind === "slash" && !weapon.stab))(
         "$weapon.name hits across its full visible arcs (level $level, area $area)",
         ({ weapon, level, area, angle }) => {
             const { sim, view, overlay, project } = setup(area, weapon.id);

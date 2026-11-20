@@ -727,6 +727,52 @@ describe("melee", () => {
         expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
     });
 
+    test("a slash one way doesn't hit what's pressed against your back", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        expect(sim["getEffectiveLevel"](sim.weapons[0]).amount).toBe(1);
+        // The nearer one is swung at; the other touches the player behind
+        const front = dummy(sim, 0.5, 0);
+        const behind = dummy(sim, -0.75, 0);
+        for (const enemy of [front, behind]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, front)).toHaveLength(1);
+        expect(hitsOn(events, behind)).toHaveLength(0);
+    });
+
+    test("a slash both ways hits what's touching you once, unless it's right beside you", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        sim.weapons[0].level = 2;
+        // Touching the player, in front of where the back swing's strip starts
+        const goblin = dummy(sim, 0.6, 0.5);
+        goblin.frozen = 1e6;
+        expect(hitsOn(attack(sim), goblin)).toHaveLength(1);
+    });
+
+    test.each([
+        ["scimitar", 1],
+        ["keris_partisan", 0],
+        ["osmumtens_fang", 0],
+        ["ghrazi_rapier", 0],
+    ])("%s's swoosh off to the side hits %i times: stabs keep to their strip", (weaponId, hits) => {
+        const sim = armed(weaponId);
+        sim.enemies = [];
+        expect(getWeapon(weaponId).stab ?? false).toBe(hits === 0);
+        // Swung at the one straight ahead; the other is in reach, under the swoosh's arc but
+        // wide of the strip
+        const front = dummy(sim, 1, 0);
+        const side = dummy(sim, 1.3, 1.3);
+        for (const enemy of [front, side]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, front)).toHaveLength(1);
+        expect(hitsOn(events, side)).toHaveLength(hits);
+    });
+
     test("a slash keeps its old strip's far corner without hitting a target twice", () => {
         const sim = armed("scimitar");
         const reach = sim["getEffectiveLevel"](sim.weapons[0]).area;

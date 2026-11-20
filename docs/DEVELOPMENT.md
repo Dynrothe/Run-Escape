@@ -1493,14 +1493,11 @@ adventurer can have:
   stagger. `getSpotAnimIds` collects `hit`. The `meleeSpeed` stat speeds melee weapons only,
   on top of the sets' speed (`Sim.weaponSpeed`, capped with the rest in `cooldownTicks`):
   Saradomin bracers give it, and a Saradomin platebody `meleeKnockback`.
-- **Melee swooshes** (`GameView.drawSlashes`): slash damage covers the full visible arc, with
-  the old contact strip kept too, including its reach and close-range hits. `Sim.inMeleeArc`
-  shares the arc checks with sweeps, including large enemies' edges. Slashes can still land
-  once per side; sweeps hit each enemy once across both sides. Slashes cut roots across both
-  their arc and contact strip. The swoosh itself stays wide; this increases crowd coverage,
-  not damage per hit or attack speed.
-  `GameView.test.ts` exercises the real slash and sweep weapons at their first and last levels,
-  with area bonuses, and checks that all-round specials still draw a full circle.
+- **Slashes and sweeps** (`Sim.fireSlash`, `fireSweep`): a slash hits its strip (`SLASH_WIDTH`)
+  and everything under its swoosh (`SLASH_ARC`, as `GameView.drawSlashes` draws it), each side
+  once, so what's right beside the player takes both. A `WeaponDef.stab` hits only its strip.
+  A sweep hits each enemy once across its arcs, and what's touching the player whichever way it
+  goes. Both go by `Sim.inMeleeArc` (big enemies by their edge), and cut roots where they hit.
 - **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
   as a loc can't play a skeletal animation, and the map opens with a cinematic
   (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening

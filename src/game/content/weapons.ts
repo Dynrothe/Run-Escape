@@ -308,6 +308,7 @@ const keris = (
         Partial<WeaponDef>,
 ): WeaponDef => ({
     kind: "slash",
+    stab: true,
     playerSeq: KERIS_STAB,
     // hacksword_slash stands in for its sound, as the fang's
     sound: 2500,
@@ -1772,6 +1773,7 @@ export const WEAPONS: WeaponDef[] = [
         name: "Osmumten's fang",
         kind: "slash",
         description: "Fast, precise stabs at the closest enemy. Bosses and elites are hit twice.",
+        stab: true,
         iconObjId: 26219,
         // A stab; hacksword_slash stands in for its sound
         playerSeq: 386,
@@ -1806,6 +1808,7 @@ export const WEAPONS: WeaponDef[] = [
         kind: "slash",
         description:
             "The fastest stabs there are, at the closest enemy. Bosses and elites are hit twice.",
+        stab: true,
         iconObjId: 22324,
         // A stab; hacksword_slash stands in for its sound
         playerSeq: 386,

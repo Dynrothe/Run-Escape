@@ -61,10 +61,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
-- A `slash` hits its swoosh's full arc as well as its original contact strip. Each side can
-  hit an enemy once, so an enemy right on the player can still take both sides. A `sweep`
-  hits each enemy once across its arcs. Both use `Sim.inMeleeArc` and cut roots across their
-  arcs; keep the swoosh wide rather than narrowing it to the old strip.
+- A `slash` hits its strip and everything under its swoosh. Set `stab` on one that stabs straight
+  ahead (the keris partisans, the fang, the rapier): it hits only its strip.
 - To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
   projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
   Use `projectileObjId` for a real item model instead (the crossbows' bolts); these are baked at
