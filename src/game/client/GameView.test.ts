@@ -147,6 +147,62 @@ describe("high alchemy", () => {
     });
 });
 
+test.each([
+    ["duke_sucellus", "Icicles"],
+    ["awakened_duke", "Icicles"],
+    ["awakened_duke", "Icicles twice"],
+])("%s %s outlines every mark's full hit radius until it lands", (enemyId, attackName) => {
+    const sim = new Sim({
+        grid: makeGrid(Array(24).fill("........................")),
+        characterId: "ranger",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 111.5,
+        spawnY: 210.5,
+    });
+    const def = getEnemy(enemyId);
+    const boss = sim["spawnBoss"](def, "boss", undefined, { x: 111.5, y: 215.5 })!;
+    const attack = def.boss!.attacks.find((a) => a.name === attackName)!;
+    sim["startBossAttack"](boss, attack);
+    const view = new GameView({
+        get: () => undefined,
+        getPlayer: () => undefined,
+    } as unknown as GameAssets);
+    const outlines: { x: number; y: number }[][] = [];
+    let path: { x: number; y: number }[] = [];
+    const overlay = {
+        ctx: {
+            beginPath: () => (path = []),
+            moveTo: (x: number, y: number) => path.push({ x, y }),
+            lineTo: (x: number, y: number) => path.push({ x, y }),
+            closePath() {},
+            fill() {},
+            stroke: () => outlines.push(path.slice()),
+        },
+        project: (x: number, _height: number, y: number) => ({ x, y }),
+    } as unknown as Overlay;
+    expect(sim.hazards.length).toBeGreaterThan(0);
+    const landTick = sim.hazards[0].landTick;
+    for (const tick of [sim.tick, landTick - 1]) {
+        sim.tick = tick;
+        outlines.length = 0;
+        view["drawBossWindups"](overlay, sim, 0);
+        expect(outlines).toHaveLength(sim.hazards.length);
+        for (const [i, hazard] of sim.hazards.entries()) {
+            expect(outlines[i].length).toBeGreaterThan(0);
+            for (const point of outlines[i]) {
+                expect(Math.hypot(point.x - hazard.x, point.y - hazard.y)).toBeCloseTo(
+                    hazard.radius,
+                );
+            }
+        }
+    }
+    sim.tick = landTick;
+    outlines.length = 0;
+    view["drawBossWindups"](overlay, sim, 0);
+    expect(outlines).toHaveLength(0);
+});
+
 describe("hitsplat groups", () => {
     afterEach(() => {
         vi.restoreAllMocks();
