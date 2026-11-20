@@ -1,3 +1,5 @@
+import { CHAT_MODES, ChatMode } from "./coop/chat";
+
 // Settings for how the game looks and behaves, kept in the browser like the
 // sound ones
 export type DisplaySettings = {
@@ -29,6 +31,8 @@ export type DisplaySettings = {
     movePrediction: boolean;
     // Other co-op players see your country's flag, where the relay knows it
     coopFlag: boolean;
+    // Co-op chat: everything, the quick-chat phrases only, or none (coop/chat.ts)
+    coopChat: ChatMode;
     // A finished run's anonymous stats go to the build's collector, if it has one (RunAnalytics)
     runStats: boolean;
     // Frames a second at most (frameCap)
@@ -79,6 +83,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
         autoEquip: false,
         movePrediction: true,
         coopFlag: true,
+        coopChat: "all",
         runStats: true,
         frameRate: "auto",
     };
@@ -128,6 +133,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.coopFlag === "boolean") {
                 settings.coopFlag = data.coopFlag;
+            }
+            if (CHAT_MODES.includes(data.coopChat)) {
+                settings.coopChat = data.coopChat;
             }
             if (typeof data.runStats === "boolean") {
                 settings.runStats = data.runStats;

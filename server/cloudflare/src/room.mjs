@@ -21,6 +21,7 @@
 // frames a guest missed meanwhile (see CoopRun).
 import { DurableObject } from "cloudflare:workers";
 
+import { chatLine } from "../../coop-chat.mjs";
 import {
     RunWatch,
     checkReport,
@@ -935,7 +936,9 @@ export class Room extends DurableObject {
             this.discarded(client, room ? "not in the room" : "no room");
             return;
         }
-        if (message.t !== "me") {
+        // Chat, like a player's own updates, could hold a room for ever (IDLE_MESSAGES in
+        // coop-relay.mjs)
+        if (message.t !== "me" && message.t !== "chat") {
             room.lastActive = Date.now();
         }
         const isHost = room.hostId === client.id;
@@ -1089,6 +1092,16 @@ export class Room extends DurableObject {
                     this.broadcastRoom();
                 }
                 return;
+            case "chat": {
+                // A line for the whole room, the sender's game too, kept nowhere
+                const line = chatLine(client, message, text.length);
+                if (line) {
+                    for (const member of room.members) {
+                        this.send(member, line);
+                    }
+                }
+                return;
+            }
             case "up":
                 // A guest's input for the host, saying who it's from: the
                 // message as it came, with one more field last

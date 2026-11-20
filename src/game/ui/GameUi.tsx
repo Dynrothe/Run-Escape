@@ -38,6 +38,7 @@ import {
     UiSnapshot,
 } from "../client/GameStore";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
+import { CHAT_MODES } from "../client/coop/chat";
 import {
     ACT_BY_ID,
     ActDef,
@@ -157,6 +158,7 @@ import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { CombatAchievementsScreen } from "./CombatAchievementsScreen";
 import { CombatBreakdown, CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
+import { CoopChatRun } from "./CoopChat";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { DirectorPanel } from "./DirectorPanel";
@@ -607,6 +609,29 @@ function CoopFlagSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function CoopChatSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting name={t("settings.coop_chat.name")} text={t("settings.coop_chat.desc")}>
+            {CHAT_MODES.map((mode) => (
+                <button
+                    key={mode}
+                    className={
+                        "ui-button ui-button-small ui-frame-rate" +
+                        (ui.display.coopChat === mode ? " ui-frame-rate-on" : "")
+                    }
+                    aria-pressed={ui.display.coopChat === mode}
+                    onClick={(e) => {
+                        client.setChatMode(mode);
+                        releaseFocus(e);
+                    }}
+                >
+                    {t(`settings.coop_chat.${mode}`)}
+                </button>
+            ))}
+        </Setting>
+    );
+}
+
 // Only in a build that has a collector to send to
 function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
     if (!RUN_ANALYTICS_URL) {
@@ -947,6 +972,7 @@ function SettingsPanel({
                     >
                         <MovePredictionSetting ui={ui} client={client} />
                         <CoopFlagSetting ui={ui} client={client} />
+                        <CoopChatSetting ui={ui} client={client} />
                     </SettingsSection>
                     {padKind ? (
                         <SettingsSection
@@ -3383,6 +3409,10 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
+            {ui.party.length > 0 &&
+                !ui.cinematic &&
+                ui.overlay !== "dead" &&
+                ui.overlay !== "victory" && <CoopChatRun ui={ui} client={client} />}
             {import.meta.env.DEV && ui.director ? (
                 // Dev only: the shot editor, over a cinematic held where it's put
                 <DirectorPanel director={ui.director} client={client} trailer={ui.trailer} />
@@ -5379,6 +5409,7 @@ function PauseSettings({ ui, client }: ScreenProps): JSX.Element {
                     title={t("settings.group.coop")}
                 >
                     <MovePredictionSetting ui={ui} client={client} />
+                    <CoopChatSetting ui={ui} client={client} />
                 </SettingsSection>
                 {padKind ? (
                     <SettingsSection

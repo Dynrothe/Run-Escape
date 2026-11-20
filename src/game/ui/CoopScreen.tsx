@@ -34,6 +34,7 @@ import {
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
 import { CardNeedsWindow } from "./CardNeeds";
 import { useConfirm } from "./ConfirmDialog";
+import { CoopChatPanel, useUnreadChat } from "./CoopChat";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import {
@@ -402,6 +403,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     if (board && runBoard && !runBoardOpen) {
         setBoard(false);
     }
+    // Muting is for the chat, so only where there is one
+    const chatOn = ui.coop.chat && ui.display.coopChat !== "off";
     const [confirm, confirmDialog] = useConfirm();
     const disband = async () => {
         if (
@@ -430,7 +433,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     };
     // A phone's lists over the whole screen (as PhoneSetup's): Escape and Enter close them
     const phone = usePhoneLayout();
-    const [picker, setPicker] = useState<"adventurer" | "map">();
+    const [picker, setPicker] = useState<"adventurer" | "map" | "chat">();
     // Only the host picks the map: a guest's list closes if they stop being it
     const picking = phone && (picker !== "map" || isHost) ? picker : undefined;
     const closePicker = () => setPicker(undefined);
@@ -529,6 +532,22 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                     onClick={() => client.renameCoop()}
                                 >
                                     {t("coop.new_name")}
+                                </button>
+                            )}
+                            {chatOn && member.id !== you && (
+                                <button
+                                    className="ui-button ui-button-small"
+                                    aria-label={t(
+                                        ui.coop.muted.includes(member.id)
+                                            ? "coop.unmute_player"
+                                            : "coop.mute_player",
+                                        { name: member.name },
+                                    )}
+                                    onClick={() => client.toggleChatMute(member.id)}
+                                >
+                                    {ui.coop.muted.includes(member.id)
+                                        ? t("coop.unmute")
+                                        : t("coop.mute")}
                                 </button>
                             )}
                         </div>
@@ -812,6 +831,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     {isHost ? mapList : <div className="ui-select-details">{mapSummary}</div>}
                     {notes}
                 </div>
+                {/* In the middle, under the adventurer: the party panel has no room to spare */}
+                <CoopChatPanel ui={ui} client={client} />
                 <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
                     {leave}
                     {modes}
@@ -862,6 +883,20 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             </div>
         );
     }
+    if (picking === "chat") {
+        return (
+            <div className="ui-fill ui-phone-picker">
+                <div className="ui-panel rs-border rs-background ui-select-panel ui-coopchat-picker">
+                    <PickerHeading
+                        heading={<h2 className="ui-select-heading">{t("chat.log")}</h2>}
+                        onDone={closePicker}
+                    />
+                    <CoopChatPanel ui={ui} client={client} framed={false} />
+                </div>
+                {overlays}
+            </div>
+        );
+    }
     // A phone's room: the party beside the map and your adventurer, each a tap from its list
     const mapLabel = (
         <span className="ui-phone-card-label">
@@ -897,10 +932,25 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             </div>
             <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
                 {leave}
+                <ChatButton ui={ui} client={client} onOpen={() => setPicker("chat")} />
                 {ready}
             </div>
             {overlays}
         </div>
+    );
+}
+
+// A phone room's way into its chat, marked when someone's said something since it was last open
+function ChatButton({ ui, client, onOpen }: Props & { onOpen: () => void }): JSX.Element | null {
+    const unread = useUnreadChat(ui, client, false);
+    if (!ui.coop.chat || ui.display.coopChat === "off") {
+        return null;
+    }
+    return (
+        <button className="ui-button ui-coopchat-room-button" onClick={onOpen}>
+            {t("chat.button")}
+            {unread && <span className="ui-coopchat-unread" />}
+        </button>
     );
 }
 

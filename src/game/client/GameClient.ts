@@ -259,6 +259,7 @@ import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecord
 import { CoopLobby, makeLoadout, roomPlaysCardsOnly } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
+import { ChatMode } from "./coop/chat";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
 import { saveFile } from "./saveFile";
 
@@ -1089,7 +1090,11 @@ export class GameClient implements GameFrameHandler {
         this.overlay = new Overlay(overlayCanvas);
         this.input = new GameInput(renderer.canvas);
         this.input.onPress = (code) => this.pressKey(code);
-        this.input.takesKey = (code) => code === "Tab" && this.isPlaying();
+        // Enter's keypress would otherwise reach the chat's box it opens and send it empty, or
+        // press a button in the open box
+        this.input.takesKey = (code) =>
+            (code === "Tab" && this.isPlaying()) ||
+            (code === "Enter" && (this.canOpenChat() || this.store.getSnapshot().chatOpen));
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
                 pad.standard
@@ -2021,7 +2026,7 @@ export class GameClient implements GameFrameHandler {
                     sim.leave(hero.index);
                 }
             }
-            this.coopRun = undefined;
+            this.setCoopRun(undefined);
             // Solo now: rendering steps it, as any solo run
             this.stopCoopTicker();
             this.store.toast(t("toast.coop_lost_others"), 6000);
@@ -2210,6 +2215,67 @@ export class GameClient implements GameFrameHandler {
     toggleCoopFlag(): void {
         this.setDisplay({ coopFlag: !this.display.coopFlag });
         this.coop.setMe({ hideCountry: !this.display.coopFlag });
+    }
+
+    // Co-op chat (coop/chat.ts): what this player sees of it, and says
+    setChatMode(coopChat: ChatMode): void {
+        this.setDisplay({ coopChat });
+        if (coopChat !== "all") {
+            this.closeChat();
+        }
+    }
+
+    sayChat(text: string): boolean {
+        return this.display.coopChat === "all" && this.coop.sayChat(text);
+    }
+
+    sayQuickChat(id: string): boolean {
+        return this.display.coopChat !== "off" && this.coop.sayQuickChat(id);
+    }
+
+    toggleChatMute(id: string): void {
+        this.coop.toggleMute(id);
+    }
+
+    markChatRead(): void {
+        this.coop.markChatRead();
+    }
+
+    // Mid-run, Enter opens the chat's box to type in: in a co-op run with
+    // nothing over it. Not on co-op's menu, where Enter presses its buttons (a
+    // controller's confirm too).
+    private canOpenChat(): boolean {
+        const { overlay, coop, chatOpen } = this.store.getSnapshot();
+        return (
+            !chatOpen &&
+            this.coopRun !== undefined &&
+            this.sim !== undefined &&
+            !this.sim.runOver &&
+            overlay === "none" &&
+            coop.chat &&
+            coop.room !== undefined &&
+            this.display.coopChat !== "off"
+        );
+    }
+
+    // The co-op run this game's in, if any. The chat's box shuts with each change: one left
+    // open as a run ended, its HUD gone with it, would start the next run open.
+    private setCoopRun(run: CoopRun | undefined): void {
+        this.coopRun = run;
+        this.closeChat();
+    }
+
+    openChat(): void {
+        if (this.canOpenChat()) {
+            this.input.release();
+            this.store.set({ chatOpen: true });
+        }
+    }
+
+    closeChat(): void {
+        if (this.store.getSnapshot().chatOpen) {
+            this.store.set({ chatOpen: false });
+        }
     }
 
     // Takes hold from the next frame (update)
@@ -2703,7 +2769,7 @@ export class GameClient implements GameFrameHandler {
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
         run.prediction?.setDiagnostics(this.movementDiagnostics);
-        this.coopRun = run;
+        this.setCoopRun(run);
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];
         this.coopInbox = undefined;
@@ -3267,7 +3333,7 @@ export class GameClient implements GameFrameHandler {
             // The room's open for the next run
             this.coop.end();
         }
-        this.coopRun = undefined;
+        this.setCoopRun(undefined);
         this.combat = undefined;
         this.combatViews = undefined;
         this.coopBarBoss = undefined;
@@ -3796,6 +3862,16 @@ export class GameClient implements GameFrameHandler {
         }
         if (code === "Tab" && this.isPlaying()) {
             this.toggleDamagePanel();
+            return;
+        }
+        // The chat's box, open without its own box to type in (quick chat only, or the focus
+        // gone back to the world): Escape and Enter shut it, and Escape doesn't pause too
+        if ((code === "Escape" || code === "Enter") && this.store.getSnapshot().chatOpen) {
+            this.closeChat();
+            return;
+        }
+        if (code === "Enter" && this.canOpenChat()) {
+            this.openChat();
             return;
         }
         const sim = this.sim;

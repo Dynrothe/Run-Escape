@@ -1,3 +1,4 @@
+import { CHAT_BURST } from "../coop-chat.mjs";
 import { roomLocation } from "./src/location.mjs";
 import { Room } from "./src/room.mjs";
 
@@ -187,6 +188,22 @@ describe("Cloudflare co-op room", () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.unstubAllGlobals();
+    });
+
+    it("passes chat to everyone in the room and keeps none of it", async () => {
+        const { room, host, guest } = await party();
+        say(room, guest, { t: "chat", text: "hi\u202E all" });
+        for (const socket of [host.socket, guest.socket]) {
+            expect(socket.sent.filter((m: any) => m.t === "chat")).toEqual([
+                { t: "chat", from: "guest", name: "guest", text: "hi all" },
+            ]);
+        }
+        expect(JSON.stringify(saved)).not.toContain("hi all");
+        // A few at once, then no more till time passes
+        for (let i = 0; i < 10; i++) {
+            say(room, host, { t: "chat", quick: "go" });
+        }
+        expect(guest.socket.sent.filter((m: any) => m.quick === "go")).toHaveLength(CHAT_BURST);
     });
 
     it("saves someone joining at once, even straight after another save", async () => {

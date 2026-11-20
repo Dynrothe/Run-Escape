@@ -7,6 +7,9 @@ the version in the corner).
 
 ### Added
 
+- Co-op chat, by Okaeri: talk to your party in the room and during a run (Enter on a keyboard, the
+  Chat button on a phone), or use quick-chat phrases. Chat is never saved, and Settings can keep it
+  to quick chat or turn it off. You can mute anyone in your room.
 - Relics, by Deivid Smarzaro: a Remove all button to unequip them together.
 
 ### Fixed
