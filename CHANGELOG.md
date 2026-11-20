@@ -24,6 +24,7 @@ the version in the corner).
   ahead (the Rubber chicken's too). Stabs, such as the keris partisans', are as they were.
 - The invocations board has one Hard switch beside hard mode's row, whose four icons only say
   what they do now. By Jp66600.
+- Dragon claws and Burning claws use the claw special attack animation for every four-hit swing, by Deivid Smarzaro.
 
 ### Fixed
 

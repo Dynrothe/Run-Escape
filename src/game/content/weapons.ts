@@ -1644,8 +1644,8 @@ export const WEAPONS: WeaponDef[] = [
         kind: "slash",
         description: "Four quick slashes at the closest enemy each time, the last the hardest.",
         iconObjId: 13652,
-        // The claws' scratch; hacksword_slash stands in for its sound
-        playerSeq: 393,
+        // The claws' special; hacksword_slash stands in for its sound
+        playerSeq: 7514,
         sound: 2500,
         hitSound: -1,
         rarity: "rare",
@@ -1678,7 +1678,7 @@ export const WEAPONS: WeaponDef[] = [
         description:
             "Evolved Dragon claws. Four quick slashes each time, and every third set burns what it hits.",
         iconObjId: 29577,
-        playerSeq: 393,
+        playerSeq: 7514,
         sound: 2500,
         hitSound: -1,
         rarity: "veryRare",
