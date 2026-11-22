@@ -93,6 +93,7 @@ go stale. Add anything that cost you time to work out.
 | NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Daily and weekly quests: the pools, picks, progress    | `content/periodicQuests.ts`, `core/periodicQuests.ts`, `QuestScreen`   |
 | Combat Achievements: tasks, tiers, coins, rewards      | `src/game/content/combatTasks.ts`                                      |
 | What follows a run's Combat Achievements               | `src/game/core/CombatTracker.ts`                                       |
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |

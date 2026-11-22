@@ -52,6 +52,7 @@ import {
 } from "../content/maps";
 import { Hsl } from "../content/maxCape";
 import { getPassive, passiveValueText } from "../content/passives";
+import { describePeriodic } from "../content/periodicQuests";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUEST_ICON_OBJ_IDS } from "../content/questIcons";
@@ -125,12 +126,15 @@ import {
     winGauntletFight,
 } from "../core/gauntlet";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
+import { recordPeriodic } from "../core/periodicQuests";
 import { POCKET_COLD_WASH, invasionContent } from "../core/rules/invasion";
 import { remixContent } from "../core/rules/remix";
 import {
     NewerSave,
+    RunSummary,
     SaveData,
     SaveStore,
+    beatsMap,
     buyArmouryUpgrade,
     buyCosmetic,
     buyUpgrade,
@@ -3318,21 +3322,34 @@ export class GameClient implements GameFrameHandler {
     // out the quests it finished. Not a result with a number that isn't: a co-op run's numbers can
     // come from another player's modified game, and a NaN in a solo one's would come back from the
     // save as 0 coins.
-    private bankRun(save: SaveData, result: RunResult): ReturnType<typeof recordRun> {
+    private bankRun(save: SaveData, result: RunResult): { name: string; coins: number }[] {
         if (hasBadNumber(result)) {
             return [];
         }
         const vaultKey = this.runVault;
         const sim = this.sim;
         const combat = this.combat;
-        return recordRun(save, {
+        const summary: RunSummary = {
             ...result,
             ...(vaultKey && { vault: vaultKey }),
             // This player's own: each co-op player records their run on their own save
             ...(sim?.heroes[sim.focus].cardCaps && { cardsOnly: true }),
             // A solo run Combat Achievements followed: the tasks it did, banked with it
             ...(combat && { combatTasks: [...combat.done], combatProgress: [...combat.earned] }),
-        });
+        };
+        const quests = recordRun(save, summary).map((q) => ({ name: q.name, coins: q.coins }));
+        // Daily and weekly quests: the run's numbers on today's and this week's
+        const periodic = recordPeriodic(
+            save,
+            { ...summary, beatsMap: beatsMap(summary) },
+            Date.now(),
+        ).map(({ kind, quest }) => ({
+            name: t(kind === "daily" ? "quest.daily_done" : "quest.weekly_done", {
+                quest: describePeriodic(quest),
+            }),
+            coins: quest.coins,
+        }));
+        return [...quests, ...periodic];
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
@@ -3784,7 +3801,7 @@ export class GameClient implements GameFrameHandler {
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
-                quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                quests,
                 combatTasks: combatDone.map((task) => ({
                     name: combatTaskName(task),
                     tier: combatTierName(task.tier),

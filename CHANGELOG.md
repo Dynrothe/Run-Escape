@@ -3,6 +3,16 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Daily and weekly quests, by NightDamage: three new quests every day and two every week, at the top
+  of the Quests screen, the same for everyone. They ask for kills, bosses, caskets, runs, maps
+  beaten or a long run, each pays coins once when the run that finishes it ends, and what's left
+  over goes when the day or week turns. A week's are harder (defeat three bosses, beat three maps)
+  and pay more.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added

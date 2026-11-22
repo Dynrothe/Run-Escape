@@ -190,7 +190,6 @@
   "coop.gone.host_left_run": "O anfitrião saiu e a partida foi encerrada.",
   "coop.gone.you_left": "Você saiu do grupo.",
   "quest.title": "Missões",
-  "quest.intro": "As missões podem levar quantas partidas forem necessárias. Cada uma concede moedas uma única vez, ao fim da partida em que for concluída.",
   "quest.all_over": "Por toda parte",
   "quest.not_open": "ainda não disponível",
   "quest.completed": "Concluídas {done} / {total}",
