@@ -103,6 +103,7 @@ import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
     COMBAT_ACHIEVEMENTS_OBJ,
+    MONSTER_DIARY_OBJ,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
     SETTINGS_SECTION_SPRITES,
@@ -177,6 +178,7 @@ import {
 import { ItemIcon } from "./ItemIcon";
 import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
+import { MonsterDiaryScreen } from "./MonsterDiaryScreen";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { PauseChat } from "./PauseChat";
@@ -282,6 +284,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "collectionLog":
             screen = <CollectionLogScreen save={ui.save} client={client} />;
+            break;
+        case "monsterDiary":
+            screen = <MonsterDiaryScreen ui={ui} client={client} />;
             break;
         case "cards":
             screen = <CardsScreen ui={ui} client={client} />;
@@ -1083,6 +1088,7 @@ export function menuItems(): MenuItem[] {
             objId: COMBAT_ACHIEVEMENTS_OBJ,
         },
         { screen: "collectionLog", name: t("ui.title.collection_log"), objId: COLLECTION_LOG_OBJ },
+        { screen: "monsterDiary", name: t("ui.title.monster_diary"), objId: MONSTER_DIARY_OBJ },
         { screen: "cards", name: t("ui.title.cards"), objId: CARDS_ICON_OBJ },
     ];
 }

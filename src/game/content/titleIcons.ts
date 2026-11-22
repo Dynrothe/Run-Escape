@@ -72,6 +72,9 @@ export const CHECKBOX_SPRITES = {
 
 export const COLLECTION_LOG_OBJ = 22711;
 
+// The Monster diary's tile: the Slayer helmet
+export const MONSTER_DIARY_OBJ = 11864;
+
 // Combat Achievements' tile: Ghommal's hilt 6, the top tier's reward
 export const COMBAT_ACHIEVEMENTS_OBJ = 25936;
 

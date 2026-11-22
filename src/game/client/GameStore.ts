@@ -33,6 +33,8 @@ export type Screen =
     | "quests"
     | "combatAchievements"
     | "collectionLog"
+    // The Monster diary: every monster, its model, stats, spawns and lore (content/monsterDiary.ts)
+    | "monsterDiary"
     // Cards: the album and its packs (content/cards.ts)
     | "cards"
     // Co-op: finding or making a room, and the room before a run
@@ -47,7 +49,14 @@ export type Screen =
 // The title's tiles, which a co-op room opens too without leaving it (GameClient.openMenu)
 export type MenuScreen = Extract<
     Screen,
-    "shop" | "armoury" | "wardrobe" | "quests" | "combatAchievements" | "collectionLog" | "cards"
+    | "shop"
+    | "armoury"
+    | "wardrobe"
+    | "quests"
+    | "combatAchievements"
+    | "collectionLog"
+    | "monsterDiary"
+    | "cards"
 >;
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";

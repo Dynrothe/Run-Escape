@@ -3,6 +3,17 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- The Monster diary, by NightDamage: a page for every monster, from a tile on the title screen and
+  in a co-op room's Menu. It shows the monster's head or whole body (turn it with the arrows), its
+  stats beside it, the maps and times it turns up, what it's like in Old School RuneScape and where
+  it's found there, its notable unique drop if it has one, and some trivia. Search it by name, or
+  filter it by kind (monsters, bosses, a fight's mechanics) or by map. It counts how many of each
+  you've defeated.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added
