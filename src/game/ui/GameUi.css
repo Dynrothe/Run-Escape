@@ -4414,12 +4414,6 @@
     color: #ffd700;
 }
 
-/* A key that's a word ("Enter") beside a button's text */
-.ui-choice-key.ui-word-key {
-    width: auto;
-    font-size: 13px;
-}
-
 /* How many level ups are still to come, beside the heading */
 .ui-levelup-more {
     margin-left: 10px;

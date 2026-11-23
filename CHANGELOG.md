@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Fixed
 
-- The map selection button now says “Enter Lumbridge” with a single “Enter”. Fixed by trippy22.
+- The buttons now read “Enter Lumbridge” on map selection and “Play again” after a solo run.
+  Pressing Enter still activates either button. Fixed by trippy22.
 
 ## 0.36.0 - 2026-11-20
 
