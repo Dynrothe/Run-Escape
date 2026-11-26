@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
-import { enemyName } from "../content/enemies";
+import { ENEMIES, enemyName } from "../content/enemies";
 import { getDiaryEntries } from "../content/monsterDiary";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
@@ -15,8 +15,12 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-// The diary open on a new save (or one with kills), every picture stubbed
-function openDiary(kills: Record<string, number> = {}): {
+// Every monster killed once, so every page is filled in
+const ALL_KILLED = (): Record<string, number> =>
+    Object.fromEntries(ENEMIES.map((enemy) => [enemy.id, 1]));
+
+// The diary open on a save with these kills (every monster's, by default), every picture stubbed
+function openDiary(kills: Record<string, number> = ALL_KILLED()): {
     leaveMenu: ReturnType<typeof vi.fn>;
     diary: HTMLElement;
 } {
@@ -102,11 +106,19 @@ describe("the Monster diary's screen", () => {
         const first = getDiaryEntries()[0];
         const { diary } = openDiary({ [first.variants[0].def.id]: 7 });
         expect(within(diary).getByText(/Defeated 7/)).toBeTruthy();
+        expect(within(diary).getByText(`1 of ${getDiaryEntries().length} found`)).toBeTruthy();
     });
 
-    test("says a monster hasn't been defeated yet", () => {
-        const { diary } = openDiary();
-        expect(within(diary).getByText(/Not defeated yet/)).toBeTruthy();
+    test("keeps a monster not met yet a mystery: no name, stats or lore, and no search by name", () => {
+        const { diary } = openDiary({});
+        const first = getDiaryEntries()[0];
+        expect(pageName(diary)).toBe("???");
+        expect(within(diary).getByText(/Not met yet/)).toBeTruthy();
+        expect(within(diary).queryByText("Hitpoints")).toBeNull();
+        expect(within(diary).queryByText(first.lore!.about)).toBeNull();
+        expect(within(diary).queryByRole("button", { name: /Dharok/ })).toBeNull();
+        fireEvent.change(within(diary).getByRole("searchbox"), { target: { value: "dharok" } });
+        expect(within(diary).getByText("No monster matches.")).toBeTruthy();
     });
 
     test("turns the body, and goes back to the head", () => {

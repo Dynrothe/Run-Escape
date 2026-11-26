@@ -93,6 +93,11 @@
     cursor: default;
 }
 
+/* The model's turn buttons, narrow enough that Head, Body and both fit on one row */
+.ui-diary-kind.ui-diary-turn {
+    padding: 2px 6px;
+}
+
 .ui-diary-kind.ui-diary-on {
     color: var(--ui-white);
     background: #4a4033;
@@ -329,6 +334,28 @@
     .ui-diary-head {
         flex-direction: column;
         align-items: center;
+    }
+}
+
+/* A phone on its side: too short for a header and a text that scroll apart, so the whole page
+   scrolls as one, and the list is narrower */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-diary-list {
+        flex-basis: 170px;
+    }
+
+    .ui-diary-page {
+        overflow-y: auto;
+    }
+
+    .ui-diary-head {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .ui-diary-scroll {
+        flex: none;
+        overflow: visible;
     }
 }
 

@@ -603,9 +603,11 @@
         gap: 4px;
     }
 
+    /* Wide enough for every tile in one row (the Monster diary made it eight), down to a 640px
+       phone */
     .ui-title-menu {
         gap: 6px;
-        width: min(420px, 56vw);
+        width: min(460px, 62vw);
         padding: 6px 8px;
     }
 
@@ -615,7 +617,7 @@
 
     /* As wide as the menu, and kept to two lines or so */
     .ui-export-reminder {
-        width: min(420px, 54vw);
+        width: min(460px, 60vw);
         padding: 2px 6px;
     }
 
@@ -630,10 +632,14 @@
         font-size: 22px;
     }
 
+    .ui-title-tiles {
+        gap: 3px;
+    }
+
     .ui-title-tile {
         min-height: 48px;
         padding: 2px 0;
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .ui-title-stats {

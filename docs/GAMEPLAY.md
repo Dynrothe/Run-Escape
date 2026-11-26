@@ -1329,16 +1329,19 @@ version and how to run it.
   row under the quests, which turns red with a toast saying what did it ("hit by Lunge") once
   they're spoilt. The pause menu's Quests tab has every task the run is following, and how each is going.
 - **Monster diary** (on the title screen, and in a co-op room's Menu) is a page for every monster
-  in the game: its head or whole body (turn it with the arrows), its stats (hitpoints, touch damage,
-  speed, size, experience, and for a boss its attacks, how often it attacks and when it enrages), what
-  it can do (flies, heals, splits, shoots...), the maps it turns up on and when, how many you've
-  defeated, and what Old School RuneScape says about it: what it is, where it's found there, its
-  notable unique drop if it has one (`content/monsterLore/drops.ts`), and some trivia. The stats
-  sit beside the portrait. Where and when come from each map's own waves, events, raid rooms and lairs, so
+  in the game, "???" until one's been killed (a fight's mechanic, until a map it's on is beaten),
+  so nothing's given away before it's met, and nothing of an act that isn't out. A page has its
+  head or whole body (turn it with the arrows), its stats (hitpoints, touch damage, speed, size,
+  experience, and for a boss its attacks, how often it attacks and when it enrages), what it can
+  do (flies, heals, splits, shoots...), the maps it turns up on and when, how many you've defeated,
+  and what Old School RuneScape says about it: what it is, where it's found there, its notable
+  unique drop if it has one (`content/monsterLore/drops.ts`), and some trivia. The stats sit beside
+  the portrait. Where and when come from each map's own waves, events, raid rooms and lairs, so
   they're always what the game does: "In waves from 0:45 to 3:30", "The final boss, at 15:00", or
   "Brought in by another enemy, a map rule or a random event". It's searched by name and filtered
-  by kind (monsters, bosses, the things a fight is built from) and by map. Fun-map opponents drawn
-  as players have no model, and are marked so. The descriptions are in English in every language.
+  by kind (monsters, bosses, the things a fight is built from) and by map, with how many of them
+  have been found. Fun-map opponents drawn as players have no model, and are marked so. The
+  descriptions are in English in every language.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).

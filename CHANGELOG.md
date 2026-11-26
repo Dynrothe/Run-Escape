@@ -12,12 +12,12 @@ the version in the corner).
   beaten or a long run, each pays coins once when the run that finishes it ends, and what's left
   over goes when the day or week turns. A week's are harder (defeat three bosses, beat three maps)
   and pay more.
-- The Monster diary, by NightDamage: a page for every monster, from a tile on the title screen and
-  in a co-op room's Menu. It shows the monster's head or whole body (turn it with the arrows), its
-  stats beside it, the maps and times it turns up, what it's like in Old School RuneScape and where
-  it's found there, its notable unique drop if it has one, and some trivia. Search it by name, or
-  filter it by kind (monsters, bosses, a fight's mechanics) or by map. It counts how many of each
-  you've defeated.
+- The Monster diary, by NightDamage: a page for every monster, filled in once you've defeated one,
+  from a tile on the title screen and in a co-op room's Menu. It shows the monster's head or whole
+  body (turn it with the arrows), its stats beside it, the maps and times it turns up, what it's
+  like in Old School RuneScape and where it's found there, its notable unique drop if it has one,
+  and some trivia. Search it by name, or filter it by kind (monsters, bosses, a fight's mechanics)
+  or by map. It counts how many of each you've defeated.
 
 ### Fixed
 

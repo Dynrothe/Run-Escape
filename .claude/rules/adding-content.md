@@ -210,14 +210,16 @@ a map, or an enemy on that map, mentions it), so that needs nothing added. Then 
 `scripts/cache/npc-looks.ts`: if its NPC looks the same as another enemy's, it's baked once with
 it, and a test with the cache fails until that's run.
 
-The Monster diary (`content/monsterDiary.ts`) lists every enemy by name and reads its stats and where
-and when it turns up from the definitions, so those need nothing more. What it says about the
-monster is written: add an entry, keyed by the enemy's `name`, to the file in `content/monsterLore/`
-for its map (`lore(about, where, ...trivia)`): what it is, where it is in Old School RuneScape, and
-facts about it, and in `monsterLore/drops.ts` its notable unique drop, if it has one. Check them against the OSRS Wiki and put them in your own words, and for one that
-isn't an OSRS monster (a fan-game invention, a fight's prop) say so rather than make lore up. A test
-fails for an enemy with no entry. A thing a fight is built from that isn't a creature (a totem, an
-orb) goes in `MECHANIC_NAMES`, so the diary lists it apart.
+The Monster diary (`content/monsterDiary.ts`) lists every enemy on a map that's out by name, and
+reads its stats and where and when it turns up from the definitions, so those need nothing more.
+What it says about the monster is written, and optional: an enemy with none says nothing's
+written yet. To add some, put an entry keyed by the enemy's `name` in the file in
+`content/monsterLore/` for its map (`lore(about, where, ...trivia)`): what it is, where it is in
+Old School RuneScape, and facts about it, and in `monsterLore/drops.ts` its notable unique drop, if
+it has one. Check them against the OSRS Wiki and put them in your own words, and for one that isn't
+an OSRS monster (a fan-game invention, a fight's prop) say so rather than make lore up. A thing a
+fight is built from that isn't a creature (a totem, an orb) goes in `MECHANIC_NAMES`, so the diary
+lists it apart, and its page opens once a map it's on is beaten rather than when one's killed.
 
 - `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).

@@ -1,3 +1,5 @@
+import type { SaveData } from "../core/save";
+import { isMapOut } from "./acts";
 import { ENEMIES, ENEMY_BY_ID } from "./enemies";
 import { getMapEnemies, getTombsRooms } from "./mapEnemies";
 import { ALL_MAPS } from "./maps";
@@ -193,8 +195,21 @@ export function mapAppearances(map: MapDef): Map<string, Appearance[]> {
     return found;
 }
 
+// The maps the diary reads: those out for players, so an act that isn't released (isMapOut) keeps
+// its monsters to itself, as the Collection log does, and not ScapeRune's dev maps
+function diaryMapList(): MapDef[] {
+    return ALL_MAPS.filter((map) => !map.dev && isMapOut(map));
+}
+
 function build(): DiaryEntry[] {
-    const perMap = ALL_MAPS.map((map) => ({ map, found: mapAppearances(map) }));
+    const maps = diaryMapList();
+    const perMap = maps.map((map) => ({ map, found: mapAppearances(map) }));
+    // What the maps left out bring on: a monster only there isn't listed
+    const elsewhere = new Set(
+        ALL_MAPS.filter((map) => !maps.includes(map)).flatMap((map) => [
+            ...mapAppearances(map).keys(),
+        ]),
+    );
     const byName = new Map<string, DiaryEntry>();
     for (const def of ENEMIES) {
         // An id that's listed twice is the one the game uses: the last (ENEMY_BY_ID's)
@@ -202,6 +217,9 @@ function build(): DiaryEntry[] {
             continue;
         }
         const appearances = perMap.flatMap(({ found }) => found.get(def.id) ?? []);
+        if (appearances.length === 0 && elsewhere.has(def.id)) {
+            continue;
+        }
         let entry = byName.get(def.name);
         if (!entry) {
             entry = {
@@ -218,7 +236,7 @@ function build(): DiaryEntry[] {
         }
         entry.variants.push({ def, appearances });
     }
-    const order = new Map(ALL_MAPS.map((map, i) => [map.id, i]));
+    const order = new Map(maps.map((map, i) => [map.id, i]));
     for (const entry of byName.values()) {
         const ids = new Set<string>();
         for (const variant of entry.variants) {
@@ -245,7 +263,7 @@ let cached: DiaryEntry[] | undefined;
 // ordinary monsters before bosses, then by name
 export function getDiaryEntries(): DiaryEntry[] {
     if (!cached) {
-        const order = new Map(ALL_MAPS.map((map, i) => [map.id, i]));
+        const order = new Map(diaryMapList().map((map, i) => [map.id, i]));
         const rank = (entry: DiaryEntry) =>
             entry.mapIds.length ? Math.min(...entry.mapIds.map((id) => order.get(id)!)) : 9999;
         const kind = { monster: 0, boss: 1, mechanic: 2 };
@@ -260,10 +278,23 @@ export function getDiaryEntries(): DiaryEntry[] {
 // Ids of the maps a monster's on, for the diary's map filter: every map with someone in it
 export function getDiaryMaps(): MapDef[] {
     const used = new Set(getDiaryEntries().flatMap((entry) => entry.mapIds));
-    return ALL_MAPS.filter((map) => used.has(map.id));
+    return diaryMapList().filter((map) => used.has(map.id));
 }
 
 // The diary's total kills of a monster from the save's counts: every variant that shares its name
 export function diaryKills(entry: DiaryEntry, kills: Record<string, number>): number {
     return entry.variants.reduce((sum, v) => sum + (kills[v.def.id] ?? 0), 0);
+}
+
+// Whether the player knows a monster, so its page is filled in rather than "???": they've killed
+// one of its forms, or, for a fight's mechanic (an orb, a portal: many can't be killed), beaten a
+// map it's on. Nothing's given away before it's met: a lair's boss, an invader, an act's finale.
+export function isDiaryKnown(
+    entry: DiaryEntry,
+    save: Pick<SaveData, "enemyKills" | "mapVictories">,
+): boolean {
+    if (diaryKills(entry, save.enemyKills) > 0) {
+        return true;
+    }
+    return entry.kind === "mechanic" && entry.mapIds.some((id) => (save.mapVictories[id] ?? 0) > 0);
 }

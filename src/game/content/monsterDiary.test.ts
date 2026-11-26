@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { isMapOut } from "./acts";
 import { ENEMIES } from "./enemies";
 import { ALL_MAPS } from "./maps";
 import {
@@ -7,6 +8,7 @@ import {
     diaryKills,
     getDiaryEntries,
     getDiaryMaps,
+    isDiaryKnown,
     mapAppearances,
 } from "./monsterDiary";
 import { MONSTER_DROPS, MONSTER_LORE } from "./monsterLore";
@@ -14,21 +16,28 @@ import { MONSTER_DROPS, MONSTER_LORE } from "./monsterLore";
 describe("the Monster diary", () => {
     const entries = getDiaryEntries();
 
-    test("lists every enemy the game has, one entry for each name", () => {
-        const names = new Set(ENEMIES.map((enemy) => enemy.name));
-        expect(entries.map((entry) => entry.name).sort()).toEqual([...names].sort());
-        // Every enemy is in an entry
+    test("lists every enemy on a map that's out, one entry for each name", () => {
+        const onMaps = new Set(
+            ALL_MAPS.filter((map) => !map.dev && isMapOut(map)).flatMap((map) => [
+                ...mapAppearances(map).keys(),
+            ]),
+        );
+        const names = new Set(entries.map((entry) => entry.name));
+        expect(names.size).toBe(entries.length);
         const listed = new Set(entries.flatMap((entry) => entry.variants.map((v) => v.def.id)));
-        for (const enemy of ENEMIES) {
-            expect(listed.has(enemy.id), enemy.id).toBe(true);
+        for (const id of onMaps) {
+            expect(listed.has(id), id).toBe(true);
         }
     });
 
-    test("has something written for every monster, and nothing for a monster that isn't there", () => {
-        const names = new Set(ENEMIES.map((enemy) => enemy.name));
-        for (const entry of entries) {
-            expect(entry.lore, `${entry.name} has no lore`).toBeDefined();
+    test("reads only maps that are out, and no dev map", () => {
+        for (const map of getDiaryMaps()) {
+            expect(isMapOut(map) && !map.dev, map.id).toBe(true);
         }
+    });
+
+    test("writes nothing for a monster that isn't there", () => {
+        const names = new Set(ENEMIES.map((enemy) => enemy.name));
         for (const name of Object.keys(MONSTER_LORE)) {
             expect(names.has(name), `lore for "${name}", which no enemy is called`).toBe(true);
         }
@@ -90,6 +99,23 @@ describe("the Monster diary", () => {
         for (const map of maps) {
             expect(used.has(map.id), map.id).toBe(true);
         }
+    });
+
+    test("knows a monster once it's killed, and a fight's mechanic once its map is beaten", () => {
+        const none = { enemyKills: {}, mapVictories: {} };
+        const goblin = entries.find((entry) => entry.name === "Goblin")!;
+        expect(isDiaryKnown(goblin, none)).toBe(false);
+        const killed = { enemyKills: { [goblin.variants[0].def.id]: 1 }, mapVictories: {} };
+        expect(isDiaryKnown(goblin, killed)).toBe(true);
+        // A boss isn't known for beating its map: it has to be killed
+        const boss = entries.find((entry) => entry.kind === "boss")!;
+        expect(isDiaryKnown(boss, { enemyKills: {}, mapVictories: { [boss.mapIds[0]]: 1 } })).toBe(
+            false,
+        );
+        const mechanic = entries.find((entry) => entry.kind === "mechanic")!;
+        expect(isDiaryKnown(mechanic, none)).toBe(false);
+        const won = { enemyKills: {}, mapVictories: { [mechanic.mapIds[0]]: 1 } };
+        expect(isDiaryKnown(mechanic, won)).toBe(true);
     });
 
     test("adds up kills over every form of a monster", () => {

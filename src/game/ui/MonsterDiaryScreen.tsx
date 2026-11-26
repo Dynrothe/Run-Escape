@@ -12,12 +12,13 @@ import {
     diaryKills,
     getDiaryEntries,
     getDiaryMaps,
+    isDiaryKnown,
 } from "../content/monsterDiary";
 import { portraitRequest } from "../content/portraitConfig";
 import { getPortrait } from "../content/portraits";
 import { PAUSE_TAB_SPRITES } from "../content/titleIcons";
 import { EnemyDef } from "../content/types";
-import { fmtNum, list, t } from "../i18n";
+import { fmtNum, list, t, tl, tp } from "../i18n";
 import { ItemIcon, NpcHead } from "./ItemIcon";
 import "./MonsterDiaryScreen.css";
 import { useMenuKeys } from "./menuKeys";
@@ -34,6 +35,9 @@ const KINDS: KindFilter[] = ["all", "monster", "boss", "mechanic"];
 // An eighth of a turn: the model turns by this much a press (client angle units, 2048 a turn)
 const TURN = 256;
 
+// What a monster not met yet is called, in the list and on its page
+const UNKNOWN = "???";
+
 const clock = (seconds: number): string =>
     `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -42,7 +46,8 @@ export function describeAppearance(a: Appearance): string {
     const from = a.from === undefined ? "" : clock(a.from);
     let how: string;
     if (a.room) {
-        how = t("diary.how.room");
+        const path = MAP_BY_ID.get(a.mapId)?.tombs?.paths.find((p) => p.id === a.room);
+        how = path ? t("diary.how.path", { path: tl(path.name) }) : t("diary.how.wardens");
     } else if (a.how === "wave" && a.until !== undefined) {
         how = t("diary.how.wave_range", { from, until: clock(a.until) });
     } else {
@@ -184,14 +189,19 @@ function Stats({ variant }: { variant: DiaryVariant }): JSX.Element {
                     />
                     <StatRow
                         name={t("diary.stat.enrage")}
-                        value={t("diary.enrage_value", {
-                            n: fmtNum(Math.round((boss.enrage.at ?? 0.5) * 100)),
-                        })}
+                        value={
+                            // 0: its enrage never comes (BossDef.enrage)
+                            boss.enrage.at === 0
+                                ? dash
+                                : t("diary.enrage_value", {
+                                      n: fmtNum(Math.round((boss.enrage.at ?? 0.5) * 100)),
+                                  })
+                        }
                     />
                     {boss.rises && (
                         <StatRow
                             name={t("diary.stat.rises")}
-                            value={t("diary.rises_value", { n: fmtNum(boss.rises.times) })}
+                            value={tp("diary.rises_value", boss.rises.times)}
                         />
                     )}
                 </>
@@ -213,6 +223,11 @@ export function MonsterDiaryScreen({ ui, client }: Props): JSX.Element {
     const [turn, setTurn] = useState(0);
     const close = () => client.leaveMenu();
     useMenuKeys({ onBack: close });
+    // Who the player has met: the rest are "???" (isDiaryKnown)
+    const known = useMemo(
+        () => new Set(all.filter((e) => isDiaryKnown(e, ui.save)).map((e) => e.id)),
+        [all, ui.save],
+    );
 
     const shown = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -220,14 +235,19 @@ export function MonsterDiaryScreen({ ui, client }: Props): JSX.Element {
             (entry) =>
                 (kind === "all" || entry.kind === kind) &&
                 (!mapId || entry.mapIds.includes(mapId)) &&
-                (!q || enemyName(entry.variants[0].def).toLowerCase().includes(q)),
+                (!q ||
+                    (known.has(entry.id) &&
+                        enemyName(entry.variants[0].def).toLowerCase().includes(q))),
         );
-    }, [all, kind, mapId, query]);
+    }, [all, kind, mapId, query, known]);
 
-    const entry = shown.find((e) => e.id === openId) ?? shown[0];
+    // With none picked, the first one met
+    const entry =
+        shown.find((e) => e.id === openId) ?? shown.find((e) => known.has(e.id)) ?? shown[0];
     const variant = entry ? entry.variants[Math.min(form, entry.variants.length - 1)] : undefined;
     const kills = entry ? diaryKills(entry, ui.save.enemyKills) : 0;
     const where = useMemo(() => (entry ? appearancesByMap(entry) : []), [entry]);
+    const met = !!entry && known.has(entry.id);
 
     const open = (id: string) => {
         setOpenId(id);
@@ -247,7 +267,7 @@ export function MonsterDiaryScreen({ ui, client }: Props): JSX.Element {
                         {t("diary.title")}
                     </h2>
                     <span className="ui-diary-count">
-                        {t("diary.count", { n: fmtNum(shown.length), total: fmtNum(all.length) })}
+                        {t("diary.found", { n: fmtNum(known.size), total: fmtNum(all.length) })}
                     </span>
                 </div>
                 <div className="ui-diary-filters">
@@ -305,16 +325,35 @@ export function MonsterDiaryScreen({ ui, client }: Props): JSX.Element {
                                 aria-pressed={e === entry}
                                 onClick={() => open(e.id)}
                             >
-                                <LazyHead def={e.variants[0].def} />
+                                {known.has(e.id) ? (
+                                    <LazyHead def={e.variants[0].def} />
+                                ) : (
+                                    <span className="ui-diary-row-head" />
+                                )}
                                 <span className="ui-diary-row-name">
-                                    {enemyName(e.variants[0].def)}
+                                    {known.has(e.id) ? enemyName(e.variants[0].def) : UNKNOWN}
                                 </span>
                                 {e.kind === "boss" && <span className="ui-diary-tag">★</span>}
                             </button>
                         ))}
                     </div>
                     <div className="ui-diary-page ui-diary-inset">
-                        {entry && variant && (
+                        {entry && !met && (
+                            <div className="ui-diary-unknown">
+                                <h3 className="ui-diary-name">{UNKNOWN}</h3>
+                                <div className="ui-diary-kinds-line">
+                                    {t(`diary.kind.${entry.kind}`)}
+                                </div>
+                                <p className="ui-diary-note">
+                                    {t(
+                                        entry.kind === "mechanic"
+                                            ? "diary.unknown_mechanic"
+                                            : "diary.unknown",
+                                    )}
+                                </p>
+                            </div>
+                        )}
+                        {entry && variant && met && (
                             <>
                                 <div className="ui-diary-head">
                                     <div className="ui-diary-model">
@@ -350,22 +389,22 @@ export function MonsterDiaryScreen({ ui, client }: Props): JSX.Element {
                                                 {t("diary.view_body")}
                                             </button>
                                             <button
-                                                className="ui-diary-kind"
+                                                className="ui-diary-kind ui-diary-turn"
                                                 disabled={!body}
                                                 aria-label={t("diary.turn_left")}
                                                 title={t("diary.turn_left")}
                                                 onClick={() => setTurn((n) => (n + 1) % 8)}
                                             >
-                                                ⟲
+                                                {"<"}
                                             </button>
                                             <button
-                                                className="ui-diary-kind"
+                                                className="ui-diary-kind ui-diary-turn"
                                                 disabled={!body}
                                                 aria-label={t("diary.turn_right")}
                                                 title={t("diary.turn_right")}
                                                 onClick={() => setTurn((n) => (n + 7) % 8)}
                                             >
-                                                ⟳
+                                                {">"}
                                             </button>
                                         </div>
                                         {(variant.def.outfits || variant.def.npcId < 0) && (
