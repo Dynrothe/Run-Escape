@@ -93,6 +93,7 @@ go stale. Add anything that cost you time to work out.
 | NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Daily and weekly quests: the pools, picks, progress    | `content/periodicQuests.ts`, `core/periodicQuests.ts`, `QuestScreen`   |
 | Combat Achievements: tasks, tiers, coins, rewards      | `src/game/content/combatTasks.ts`                                      |
 | What follows a run's Combat Achievements               | `src/game/core/CombatTracker.ts`                                       |
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
@@ -100,6 +101,7 @@ go stale. Add anything that cost you time to work out.
 | The Customisable max cape: its parts and presets       | `content/maxCape.ts`, `PlayerAppearance.recolors`, `recolorAtOnce`     |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | The Collection log's tabs, entries and its screen      | `content/collectionLog.ts`, `ui/CollectionLogScreen.tsx`               |
+| The Monster diary: stats, spawns, models and lore      | `content/monsterDiary.ts`, `monsterLore/`, `ui/MonsterDiaryScreen.tsx` |
 | Cards: the album, the Card shop, foils, platinum       | `content/cards.ts`, `core/cards.ts`, `ui/CardsScreen.tsx`, `Sim.ts`    |
 | A pack's Preview: its tabs, odds and info popover      | `ui/PackPreview.tsx`, `core/cardOdds.ts`                               |
 | Cards only: its runs, tab, pets and what it needs      | `core/cardRuns.ts`, `ui/CardNeeds.tsx`, `GameUi.tsx` (CardsOnlyTabs)   |

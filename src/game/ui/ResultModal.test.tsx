@@ -108,14 +108,19 @@ afterEach(() => {
 });
 
 test("on your own, Play again is the main button", () => {
+    vi.useFakeTimers();
     render(<ResultModal ui={createUi(true)} client={client} />);
-    const again = screen.getByRole("button", { name: /Play again/ });
+    const again = screen.getByRole("button", { name: "Play again" });
+    expect(again).toHaveAttribute("aria-keyshortcuts", "Enter");
     expect(again).toHaveClass("ui-button-go");
     expect(screen.getByRole("button", { name: "Back to the title" })).not.toHaveClass(
         "ui-button-go",
     );
     fireEvent.click(again);
     expect(client.retry).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(700);
+    fireEvent.keyDown(window, { code: "Enter" });
+    expect(client.retry).toHaveBeenCalledTimes(2);
 });
 
 test("a party goes back together: no Play again", () => {

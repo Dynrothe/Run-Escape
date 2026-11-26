@@ -365,7 +365,8 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    width: min(500px, calc(92vw / var(--ui-scale)));
+    /* Every tile in one row: eight of them */
+    width: min(540px, calc(92vw / var(--ui-scale)));
     padding: 10px 12px;
     box-sizing: border-box;
 }
@@ -417,7 +418,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: 4px 8px;
-    width: min(500px, calc(92vw / var(--ui-scale)));
+    width: min(540px, calc(92vw / var(--ui-scale)));
     padding: 4px 8px;
     box-sizing: border-box;
 }
@@ -4412,12 +4413,6 @@
 .ui-remix-fallen {
     border-color: #ffd700;
     color: #ffd700;
-}
-
-/* A key that's a word ("Enter") beside a button's text */
-.ui-choice-key.ui-word-key {
-    width: auto;
-    font-size: 13px;
 }
 
 /* How many level ups are still to come, beside the heading */

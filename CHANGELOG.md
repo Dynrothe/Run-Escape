@@ -3,6 +3,28 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.37.0 - 2026-11-26
+
+### Added
+
+- Daily and weekly quests, by NightDamage: three new quests every day and two every week, at the top
+  of the Quests screen, the same for everyone. They ask for kills, bosses, caskets, runs, maps
+  beaten or a long run, each pays coins once when the run that finishes it ends, and what's left
+  over goes when the day or week turns. A week's are harder (defeat three bosses, beat three maps)
+  and pay more.
+- The Monster diary, by NightDamage: a page for every monster, filled in once you've defeated one,
+  from a tile on the title screen and in a co-op room's Menu. It shows the monster's head or whole
+  body (turn it with the arrows), its stats beside it, the maps and times it turns up, what it's
+  like in Old School RuneScape and where it's found there, its notable unique drop if it has one,
+  and some trivia. Search it by name, or filter it by kind (monsters, bosses, a fight's mechanics)
+  or by map. It counts how many of each you've defeated.
+
+### Fixed
+
+- The map select's button no longer reads "Enter Enter Lumbridge", nor the results' "Enter Play
+  again". Enter still presses either. Fixed by trippy22.
+- Adventurers' boots no longer pick up a pale rim where they touch the ground. Fixed by trippy22.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added

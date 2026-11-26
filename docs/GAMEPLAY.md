@@ -1301,6 +1301,13 @@ version and how to run it.
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got, and the
   ones done all over if the map has what they're after (no Ratcatchers in the Inferno).
+  **Daily and weekly quests** sit at the top of the same list: three new ones every day and two
+  every week, the same for every player, and each is gone when its day or week turns (midnight UTC,
+  and Monday midnight UTC). They're drawn from pools in `content/periodicQuests.ts`, each of a
+  different goal: monsters killed, bosses killed, caskets opened, runs played, maps beaten, minutes
+  lasted or a level reached in one run. A week's are harder and pay more (defeat three bosses, beat
+  three maps). They count over the period's runs, on any map but the fun ones, and pay once when
+  the run that finishes them ends, which the results screen lists.
 - **Combat Achievements** (on the title screen) are challenges for solo runs, in six tiers from
   Easy to Grandmaster: kill a boss without it hitting you, avoid one of its attacks, beat a map
   under a restriction, or kill it fast. What no one can dodge (a parasite bursting, the
@@ -1321,6 +1328,20 @@ version and how to run it.
   by an Awakener's orb. Pin up to five tasks there: in a run, the pinned ones the map has get a
   row under the quests, which turns red with a toast saying what did it ("hit by Lunge") once
   they're spoilt. The pause menu's Quests tab has every task the run is following, and how each is going.
+- **Monster diary** (on the title screen, and in a co-op room's Menu) is a page for every monster
+  in the game, "???" until one's been killed (a fight's mechanic, until a map it's on is beaten),
+  so nothing's given away before it's met, and nothing of an act that isn't out. A page has its
+  head or whole body (turn it with the arrows), its stats (hitpoints, touch damage, speed, size,
+  experience, and for a boss its attacks, how often it attacks and when it enrages), what it can
+  do (flies, heals, splits, shoots...), the maps it turns up on and when, how many you've defeated,
+  and what Old School RuneScape says about it: what it is, where it's found there, its notable
+  unique drop if it has one (`content/monsterLore/drops.ts`), and some trivia. The stats sit beside
+  the portrait. Where and when come from each map's own waves, events, raid rooms and lairs, so
+  they're always what the game does: "In waves from 0:45 to 3:30", "The final boss, at 15:00", or
+  "Brought in by another enemy, a map rule or a random event". It's searched by name and filtered
+  by kind (monsters, bosses, the things a fight is built from) and by map, with how many of them
+  have been found. Fun-map opponents drawn as players have no model, and are marked so. The
+  descriptions are in English in every language.
 - **Damage meter**: under the quests, DPS is the damage you've dealt from every source over the last
   8 seconds, counted the way the results screen counts it (the whole of a killing hit, and nothing
   for a blocked one).

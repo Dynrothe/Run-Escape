@@ -398,7 +398,6 @@
     "coop.gone.host_left_run": "Hostitel odešel a výprava skončila.",
     "coop.gone.you_left": "Opustili jste družinu.",
     "quest.title": "Úkoly",
-    "quest.intro": "Úkoly můžete plnit během více výprav. Odměnu v mincích získáte za každý úkol jednou, po skončení výpravy, ve které jej dokončíte.",
     "quest.all_over": "Na všech mapách",
     "quest.not_open": "zatím nedostupné",
     "quest.completed": "Dokončeno {done} / {total}",

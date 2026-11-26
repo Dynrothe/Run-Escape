@@ -501,6 +501,10 @@
     flex-direction: column;
     gap: 10px;
     width: min(340px, calc(94vw / var(--ui-scale)));
+    /* Taller than the window (a tablet's, held sideways), it scrolls rather than lose its title
+       and Close off the edges */
+    max-height: calc(96vh / var(--ui-scale));
+    overflow-y: auto;
     box-sizing: border-box;
 }
 
@@ -549,10 +553,13 @@
     gap: 6px;
 }
 
-/* A phone held sideways hasn't the height for a row each: two columns */
+/* A phone held sideways hasn't the height for a row each: two columns, a little closer together,
+   which still scroll on the shortest */
 @media (pointer: coarse) and (max-height: 520px) {
     .ui-coop-menu {
+        gap: 6px;
         width: min(560px, calc(94vw / var(--ui-scale)));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
     }
 
     .ui-coop-menu-list {

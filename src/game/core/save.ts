@@ -46,6 +46,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
+import { PeriodRecord } from "../content/periodicQuests";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { cleanRelics } from "../content/relics";
@@ -76,6 +77,7 @@ import {
 import { WEAPONS } from "../content/weapons";
 import { getStarterCards } from "./cardRuns";
 import { addPlatinum, giveStarterCards, migrateCards, migrateKodaiCard } from "./cards";
+import { migratePeriodRecord } from "./periodicQuests";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -197,6 +199,9 @@ export type SaveData = {
     // The weekly Vault (content/vault.ts): a week's key ("2026-W46") -> its best run, the latest
     // VAULT_WEEKS_KEPT weeks
     vault?: Record<string, VaultRecord>;
+    // Daily and weekly quests' progress, for the day and the week it was made in (content/
+    // periodicQuests.ts): a record from a period gone is started over when the next run is banked
+    periodic?: { daily?: PeriodRecord; weekly?: PeriodRecord };
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // Ids of the Combat Achievements done (combatTasks.ts), and where the ones that take more
@@ -581,6 +586,12 @@ export function migrateSave(raw: unknown): SaveData {
                     runs: Math.max(1, Math.floor(num(record.runs, 1))),
                 },
             };
+        }
+    }
+    for (const kind of ["daily", "weekly"] as const) {
+        const record = migratePeriodRecord(kind, data.periodic?.[kind], num);
+        if (record) {
+            save.periodic = { ...save.periodic, [kind]: record };
         }
     }
     if (
@@ -1694,7 +1705,7 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
 }
 
 // Whether a won run beats its map: any win, but in a fight in parts only the last part's
-function beatsMap(run: RunSummary): boolean {
+export function beatsMap(run: RunSummary): boolean {
     const stages = MAP_BY_ID.get(run.mapId)?.stages;
     return !stages || (run.stage ?? 0) + 1 >= stages.length;
 }

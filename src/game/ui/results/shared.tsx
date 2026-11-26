@@ -18,7 +18,6 @@ import type { RaidChest, TombsSummary } from "../../core/Sim";
 import { fmtNum, list, t, tl, tp } from "../../i18n";
 import { Coins } from "../Coins";
 import { ItemIcon } from "../ItemIcon";
-import { KeyHint } from "../PadHint";
 import { formatCompact } from "../formatCompact";
 
 export type ScreenProps = { ui: UiSnapshot; client: GameClient };
@@ -374,8 +373,11 @@ export function ResultButtons({ ui, client }: ScreenProps): JSX.Element {
         <div className="ui-row">
             {/* On your own: straight into the same map again */}
             {canRetry && (
-                <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                    <KeyHint keyLabel="Enter" className="ui-choice-key ui-word-key" />{" "}
+                <button
+                    className="ui-button ui-button-go"
+                    aria-keyshortcuts="Enter"
+                    onClick={() => client.retry()}
+                >
                     {played.fight
                         ? nextFightLabel(played, ui.overlay === "victory", result?.stage)
                         : t("ui.result.play_again")}

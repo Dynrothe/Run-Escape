@@ -41,6 +41,7 @@ import {
     CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
     COMBAT_ACHIEVEMENTS_OBJ,
+    MONSTER_DIARY_OBJ,
     PLATINUM_TOKEN_OBJ,
 } from "../../src/game/content/titleIcons";
 import { CRONDIS } from "../../src/game/content/tombs";
@@ -184,6 +185,7 @@ function getContentObjIds(): number[] {
     const ids = new Set<number>([
         COLLECTION_LOG_OBJ,
         COMBAT_ACHIEVEMENTS_OBJ,
+        MONSTER_DIARY_OBJ,
         CARDS_ICON_OBJ,
         PLATINUM_TOKEN_OBJ,
         ...Object.values(PICKUP_OBJS),

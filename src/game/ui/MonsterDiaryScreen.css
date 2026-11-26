@@ -1,0 +1,371 @@
+/* The Monster diary: a stone window like the Collection log's, with the monsters listed down the
+   left, filtered and searched above, and the chosen one's page on the right. Back along the
+   bottom, as on every other menu screen. */
+
+.ui-diary {
+    width: min(860px, calc(94vw / var(--ui-scale)));
+    height: min(640px, calc(92vh / var(--ui-scale)));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-diary-top {
+    flex-shrink: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ui-diary .ui-diary-title {
+    margin: 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+    font-weight: normal;
+    color: var(--ui-orange);
+}
+
+.ui-diary-count {
+    font-size: 12px;
+    color: var(--ui-orange);
+}
+
+.ui-diary-filters {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.ui-diary-search {
+    flex: 1 1 140px;
+    min-width: 0;
+    min-height: 26px;
+    padding: 2px 6px;
+    font: inherit;
+    color: var(--ui-white);
+    background: rgba(20, 16, 11, 0.7);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px #4a4033;
+}
+
+.ui-diary-map {
+    flex: 0 1 180px;
+    min-width: 0;
+    min-height: 26px;
+    font: inherit;
+    color: var(--ui-white);
+    background: #2b251d;
+    border: 1px solid #000;
+}
+
+.ui-diary-kinds,
+.ui-diary-model-buttons,
+.ui-diary-forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+/* A small stone button: the kind filters, the head and body switch, a monster's forms */
+.ui-diary-kind {
+    min-height: 26px;
+    padding: 2px 8px;
+    font: inherit;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+    cursor: pointer;
+    background: #2b251d;
+    border: 1px solid #000;
+    border-bottom-color: #4a4033;
+    box-shadow: inset 1px 1px 0 #4a4033;
+}
+
+.ui-diary-kind:hover:not(:disabled) {
+    background: #3a3227;
+}
+
+.ui-diary-kind:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The model's turn buttons, narrow enough that Head, Body and both fit on one row */
+.ui-diary-kind.ui-diary-turn {
+    padding: 2px 6px;
+}
+
+.ui-diary-kind.ui-diary-on {
+    color: var(--ui-white);
+    background: #4a4033;
+    box-shadow: inset 1px 1px 0 #6b5e4a;
+}
+
+.ui-diary-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 4px;
+}
+
+.ui-diary-inset {
+    background: rgba(20, 16, 11, 0.55);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px #4a4033;
+}
+
+.ui-diary-list {
+    flex: 0 0 220px;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 2px;
+}
+
+.ui-diary-row {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 1px 6px;
+    font: inherit;
+    color: var(--ui-orange);
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    /* Rows off screen cost nothing to lay out: there are hundreds */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 28px;
+}
+
+.ui-diary-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.ui-diary-row:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ui-diary-row.ui-diary-row-open {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.ui-diary-row-head {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ui-diary-row-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ui-diary-tag {
+    flex-shrink: 0;
+    color: var(--ui-white);
+}
+
+.ui-diary-empty {
+    padding: 8px;
+    color: var(--ui-orange);
+}
+
+.ui-diary-page {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px;
+}
+
+.ui-diary-head {
+    flex-shrink: 0;
+    max-height: 55%;
+    overflow-y: auto;
+    display: flex;
+    gap: 10px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--ui-divider);
+}
+
+.ui-diary-model {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    max-width: 150px;
+}
+
+.ui-diary-portrait {
+    width: 112px;
+    height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px #4a4033;
+}
+
+.ui-diary-ident {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-diary .ui-diary-name {
+    margin: 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+    font-weight: normal;
+    color: var(--ui-orange);
+}
+
+.ui-diary-kinds-line {
+    font-size: 12px;
+    color: var(--ui-white);
+}
+
+.ui-diary-traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ui-diary-traits li {
+    padding: 0 6px;
+    font-size: 11px;
+    color: var(--ui-orange);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #4a4033;
+}
+
+/* Its head stays put, and the rest scrolls */
+.ui-diary-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ui-diary-scroll p,
+.ui-diary-scroll li {
+    margin: 0 0 4px;
+    line-height: 1.35;
+}
+
+.ui-diary .ui-diary-h {
+    margin: 8px 0 3px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--ui-orange);
+}
+
+.ui-diary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 2px 14px;
+}
+
+.ui-diary-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ui-diary-stat-name {
+    color: var(--ui-orange);
+}
+
+.ui-diary-stat-value {
+    color: var(--ui-white);
+    text-align: right;
+}
+
+.ui-diary-note {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    opacity: 0.75;
+}
+
+.ui-diary-where,
+.ui-diary-trivia {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.ui-diary-foot {
+    flex-shrink: 0;
+}
+
+/* A narrow screen: the list sits above the page, short, instead of beside it */
+@media (max-width: 640px) {
+    .ui-diary-body {
+        flex-direction: column;
+    }
+
+    .ui-diary-list {
+        flex: 0 0 120px;
+    }
+
+    .ui-diary-head {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+/* A phone on its side: too short for a header and a text that scroll apart, so the whole page
+   scrolls as one, and the list is narrower */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-diary-list {
+        flex-basis: 170px;
+    }
+
+    .ui-diary-page {
+        overflow-y: auto;
+    }
+
+    .ui-diary-head {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .ui-diary-scroll {
+        flex: none;
+        overflow: visible;
+    }
+}
+
+.ui-diary-attacks {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+/* A monster's notable unique drop, set off from the text under it */
+.ui-diary-drops {
+    color: var(--ui-white);
+}

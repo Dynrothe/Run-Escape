@@ -26,6 +26,10 @@ const CULL_MARGIN = 0.25;
 // units through it
 const LAYER_DEPTH = 3 / 128;
 
+// A boot can dip a few model units into the ground during an animation. Only show the
+// through-wall colour when the scenery is this far in front of the actor, in tiles.
+const SILHOUETTE_DEPTH_BIAS = 8 / 128;
+
 export const NO_TINT = 0xffffff;
 
 export class ActorAnim {
@@ -183,6 +187,8 @@ class InstanceList {
         unlit: number,
         // Tiles nearer the camera for each priority (LAYER_DEPTH), 0 for none
         layerDepth = 0,
+        // Tiles nearer the camera for the whole model (SILHOUETTE_DEPTH_BIAS), 0 for none
+        depthBias = 0,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -215,6 +221,7 @@ class InstanceList {
         data[o + 15] = roll;
         data[o + 16] = positionStart;
         data[o + 17] = layerDepth;
+        data[o + 18] = depthBias;
     }
 
     grow(capacity: number): void {
@@ -655,6 +662,8 @@ export class ActorRenderer {
                 pitch,
                 roll,
                 0,
+                0,
+                SILHOUETTE_DEPTH_BIAS,
             );
         }
         if (options?.outline) {
