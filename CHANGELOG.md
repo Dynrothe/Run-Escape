@@ -5,6 +5,14 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Daily and weekly quests, by NightDamage: three new quests every day and two every week, at the top
+  of the Quests screen, the same for everyone. They ask for kills, bosses, caskets, runs, maps
+  beaten or a long run, each pays coins once when the run that finishes it ends, and what's left
+  over goes when the day or week turns. A week's are harder (defeat three bosses, beat three maps)
+  and pay more.
+
 ### Fixed
 
 - The map select's button no longer reads "Enter Enter Lumbridge", nor the results' "Enter Play

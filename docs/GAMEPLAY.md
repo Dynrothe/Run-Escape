@@ -1301,6 +1301,13 @@ version and how to run it.
   client's quest tab: red until started, yellow while under way, green once done. In a run, a
   tracker under the minimap (and the pause menu) shows how far the map's quests have got, and the
   ones done all over if the map has what they're after (no Ratcatchers in the Inferno).
+  **Daily and weekly quests** sit at the top of the same list: three new ones every day and two
+  every week, the same for every player, and each is gone when its day or week turns (midnight UTC,
+  and Monday midnight UTC). They're drawn from pools in `content/periodicQuests.ts`, each of a
+  different goal: monsters killed, bosses killed, caskets opened, runs played, maps beaten, minutes
+  lasted or a level reached in one run. A week's are harder and pay more (defeat three bosses, beat
+  three maps). They count over the period's runs, on any map but the fun ones, and pay once when
+  the run that finishes them ends, which the results screen lists.
 - **Combat Achievements** (on the title screen) are challenges for solo runs, in six tiers from
   Easy to Grandmaster: kill a boss without it hitting you, avoid one of its attacks, beat a map
   under a restriction, or kill it fast. What no one can dodge (a parasite bursting, the

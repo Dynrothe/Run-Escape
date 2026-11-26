@@ -3,8 +3,10 @@ import { useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
 import { getMap } from "../content/maps";
+import { PeriodKind, describePeriodic, periodEnd } from "../content/periodicQuests";
 import { QUESTS, describeQuest } from "../content/quests";
 import { QuestDef } from "../content/types";
+import { PeriodicView, getPeriodViews } from "../core/periodicQuests";
 import { SaveData, getQuestProgress, isMapUnlocked } from "../core/save";
 import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
@@ -65,6 +67,8 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [hideDone, setHideDone] = useState(false);
     useMenuKeys({ onBack: () => client.leaveMenu() });
+    // Read when it's drawn: the screen's open for a minute, not a day
+    const now = Date.now();
     const groups = orderQuestGroups(save, getQuestGroups())
         .map((group) => ({
             ...group,
@@ -79,7 +83,18 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
                 <h2>{t("quest.title")}</h2>
                 <p className="ui-subtle">{t("quest.intro")}</p>
                 <div className="ui-quest-list">
-                    {groups.length === 0 && (
+                    {!hideDone || hasPeriodicLeft(save, now) ? (
+                        <>
+                            <PeriodicGroup save={save} kind="daily" now={now} hideDone={hideDone} />
+                            <PeriodicGroup
+                                save={save}
+                                kind="weekly"
+                                now={now}
+                                hideDone={hideDone}
+                            />
+                        </>
+                    ) : null}
+                    {groups.length === 0 && !hasPeriodicLeft(save, now) && (
                         <p className="ui-subtle ui-quest-none">{t("quest.none_left")}</p>
                     )}
                     {groups.map(({ mapId, quests }) => (
@@ -117,6 +132,74 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
                     <Coins amount={save.coins} />
                 </div>
             </div>
+        </div>
+    );
+}
+
+function hasPeriodicLeft(save: SaveData, now: number): boolean {
+    return (["daily", "weekly"] as const).some((kind) =>
+        getPeriodViews(save, kind, now).some((view) => !view.done),
+    );
+}
+
+// "5h 12m", "2d 4h": how long until a period turns
+function formatReset(ms: number): string {
+    const minutes = Math.max(1, Math.ceil(ms / 60000));
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    return days > 0
+        ? t("quest.reset_days", { days, hours })
+        : t("quest.reset_hours", { hours, minutes: minutes % 60 });
+}
+
+// Today's three quests, or this week's two: new ones when the day or the week turns
+function PeriodicGroup({
+    save,
+    kind,
+    now,
+    hideDone,
+}: {
+    save: SaveData;
+    kind: PeriodKind;
+    now: number;
+    hideDone: boolean;
+}): JSX.Element | null {
+    const views = getPeriodViews(save, kind, now).filter((view) => !hideDone || !view.done);
+    if (views.length === 0) {
+        return null;
+    }
+    const resets = t("quest.resets", { time: formatReset(periodEnd(kind, now) - now) });
+    return (
+        <section className="ui-quest-group ui-quest-periodic" data-kind={kind}>
+            <h3 className="ui-quest-group-name">
+                {t(kind === "daily" ? "quest.daily" : "quest.weekly")}
+                <span className="ui-quest-group-note">{resets}</span>
+            </h3>
+            {views.map((view) => (
+                <PeriodicRow key={view.quest.id} view={view} />
+            ))}
+        </section>
+    );
+}
+
+function PeriodicRow({ view }: { view: PeriodicView }): JSX.Element {
+    const { quest, done, progress } = view;
+    const state = done ? "done" : progress > 0 ? "started" : "new";
+    return (
+        <div className={"ui-quest ui-quest-" + state}>
+            <span className="ui-quest-name">{describePeriodic(quest)}</span>
+            <span className="ui-quest-task" />
+            <span className="ui-quest-progress">
+                {done
+                    ? t("quest.done")
+                    : t("quest.progress", {
+                          done: fmtNum(progress),
+                          total: fmtNum(quest.count),
+                      })}
+            </span>
+            <span className="ui-quest-reward">
+                <Coins amount={quest.coins} />
+            </span>
         </div>
     );
 }
