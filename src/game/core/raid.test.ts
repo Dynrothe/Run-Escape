@@ -682,6 +682,30 @@ describe("the Theatre's bullet shapes", () => {
         expect(widest(hardWall.shot)).toBeGreaterThanOrEqual(widest(wall.shot) - 1e-6);
     });
 
+    it("leaves a lane in Nylocas Vasilias's Spit at the distance it keeps, and none on the aim", () => {
+        for (const id of [
+            "nylocas_vasilias",
+            "nylocas_vasilias_ranged",
+            "nylocas_vasilias_magic",
+        ]) {
+            const keep = getEnemy(id).boss!.keepDistance!;
+            for (const scale of [1, getMap("theatre_of_blood").hard!.bullets!]) {
+                const { attack, shot, sim } = volley("Spit", id, scale);
+                const angles = shot.map((b) => Math.atan2(b.vy, b.vx)).sort((a, b) => a - b);
+                // Its gaps, side to side at that distance, less a blob and the player either side
+                const reach = attack.pattern!.radius + sim.player.radius;
+                const lanes = angles
+                    .slice(1)
+                    .map((a, i) => 2 * keep * Math.sin((a - angles[i]) / 2));
+                const label = `${id} x${scale}`;
+                expect(Math.min(...lanes) - 2 * reach, label).toBeGreaterThanOrEqual(0.5);
+                // One goes straight at the player: standing still is hit
+                const aim = Math.min(...angles.map((a) => Math.abs(a + Math.PI / 2)));
+                expect(aim, label).toBeCloseTo(0, 5);
+            }
+        }
+    });
+
     it("a closing ring forms round the player and comes in on them, with its gap", () => {
         const { attack, shot } = volley("Blood tide", "maiden_of_sugadinti");
         const pattern = attack.pattern!;

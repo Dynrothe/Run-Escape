@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Nylocas Vasilias's spit in the Theatre of Blood leaves a gap to step into at the distance it
+  fights from: three blobs (five on hard and expert) spread wider apart, instead of seven too
+  close together to stand between. The middle one is still aimed at you. Fixed by Okaeri.
+
 ## 0.37.0 - 2026-11-26
 
 ### Added

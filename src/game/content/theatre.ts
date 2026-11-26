@@ -314,14 +314,17 @@ const VASILIAS_ATTACKS: BossAttackDef[] = [
         range: 30,
         weight: 4,
         pattern: {
+            // Few and far apart: at the distance it keeps off (keepDistance) there's a lane
+            // between each to step into, and the middle one comes at you, so standing still is
+            // hit (raid.test.ts checks both, on hard too)
             shape: "spread",
-            count: 7,
+            count: 3,
             volleys: 2,
             interval: 0.4,
             speed: 7,
             range: 16,
             radius: 0.35,
-            arc: 1.4,
+            arc: 1.2,
             bright: BRIGHT,
         },
     },
