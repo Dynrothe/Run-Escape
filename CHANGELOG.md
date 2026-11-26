@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- The buttons now read “Enter Lumbridge” on map selection and “Play again” after a solo run.
+  Pressing Enter still activates either button. Fixed by trippy22.
+
 ## 0.36.0 - 2026-11-20
 
 ### Added
