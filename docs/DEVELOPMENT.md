@@ -2330,9 +2330,10 @@ priority group's average). Doing that per vertex, by lines through the body or t
 seams at the shoulders and collar. At most a face comes 21 units (0.16 tiles) nearer, which doesn't
 bring a player through a wall in front of them.
 
-The silhouette that shows a player through scenery is pulled nearer the same way, by
-`SILHOUETTE_DEPTH_BIAS` (8 units): a boot dips a few units into the ground as it steps, and without
-it the ground over that dip got the silhouette's pale colour, a rim round the feet.
+Silhouettes have a small depth bias for contact with scenery. During a stride, a player's toes can
+dip further into the ground or reach uphill. `GameView` samples the terrain across the stride. The
+silhouette tests vertices below that height at ground depth along the same screen ray, so the ground
+can cover a boot without painting it white. A wall in front can still show the hidden boot.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the

@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Fixed the white flicker under adventurers' boots as they run, including on slopes. Fixed by trippy22.
+
 ## 0.37.0 - 2026-11-26
 
 ### Added
