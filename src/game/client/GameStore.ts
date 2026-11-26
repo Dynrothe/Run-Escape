@@ -354,6 +354,9 @@ export type HudNumbers = {
     // second just now and damage this run (since it became what it is, for one
     // that's evolved), and what isn't a weapon's (items, power-ups, recoil)
     weaponDamage: Record<string, { dps: number; damage: number }>;
+    // Weapons whose special comes on a long count (getSpecialCounts), by id: attacks towards it
+    // since the last (Sim.specialEvery), of how many. At every - 1 the next attack in reach is it.
+    specials?: Record<string, { count: number; every: number }>;
     otherDps: number;
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks

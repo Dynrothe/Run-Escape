@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- A special attack counter, by Okaeri: the Keris partisan of the sun's slot on the HUD counts the
+  stabs towards Tumeken's Light, and turns gold when the next one is it.
+
 ## 0.37.0 - 2026-11-26
 
 ### Added

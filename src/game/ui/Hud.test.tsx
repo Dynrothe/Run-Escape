@@ -960,3 +960,25 @@ describe("the run's HUD", () => {
         }
     });
 });
+
+test("shows a counted special's attacks on its weapon's slot, gold when the next one is it", () => {
+    device.coarse = false;
+    const sun = "keris_partisan_of_the_sun";
+    const { store, view } = renderHud();
+    act(() => {
+        store.set({ hud: hud([slot(sun, 1), slot("bow", 1)]) });
+        store.setNumbers(numbers({ specials: { [sun]: { count: 27, every: 40 } } }));
+    });
+    const counts = view.container.querySelectorAll(".ui-slot-special");
+    // Only the weapon whose special's counted
+    expect(counts).toHaveLength(1);
+    const keris = screen.getByRole("button", { name: sun });
+    expect(within(keris).getByText("27")).toBeTruthy();
+    expect(counts[0].classList.contains("ui-slot-special-ready")).toBe(false);
+    const fill = counts[0].querySelector<HTMLElement>(".ui-slot-special-fill")!;
+    expect(fill.style.transform).toBe(`scaleX(${27 / 39})`);
+    act(() => store.setNumbers(numbers({ specials: { [sun]: { count: 39, every: 40 } } })));
+    expect(counts[0].classList.contains("ui-slot-special-ready")).toBe(true);
+    expect(fill.style.transform).toBe("scaleX(1)");
+    cleanup();
+});

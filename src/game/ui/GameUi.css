@@ -2448,6 +2448,49 @@
     color: var(--ui-yellow);
 }
 
+/* A counted special's progress (SpecialCount): a bar along the slot's foot, green like the
+   special attack bar, and the attacks towards it in the corner opposite the level */
+.ui-slot-special {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.ui-slot-special-bar {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    height: 3px;
+    background: #1c1a12;
+    box-shadow: 0 0 0 1px #000;
+}
+
+.ui-slot-special-fill {
+    position: absolute;
+    inset: 0;
+    background: #3fbf3f;
+    transform-origin: left;
+}
+
+.ui-slot-special-count {
+    position: absolute;
+    right: 2px;
+    bottom: 3px;
+    font-size: 13px;
+    line-height: 13px;
+    color: #fff;
+    text-shadow: var(--ui-outline);
+}
+
+.ui-slot-special-ready .ui-slot-special-fill {
+    background: var(--ui-state-yellow);
+}
+
+.ui-slot-special-ready .ui-slot-special-count {
+    color: var(--ui-state-yellow);
+}
+
 .ui-slot:disabled {
     cursor: default;
 }

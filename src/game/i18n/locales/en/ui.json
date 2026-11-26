@@ -333,6 +333,8 @@
     "ui.hud.raid_points_tooltip": "Raid points, for the supply chest",
     "ui.hud.room_progress": "Room {number} / {count}",
     "ui.hud.round": "Round {round}",
+    "ui.hud.special_count": "{name}: {count} of {every} attacks",
+    "ui.hud.special_ready": "{name} on the next attack",
     "ui.hud.slot_max": "max",
     "ui.invocations.badge_aria": "Beaten at {points} invocation points or more",
     "ui.invocations.best": "Best at invocations: {points} points ({time})",
