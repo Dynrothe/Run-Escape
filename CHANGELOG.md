@@ -9,6 +9,7 @@ the version in the corner).
 
 - The buttons now read “Enter Lumbridge” on map selection and “Play again” after a solo run.
   Pressing Enter still activates either button. Fixed by trippy22.
+- Adventurers' boots no longer pick up a pale rim where they touch the ground. Fixed by trippy22.
 
 ## 0.36.0 - 2026-11-20
 

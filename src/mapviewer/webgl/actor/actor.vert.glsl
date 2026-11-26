@@ -42,7 +42,8 @@ uniform int u_instanceOffset;
 //     (0xRRGGBB), and how much it's drawn at full brightness whatever the light (0-1, lights.glsl)
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
 //  4: where the frame's positions start in u_positions, -1 for a frame baked whole, and how
-//     much nearer the camera each priority is drawn (tiles, 0 for none: a player's layers)
+//     much nearer the camera each priority is drawn (tiles, 0 for none: a player's layers),
+//     and the silhouette's depth bias in tiles
 uniform highp sampler2D u_actorData;
 
 // The page's frames that share a mesh: each vertex's position, in model units as decodeVertex
@@ -192,10 +193,13 @@ void main() {
     // the platebody poking through it. From the front, depth alone keeps the body over a cape's
     // sides, which layers would bring out over it. Past MAX_LAYER they're a helm's trims, which
     // liftDecals.ts brings out instead.
+    float lift = data4.z;
     if (layerDepth > 0.0) {
         float priority = float(vertex.priority) - 1.0;
         float layer = priority >= LATE_PRIORITY ? LATE_LAYER : min(priority, MAX_LAYER);
-        float lift = layer * layerDepth * seenFromBehind(data0, scale, data3);
+        lift += layer * layerDepth * seenFromBehind(data0, scale, data3);
+    }
+    if (lift != 0.0) {
         // Nearer in depth only: moved nearer, a vertex would move on screen too, and open cracks
         // between faces of different layers
         vec4 lifted = u_projectionMatrix * (viewPos + vec4(0.0, 0.0, lift, 0.0));
