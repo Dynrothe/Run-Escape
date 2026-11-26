@@ -187,6 +187,7 @@ class InstanceList {
         unlit: number,
         // Tiles nearer the camera for each priority (LAYER_DEPTH), 0 for none
         layerDepth = 0,
+        // Tiles nearer the camera for the whole model (SILHOUETTE_DEPTH_BIAS), 0 for none
         depthBias = 0,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
