@@ -11,6 +11,7 @@ import {
     isPeriodicId,
     periodKey,
 } from "../content/periodicQuests";
+import { parseWeekKey } from "../content/vault";
 import { SaveData } from "./save";
 
 // Daily and weekly quests' bookkeeping (content/periodicQuests.ts has what they are): a run's
@@ -118,6 +119,16 @@ export function recordPeriodic(
     return finished;
 }
 
+// Whether a key is a day's or a week's that exists ("2026-11-23", "2026-W48"), not one that only
+// looks like it ("2026-02-30", "2026-W99")
+function isPeriodKey(kind: PeriodKind, key: string): boolean {
+    if (kind === "weekly") {
+        return parseWeekKey(key) !== undefined;
+    }
+    const time = /^\d{4}-\d{2}-\d{2}$/.test(key) ? Date.parse(key) : NaN;
+    return Number.isFinite(time) && periodKey(kind, time) === key;
+}
+
 // A loaded save's record: its key must be a period's own, and its ids and numbers real. A key
 // that's no day or week is dropped (and so is one from a period gone, when the next run is banked).
 export function migratePeriodRecord(
@@ -129,8 +140,7 @@ export function migratePeriodRecord(
         return undefined;
     }
     const data = raw as Partial<PeriodRecord>;
-    const valid = kind === "daily" ? /^\d{4}-\d{2}-\d{2}$/ : /^\d{4}-W\d{2}$/;
-    if (typeof data.key !== "string" || !valid.test(data.key)) {
+    if (typeof data.key !== "string" || !isPeriodKey(kind, data.key)) {
         return undefined;
     }
     const pool = kind === "daily" ? DAILY_POOL : WEEKLY_POOL;

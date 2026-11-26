@@ -32,7 +32,7 @@ function run(over: Partial<PeriodicRun> = {}): PeriodicRun {
     };
 }
 
-// A save with the given day's or week's quests all about to be finished by one run
+// The day's or week's quest of a goal, if that period has one
 function questOf(kind: "daily" | "weekly", time: number, goal: string) {
     return getPeriodQuests(kind, time).find((q) => q.goal === goal);
 }
@@ -214,6 +214,11 @@ describe("loading a save", () => {
             typeof value === "number" && Number.isFinite(value) ? value : fallback;
         expect(migratePeriodRecord("daily", { key: "tomorrow" }, num)).toBeUndefined();
         expect(migratePeriodRecord("weekly", { key: "2026-11-23" }, num)).toBeUndefined();
+        // Shaped like a day or a week, but none that exists
+        expect(migratePeriodRecord("daily", { key: "2026-02-30" }, num)).toBeUndefined();
+        expect(migratePeriodRecord("daily", { key: "2026-13-01" }, num)).toBeUndefined();
+        expect(migratePeriodRecord("weekly", { key: "2026-W99" }, num)).toBeUndefined();
+        expect(migratePeriodRecord("weekly", { key: "2026-W48" }, num)?.key).toBe("2026-W48");
         expect(migratePeriodRecord("daily", "x", num)).toBeUndefined();
         const quest = DAILY_POOL[0];
         const record = migratePeriodRecord(

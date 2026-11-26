@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
@@ -67,8 +67,17 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [hideDone, setHideDone] = useState(false);
     useMenuKeys({ onBack: () => client.leaveMenu() });
-    // Read when it's drawn: the screen's open for a minute, not a day
-    const now = Date.now();
+    // The clock, read again every half minute: the countdown ticks, and the day's and week's
+    // quests turn over at midnight UTC while the screen's open
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 30_000);
+        return () => clearInterval(timer);
+    }, []);
+    const periodic = PERIOD_KINDS.map((kind) => ({
+        kind,
+        views: getPeriodViews(save, kind, now).filter((view) => !hideDone || !view.done),
+    }));
     const groups = orderQuestGroups(save, getQuestGroups())
         .map((group) => ({
             ...group,
@@ -83,18 +92,10 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
                 <h2>{t("quest.title")}</h2>
                 <p className="ui-subtle">{t("quest.intro")}</p>
                 <div className="ui-quest-list">
-                    {!hideDone || hasPeriodicLeft(save, now) ? (
-                        <>
-                            <PeriodicGroup save={save} kind="daily" now={now} hideDone={hideDone} />
-                            <PeriodicGroup
-                                save={save}
-                                kind="weekly"
-                                now={now}
-                                hideDone={hideDone}
-                            />
-                        </>
-                    ) : null}
-                    {groups.length === 0 && !hasPeriodicLeft(save, now) && (
+                    {periodic.map(({ kind, views }) => (
+                        <PeriodicGroup key={kind} kind={kind} views={views} now={now} />
+                    ))}
+                    {groups.length === 0 && periodic.every(({ views }) => views.length === 0) && (
                         <p className="ui-subtle ui-quest-none">{t("quest.none_left")}</p>
                     )}
                     {groups.map(({ mapId, quests }) => (
@@ -136,11 +137,7 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
     );
 }
 
-function hasPeriodicLeft(save: SaveData, now: number): boolean {
-    return (["daily", "weekly"] as const).some((kind) =>
-        getPeriodViews(save, kind, now).some((view) => !view.done),
-    );
-}
+const PERIOD_KINDS: readonly PeriodKind[] = ["daily", "weekly"];
 
 // "5h 12m", "2d 4h": how long until a period turns
 function formatReset(ms: number): string {
@@ -154,17 +151,15 @@ function formatReset(ms: number): string {
 
 // Today's three quests, or this week's two: new ones when the day or the week turns
 function PeriodicGroup({
-    save,
     kind,
+    views,
     now,
-    hideDone,
 }: {
-    save: SaveData;
     kind: PeriodKind;
+    // Those shown: without the ones done, while they're hidden
+    views: PeriodicView[];
     now: number;
-    hideDone: boolean;
 }): JSX.Element | null {
-    const views = getPeriodViews(save, kind, now).filter((view) => !hideDone || !view.done);
     if (views.length === 0) {
         return null;
     }
