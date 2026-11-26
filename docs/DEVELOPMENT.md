@@ -2072,9 +2072,10 @@ side. Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`, looked
 `damagePlayer`, so it holds for a stomp, a pool or a stare too; a ground mark keeps its boss's id
 for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` times their bullets
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
-width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
-spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it often dies to the Maiden. It makes for a closing ring's way out only
+width, a wall's or closing ring's gap grows with the count, a spread fans out wider (up to its
+`maxArc`, past which its bullets close up instead), and a ring or spiral with no gap keeps its
+count. Their hitpoints (each room's `bossHp`) are tuned to players' clears, not the bot's: it often
+dies to the Maiden. It makes for a closing ring's way out only
 with `DODGE=1` (`cageGap`), so sim a change to the rings with that.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level

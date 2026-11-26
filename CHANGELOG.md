@@ -7,9 +7,10 @@ the version in the corner).
 
 ### Fixed
 
-- Nylocas Vasilias's spit in the Theatre of Blood leaves a gap to step into at the distance it
-  fights from: three blobs (five on hard and expert) spread wider apart, instead of seven too
-  close together to stand between. The middle one is still aimed at you. Fixed by Okaeri.
+- Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it
+  fights from: its blobs are spaced wider apart across a wider fan, where they used to be too
+  close together to stand between. The middle one is still aimed at you, and on hard and expert
+  the fan stops short of a half circle, so you can still run round its end. Fixed by Okaeri.
 
 ## 0.37.0 - 2026-11-26
 

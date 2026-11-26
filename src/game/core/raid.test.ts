@@ -682,7 +682,7 @@ describe("the Theatre's bullet shapes", () => {
         expect(widest(hardWall.shot)).toBeGreaterThanOrEqual(widest(wall.shot) - 1e-6);
     });
 
-    it("leaves a lane in Nylocas Vasilias's Spit at the distance it keeps, and none on the aim", () => {
+    it("leaves lanes in Nylocas Vasilias's Spit at the distance it keeps, none on the aim, and an end", () => {
         for (const id of [
             "nylocas_vasilias",
             "nylocas_vasilias_ranged",
@@ -699,6 +699,10 @@ describe("the Theatre's bullet shapes", () => {
                     .map((a, i) => 2 * keep * Math.sin((a - angles[i]) / 2));
                 const label = `${id} x${scale}`;
                 expect(Math.min(...lanes) - 2 * reach, label).toBeGreaterThanOrEqual(0.5);
+                // Never so wide its end can't be run round
+                expect(angles[angles.length - 1] - angles[0], label).toBeLessThanOrEqual(
+                    (170 / 180) * Math.PI,
+                );
                 // One goes straight at the player: standing still is hit
                 const aim = Math.min(...angles.map((a) => Math.abs(a + Math.PI / 2)));
                 expect(aim, label).toBeCloseTo(0, 5);
