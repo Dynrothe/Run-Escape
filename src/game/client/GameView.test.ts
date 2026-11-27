@@ -10,6 +10,7 @@ import { getEnemy } from "../content/enemies";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { SOUNDS } from "../content/sounds";
 import { emptyStats } from "../content/types";
+import { createWardensFloor } from "../content/wardensFloor";
 import {
     PROJECTILE_ITEM_LOOKS,
     PROJECTILE_SPOT_LOOKS,
@@ -17,6 +18,8 @@ import {
     getProjectileObjId,
     getWeapon,
 } from "../content/weapons";
+import { ArenaFloor } from "../core/ArenaFloor";
+import { Rng } from "../core/Rng";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup, SimEvent } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
@@ -31,6 +34,72 @@ vi.hoisted(() => {
 });
 
 const camera = new Camera(104, -10, 204, 0, 0);
+
+test.each(["warrior", "justiciar_zachariah"])(
+    "%s uses the terrain under the rendered stride for its silhouette",
+    (characterId) => {
+        const grid = makeGrid(Array(8).fill("........"));
+        const sim = new Sim({
+            grid,
+            characterId,
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: 102,
+            spawnY: 202,
+        });
+        const anim = { getFrame: () => 0 };
+        const model = { getAnim: () => anim, runPoses: new Map() };
+        const view = new GameView({
+            getPlayer: () => model,
+            getHeroLook: () => model,
+            getPlayerStance: () => PLAYER_SEQS,
+        } as unknown as GameAssets);
+        const draw = vi.fn<ActorRenderer["draw"]>();
+        const actors = { draw } as unknown as ActorRenderer;
+        view.localPlayerPose = { hero: 0, x: 104, y: 204, yaw: 512, moving: true, moveTicks: 5 };
+        view["drawPlayer"](actors, sim, 0, 0.5);
+        expect(draw.mock.lastCall![7]?.silhouetteGroundRise).toBe(0);
+
+        // The next tile rises half a tile to the east. Only the outstretched foot reaches it.
+        const stride = grid.sizeX + 1;
+        for (let y = 0; y <= grid.sizeY; y++) {
+            grid.data.heights[y * stride + 5] = -64;
+        }
+        view["drawPlayer"](actors, sim, 0, 0.5);
+        const [, , , , ground, , , options] = draw.mock.lastCall!;
+        expect(ground).toBe(0);
+        expect(options?.silhouetteGroundRise).toBeCloseTo(0.375 * (options?.scale ?? 1));
+    },
+);
+
+test("a ramp can hide a striding boot but the platform beyond it can still cover the hero", () => {
+    const grid = makeGrid(Array(8).fill("........"));
+    const sim = new Sim({
+        grid,
+        characterId: "warrior",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 102,
+        spawnY: 202,
+    });
+    sim.floor = new ArenaFloor(
+        {
+            ...createWardensFloor({ x0: 100, y0: 200, x1: 107, y1: 207 }),
+            tiles: [
+                { where: { kind: "rect", x0: 3, y0: 4, x1: 5, y1: 6 }, height: 0.5 },
+                { where: { kind: "rect", x0: 4, y0: 3, x1: 4, y1: 3 }, ramp: "north" },
+            ],
+        },
+        grid,
+        new Rng(1),
+        TICKS_PER_SECOND,
+    );
+    const view = new GameView({} as GameAssets);
+    // Halfway up the ramp, in a flat tile beside the platform, and on top.
+    expect(view["strideGroundRise"](sim, 104.5, 203.5, 1)).toBe(0.25);
+    expect(view["strideGroundRise"](sim, 103.5, 203.5, 1)).toBe(0);
+    expect(view["strideGroundRise"](sim, 104.5, 204.5, 1)).toBe(0);
+});
 
 describe("high alchemy", () => {
     afterEach(() => vi.restoreAllMocks());

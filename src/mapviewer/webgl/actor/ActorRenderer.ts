@@ -119,6 +119,8 @@ export type ActorDrawOptions = {
     tint?: number;
     alpha?: number;
     silhouette?: boolean;
+    // Height in tiles above the actor's origin reached by the ground under its feet.
+    silhouetteGroundRise?: number;
     // Drawn with an outline: the model this much bigger in a flat colour
     // (ActorRenderer.outlineColor) behind it
     outline?: number;
@@ -189,6 +191,7 @@ class InstanceList {
         layerDepth = 0,
         // Tiles nearer the camera for the whole model (SILHOUETTE_DEPTH_BIAS), 0 for none
         depthBias = 0,
+        groundRise = -1,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -222,6 +225,7 @@ class InstanceList {
         data[o + 16] = positionStart;
         data[o + 17] = layerDepth;
         data[o + 18] = depthBias;
+        data[o + 19] = groundRise;
     }
 
     grow(capacity: number): void {
@@ -664,6 +668,7 @@ export class ActorRenderer {
                 0,
                 0,
                 SILHOUETTE_DEPTH_BIAS,
+                options.silhouetteGroundRise,
             );
         }
         if (options?.outline) {

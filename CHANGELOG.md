@@ -16,6 +16,7 @@ the version in the corner).
   fights from: its blobs are spaced wider apart across a wider fan, where they used to be too
   close together to stand between. The middle one is still aimed at you, and on hard and expert
   the fan stops short of a half circle, so you can still run round its end. Fixed by Okaeri.
+- Fixed the white flicker under adventurers' boots as they run, including on slopes. Fixed by trippy22.
 
 ## 0.37.0 - 2026-11-26
 
