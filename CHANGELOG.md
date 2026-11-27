@@ -21,6 +21,7 @@ the version in the corner).
 - Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it
   fights from, on hard and expert too. Fixed by Okaeri.
 - Adventurers' boots no longer flicker white as they run, on slopes too. Fixed by trippy22.
+- Face-down cards in the album are now the same size as collected cards. Fixed by trippy22.
 
 ## 0.37.0 - 2026-11-26
 
