@@ -32,6 +32,7 @@ import org.mozilla.geckoview.WebRequestError;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -50,8 +51,8 @@ public final class MainActivity extends Activity {
     private static final String RELEASES_URL = "https://github.com/Dynrothe/Run-Escape/releases";
     private static final String CHECK_PATH = "/game/offline-check.html";
     private static final String GAME_PATH = "/game/index.html";
-    private static final int WEB_FILE_PICKER = 100;
     private static final int EXPORT_SAVE = 102;
+    private static final int IMPORT_FILE = 103;
     // The names the game gives its files (src/game/client/GameClient.ts), such as
     // run-escape-save-unreadable.json
     private static final Pattern SAVE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.json");
@@ -69,8 +70,10 @@ public final class MainActivity extends Activity {
     private FrameLayout root;
     private TextView loading;
     private Button menuButton;
-    private GeckoSession.PromptDelegate.FilePrompt pendingFilePrompt;
-    private GeckoResult<GeckoSession.PromptDelegate.PromptResponse> pendingFileResult;
+    // The import waiting on the document picker's result, completed (with the file's text, or
+    // null if the player cancelled) once it's read. Only ever touched on the UI thread; importFile()
+    // blocks a LoopbackServer worker thread on its own CompletableFuture, which this field is not.
+    private CompletableFuture<String> pendingImportResult;
     // The export waiting on the document picker's result, completed once it's written. Only
     // ever touched on the UI thread; exportSave() blocks a LoopbackServer worker thread on its
     // own CompletableFuture, which this field is not.
@@ -134,7 +137,7 @@ public final class MainActivity extends Activity {
                 games = new GamePathHandler(this, null);
             }
 
-            server = new LoopbackServer(this, games, relayPolicy, this::exportSave);
+            server = new LoopbackServer(this, games, relayPolicy, this::exportSave, this::importFile);
             server.start();
             gameOrigin = server.origin();
 
@@ -161,6 +164,8 @@ public final class MainActivity extends Activity {
         session.setNavigationDelegate(new GameNavigationDelegate());
         session.setPromptDelegate(new GamePromptDelegate());
         session.setProgressDelegate(new GameProgressDelegate());
+        session.setPermissionDelegate(new GamePermissionDelegate());
+        session.setSelectionActionDelegate(new GameSelectionActionDelegate());
 
         geckoView = new GeckoView(this);
         geckoView.setSession(session);
@@ -392,23 +397,73 @@ public final class MainActivity extends Activity {
         return new File(getCacheDir(), PENDING_EXPORT);
     }
 
+    // Called from LoopbackServer's per-request thread (never the UI thread): the game's
+    // fetch('/__native/import') only resolves once this returns. GeckoView's own <input type=file>
+    // can't actually read what the player picks here (GeckoViewFilePickerDelegate logs "Error
+    // resolving files from file picker: ... NS_ERROR_FILE_UNRECOGNIZED_PATH" from inside
+    // FilePickerDelegate.sys.mjs's _getDOMFile - confirmed on a real device against both Android's
+    // Downloads provider's own content:// URI and this app's own FileProvider URI, so it is a
+    // GeckoView-side limitation reading content:// URIs in general, not one specific provider's
+    // shape of URI), so this reads the file itself through Android's own ContentResolver, which
+    // has no trouble with the exact same URI, and hands the text back directly instead of ever
+    // routing the picked file through GeckoView's broken resolution.
+    private String importFile() {
+        if (destroyed || !gameReady) return null;
+        CompletableFuture<String> result = new CompletableFuture<>();
+        handler.post(() -> startImport(result));
+        try {
+            return result.get();
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private void startImport(CompletableFuture<String> result) {
+        if (destroyed || isFinishing() || pendingImportResult != null) {
+            result.complete(null);
+            return;
+        }
+        try {
+            pendingImportResult = result;
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            startActivityForResult(intent, IMPORT_FILE);
+        } catch (Exception exception) {
+            pendingImportResult = null;
+            result.complete(null);
+        }
+    }
+
+    // Reads a picked document's full bytes as UTF-8 text, or null if that somehow fails (the
+    // player will see the same "couldn't import" message a genuinely invalid file gives them).
+    private String readPickedFile(Uri uri) {
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) return null;
+            return new String(readAllBytes(in), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            Log.w("MainActivity", "could not read the picked file", exception);
+            return null;
+        }
+    }
+
+    private static byte[] readAllBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = in.read(chunk)) >= 0) buffer.write(chunk, 0, read);
+        return buffer.toByteArray();
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == WEB_FILE_PICKER) {
-            if (pendingFileResult != null) {
-                GeckoSession.PromptDelegate.FilePrompt prompt = pendingFilePrompt;
-                GeckoResult<GeckoSession.PromptDelegate.PromptResponse> callback = pendingFileResult;
-                pendingFilePrompt = null;
-                pendingFileResult = null;
-                if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null
-                        && prompt != null) {
-                    callback.complete(prompt.confirm(this, data.getData()));
-                } else if (prompt != null) {
-                    callback.complete(prompt.dismiss());
-                } else {
-                    callback.complete(null);
-                }
+        if (requestCode == IMPORT_FILE) {
+            CompletableFuture<String> result = pendingImportResult;
+            pendingImportResult = null;
+            if (result != null) {
+                Uri picked = resultCode == Activity.RESULT_OK && data != null ? data.getData() : null;
+                result.complete(picked != null ? readPickedFile(picked) : null);
             }
             return;
         }
@@ -484,6 +539,40 @@ public final class MainActivity extends Activity {
         @Override
         public void onKill(GeckoSession session) {
             reopenAfterContentProcessLoss();
+        }
+    }
+
+    // Everything here is the bundled game's own origin, not arbitrary web content, so this grants
+    // what Electron's desktop build grants implicitly (its own permission request handler only
+    // ever sees "fullscreen" and "pointerLock", since Electron's Chromium doesn't gate audible
+    // autoplay behind a permission the way GeckoView does - with no delegate here at all, GeckoView
+    // was silently denying PERMISSION_AUTOPLAY_AUDIBLE, which is why the game's music never played).
+    private final class GamePermissionDelegate implements GeckoSession.PermissionDelegate {
+        @Override
+        public GeckoResult<Integer> onContentPermissionRequest(
+                GeckoSession session, ContentPermission perm) {
+            if (perm.permission == PERMISSION_AUTOPLAY_AUDIBLE
+                    || perm.permission == PERMISSION_AUTOPLAY_INAUDIBLE) {
+                return GeckoResult.fromValue(ContentPermission.VALUE_ALLOW);
+            }
+            return GeckoSession.PermissionDelegate.super.onContentPermissionRequest(session, perm);
+        }
+    }
+
+    // Clipboard copy (a coop room code, a cloud save key) goes through a separate delegate from
+    // PermissionDelegate above: GeckoSession.SelectionActionDelegate.onShowClipboardPermissionRequest,
+    // which also has no default implementation that grants anything. With no delegate set at all,
+    // GeckoView silently dismissed every clipboard write (GeckoView:DismissClipboardPermissionRequest
+    // in logcat), so the player's tap on a copy button did nothing. GeckoView bundles a fuller
+    // BasicSelectionActionDelegate (Android's own text-selection toolbar, cut/copy/paste), which
+    // isn't used here: the game has its own UI for everything a player selects or copies, and
+    // bringing in Android's native selection toolbar on top of it would be a second, unwanted
+    // overlay. Only the clipboard permission itself is granted.
+    private final class GameSelectionActionDelegate implements GeckoSession.SelectionActionDelegate {
+        @Override
+        public GeckoResult<AllowOrDeny> onShowClipboardPermissionRequest(
+                GeckoSession session, ClipboardPermission perm) {
+            return GeckoResult.fromValue(AllowOrDeny.ALLOW);
         }
     }
 
@@ -575,28 +664,11 @@ public final class MainActivity extends Activity {
         }
     }
 
-    // <input type=file> (save import): the GeckoView analog of WebChromeClient.onShowFileChooser.
+    // <input type=file> (save import) is routed around entirely rather than handled here: see
+    // importFile()/startImport() and saveFile.ts's importFromApp() for why GeckoView's own
+    // GeckoSession.PromptDelegate.onFilePrompt can't actually serve the picked file's bytes back
+    // to the page.
     private final class GamePromptDelegate implements GeckoSession.PromptDelegate {
-        @Override
-        public GeckoResult<PromptResponse> onFilePrompt(GeckoSession session, FilePrompt prompt) {
-            if (pendingFileResult != null) pendingFileResult.complete(prompt.dismiss());
-            GeckoResult<PromptResponse> result = new GeckoResult<>();
-            pendingFilePrompt = prompt;
-            pendingFileResult = result;
-            try {
-                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/json");
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivityForResult(intent, WEB_FILE_PICKER);
-            } catch (ActivityNotFoundException exception) {
-                pendingFilePrompt = null;
-                pendingFileResult = null;
-                toast("No file picker is available on this device.");
-                result.complete(prompt.dismiss());
-            }
-            return result;
-        }
     }
 
     private void handleBack() {
@@ -640,10 +712,9 @@ public final class MainActivity extends Activity {
         if (siteUpdater != null) siteUpdater.close();
         diagnosticGeneration++;
         handler.removeCallbacksAndMessages(null);
-        if (pendingFileResult != null) {
-            GeckoSession.PromptDelegate.FilePrompt prompt = pendingFilePrompt;
-            pendingFileResult.complete(prompt != null ? prompt.dismiss() : null);
-            pendingFileResult = null;
+        if (pendingImportResult != null) {
+            pendingImportResult.complete(null);
+            pendingImportResult = null;
         }
         if (pendingExportResult != null) {
             pendingExportResult.complete(false);

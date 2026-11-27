@@ -43,6 +43,7 @@ final class LoopbackServer extends Thread {
     private static final String CHECK_PATH = "game/offline-check.html";
     private static final String WORKER_PATH = "game/offline-check-worker.js";
     private static final String EXPORT_PATH = "/__native/export";
+    private static final String IMPORT_PATH = "/__native/import";
     private static final int MAX_EXPORT_BYTES = 2 * 1024 * 1024;
 
     /** Mirrors saveFile.ts's AppDownloads message: the game hands over {name, text}. */
@@ -51,19 +52,27 @@ final class LoopbackServer extends Thread {
         boolean export(String name, String text);
     }
 
+    /** Mirrors saveFile.ts's importFromApp(): the game asks for a save file's text, or null. */
+    interface ImportHandler {
+        /** Must block the calling (request) thread until a file is picked, or the player cancels. */
+        String importFile();
+    }
+
     private final Context context;
     private final GamePathHandler games;
     private final RelayPolicy relayPolicy;
     private final ExportHandler exportHandler;
+    private final ImportHandler importHandler;
     private final ServerSocket socket;
     private volatile boolean running = true;
 
     LoopbackServer(Context context, GamePathHandler games, RelayPolicy relayPolicy,
-                    ExportHandler exportHandler) throws IOException {
+                    ExportHandler exportHandler, ImportHandler importHandler) throws IOException {
         this.context = context;
         this.games = games;
         this.relayPolicy = relayPolicy;
         this.exportHandler = exportHandler;
+        this.importHandler = importHandler;
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         int preferred = prefs.getInt(KEY_PORT, PREFERRED_PORT);
         this.socket = bind(preferred);
@@ -152,6 +161,11 @@ final class LoopbackServer extends Thread {
                 if ("POST".equals(method) && EXPORT_PATH.equals(path)) {
                     byte[] body = readExactly(rawIn, contentLength);
                     handleExport(body, out);
+                    continue;
+                }
+                if ("POST".equals(method) && IMPORT_PATH.equals(path)) {
+                    readExactly(rawIn, contentLength); // No body expected; drained all the same
+                    handleImport(out);
                     continue;
                 }
                 if (!"GET".equals(method)) {
@@ -246,12 +260,19 @@ final class LoopbackServer extends Thread {
     // exactly the shape androidx.webkit's WebMessageListener used to inject into the WebView
     // page. GeckoView has no equivalent "inject a named JS object" API, so the same contract is
     // recreated here with a plain <script> shim backed by fetch() to our own /__native/export -
-    // the unmodified game code never has to know the difference.
+    // the unmodified game code never has to know the difference. importFile does the same for
+    // import (/__native/import): GeckoView's own <input type=file> can't actually read what's
+    // picked (see MainActivity's importFile/startImport and saveFile.ts for the full story), so
+    // the app picks and reads the file itself and hands the text back through this bridge instead.
     private byte[] injectNativeBridge(byte[] html) {
         String shim = "<script>window.NativeDownloads={onmessage:null,postMessage:function(msg){"
                 + "fetch('" + EXPORT_PATH + "',{method:'POST',body:msg}).then(function(r){"
                 + "if(r.ok&&window.NativeDownloads.onmessage){window.NativeDownloads.onmessage({data:'saved'});}"
-                + "});}};</script>";
+                + "});},importFile:function(){"
+                + "return fetch('" + IMPORT_PATH + "',{method:'POST'}).then(function(r){"
+                + "return r.status===204?null:r.text();"
+                + "}).catch(function(){return null;});"
+                + "}};</script>";
         // A save migrated from the app's previous WebView-based releases (LegacySaveMigrator)
         // waits here until the real game page actually loads, then is set only if this origin
         // doesn't already have a save of its own - safe to run on every load, including repeats,
@@ -301,6 +322,17 @@ final class LoopbackServer extends Thread {
         }
         byte[] responseBody = (ok ? "saved" : "failed").getBytes(StandardCharsets.UTF_8);
         writeResponse(out, ok ? 200 : 500, "text/plain", null, responseBody);
+    }
+
+    // 204 (no text, valid JS null through the shim below) when the player cancelled the picker;
+    // the file's text itself, as plain text, when they picked one.
+    private void handleImport(OutputStream out) throws IOException {
+        String text = importHandler.importFile();
+        if (text == null) {
+            writeResponse(out, 204, "text/plain", null, new byte[0]);
+            return;
+        }
+        writeResponse(out, 200, "text/plain; charset=utf-8", null, text.getBytes(StandardCharsets.UTF_8));
     }
 
     private Map<String, String> isolationHeaders() {
