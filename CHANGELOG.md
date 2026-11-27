@@ -9,14 +9,13 @@ the version in the corner).
 
 - A special attack counter, by Okaeri: the Keris partisan of the sun's slot on the HUD counts the
   stabs towards Tumeken's Light, and turns gold when the next one is it.
+- A Linux version, by WarlockSyno: each release has an AppImage of the app beside the Windows zip.
 
 ### Fixed
 
 - Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it
-  fights from: its blobs are spaced wider apart across a wider fan, where they used to be too
-  close together to stand between. The middle one is still aimed at you, and on hard and expert
-  the fan stops short of a half circle, so you can still run round its end. Fixed by Okaeri.
-- Fixed the white flicker under adventurers' boots as they run, including on slopes. Fixed by trippy22.
+  fights from, on hard and expert too. Fixed by Okaeri.
+- Adventurers' boots no longer flicker white as they run, on slopes too. Fixed by trippy22.
 
 ## 0.37.0 - 2026-11-26
 

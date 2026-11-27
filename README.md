@@ -156,7 +156,8 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 ## Desktop
 
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
-[release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
+[release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. On
+Linux, make `Run-Escape-<version>-linux-x64.AppImage` executable (`chmod +x`) and run it. Either
 plays offline, and updates the game by itself when it can, keeping to the website's version so it
 can play co-op with the website's players between releases.
 Saves are kept apart from a browser's, and

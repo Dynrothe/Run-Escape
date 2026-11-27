@@ -651,10 +651,16 @@ The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, s
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
 `desktop/`, apart from the game, which doesn't know it's in an app.
 
+The Linux app is the same app as a single AppImage (`linux` in `electron-builder.yml`), x64 only:
+made executable, it runs from anywhere, with saves and game updates in `~/.config/Run Escape`
+(`app.getPath("appData")`). The release workflow builds it on Ubuntu (`build-linux`, under
+Releases).
+
 ```
 bun run build && bun run slim-cache
-bun run desktop         # the app, on this build, with no update check
-bun run desktop:dist    # everything a release carries, in release/
+bun run desktop             # the app, on this build, with no update check
+bun run desktop:dist        # everything a release carries, in release/
+bun run desktop:dist:linux  # the same with the AppImage in place of the Windows zip (on Linux)
 ```
 
 `desktop:dist` stops if `dist/caches` isn't the slim cache made for this build. It needs Node
@@ -816,14 +822,22 @@ hand.
 
 It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
 `GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
-`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
+`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`,
+`Run-Escape-<version>-linux-x64.AppImage`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
 [GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
 the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
-to the zip, and to the APK when it's built. The links only work once the draft is published, so the
-`publish` job links the names it uploads: a renamed file fails the upload rather than leaving a
-dead link.
+to the zip, the AppImage, and the APK when it's built. The links only work once the draft is
+published, so the `publish` job links the names it uploads: a renamed file fails the upload rather
+than leaving a dead link.
+
+The AppImage comes from `build-linux`, on Ubuntu beside the Windows job: the same steps (tests
+included) from the same commit, so its game has the same build id, then `desktop:dist:linux`. It
+uploads only the AppImage: the game zips, chunks and manifest are the Windows job's. The draft
+waits for both, so a failed Linux build means no draft at all, as a failed Windows one does.
+electron-builder names an AppImage's arch `x86_64`, so `electron-builder.yml` writes `x64` into
+its name itself.
 **Publishing the draft by hand is what releases it to players**, and the tag only exists from then
 on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
@@ -2331,10 +2345,15 @@ priority group's average). Doing that per vertex, by lines through the body or t
 seams at the shoulders and collar. At most a face comes 21 units (0.16 tiles) nearer, which doesn't
 bring a player through a wall in front of them.
 
-Silhouettes have a small depth bias for contact with scenery. During a stride, a player's toes can
-dip further into the ground or reach uphill. `GameView` samples the terrain across the stride. The
-silhouette tests vertices below that height at ground depth along the same screen ray, so the ground
-can cover a boot without painting it white. A wall in front can still show the hidden boot.
+The silhouette that shows a player through scenery is pulled nearer the same way, by
+`SILHOUETTE_DEPTH_BIAS` (8 units): a boot dips a few units into the ground as it steps, and without
+it the ground over that dip got the silhouette's pale colour, a rim round the feet. A running
+stride dips further, and can reach uphill before the player's middle does, so
+`GameView.strideGroundRise` takes the highest ground three quarters of a tile round them (and a
+Wardens' floor ramp's rise) as `silhouetteGroundRise`. In `actor.vert.glsl` a silhouette vertex
+below that height is depth-tested where its screen ray meets it, so the ground covers the boot
+without painting it white, while a wall in front still shows it. A raised platform beside the
+player isn't counted, so it can still hide them.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
