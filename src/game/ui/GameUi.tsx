@@ -116,7 +116,7 @@ import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
-import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
+import { WEAPONS, getWeapon, weaponName, weaponSpecialName } from "../content/weapons";
 import type { ScabarasPuzzle } from "../core/Sim";
 import {
     getCardRunNeeds,
@@ -3630,18 +3630,76 @@ function formatSlotLevel(slot: SlotView): string {
     return slot.level === slot.maxLevel ? t("ui.hud.slot_max") : String(slot.level);
 }
 
+// How far a weapon's counted special has got (HudNumbers.specials): the attacks towards it in the
+// slot's corner and a bar along its foot, full and gold when the next attack in reach is it
+function SpecialCount({
+    client,
+    weaponId,
+}: {
+    client: GameClient;
+    weaponId: string;
+}): JSX.Element | null {
+    const special = useHudNumber(client, (n) => n.specials?.[weaponId]);
+    if (!special) {
+        return null;
+    }
+    const ready = special.count === special.every - 1;
+    return (
+        <span
+            className={"ui-slot-special" + (ready ? " ui-slot-special-ready" : "")}
+            aria-hidden="true"
+        >
+            <span className="ui-slot-special-bar">
+                <span
+                    className="ui-slot-special-fill"
+                    style={{ transform: `scaleX(${special.count / (special.every - 1)})` }}
+                />
+            </span>
+            <span className="ui-slot-special-count">{fmtNum(special.count)}</span>
+        </span>
+    );
+}
+
+// The same in words, on the slot's description
+function SpecialCountLine({
+    client,
+    weaponId,
+}: {
+    client: GameClient;
+    weaponId: string;
+}): JSX.Element | null {
+    const special = useHudNumber(client, (n) => n.specials?.[weaponId]);
+    const name = special && weaponSpecialName(getWeapon(weaponId));
+    if (!special || name === undefined) {
+        return null;
+    }
+    return special.count === special.every - 1 ? (
+        <div className="ui-evolve-ready">{t("ui.hud.special_ready", { name })}</div>
+    ) : (
+        <div className="ui-slot-tip-level">
+            {t("ui.hud.special_count", {
+                name,
+                count: fmtNum(special.count),
+                every: fmtNum(special.every),
+            })}
+        </div>
+    );
+}
+
 // A weapon, passive or blessing in the HUD, with what it does on a card shown
-// while it's pointed at
+// while it's pointed at. With a client, weapons show a counted special's progress.
 const Slots = memo(function Slots({
     slots,
     max,
     disabled,
     className,
+    client,
 }: {
     slots: SlotView[];
     max: number;
     disabled: boolean;
     className?: string;
+    client?: GameClient;
 }): JSX.Element {
     return (
         <div className={className ? `ui-slots ${className}` : "ui-slots"}>
@@ -3679,6 +3737,9 @@ const Slots = memo(function Slots({
                                         />
                                     ))}
                                     {slot.detail && <div>{slot.detail.text}</div>}
+                                    {client && (
+                                        <SpecialCountLine client={client} weaponId={slot.id} />
+                                    )}
                                     {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                 </>
                             )
@@ -3688,6 +3749,7 @@ const Slots = memo(function Slots({
                             <>
                                 <SlotIcon slot={slot} size={30} />
                                 <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
+                                {client && <SpecialCount client={client} weaponId={slot.id} />}
                             </>
                         )}
                     </DescriptionButton>
@@ -3896,6 +3958,7 @@ const Hud = memo(function Hud({
                                     slots={hud.weapons}
                                     max={hud.weapons.length}
                                     disabled={disabled}
+                                    client={client}
                                 />
                                 {hud.blessings.length > 0 && (
                                     <Slots
@@ -3912,6 +3975,7 @@ const Hud = memo(function Hud({
                                     slots={hud.weapons}
                                     max={hud.maxWeapons}
                                     disabled={disabled}
+                                    client={client}
                                 />
                                 <Slots
                                     slots={hud.passives}

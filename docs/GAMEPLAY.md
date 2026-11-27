@@ -62,7 +62,8 @@ version and how to run it.
   kalphites and scarabs; **of corruption**'s every sixth stab is Wrath of Amascut, after which
   what it hit takes 25% more for 6 seconds; **of the sun** heals you on each kill, hits a quarter
   harder below a quarter of your hitpoints, and every fortieth stab is Tumeken's Light, healing
-  you to full; and **of amascut** has all of it but Tumeken's Light. You carry one keris at most,
+  you to full (its slot on the HUD counts the stabs towards it, and turns gold when the next is
+  the Light); and **of amascut** has all of it but Tumeken's Light. You carry one keris at most,
   so they can't be stacked. It's the one shared weapon that's Rare, so it comes with a Rare's
   bonus damage, and a ranged or magic adventurer who starts with a Common or Uncommon weapon holds
   the keris once they take it (the rarest weapon you carry is the one in your hand).

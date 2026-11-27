@@ -777,6 +777,24 @@ export function getShownHp(hp: number): number {
     return hp > 0 ? Math.max(1, Math.round(hp)) : 0;
 }
 
+// A special that comes on fewer attacks than this goes round every second or two, so the HUD
+// leaves its count out: it's for the long ones a player times things round (Tumeken's Light)
+export const SPECIAL_COUNTER_MIN = 10;
+
+// The hero's weapons whose special comes on a long count, by id: how many attacks towards it, of
+// how many (HudNumbers.specials). Read only, from the hero shown (the local player in co-op).
+export function getSpecialCounts(sim: Sim): HudNumbers["specials"] {
+    let counts: HudNumbers["specials"];
+    for (const weapon of sim.weapons) {
+        const every = sim.specialEvery(weapon);
+        if (every !== undefined && (weapon.def.special?.every ?? 0) >= SPECIAL_COUNTER_MIN) {
+            counts ??= {};
+            counts[weapon.def.id] = { count: weapon.uses % every, every };
+        }
+    }
+    return counts;
+}
+
 // The first of the map's objectives that isn't done (MapDef.objectives), with how many of its
 // lairs are beaten
 export function getObjectiveView(sim: Sim): HudNumbers["objective"] {
@@ -5593,6 +5611,7 @@ export class GameClient implements GameFrameHandler {
             platinum: Math.floor(sim.platinum + 1e-6),
             dps: this.shownDps,
             weaponDamage,
+            specials: getSpecialCounts(sim),
             otherDps: meter.otherPerSecond,
             buffs: getBuffViews(sim),
             boss,

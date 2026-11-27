@@ -5,6 +5,11 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- A special attack counter, by Okaeri: the Keris partisan of the sun's slot on the HUD counts the
+  stabs towards Tumeken's Light, and turns gold when the next one is it.
+
 ### Fixed
 
 - Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it

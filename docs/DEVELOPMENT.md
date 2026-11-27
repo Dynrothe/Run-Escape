@@ -2651,6 +2651,11 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   `stepPlayer`, so `hp` is rounded for the number and `hpShare` (`getHpShare`, to a thousandth)
   fills the bar.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
+  A weapon whose special's `every` is `SPECIAL_COUNTER_MIN` or more (Tumeken's Light, not the
+  godswords' every third) shows its count on its HUD slot: `getSpecialCounts` reads each
+  weapon's `uses` against `Sim.specialEvery`, which `takeSpecial` uses too, into
+  `HudNumbers.specials`, and `SpecialCount` draws it, gold at `every - 1`, when the next attack
+  in reach is the special. It's the shown hero's, so a co-op player sees their own.
   `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
   `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the

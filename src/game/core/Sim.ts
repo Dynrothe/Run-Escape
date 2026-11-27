@@ -21350,10 +21350,10 @@ export class Sim {
         level: WeaponDef["levels"][number],
     ): SpecialAttackDef | undefined {
         const special = weapon.def.special;
-        if (!special) {
+        const every = this.specialEvery(weapon);
+        if (!special || every === undefined) {
             return undefined;
         }
-        const every = special.every * (this.invoked("overly_draining") ? 2 : 1);
         if (weapon.uses % every !== every - 1) {
             weapon.uses++;
             return undefined;
@@ -21363,6 +21363,13 @@ export class Sim {
         }
         weapon.uses++;
         return special;
+    }
+
+    // How many attacks a weapon's special comes every this run (Overly Draining doubles it), none
+    // without one. Its attacks towards the next are weapon.uses % this: the HUD reads it too.
+    specialEvery(weapon: WeaponState): number | undefined {
+        const special = weapon.def.special;
+        return special && special.every * (this.invoked("overly_draining") ? 2 : 1);
     }
 
     // Something a melee weapon at this level would hit
