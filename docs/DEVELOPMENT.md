@@ -498,10 +498,10 @@ gh variable set ANDROID_RELEASE_ENABLED --body true
 Keep the `.jks` and its password somewhere other than this computer, and out of the repository
 (`.gitignore` has `*.jks`). With `ANDROID_RELEASE_ENABLED` set, the release's `android` job checks
 and unpacks the desktop game zip, builds the APK, and signs and checks it with
-`scripts/android/sign-apk.py`; the draft then carries `Run-Escape-<version>-android.apk`. If that
-job fails, there's no draft at all, rather than one without the APK. Without the variable, releases
-are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
-environment variables.
+`scripts/android/sign-apk.py`; the release then carries `Run-Escape-<version>-android.apk`. If
+that job fails, there's no release at all, rather than one without the APK. Without the variable,
+releases are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three
+as environment variables.
 
 **Updates from GitHub.** The APK is only published on this repository's releases, never in an app
 store. `AppUpdater.java` checks the public GitHub releases API once when the app opens, off the UI
@@ -644,8 +644,8 @@ request itself, and WebSockets are kept to the relay by the `Content-Security-Po
 The launcher only gets it in a new download, so players on an older one keep playing without
 Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.
 Desktop and web players share rooms only on the same build. A launcher with `GAME_SITE_URL` keeps
-to the website's (Following the website); without it, publish a release and deploy the website
-from the same commit.
+to the website's (Following the website); without it, a release goes out as soon as its build
+does (Releases), so deploy the website from the same commit straight after.
 
 The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
@@ -716,7 +716,7 @@ Interception only works reliably for one session per process, so don't add a sec
 The launcher updates the game's files by itself, not the launcher. At launch:
 
 1. It asks GitHub's API for the latest published release of Dynrothe/Run-Escape, with no token and
-   a 5 second limit. Drafts aren't returned, so publishing is what lets players have it.
+   a 5 second limit. Drafts aren't returned, so players have a release once it's published.
 2. If the release's `game-manifest.json` has a newer version than the game it has, it shows a small
    window, downloads `game-<version>.zip`, checks its sha256, extracts it to a temporary folder and
    renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
@@ -812,34 +812,41 @@ new launcher, and existing players keep working.
 
 `.github/workflows/release.yml` runs on every push to `main`, and stops straight away unless
 `package.json`'s version has no release yet, drafts included. So a merge that doesn't change the
-version does nothing, and neither does one while a draft for this version is waiting. The Actions
-tab's Run workflow button (`workflow_dispatch`) does the same but rebuilds a waiting draft, and it
-only appears once the workflow's on `main`.
+version does nothing, and neither does one while a draft for this version is waiting (left by a
+publish cut off mid-upload, or made by hand). The Actions tab's Run workflow button
+(`workflow_dispatch`) does the same but rebuilds a waiting draft and publishes it, and it only
+appears once the workflow's on `main`.
 
 The actions it uses are pinned to commits, with the version in a comment beside each. Dependabot
 (`.github/dependabot.yml`) opens a pull request when one has a new release, so don't move them by
 hand.
 
 It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
-`GAME_CACHE_NAME`. The draft is tagged `v<version>`, with notes from that version's section of
+`GAME_CACHE_NAME`. The release is tagged `v<version>`, with notes from that version's section of
 `CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`,
 `Run-Escape-<version>-linux-x64.AppImage`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
 [GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
 the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
-to the zip, the AppImage, and the APK when it's built. The links only work once the draft is
-published, so the `publish` job links the names it uploads: a renamed file fails the upload rather
+to the zip, the AppImage, and the APK when it's built. The notes are written before anything's
+uploaded, so the `publish` job links the names it uploads: a renamed file fails the upload rather
 than leaving a dead link.
 
 The AppImage comes from `build-linux`, on Ubuntu beside the Windows job: the same steps (tests
 included) from the same commit, so its game has the same build id, then `desktop:dist:linux`. It
-uploads only the AppImage: the game zips, chunks and manifest are the Windows job's. The draft
-waits for both, so a failed Linux build means no draft at all, as a failed Windows one does.
+uploads only the AppImage: the game zips, chunks and manifest are the Windows job's. The release
+waits for both, so a failed Linux build means no release at all, as a failed Windows one does.
 electron-builder names an AppImage's arch `x86_64`, so `electron-builder.yml` writes `x64` into
 its name itself.
-**Publishing the draft by hand is what releases it to players**, and the tag only exists from then
-on. A version needs its own section in `CHANGELOG.md`, or the build fails.
+**The `publish` job publishes the release, and players get it from then on**: the Windows and
+Linux apps and the Android app take it the next time they open, unless they keep to the website
+(Following the website). `gh` uploads the files to a draft and publishes that once they're all up,
+and deletes the draft if an upload fails, so a release is never out missing files. The tag only
+exists once it's published. Co-op rooms only take players on the host's build, so until the
+website is deployed from the same commit, app and website players can't play together: deploy it
+as soon as the workflow's done. A version needs its own section in `CHANGELOG.md`, or the build
+fails.
 
 The app isn't signed, so Windows shows a SmartScreen warning the first time it's run (More info,
 then Run anyway). Unzip it first: running it from inside the zip fails.
