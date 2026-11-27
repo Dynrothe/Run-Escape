@@ -2179,8 +2179,6 @@ export type CombatRules = {
     noPassives?: boolean;
     // No casket gear put on
     noGear?: boolean;
-    // No Skills upgrades on the adventurer's page, and nothing in the Armoury
-    noUpgrades?: boolean;
     // A raid: no teleporter used; no raid points spent at the supply chest, and no supply used
     // (the Tombs of Amascut's, from the Helpful Spirit)
     noTeleports?: boolean;

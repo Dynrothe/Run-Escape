@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Bare Essentials Combat Achievement is gone: Armoury upgrades can't be undone, so most players
+  could never do it. The tiers' rewards need a few points fewer to match.
+
 ## 0.37.0 - 2026-11-26
 
 ### Added
