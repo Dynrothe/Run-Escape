@@ -14798,12 +14798,18 @@ export class Sim {
             (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
         // Lanes (BulletPatternDef.gapStep) are as they are, whatever the mode
         const lanes = pattern.shape === "wall" && pattern.gapStep !== undefined;
-        const count =
-            closed || lanes ? pattern.count : Math.round(pattern.count * this.bulletScale);
-        const arc = Math.min(
+        let count = closed || lanes ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        let arc = Math.min(
             Math.PI * 2,
             ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
         );
+        // A spread no wider than its maxArc: its bullets closer together instead
+        if (pattern.maxArc !== undefined && arc > pattern.maxArc) {
+            arc = pattern.maxArc;
+            if (pattern.count % 2 === 1 && count % 2 === 0) {
+                count--;
+            }
+        }
         return { count, arc };
     }
 
