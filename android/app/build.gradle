@@ -109,6 +109,14 @@ android {
         buildConfigField 'String', 'RUN_ANALYTICS_URL', groovy.json.JsonOutput.toJson(runAnalyticsUrl)
         buildConfigField 'String', 'CLOUD_SAVE_URL', groovy.json.JsonOutput.toJson(cloudSaveUrl)
         buildConfigField 'String', 'GAME_SITE_URL', groovy.json.JsonOutput.toJson(gameSiteUrl)
+        // GeckoView bundles its own native engine per ABI, which is most of this APK's size (the
+        // old WebView-based build had none of this cost, since it only used the system's own
+        // WebView). Every real device this app targets is arm64 (including the unsupported-
+        // WebView devices this port exists for, like the Retroid Pocket 5/6), so armeabi-v7a and
+        // x86_64 are dropped entirely rather than left in as dead weight nobody installs.
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     buildFeatures {
@@ -128,8 +136,20 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (hasSigning) signingConfig signingConfigs.release
+        }
+        debug {
+            // CI and manual test installs both build the debug variant (assembleDebug), so R8
+            // is enabled here too, not just on release - otherwise this cost cutting would never
+            // actually apply to the APK anyone installs. Stack traces stay readable through
+            // adb logcat because debuggable builds keep line numbers by default; only identifier
+            // names get shortened.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -142,6 +162,18 @@ android {
         // The slim cache's chunks (caches/chunks/*.bin) are compressed already. A match is on the
         // end of a file's name.
         noCompress += ['bin', 'wasm']
+    }
+
+    packagingOptions {
+        jniLibs {
+            // AGP stores native libraries (lib/*/*.so) uncompressed by default on API 23+, so
+            // Android can mmap them straight out of the APK instead of extracting them to disk
+            // first - a real trade-off (faster install, no extra on-device storage, but a bigger
+            // download). GeckoView's libxul.so alone is ~155MB and was taking its full size in
+            // the APK at 0% compression; forcing legacy (compressed) packaging trades a slightly
+            // slower first install for a meaningfully smaller download, which matters more here.
+            useLegacyPackaging true
+        }
     }
 }
 
