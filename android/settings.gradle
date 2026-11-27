@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // GeckoView: not published to Maven Central or Google's repo, only Mozilla's own.
+        maven { url 'https://maven.mozilla.org/maven2/' }
     }
 }
 rootProject.name = 'RunEscape'

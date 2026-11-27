@@ -95,14 +95,14 @@ if (!hasSigning && signingKeys.any { releaseSigning[it] }) {
 
 android {
     namespace 'io.jere.run_escape'
-    compileSdk 36
-    buildToolsVersion '36.0.0'
+    compileSdk 37
+    buildToolsVersion '37.0.0'
 
     defaultConfig {
         // Android players' saves belong to this: never change it (see Android in docs/DEVELOPMENT.md)
         applicationId 'io.jere.run_escape'
-        minSdk 26
-        targetSdk 35
+        minSdk 26  // GeckoView requires at least 26
+        targetSdk 37
         versionCode gameVersionCode.toInteger()
         versionName gamePackage.version
         buildConfigField 'String', 'COOP_URL', groovy.json.JsonOutput.toJson(coopUrl)
@@ -147,7 +147,13 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.17.0'
+    // Still used for GamePathHandler (WebViewAssetLoader.PathHandler/AssetsPathHandler/
+    // InternalStoragePathHandler): convenience path-resolution utilities, reused as-is by
+    // LoopbackServer. No android.webkit.WebView instance is ever created.
     implementation 'androidx.webkit:webkit:1.18.0'
+    // GeckoView: bundles its own browser engine, so it needs no system WebView at all -
+    // the fix for devices with a missing, outdated, or non-Google-certified one.
+    implementation 'org.mozilla.geckoview:geckoview:161.0.20261118180411'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
 }
