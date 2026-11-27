@@ -562,8 +562,8 @@ export function CardFace({
     );
 }
 
-// A card face down: the deck's own back, the same for every card. In the album, a card not found
-// yet shows its back with its number, so what's missing can be told apart.
+// A card face down: the deck's own back, on the same plate as a face. In the album, a card not
+// found yet shows its back with its number on it, so what's missing can be told apart.
 export function CardBack({
     size,
     card,
@@ -575,13 +575,12 @@ export function CardBack({
     large?: boolean;
 }): JSX.Element {
     return (
-        <span className={`ui-tcg-${size} ui-tcg-back` + (card ? " ui-tcg-missing" : "")}>
-            <img
-                className="ui-tcg-back-art"
-                src={large || size === "big" ? cardBackLarge : cardBackSmall}
-                alt=""
-                draggable={false}
-            />
+        <span
+            className={`ui-tcg ui-tcg-${size} ui-tcg-back` + (card ? " ui-tcg-missing" : "")}
+            style={{
+                backgroundImage: `url(${large || size === "big" ? cardBackLarge : cardBackSmall})`,
+            }}
+        >
             {card && <span className="ui-tcg-back-number">{cardNumber(card)}</span>}
         </span>
     );

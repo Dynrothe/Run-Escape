@@ -651,10 +651,16 @@ The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, s
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
 `desktop/`, apart from the game, which doesn't know it's in an app.
 
+The Linux app is the same app as a single AppImage (`linux` in `electron-builder.yml`), x64 only:
+made executable, it runs from anywhere, with saves and game updates in `~/.config/Run Escape`
+(`app.getPath("appData")`). The release workflow builds it on Ubuntu (`build-linux`, under
+Releases).
+
 ```
 bun run build && bun run slim-cache
-bun run desktop         # the app, on this build, with no update check
-bun run desktop:dist    # everything a release carries, in release/
+bun run desktop             # the app, on this build, with no update check
+bun run desktop:dist        # everything a release carries, in release/
+bun run desktop:dist:linux  # the same with the AppImage in place of the Windows zip (on Linux)
 ```
 
 `desktop:dist` stops if `dist/caches` isn't the slim cache made for this build. It needs Node
@@ -817,21 +823,30 @@ hand.
 
 It builds on Windows, with the OSRS cache kept between runs by `actions/cache` under
 `GAME_CACHE_NAME`. The release is tagged `v<version>`, with notes from that version's section of
-`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
+`CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`,
+`Run-Escape-<version>-linux-x64.AppImage`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
 [GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
 the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
-to the zip, and to the APK when it's built. The notes are written before anything's uploaded, so
-the `publish` job links the names it uploads: a renamed file fails the upload rather than leaving a
-dead link.
-**The `publish` job publishes the release, and players get it from then on**: the Windows launcher
-and the Android app take it the next time they open, unless they keep to the website (Following
-the website). `gh` uploads the files to a draft and publishes that once they're all up, and deletes
-the draft if an upload fails, so a release is never out missing files. The tag only exists once
-it's published. Co-op rooms only take players on the host's build, so until the website is deployed
-from the same commit, app and website players can't play together: deploy it as soon as the
-workflow's done. A version needs its own section in `CHANGELOG.md`, or the build fails.
+to the zip, the AppImage, and the APK when it's built. The notes are written before anything's
+uploaded, so the `publish` job links the names it uploads: a renamed file fails the upload rather
+than leaving a dead link.
+
+The AppImage comes from `build-linux`, on Ubuntu beside the Windows job: the same steps (tests
+included) from the same commit, so its game has the same build id, then `desktop:dist:linux`. It
+uploads only the AppImage: the game zips, chunks and manifest are the Windows job's. The release
+waits for both, so a failed Linux build means no release at all, as a failed Windows one does.
+electron-builder names an AppImage's arch `x86_64`, so `electron-builder.yml` writes `x64` into
+its name itself.
+**The `publish` job publishes the release, and players get it from then on**: the Windows and
+Linux apps and the Android app take it the next time they open, unless they keep to the website
+(Following the website). `gh` uploads the files to a draft and publishes that once they're all up,
+and deletes the draft if an upload fails, so a release is never out missing files. The tag only
+exists once it's published. Co-op rooms only take players on the host's build, so until the
+website is deployed from the same commit, app and website players can't play together: deploy it
+as soon as the workflow's done. A version needs its own section in `CHANGELOG.md`, or the build
+fails.
 
 The app isn't signed, so Windows shows a SmartScreen warning the first time it's run (More info,
 then Run anyway). Unzip it first: running it from inside the zip fails.
@@ -1813,8 +1828,10 @@ involved.
   the item drawn from its model at the card's size (`ItemIcon`'s `large`). A face-down card is a
   picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape:
   `scripts/cards/make-back.ts` fits it to the front's plate, at the fronts' sizes, so a card
-  has one outline face up and face down. A
-  pack opens on a playmat that fills the screen (`PackWindow`): its cards in a deck, each press
+  has one outline face up and face down. In the album, a missing card's number is laid on its
+  back's cloth, level with a face's, so it takes no room from the picture and every slot is a
+  card tall (a row with a gap the same height as one without). A pack opens on a playmat that
+  fills the screen (`PackWindow`): its cards in a deck, each press
   dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`); the
   row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
   the window), not below a size its words can be read at where the height allows, and overlaps the
@@ -2078,9 +2095,10 @@ side. Armour takes at most `ARMOR_CAP` of their hits (`BossDef.armorCap`, looked
 `damagePlayer`, so it holds for a stomp, a pool or a stare too; a ground mark keeps its boss's id
 for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` times their bullets
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
-width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
-spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it often dies to the Maiden. It makes for a closing ring's way out only
+width, a wall's or closing ring's gap grows with the count, a spread fans out wider (up to its
+`maxArc`, past which its bullets close up instead), and a ring or spiral with no gap keeps its
+count. Their hitpoints (each room's `bossHp`) are tuned to players' clears, not the bot's: it often
+dies to the Maiden. It makes for a closing ring's way out only
 with `DODGE=1` (`cageGap`), so sim a change to the rings with that.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
@@ -2338,7 +2356,13 @@ bring a player through a wall in front of them.
 
 The silhouette that shows a player through scenery is pulled nearer the same way, by
 `SILHOUETTE_DEPTH_BIAS` (8 units): a boot dips a few units into the ground as it steps, and without
-it the ground over that dip got the silhouette's pale colour, a rim round the feet.
+it the ground over that dip got the silhouette's pale colour, a rim round the feet. A running
+stride dips further, and can reach uphill before the player's middle does, so
+`GameView.strideGroundRise` takes the highest ground three quarters of a tile round them (and a
+Wardens' floor ramp's rise) as `silhouetteGroundRise`. In `actor.vert.glsl` a silhouette vertex
+below that height is depth-tested where its screen ray meets it, so the ground covers the boot
+without painting it white, while a wall in front still shows it. A raised platform beside the
+player isn't counted, so it can still hide them.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
@@ -2656,6 +2680,11 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   `stepPlayer`, so `hp` is rounded for the number and `hpShare` (`getHpShare`, to a thousandth)
   fills the bar.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
+  A weapon whose special's `every` is `SPECIAL_COUNTER_MIN` or more (Tumeken's Light, not the
+  godswords' every third) shows its count on its HUD slot: `getSpecialCounts` reads each
+  weapon's `uses` against `Sim.specialEvery`, which `takeSpecial` uses too, into
+  `HudNumbers.specials`, and `SpecialCount` draws it, gold at `every - 1`, when the next attack
+  in reach is the special. It's the shown hero's, so a co-op player sees their own.
   `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
   `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the

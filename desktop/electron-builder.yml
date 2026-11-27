@@ -1,4 +1,5 @@
-# The Windows zip: Run Escape.exe, the Electron runtime and the game. bun run desktop:dist makes it.
+# The Windows zip and Linux AppImage: Run Escape.exe/AppImage, the Electron runtime and the game.
+# bun run desktop:dist (Windows) and bun run desktop:dist:linux make them.
 # appId and productName don't decide where saves are: that's main.ts.
 appId: com.dynrothe.run-escape
 productName: Run Escape
@@ -28,4 +29,15 @@ win:
         - target: zip
           arch: x64
     artifactName: Run-Escape-${version}-win-${arch}.${ext}
+linux:
+    icon: desktop/icon.png
+    # AppImage only: a single portable file, no distro-specific packaging to maintain.
+    target:
+        - target: AppImage
+          arch: x64
+    # ${arch} resolves to x86_64 for AppImage (electron-builder's Linux-arch naming), not x64 as
+    # it does for win's zip: hardcoded so both artifacts' names agree with the rest of the release
+    # tooling (release.yml, package.json) and with the Windows filename's own x64 convention.
+    artifactName: Run-Escape-${version}-linux-x64.${ext}
+    category: Game
 publish: null

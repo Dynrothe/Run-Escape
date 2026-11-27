@@ -43,7 +43,7 @@ uniform int u_instanceOffset;
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
 //  4: where the frame's positions start in u_positions, -1 for a frame baked whole, and how
 //     much nearer the camera each priority is drawn (tiles, 0 for none: a player's layers),
-//     and the silhouette's depth bias in tiles
+//     the silhouette's depth bias, and the terrain rise under a hero's feet (-1 to skip), in tiles
 uniform highp sampler2D u_actorData;
 
 // The page's frames that share a mesh: each vertex's position, in model units as decodeVertex
@@ -194,6 +194,17 @@ void main() {
     // sides, which layers would bring out over it. Past MAX_LAYER they're a helm's trims, which
     // liftDecals.ts brings out instead.
     float lift = data4.z;
+    float burial = worldPos.y - data0.y + data4.w;
+    if (data4.w >= 0.0 && burial > 0.0) {
+        // Test the buried part of a stride at ground depth on the same screen ray.
+        // A wall in front of the ground can still show the whole silhouette.
+        vec3 toEye = u_projectionMatrix[3][3] == 0.0 ? viewPos.xyz / viewPos.z : vec3(0.0, 0.0, 1.0);
+        float risePerDepth = -dot(u_viewMatrix[1].xyz, toEye);
+        if (risePerDepth > 0.0) {
+            // A grazing ray may meet that height beyond the camera.
+            lift += min(burial / risePerDepth, max(0.0, -viewPos.z * 0.5));
+        }
+    }
     if (layerDepth > 0.0) {
         float priority = float(vertex.priority) - 1.0;
         float layer = priority >= LATE_PRIORITY ? LATE_LAYER : min(priority, MAX_LAYER);

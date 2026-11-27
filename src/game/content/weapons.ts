@@ -3120,6 +3120,11 @@ export function weaponName(weapon: WeaponDef): string {
     return tr(`weapon.${weapon.id}.name`, weapon.name);
 }
 
+export function weaponSpecialName(weapon: WeaponDef): string | undefined {
+    const name = weapon.special?.name;
+    return name === undefined ? undefined : tr(`weapon.${weapon.id}.special.name`, name);
+}
+
 export function weaponDescription(weapon: WeaponDef): string {
     return tr(`weapon.${weapon.id}.desc`, weapon.description);
 }

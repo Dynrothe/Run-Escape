@@ -495,6 +495,10 @@ export type BulletPatternDef = {
     turn?: number;
     // Radians from one side of a spread to the other
     arc?: number;
+    // Spreads: the widest hard mode's extra bullets fan it out to (Sim.volleyShape), so there's
+    // still a way round its end; past it they close up instead, an odd count kept odd so one
+    // still goes down the aim
+    maxArc?: number;
     // Radians a second each bullet curves by as it flies
     curve?: number;
     // Rings and spirals: radians left empty in each volley, from the ring's own
@@ -2179,8 +2183,6 @@ export type CombatRules = {
     noPassives?: boolean;
     // No casket gear put on
     noGear?: boolean;
-    // No Skills upgrades on the adventurer's page, and nothing in the Armoury
-    noUpgrades?: boolean;
     // A raid: no teleporter used; no raid points spent at the supply chest, and no supply used
     // (the Tombs of Amascut's, from the Helpful Spirit)
     noTeleports?: boolean;

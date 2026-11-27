@@ -71,6 +71,7 @@ import {
     Thrall,
     Visitor,
 } from "../core/entities";
+import { RAMP_NONE } from "../core/floorLayout";
 import type { RealmHole } from "../core/rules/RealmRule";
 import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
@@ -819,6 +820,33 @@ export class GameView {
     private ground(sim: Sim, x: number, y: number): number {
         const lift = sim.floor ? sim.floor.liftAt(x, y) : 0;
         return sim.grid.getHeight(x, y) / 128 - lift;
+    }
+
+    // A running boot can reach uphill before the hero's centre reaches the higher ground.
+    private strideGroundRise(sim: Sim, x: number, y: number, scale: number): number {
+        const reach = 0.75 * scale;
+        const middle = sim.grid.getHeight(x, y);
+        const highest = Math.min(
+            middle,
+            sim.grid.getHeight(x - reach, y - reach),
+            sim.grid.getHeight(x + reach, y - reach),
+            sim.grid.getHeight(x - reach, y + reach),
+            sim.grid.getHeight(x + reach, y + reach),
+        );
+        const groundRise = (middle - highest) / 128;
+        const floor = sim.floor;
+        if (floor?.hasLevels) {
+            // A ramp is part of the ground a hero can stand on. A nearby pillar can hide them.
+            const i = floor.index(Math.floor(x), Math.floor(y));
+            if (i >= 0 && floor.layout.mask[i] && floor.layout.ramp[i] !== RAMP_NONE) {
+                const ramp = floor.layout.ramp[i];
+                const a = floor.edgeHeight(i, ramp);
+                const b = floor.edgeHeight(i, (ramp + 2) & 3);
+                const uphill = Math.max(a, b) - floor.liftAt(x, y);
+                return groundRise + Math.min(uphill, Math.abs(a - b) * reach);
+            }
+        }
+        return groundRise;
     }
 
     // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
@@ -2691,6 +2719,7 @@ export class GameView {
         const big = sim.heroes[hero].characterId === "avian_assaulter" ? AVIAN_SCALE : 1;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
+            silhouetteGroundRise: this.strideGroundRise(sim, x, y, big),
             tint,
             flash,
             ...(big !== 1 && { scale: big }),
@@ -2895,6 +2924,7 @@ export class GameView {
         const { x, y } = pose;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
+            silhouetteGroundRise: this.strideGroundRise(sim, x, y, look.scale ?? 1),
             tint,
             flash,
             scale: look.scale ?? 1,

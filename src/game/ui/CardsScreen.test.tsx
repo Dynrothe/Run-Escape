@@ -4,7 +4,15 @@ import { useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
-import { CARDS, CARD_BY_ID, PACK_BY_ID, PACK_SIZE, PackDef, packName } from "../content/cards";
+import {
+    CARDS,
+    CARD_BY_ID,
+    PACK_BY_ID,
+    PACK_SIZE,
+    PackDef,
+    cardNumber,
+    packName,
+} from "../content/cards";
 import { getMap, mapName } from "../content/maps";
 import { buyCardPack, openCardPack, packPool } from "../core/cards";
 import { SaveData, createSave } from "../core/save";
@@ -61,6 +69,14 @@ test("keeps a card not found face down, and shows a found one with its versions 
     expect(screen.getAllByRole("button", { name: /not found yet$/ })).toHaveLength(
         CARDS.length - 1,
     );
+    const missing = CARDS.find((card) => card.id !== scimitar.id)!;
+    // A face's plate, its number laid on it: nothing in the slot beside it, so every slot is a
+    // card tall and the picture isn't squeezed
+    const number = screen.getByText(cardNumber(missing));
+    const slot = number.closest("button")!;
+    expect(slot.children).toHaveLength(1);
+    expect(slot.firstElementChild).toHaveClass("ui-tcg", "ui-tcg-small", "ui-tcg-back");
+    expect(slot.firstElementChild).toContainElement(number);
     fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${scimitar.name()}, `) }));
     expect(screen.getByRole("dialog", { name: scimitar.name() })).toHaveTextContent(
         "Yours: Common x3 and Rare x1",
