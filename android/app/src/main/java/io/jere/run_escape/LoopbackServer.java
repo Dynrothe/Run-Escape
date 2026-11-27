@@ -104,6 +104,10 @@ final class LoopbackServer extends Thread {
         while (running) {
             try {
                 Socket client = socket.accept();
+                try {
+                    client.setTcpNoDelay(true);
+                } catch (IOException ignored) {
+                }
                 // One thread per request: an export waiting on the document picker must never
                 // block the game's own asset loads.
                 new Thread(() -> handle(client)).start();
@@ -116,40 +120,46 @@ final class LoopbackServer extends Thread {
     private void handle(Socket client) {
         try (Socket c = client) {
             InputStream rawIn = c.getInputStream();
-            byte[] headerBytes = readHeaderBlock(rawIn);
-            if (headerBytes == null) return;
-            String headerText = new String(headerBytes, StandardCharsets.US_ASCII);
-            String[] lines = headerText.split("\r\n");
-            if (lines.length == 0) return;
-            String[] parts = lines[0].split(" ");
-            if (parts.length < 2) return;
-            String method = parts[0];
-            String path = parts[1];
+            // HTTP/1.1 keep-alive: GeckoView's connection pool expects to reuse connections: a
+            // server that closes every one (HTTP/1.0 "Connection: close") races its own eager
+            // speculative connections against in-flight writes, which showed up as intermittent
+            // broken-pipe failures on this server's larger responses.
+            while (running) {
+                byte[] headerBytes = readHeaderBlock(rawIn);
+                if (headerBytes == null) return; // client closed the connection
+                String headerText = new String(headerBytes, StandardCharsets.US_ASCII);
+                String[] lines = headerText.split("\r\n");
+                if (lines.length == 0) return;
+                String[] parts = lines[0].split(" ");
+                if (parts.length < 2) return;
+                String method = parts[0];
+                String path = parts[1];
 
-            int contentLength = 0;
-            for (int i = 1; i < lines.length; i++) {
-                String line = lines[i];
-                if (line.toLowerCase(java.util.Locale.ROOT).startsWith("content-length:")) {
-                    try {
-                        contentLength = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
-                    } catch (NumberFormatException ignored) {
+                int contentLength = 0;
+                for (int i = 1; i < lines.length; i++) {
+                    String line = lines[i];
+                    if (line.toLowerCase(java.util.Locale.ROOT).startsWith("content-length:")) {
+                        try {
+                            contentLength = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
+                        } catch (NumberFormatException ignored) {
+                        }
                     }
                 }
-            }
 
-            OutputStream out = c.getOutputStream();
-            if ("POST".equals(method) && EXPORT_PATH.equals(path)) {
-                byte[] body = readExactly(rawIn, contentLength);
-                handleExport(body, out);
-                return;
+                OutputStream out = c.getOutputStream();
+                if ("POST".equals(method) && EXPORT_PATH.equals(path)) {
+                    byte[] body = readExactly(rawIn, contentLength);
+                    handleExport(body, out);
+                    continue;
+                }
+                if (!"GET".equals(method)) {
+                    writeResponse(out, 405, "text/plain", null, "Method not allowed".getBytes(StandardCharsets.UTF_8));
+                    continue;
+                }
+                handleGet(path, out);
             }
-            if (!"GET".equals(method)) {
-                writeResponse(out, 405, "text/plain", null, "Method not allowed".getBytes(StandardCharsets.UTF_8));
-                return;
-            }
-            handleGet(path, out);
         } catch (IOException e) {
-            Log.w(TAG, "request handling failed", e);
+            Log.w(TAG, "request handling failed: " + e, e);
         }
     }
 
@@ -206,9 +216,7 @@ final class LoopbackServer extends Thread {
             return;
         }
 
-        WebResourceResponse response = assetPath.startsWith(GAME)
-                ? games.handle(assetPath.substring(GAME.length()))
-                : null;
+        WebResourceResponse response = assetPath.startsWith(GAME) ? games.handle(assetPath) : null;
         if (response == null) {
             writeResponse(out, 404, "text/plain", null, "Not found".getBytes(StandardCharsets.UTF_8));
             return;
@@ -235,6 +243,14 @@ final class LoopbackServer extends Thread {
                 + "if(r.ok&&window.NativeDownloads.onmessage){window.NativeDownloads.onmessage({data:'saved'});}"
                 + "});}};</script>";
         String page = new String(html, StandardCharsets.UTF_8);
+        // Vite marks the bundle's own <script>/<link> tags crossorigin for real web deployments
+        // (SRI, cross-origin error reporting). Everything here is served from one origin by this
+        // same loopback server, so it is never actually cross-origin - but GeckoView still runs
+        // the CORS-mode request path for a crossorigin-attributed tag, and that path has been
+        // observed closing the connection out from under this server's in-flight response for
+        // exactly these two tags (and no others) on this engine. Dropping the now-meaningless
+        // attribute avoids that path entirely.
+        page = page.replace(" crossorigin ", " ").replace(" crossorigin>", ">").replace(" crossorigin/>", "/>");
         int headEnd = page.indexOf("</head>");
         String withShim = headEnd >= 0
                 ? page.substring(0, headEnd) + shim + page.substring(headEnd)
@@ -297,7 +313,7 @@ final class LoopbackServer extends Thread {
     private void writeResponse(OutputStream out, int status, String contentType,
                                 Map<String, String> extraHeaders, byte[] body) throws IOException {
         StringBuilder headers = new StringBuilder();
-        headers.append("HTTP/1.0 ").append(status).append(' ').append(reason(status)).append("\r\n");
+        headers.append("HTTP/1.1 ").append(status).append(' ').append(reason(status)).append("\r\n");
         headers.append("Content-Type: ").append(contentType).append("\r\n");
         headers.append("Content-Length: ").append(body.length).append("\r\n");
         if (extraHeaders != null) {
@@ -305,7 +321,7 @@ final class LoopbackServer extends Thread {
                 headers.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
             }
         }
-        headers.append("Connection: close\r\n\r\n");
+        headers.append("Connection: keep-alive\r\n\r\n");
         out.write(headers.toString().getBytes(StandardCharsets.UTF_8));
         out.write(body);
         out.flush();

@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     private boolean awaitingGameLoad;
     private boolean destroyed;
     private int diagnosticGeneration;
+    private int navigationGeneration = -1;
     private AppUpdater updater;
     private SiteUpdater siteUpdater;
     private File siteGame;
@@ -447,11 +448,18 @@ public final class MainActivity extends Activity {
         @Override
         public void onTitleChange(GeckoSession session, String title) {
             if (destroyed || title == null || "pending".equals(title)) return;
+            // Guards against GeckoView re-firing onTitleChange for the same verdict (observed:
+            // a stray repeat title event re-triggering loadUri mid-load, cancelling the real
+            // game page's still-in-flight subresource fetches). Each diagnostic attempt gets
+            // one shot at starting the real game load, not more.
+            if (navigationGeneration == diagnosticGeneration) return;
             if ("passed".equals(title)) {
+                navigationGeneration = diagnosticGeneration;
                 diagnosticGeneration++;
                 awaitingGameLoad = true;
                 session.loadUri(gameOrigin + GAME_PATH);
             } else {
+                navigationGeneration = diagnosticGeneration;
                 showCompatibilityScreen(true);
             }
         }
