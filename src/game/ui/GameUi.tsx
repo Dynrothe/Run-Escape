@@ -23,6 +23,7 @@ import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
+import { importFromApp } from "../client/saveFile";
 import {
     BuffView,
     CombatTrackView,
@@ -799,13 +800,9 @@ function DiscordLink(): JSX.Element {
 function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
     const fileInput = useRef<HTMLInputElement>(null);
     const [confirm, confirmDialog] = useConfirm();
-    const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        // So picking the same file again still counts
-        e.target.value = "";
-        if (!file) {
-            return;
-        }
+    // Shared by both ways a file's text reaches this setting (GameUi.tsx's <input type=file> here,
+    // or the Android app's own picker through importFromApp - see saveFile.ts for why there are two)
+    const applyImportedText = async (text: string, fileName: string) => {
         // Nothing's being saved, so an import wouldn't be kept
         if (ui.saveBlock) {
             void confirm(
@@ -815,14 +812,14 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         }
         let save: SaveData;
         try {
-            save = importSave(await file.text(), GAME_VERSION);
+            save = importSave(text, GAME_VERSION);
         } catch (e) {
             void confirm(
                 messageOptions(
                     t("confirm.import.failed"),
                     e instanceof NewerSaveError
-                        ? t("settings.save.newer_version", { file: file.name })
-                        : t("settings.save.invalid_file", { file: file.name }),
+                        ? t("settings.save.newer_version", { file: fileName })
+                        : t("settings.save.invalid_file", { file: fileName }),
                 ),
             );
             return;
@@ -845,6 +842,15 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         if (replace) {
             client.replaceSave(save);
         }
+    };
+    const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        // So picking the same file again still counts
+        e.target.value = "";
+        if (!file) {
+            return;
+        }
+        await applyImportedText(await file.text(), file.name);
     };
     const lastCopy = ui.save.lastExported;
     return (
@@ -877,7 +883,14 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 disabled={ui.saveBlock !== undefined}
                 title={ui.saveBlock ? t("settings.save.import_disabled_title") : undefined}
                 onClick={(e) => {
-                    fileInput.current?.click();
+                    const fromApp = importFromApp();
+                    if (fromApp) {
+                        void fromApp.then((text) => {
+                            if (text != null) void applyImportedText(text, t("settings.save.import"));
+                        });
+                    } else {
+                        fileInput.current?.click();
+                    }
                     releaseFocus(e);
                 }}
             >

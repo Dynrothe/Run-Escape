@@ -22,10 +22,17 @@ function canUseShareSheet(file: File): boolean {
 }
 
 // The Android app puts this in its page (android/, MainActivity.java): a WebView can't download a
-// file itself, so the app asks the player where to keep it, and answers "saved" once it's written
+// file itself, so the app asks the player where to keep it, and answers "saved" once it's written.
+// importFile is the same idea the other way: GeckoView's own <input type=file> can't actually read
+// what the player picks (a GeckoView bug - FilePickerDelegate.sys.mjs's _getDOMFile fails on
+// Android's content:// document URIs with NS_ERROR_FILE_UNRECOGNIZED_PATH, confirmed against
+// GeckoView 161 on a real device; not specific to one content provider, since even this app's own
+// FileProvider URI hit the same error), so the app reads the picked file itself through Android's
+// own APIs and hands the text straight over instead.
 type AppDownloads = {
     postMessage(message: string): void;
     onmessage: ((event: { data: unknown }) => void) | null;
+    importFile?(): Promise<string | null>;
 };
 
 // What to do once the app says the file it was given last is written. The app takes one at a time.
@@ -64,4 +71,11 @@ export function saveFile(name: string, text: string, type: string, kept?: () => 
             }
         },
     );
+}
+
+// Undefined on every platform but the Android app (no bridge to ask): the setting that imports a
+// save calls this first and only falls back to its own <input type=file> when it gets undefined
+// back, rather than a promise.
+export function importFromApp(): Promise<string | null> | undefined {
+    return (globalThis as { NativeDownloads?: AppDownloads }).NativeDownloads?.importFile?.();
 }

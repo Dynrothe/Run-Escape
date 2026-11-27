@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The game's own loopback HTTP server (LoopbackServer.java) serves plain http://127.0.0.1 -
+    real COOP/COEP/CSP headers over a real socket, the same mechanism desktop/gameServer.ts uses
+    for the Electron app, not WebView's CROSS_ORIGIN_ISOLATED_ALLOWLIST escape hatch. The app's
+    usesCleartextTraffic="false" still applies to everything else: this is a narrow exception for
+    127.0.0.1 only, which never leaves the device.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

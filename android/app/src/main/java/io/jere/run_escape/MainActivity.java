@@ -12,16 +12,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.webkit.ValueCallback;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -29,65 +23,78 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.webkit.JavaScriptReplyProxy;
-import androidx.webkit.WebViewAssetLoader;
-import androidx.webkit.WebViewCompat;
-import androidx.webkit.WebViewFeature;
+import org.mozilla.geckoview.AllowOrDeny;
+import org.mozilla.geckoview.GeckoResult;
+import org.mozilla.geckoview.GeckoRuntime;
+import org.mozilla.geckoview.GeckoSession;
+import org.mozilla.geckoview.GeckoView;
+import org.mozilla.geckoview.WebRequestError;
 
-import org.json.JSONObject;
-import org.json.JSONTokener;
-
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 
-/** Runs the bundled game on a private, intercepted HTTPS origin. */
+/**
+ * Runs the bundled game under GeckoView, served from a real loopback HTTP origin
+ * (LoopbackServer) instead of WebView's intercepted appassets.androidplatform.net scheme.
+ * GeckoView has no system-WebView dependency at all: it bundles its own browser engine, so a
+ * device whose Android System WebView is missing, outdated, or not Google-certified (the
+ * problem this replaces WebView to fix) plays the game exactly the same as any other device.
+ */
 public final class MainActivity extends Activity {
-    private static final String ORIGIN = "https://appassets.androidplatform.net";
-    private static final String GAME_ROOT = "/assets/game/";
-    private static final String GAME_URL = ORIGIN + GAME_ROOT + "index.html";
-    private static final String CHECK_URL = ORIGIN + GAME_ROOT + "offline-check.html";
-    private static final String WORKER_URL = ORIGIN + GAME_ROOT + "offline-check-worker.js";
     private static final String RELEASES_URL = "https://github.com/Dynrothe/Run-Escape/releases";
-    private static final int WEB_FILE_PICKER = 100;
+    private static final String CHECK_PATH = "/game/offline-check.html";
+    private static final String GAME_PATH = "/game/index.html";
     private static final int EXPORT_SAVE = 102;
-    private static final int MAX_SAVE_BYTES = 2 * 1024 * 1024;
+    private static final int IMPORT_FILE = 103;
     // The names the game gives its files (src/game/client/GameClient.ts), such as
     // run-escape-save-unreadable.json
     private static final Pattern SAVE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.json");
     private static final String DEFAULT_SAVE_NAME = "run-escape-save.json";
-    // A save waiting for the document picker, kept on disk in case Android stops the app meanwhile
     private static final String PENDING_EXPORT = "pending-export.json";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RelayPolicy relayPolicy =
             new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL,
                     BuildConfig.CLOUD_SAVE_URL);
-    private WebView webView;
+    private GeckoRuntime runtime;
+    private GeckoSession session;
+    private GeckoView geckoView;
+    private LoopbackServer server;
     private FrameLayout root;
     private TextView loading;
     private Button menuButton;
-    private ValueCallback<Uri[]> webFileCallback;
-    private String pendingExport;
-    // The page that asked for the export, told once it's written
-    private JavaScriptReplyProxy exportReply;
+    // The import waiting on the document picker's result, completed (with the file's text, or
+    // null if the player cancelled) once it's read. Only ever touched on the UI thread; importFile()
+    // blocks a LoopbackServer worker thread on its own CompletableFuture, which this field is not.
+    private CompletableFuture<String> pendingImportResult;
+    // The export waiting on the document picker's result, completed once it's written. Only
+    // ever touched on the UI thread; exportSave() blocks a LoopbackServer worker thread on its
+    // own CompletableFuture, which this field is not.
+    private CompletableFuture<Boolean> pendingExportResult;
     private boolean gameReady;
+    private boolean awaitingGameLoad;
     private boolean destroyed;
     private int diagnosticGeneration;
+    private int navigationGeneration = -1;
+    // Once the diagnostic has passed and navigation to the real game has started, every further
+    // onTitleChange call belongs to the GAME's own page (its <title>Run Escape</title>, or any
+    // title the game sets later) - not to another diagnostic verdict. onTitleChange is a
+    // session-wide delegate, not scoped to the diagnostic page, so without this flag the game's
+    // own title change was falling through to the "diagnostic failed" branch and triggering the
+    // compatibility screen on every single launch, regardless of whether the game loaded fine.
+    private boolean pastDiagnostic;
     private AppUpdater updater;
     private SiteUpdater siteUpdater;
-    // The website's build being played (SiteGames), or null for the APK's game
     private File siteGame;
-    // Another build's ready (the website's, or the APK's own again): Restart game plays it
     private boolean siteReady;
+    private String gameOrigin;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -101,7 +108,6 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
         try {
-            // Saved state means it's only made again (Try again, Reopen), on the same visit
             updater = new AppUpdater(this, savedInstanceState == null);
         } catch (RuntimeException exception) {
             android.util.Log.i("AppUpdater", "Updates unavailable on this device", exception);
@@ -111,27 +117,16 @@ public final class MainActivity extends Activity {
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         }
 
-        try {
-            webView = new WebView(this);
-            WebView.setWebContentsDebuggingEnabled(false);
-            WebSettings settings = webView.getSettings();
-            settings.setJavaScriptEnabled(true);
-            settings.setDomStorageEnabled(true);
-            settings.setAllowFileAccess(false);
-            settings.setAllowContentAccess(true);
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-            settings.setMediaPlaybackRequiresUserGesture(false);
-            settings.setSupportZoom(false);
-            settings.setBuiltInZoomControls(false);
-            settings.setDisplayZoomControls(false);
-            settings.setUseWideViewPort(true);
-            settings.setLoadWithOverviewMode(true);
-            webView.setBackgroundColor(Color.BLACK);
-            webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            root.addView(webView, new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        buildGeckoView();
 
-            // Picked once, before the game loads: a build downloaded on this visit plays from the next
+        try (InputStream ignored = getAssets().open("game/index.html")) {
+            // All game files are packaged before making an installable release.
+        } catch (Exception exception) {
+            showMissingGameScreen();
+            return;
+        }
+
+        try {
             GamePathHandler games;
             try {
                 siteGame = SiteUpdater.pickGame(this);
@@ -141,65 +136,77 @@ public final class MainActivity extends Activity {
                 siteGame = null;
                 games = new GamePathHandler(this, null);
             }
-            WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
-                    .addPathHandler("/assets/", games)
-                    .build();
-            webView.setWebViewClient(new OfflineClient(assetLoader));
-            webView.setWebChromeClient(new OfflineChromeClient());
 
-            loading = new TextView(this);
-            loading.setText("Preparing your game…");
-            loading.setTextColor(Color.WHITE);
-            loading.setBackgroundColor(Color.BLACK);
-            loading.setTextSize(18);
-            loading.setGravity(Gravity.CENTER);
-            root.addView(loading, new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+            server = new LoopbackServer(this, games, relayPolicy, this::exportSave, this::importFile);
+            server.start();
+            gameOrigin = server.origin();
 
-            menuButton = new Button(this);
-            menuButton.setText("⋮");
-            menuButton.setTextSize(24);
-            menuButton.setTextColor(Color.WHITE);
-            menuButton.setBackgroundColor(0x66000000);
-            menuButton.setContentDescription("Game menu");
-            menuButton.setPadding(0, 0, 0, 0);
-            menuButton.setVisibility(View.GONE);
-            menuButton.setOnClickListener(v -> showGameMenu());
-            FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
-                    dp(40), dp(40), Gravity.TOP | Gravity.RIGHT);
-            buttonParams.setMargins(dp(6), dp(6), dp(6), dp(6));
-            root.addView(menuButton, buttonParams);
-
-            if (!WebViewFeature.isFeatureSupported(WebViewFeature.CROSS_ORIGIN_ISOLATED_ALLOWLIST)
-                    || !WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
-                    || !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-                showCompatibilityScreen(false);
-                return;
-            }
-            WebViewCompat.addWebMessageListener(webView, "NativeDownloads", Collections.singleton(ORIGIN),
-                    (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
-                        if (isMainFrame && ORIGIN.equals(sourceOrigin.toString())) {
-                            receiveDownload(message.getData(), replyProxy);
-                        }
-                    });
-            WebViewCompat.getProfile(webView).setCrossOriginIsolatedAllowlist(
-                    Collections.singleton(ORIGIN));
-            try (InputStream ignored = getAssets().open("game/index.html")) {
-                // All game files are packaged before making an installable release.
-            } catch (Exception exception) {
-                showMissingGameScreen();
-                return;
-            }
-            // Each time the activity's made, Try again and Reopen too: one stopped by them goes on
             try {
                 siteUpdater = new SiteUpdater(this, siteGame, this::onSiteGameReady);
             } catch (RuntimeException exception) {
                 android.util.Log.w("SiteUpdater", "Not keeping to the website", exception);
             }
-            startDiagnostic();
-        } catch (RuntimeException exception) {
-            showCompatibilityScreen(false);
+
+            LegacySaveMigrator.attemptIfNeeded(this, games, handler);
+
+            loadGame();
+        } catch (Exception exception) {
+            android.util.Log.e("MainActivity", "Could not start the game server", exception);
+            showCompatibilityScreen(true);
         }
+    }
+
+    private void buildGeckoView() {
+        runtime = GeckoRuntime.create(this);
+        session = new GeckoSession();
+        session.open(runtime);
+        session.setContentDelegate(new GameContentDelegate());
+        session.setNavigationDelegate(new GameNavigationDelegate());
+        session.setPromptDelegate(new GamePromptDelegate());
+        session.setProgressDelegate(new GameProgressDelegate());
+        session.setPermissionDelegate(new GamePermissionDelegate());
+        session.setSelectionActionDelegate(new GameSelectionActionDelegate());
+
+        geckoView = new GeckoView(this);
+        geckoView.setSession(session);
+        root.addView(geckoView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        loading = new TextView(this);
+        loading.setText("Preparing your game…");
+        loading.setTextColor(Color.WHITE);
+        loading.setBackgroundColor(Color.BLACK);
+        loading.setTextSize(18);
+        loading.setGravity(Gravity.CENTER);
+        root.addView(loading, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        menuButton = new Button(this);
+        menuButton.setText("⋮");
+        menuButton.setTextSize(24);
+        menuButton.setTextColor(Color.WHITE);
+        menuButton.setBackgroundColor(0x66000000);
+        menuButton.setContentDescription("Game menu");
+        menuButton.setPadding(0, 0, 0, 0);
+        menuButton.setVisibility(View.GONE);
+        menuButton.setOnClickListener(v -> showGameMenu());
+        FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
+                dp(40), dp(40), Gravity.TOP | Gravity.RIGHT);
+        buttonParams.setMargins(dp(6), dp(6), dp(6), dp(6));
+        root.addView(menuButton, buttonParams);
+    }
+
+    // Loads the diagnostic first (same check WebView used to run, now reporting through
+    // document.title - see LoopbackServer.diagnosticHtml - since GeckoView has no public
+    // generic evaluateJavascript to poll a JS variable the way WebView's did). The content
+    // delegate's onTitleChange below advances to the real game, or shows the failure screen.
+    private void loadGame() {
+        if (destroyed || session == null || gameOrigin == null) return;
+        gameReady = false;
+        diagnosticGeneration++;
+        if (loading != null) loading.setVisibility(View.VISIBLE);
+        if (menuButton != null) menuButton.setVisibility(View.GONE);
+        session.loadUri(gameOrigin + CHECK_PATH);
     }
 
     private void showMissingGameScreen() {
@@ -207,71 +214,32 @@ public final class MainActivity extends Activity {
         loading.setPadding(dp(24), dp(16), dp(24), dp(16));
     }
 
-    private void startDiagnostic() {
-        if (destroyed || webView == null) return;
-        gameReady = false;
-        diagnosticGeneration++;
-        if (loading != null) loading.setVisibility(View.VISIBLE);
-        if (menuButton != null) menuButton.setVisibility(View.GONE);
-        webView.loadUrl(CHECK_URL);
-    }
-
-    private void pollDiagnostic(int generation, int attempts) {
-        if (destroyed || generation != diagnosticGeneration || webView == null) return;
-        webView.evaluateJavascript("JSON.stringify(window.__offlineCheck || {state:'pending'})", value -> {
-            if (destroyed || generation != diagnosticGeneration) return;
-            try {
-                Object decoded = new JSONTokener(value).nextValue();
-                JSONObject result = new JSONObject((String) decoded);
-                String state = result.optString("state");
-                if ("passed".equals(state)) {
-                    diagnosticGeneration++;
-                    webView.loadUrl(GAME_URL);
-                    return;
-                }
-                if ("failed".equals(state) || attempts >= 100) {
-                    showCompatibilityScreen(true);
-                    return;
-                }
-            } catch (Exception ignored) {
-                if (attempts >= 100) {
-                    showCompatibilityScreen(true);
-                    return;
-                }
-            }
-            handler.postDelayed(() -> pollDiagnostic(generation, attempts + 1), 100);
-        });
-    }
-
     private void showCompatibilityScreen(boolean retryAvailable) {
         diagnosticGeneration++;
+        pastDiagnostic = false;
         gameReady = false;
         if (destroyed || root == null) return;
-        if (webView != null) webView.stopLoading();
+        if (session != null) session.stop();
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(dp(28), dp(16), dp(28), dp(16));
         panel.setBackgroundColor(Color.BLACK);
         TextView title = new TextView(this);
-        title.setText("Your game needs an updated WebView");
+        title.setText("Run Escape could not start");
         title.setTextColor(Color.WHITE);
         title.setTextSize(22);
         title.setGravity(Gravity.CENTER);
         panel.addView(title);
         TextView message = new TextView(this);
-        message.setText("Update Android System WebView and Chrome to version 152 or newer, "
-                + "then reopen Run Escape. Solo play works in airplane mode. "
-                + "Co-op needs an internet connection.");
+        message.setText("Something on this device stopped the game from starting (its graphics "
+                + "check failed, or its local server couldn't open). Trying again, or closing "
+                + "other recently-opened apps first, sometimes fixes this.");
         message.setTextColor(0xffcccccc);
         message.setTextSize(16);
         message.setGravity(Gravity.CENTER);
         message.setPadding(0, dp(12), 0, dp(12));
         panel.addView(message);
-        Button update = new Button(this);
-        update.setText("Update Android System WebView");
-        update.setOnClickListener(v -> openWebViewUpdate());
-        panel.addView(update);
         if (retryAvailable) {
             Button retry = new Button(this);
             retry.setText("Try again");
@@ -284,25 +252,6 @@ public final class MainActivity extends Activity {
         panel.addView(close);
         root.addView(panel, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-    }
-
-    private void openWebViewUpdate() {
-        String packageName = "com.google.android.webview";
-        try {
-            android.content.pm.PackageInfo info = WebView.getCurrentWebViewPackage();
-            if (info != null) packageName = info.packageName;
-        } catch (RuntimeException ignored) { }
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW,
-                    Uri.parse("market://details?id=" + packageName)));
-        } catch (ActivityNotFoundException exception) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW,
-                        Uri.parse("https://play.google.com/store/apps/details?id=" + packageName)));
-            } catch (ActivityNotFoundException ignored) {
-                toast("Update Android System WebView using your app store.");
-            }
-        }
     }
 
     private void showGameMenu() {
@@ -327,7 +276,7 @@ public final class MainActivity extends Activity {
                             // Made again, the activity serves the build that's ready
                             if (siteReady) recreate();
                             // The renderer can have gone while this menu was open
-                            else if (webView != null) webView.reload();
+                            else if (session != null) loadGame();
                             break;
                         case 3:
                             new AlertDialog.Builder(this).setTitle("Run Escape " + BuildConfig.VERSION_NAME)
@@ -406,162 +355,276 @@ public final class MainActivity extends Activity {
                 .setOnDismissListener(dialog -> hideSystemBars()).show();
     }
 
-    // The game hands over a file to keep (src/game/client/saveFile.ts): {name, text}. Its text is
-    // written exactly, protected newer or unreadable saves included. Imports stay in the game so its
-    // migration and save-lock checks remain in force.
-    private void receiveDownload(String message, JavaScriptReplyProxy reply) {
-        if (destroyed || !gameReady || isFinishing() || pendingExport != null) return;
+    // Called from LoopbackServer's per-request thread (never the UI thread): the game's
+    // fetch('/__native/export') only resolves once this returns, matching the old
+    // WebMessageListener reply contract (saveFile.ts's app.onmessage fires only once the file is
+    // written). Blocks that one request thread while the document picker is open; every other
+    // request (game assets) is served by its own thread, so nothing else stalls.
+    private boolean exportSave(String name, String text) {
+        if (destroyed || !gameReady) return false;
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        handler.post(() -> startExport(name, text, result));
         try {
-            JSONObject file = new JSONObject(message);
-            String text = file.getString("text");
+            return result.get();
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private void startExport(String name, String text, CompletableFuture<Boolean> result) {
+        if (destroyed || isFinishing() || pendingExportResult != null) {
+            result.complete(false);
+            return;
+        }
+        try {
             byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-            if (bytes.length > MAX_SAVE_BYTES) throw new IllegalArgumentException();
-            String name = file.optString("name");
             if (!SAVE_NAME.matcher(name).matches()) name = DEFAULT_SAVE_NAME;
             Files.write(pendingExportFile().toPath(), bytes);
-            pendingExport = text;
-            exportReply = reply;
+            pendingExportResult = result;
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("application/json");
             intent.putExtra(Intent.EXTRA_TITLE, name);
             startActivityForResult(intent, EXPORT_SAVE);
         } catch (Exception exception) {
-            pendingExport = null;
-            exportReply = null;
             pendingExportFile().delete();
-            toast("The save could not be exported. Please try again.");
+            pendingExportResult = null;
+            result.complete(false);
         }
-    }
-
-    // Tells the game the file's kept (saveFile.ts), so the title's reminder to export can go. A page
-    // that's gone (Android stopped the app while the picker was open) isn't told.
-    private static void tellSaved(JavaScriptReplyProxy reply) {
-        if (reply == null) return;
-        try {
-            reply.postMessage("saved");
-        } catch (Exception ignored) { }
     }
 
     private File pendingExportFile() {
         return new File(getCacheDir(), PENDING_EXPORT);
     }
 
-    // The save waiting for the picker: in memory, or on disk when Android stopped the app meanwhile
-    private byte[] takePendingExport() {
-        File file = pendingExportFile();
+    // Called from LoopbackServer's per-request thread (never the UI thread): the game's
+    // fetch('/__native/import') only resolves once this returns. GeckoView's own <input type=file>
+    // can't actually read what the player picks here (GeckoViewFilePickerDelegate logs "Error
+    // resolving files from file picker: ... NS_ERROR_FILE_UNRECOGNIZED_PATH" from inside
+    // FilePickerDelegate.sys.mjs's _getDOMFile - confirmed on a real device against both Android's
+    // Downloads provider's own content:// URI and this app's own FileProvider URI, so it is a
+    // GeckoView-side limitation reading content:// URIs in general, not one specific provider's
+    // shape of URI), so this reads the file itself through Android's own ContentResolver, which
+    // has no trouble with the exact same URI, and hands the text back directly instead of ever
+    // routing the picked file through GeckoView's broken resolution.
+    private String importFile() {
+        if (destroyed || !gameReady) return null;
+        CompletableFuture<String> result = new CompletableFuture<>();
+        handler.post(() -> startImport(result));
         try {
-            if (pendingExport != null) return pendingExport.getBytes(StandardCharsets.UTF_8);
-            return file.isFile() ? Files.readAllBytes(file.toPath()) : null;
+            return result.get();
         } catch (Exception exception) {
             return null;
-        } finally {
-            pendingExport = null;
-            file.delete();
         }
+    }
+
+    private void startImport(CompletableFuture<String> result) {
+        if (destroyed || isFinishing() || pendingImportResult != null) {
+            result.complete(null);
+            return;
+        }
+        try {
+            pendingImportResult = result;
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            startActivityForResult(intent, IMPORT_FILE);
+        } catch (Exception exception) {
+            pendingImportResult = null;
+            result.complete(null);
+        }
+    }
+
+    // Reads a picked document's full bytes as UTF-8 text, or null if that somehow fails (the
+    // player will see the same "couldn't import" message a genuinely invalid file gives them).
+    private String readPickedFile(Uri uri) {
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) return null;
+            return new String(readAllBytes(in), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            Log.w("MainActivity", "could not read the picked file", exception);
+            return null;
+        }
+    }
+
+    private static byte[] readAllBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = in.read(chunk)) >= 0) buffer.write(chunk, 0, read);
+        return buffer.toByteArray();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == WEB_FILE_PICKER) {
-            if (webFileCallback != null) {
-                webFileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
-                webFileCallback = null;
-            } else if (resultCode == RESULT_OK) {
-                // Android stopped the app while the picker was open, and the game started over
-                toast("The import was interrupted. Please choose the file again.");
+        if (requestCode == IMPORT_FILE) {
+            CompletableFuture<String> result = pendingImportResult;
+            pendingImportResult = null;
+            if (result != null) {
+                Uri picked = resultCode == Activity.RESULT_OK && data != null ? data.getData() : null;
+                result.complete(picked != null ? readPickedFile(picked) : null);
             }
             return;
         }
         if (requestCode == EXPORT_SAVE) {
-            byte[] save = takePendingExport();
-            JavaScriptReplyProxy reply = exportReply;
-            exportReply = null;
-            if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
-            Uri document = data.getData();
-            try {
-                if (save == null) throw new IllegalStateException("No save to write");
-                try (OutputStream stream = getContentResolver().openOutputStream(document, "wt")) {
-                    if (stream == null) throw new IllegalStateException("No output stream");
-                    stream.write(save);
-                }
-                toast("Save exported.");
-                tellSaved(reply);
-            } catch (Exception exception) {
-                // The picker made the document already: don't leave an empty one that looks like a save
+            CompletableFuture<Boolean> result = pendingExportResult;
+            pendingExportResult = null;
+            File file = pendingExportFile();
+            boolean ok = false;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri document = data.getData();
                 try {
-                    DocumentsContract.deleteDocument(getContentResolver(), document);
-                } catch (Exception ignored) { }
-                toast("The save could not be written. Please try again.");
-            }
-        }
-    }
-
-    private static boolean isLocal(Uri uri) {
-        return "https".equals(uri.getScheme())
-                && "appassets.androidplatform.net".equals(uri.getHost())
-                && (uri.getPort() == -1 || uri.getPort() == 443)
-                && uri.getPath() != null && uri.getPath().startsWith(GAME_ROOT);
-    }
-
-    private Map<String, String> isolationHeaders() {
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Document-Isolation-Policy", "isolate-and-credentialless");
-        headers.put("Cross-Origin-Opener-Policy", "same-origin");
-        headers.put("Cross-Origin-Embedder-Policy", "require-corp");
-        headers.put("Cross-Origin-Resource-Policy", "same-origin");
-        headers.put("Content-Security-Policy", relayPolicy.contentSecurityPolicy());
-        return headers;
-    }
-
-    private WebResourceResponse textResponse(String mime, String text, int status) {
-        return new WebResourceResponse(mime, "UTF-8", status, status == 200 ? "OK" : "Not Found",
-                isolationHeaders(), new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private final class OfflineClient extends WebViewClient {
-        private final WebViewAssetLoader loader;
-
-        OfflineClient(WebViewAssetLoader loader) { this.loader = loader; }
-
-        @Override
-        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            Uri uri = request.getUrl();
-            if (!isLocal(uri)) {
-                if (relayPolicy.allowsNetworkRequest(request.getMethod(), uri.toString())) {
-                    return null;
+                    byte[] save = Files.readAllBytes(file.toPath());
+                    try (OutputStream stream = getContentResolver().openOutputStream(document, "wt")) {
+                        if (stream == null) throw new IllegalStateException("No output stream");
+                        stream.write(save);
+                    }
+                    ok = true;
+                    toast("Save exported.");
+                } catch (Exception exception) {
+                    // The picker made the document already: don't leave an empty one that
+                    // looks like a save
+                    try {
+                        DocumentsContract.deleteDocument(getContentResolver(), document);
+                    } catch (Exception ignored) {
+                    }
+                    toast("The save could not be written. Please try again.");
                 }
-                return textResponse("text/plain", "Not available", 404);
             }
-            if (CHECK_URL.equals(uri.toString())) return textResponse("text/html", diagnosticHtml(), 200);
-            if (WORKER_URL.equals(uri.toString())) {
-                return textResponse("text/javascript", "self.onmessage=async e=>{try{"
-                        + "const r=await fetch('caches/caches.json');if(!r.ok)throw Error('cache');"
-                        + "const c=await r.json();if(!Array.isArray(c)||!c.length)throw Error('cache');"
-                        + "const v=new Int32Array(e.data);v[0]+=1;self.postMessage(v[0]);"
-                        + "}catch(e){self.postMessage(-1)}};", 200);
+            file.delete();
+            if (result != null) result.complete(ok);
+        }
+    }
+
+    private void reopenAfterContentProcessLoss() {
+        if (destroyed) return;
+        gameReady = false;
+        diagnosticGeneration++;
+        new AlertDialog.Builder(MainActivity.this).setTitle("The game stopped")
+                .setMessage("Reopen the game to continue. Your saved progress is kept.")
+                .setPositiveButton("Reopen", (dialog, which) -> recreate())
+                .setNegativeButton("Close", (dialog, which) -> finish()).show();
+    }
+
+    private final class GameContentDelegate implements GeckoSession.ContentDelegate {
+        // The diagnostic's verdict (LoopbackServer.diagnosticHtml), reported via document.title
+        // since GeckoView has no generic evaluateJavascript to poll a variable the way WebView's
+        // did - the same technique the feasibility spike proved out.
+        @Override
+        public void onTitleChange(GeckoSession session, String title) {
+            if (destroyed || title == null || "pending".equals(title)) return;
+            // Guards against GeckoView re-firing onTitleChange for the same verdict (observed:
+            // a stray repeat title event re-triggering loadUri mid-load, cancelling the real
+            // game page's still-in-flight subresource fetches). Each diagnostic attempt gets
+            // one shot at starting the real game load, not more.
+            if (pastDiagnostic || navigationGeneration == diagnosticGeneration) return;
+            if ("passed".equals(title)) {
+                navigationGeneration = diagnosticGeneration;
+                diagnosticGeneration++;
+                pastDiagnostic = true;
+                awaitingGameLoad = true;
+                session.loadUri(gameOrigin + GAME_PATH);
+            } else {
+                navigationGeneration = diagnosticGeneration;
+                showCompatibilityScreen(true);
             }
-            WebResourceResponse response = loader.shouldInterceptRequest(uri);
-            if (response == null) return textResponse("text/plain", "Not found", 404);
-            String path = uri.getPath();
-            if (path != null) {
-                if (path.endsWith(".wasm")) response.setMimeType("application/wasm");
-                else if (path.endsWith(".js") || path.endsWith(".mjs")) response.setMimeType("text/javascript");
-                else if (path.endsWith(".webmanifest")) response.setMimeType("application/manifest+json");
-            }
-            Map<String, String> headers = new HashMap<>();
-            if (response.getResponseHeaders() != null) headers.putAll(response.getResponseHeaders());
-            headers.putAll(isolationHeaders());
-            response.setResponseHeaders(headers);
-            return response;
         }
 
         @Override
-        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            Uri uri = request.getUrl();
-            if (isLocal(uri)) return false;
-            if (request.isForMainFrame() && request.hasGesture() && "https".equals(uri.getScheme())
+        public void onCrash(GeckoSession session) {
+            reopenAfterContentProcessLoss();
+        }
+
+        @Override
+        public void onKill(GeckoSession session) {
+            reopenAfterContentProcessLoss();
+        }
+    }
+
+    // Everything here is the bundled game's own origin, not arbitrary web content, so this grants
+    // what Electron's desktop build grants implicitly (its own permission request handler only
+    // ever sees "fullscreen" and "pointerLock", since Electron's Chromium doesn't gate audible
+    // autoplay behind a permission the way GeckoView does - with no delegate here at all, GeckoView
+    // was silently denying PERMISSION_AUTOPLAY_AUDIBLE, which is why the game's music never played).
+    private final class GamePermissionDelegate implements GeckoSession.PermissionDelegate {
+        @Override
+        public GeckoResult<Integer> onContentPermissionRequest(
+                GeckoSession session, ContentPermission perm) {
+            if (perm.permission == PERMISSION_AUTOPLAY_AUDIBLE
+                    || perm.permission == PERMISSION_AUTOPLAY_INAUDIBLE) {
+                return GeckoResult.fromValue(ContentPermission.VALUE_ALLOW);
+            }
+            return GeckoSession.PermissionDelegate.super.onContentPermissionRequest(session, perm);
+        }
+    }
+
+    // Clipboard copy (a coop room code, a cloud save key) goes through a separate delegate from
+    // PermissionDelegate above: GeckoSession.SelectionActionDelegate.onShowClipboardPermissionRequest,
+    // which also has no default implementation that grants anything. With no delegate set at all,
+    // GeckoView silently dismissed every clipboard write (GeckoView:DismissClipboardPermissionRequest
+    // in logcat), so the player's tap on a copy button did nothing. GeckoView bundles a fuller
+    // BasicSelectionActionDelegate (Android's own text-selection toolbar, cut/copy/paste), which
+    // isn't used here: the game has its own UI for everything a player selects or copies, and
+    // bringing in Android's native selection toolbar on top of it would be a second, unwanted
+    // overlay. Only the clipboard permission itself is granted.
+    private final class GameSelectionActionDelegate implements GeckoSession.SelectionActionDelegate {
+        @Override
+        public GeckoResult<AllowOrDeny> onShowClipboardPermissionRequest(
+                GeckoSession session, ClipboardPermission perm) {
+            return GeckoResult.fromValue(AllowOrDeny.ALLOW);
+        }
+    }
+
+    private final class GameProgressDelegate implements GeckoSession.ProgressDelegate {
+        @Override
+        public void onPageStart(GeckoSession session, String url) {
+        }
+
+        @Override
+        public void onPageStop(GeckoSession session, boolean success) {
+            Log.i("MainActivity", "onPageStop success=" + success + " awaitingGameLoad=" + awaitingGameLoad
+                    + " destroyed=" + destroyed);
+            if (destroyed || !awaitingGameLoad) return;
+            awaitingGameLoad = false;
+            if (!success) {
+                showCompatibilityScreen(true);
+                return;
+            }
+            gameReady = true;
+            if (loading != null) loading.setVisibility(View.GONE);
+            if (menuButton != null) menuButton.setVisibility(View.VISIBLE);
+            handler.postDelayed(() -> {
+                if (!destroyed && menuButton != null) menuButton.setVisibility(View.GONE);
+            }, 6000);
+            if (!getPreferences(MODE_PRIVATE).getBoolean("save-menu-hint", false)) {
+                toast("Use Back to open the game menu.");
+                getPreferences(MODE_PRIVATE).edit().putBoolean("save-menu-hint", true).apply();
+            }
+        }
+
+        @Override
+        public void onProgressChange(GeckoSession session, int progress) {
+        }
+
+        @Override
+        public void onSecurityChange(GeckoSession session, SecurityInformation securityInfo) {
+        }
+
+        @Override
+        public void onSessionStateChange(GeckoSession session, GeckoSession.SessionState state) {
+        }
+    }
+
+    private final class GameNavigationDelegate implements GeckoSession.NavigationDelegate {
+        @Override
+        public GeckoResult<AllowOrDeny> onLoadRequest(GeckoSession session, LoadRequest request) {
+            String url = request.uri;
+            if (gameOrigin != null && url.startsWith(gameOrigin + "/")) {
+                return GeckoResult.allow();
+            }
+            Uri uri = Uri.parse(url);
+            if (request.hasUserGesture && "https".equals(uri.getScheme())
                     && ("github.com".equals(uri.getHost()) || "discord.gg".equals(uri.getHost())
                     || "discord.com".equals(uri.getHost()))) {
                 try {
@@ -570,80 +633,42 @@ public final class MainActivity extends Activity {
                     toast("No browser is available to open this link.");
                 }
             }
-            return true;
+            // Any other navigation away from the game's own origin is denied, not followed in
+            // the app: the relay/analytics/cloud-save traffic goes out as fetch()/WebSocket
+            // under this page's Content-Security-Policy, never as a page navigation.
+            return GeckoResult.deny();
         }
 
         @Override
-        public void onPageFinished(WebView view, String url) {
-            if (destroyed) return;
-            if (CHECK_URL.equals(url)) {
-                pollDiagnostic(diagnosticGeneration, 0);
-            } else if (GAME_URL.equals(url)) {
-                gameReady = true;
-                loading.setVisibility(View.GONE);
-                menuButton.setVisibility(View.VISIBLE);
-                handler.postDelayed(() -> {
-                    if (!destroyed && menuButton != null) menuButton.setVisibility(View.GONE);
-                }, 6000);
-                if (!getPreferences(MODE_PRIVATE).getBoolean("save-menu-hint", false)) {
-                    toast("Use Back to open the game menu.");
-                    getPreferences(MODE_PRIVATE).edit().putBoolean("save-menu-hint", true).apply();
-                }
-            }
+        public GeckoResult<GeckoSession> onNewSession(GeckoSession session, String uri) {
+            return null;
         }
 
         @Override
-        public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
-            if (!destroyed) {
-                gameReady = false;
-                diagnosticGeneration++;
-                root.removeView(view);
-                view.destroy();
-                webView = null;
-                new AlertDialog.Builder(MainActivity.this).setTitle("The game stopped")
-                        .setMessage("Reopen the game to continue. Your saved progress is kept.")
-                        .setPositiveButton("Reopen", (dialog, which) -> recreate())
-                        .setNegativeButton("Close", (dialog, which) -> finish()).show();
+        public void onCanGoBack(GeckoSession session, boolean canGoBack) {
+        }
+
+        @Override
+        public void onCanGoForward(GeckoSession session, boolean canGoForward) {
+        }
+
+        @Override
+        public GeckoResult<String> onLoadError(GeckoSession session, String uri, WebRequestError error) {
+            Log.i("MainActivity", "onLoadError uri=" + uri + " error=" + error
+                    + " category=" + (error != null ? error.category : "?")
+                    + " code=" + (error != null ? error.code : "?"));
+            if (gameOrigin != null && uri != null && uri.startsWith(gameOrigin)) {
+                showCompatibilityScreen(true);
             }
-            return true;
+            return null;
         }
     }
 
-    private final class OfflineChromeClient extends WebChromeClient {
-        @Override
-        public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
-                                         FileChooserParams parameters) {
-            if (webFileCallback != null) webFileCallback.onReceiveValue(null);
-            webFileCallback = callback;
-            try {
-                Intent intent = parameters.createIntent();
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivityForResult(intent, WEB_FILE_PICKER);
-            } catch (ActivityNotFoundException exception) {
-                webFileCallback.onReceiveValue(null);
-                webFileCallback = null;
-                toast("No file picker is available on this device.");
-            }
-            return true;
-        }
-    }
-
-    private static String diagnosticHtml() {
-        return "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>html,body{background:#000}</style><script>"
-                + "window.__offlineCheck={state:'pending'};let worker;"
-                + "try{if(!window.crossOriginIsolated||typeof SharedArrayBuffer!=='function')throw Error('isolation');"
-                + "let canvas=document.createElement('canvas');let gl=canvas.getContext('webgl2');"
-                + "if(!gl)throw Error('graphics');let lose=gl.getExtension('WEBGL_lose_context');"
-                + "if(lose)lose.loseContext();canvas=null;gl=null;"
-                + "const buffer=new SharedArrayBuffer(4),view=new Int32Array(buffer);view[0]=42;"
-                + "worker=new Worker('offline-check-worker.js');"
-                + "worker.onmessage=e=>{window.__offlineCheck={state:e.data===43&&view[0]===43?'passed':'failed'};worker.terminate()};"
-                + "worker.onerror=()=>{window.__offlineCheck={state:'failed'};worker.terminate()};"
-                + "worker.postMessage(buffer);"
-                + "setTimeout(()=>{if(window.__offlineCheck.state==='pending'){window.__offlineCheck={state:'failed'};worker.terminate()}},8000);"
-                + "}catch(e){window.__offlineCheck={state:'failed'}}"
-                + "</script>";
+    // <input type=file> (save import) is routed around entirely rather than handled here: see
+    // importFile()/startImport() and saveFile.ts's importFromApp() for why GeckoView's own
+    // GeckoSession.PromptDelegate.onFilePrompt can't actually serve the picked file's bytes back
+    // to the page.
+    private final class GamePromptDelegate implements GeckoSession.PromptDelegate {
     }
 
     private void handleBack() {
@@ -651,7 +676,9 @@ public final class MainActivity extends Activity {
     }
 
     @Override
-    public void onBackPressed() { handleBack(); }
+    public void onBackPressed() {
+        handleBack();
+    }
 
     private void hideSystemBars() {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -669,14 +696,12 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         if (updater != null) updater.onPause();
-        if (webView != null) webView.onPause();
         super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (webView != null) webView.onResume();
         if (updater != null) updater.onResume();
     }
 
@@ -687,15 +712,21 @@ public final class MainActivity extends Activity {
         if (siteUpdater != null) siteUpdater.close();
         diagnosticGeneration++;
         handler.removeCallbacksAndMessages(null);
-        if (webFileCallback != null) {
-            webFileCallback.onReceiveValue(null);
-            webFileCallback = null;
+        if (pendingImportResult != null) {
+            pendingImportResult.complete(null);
+            pendingImportResult = null;
         }
-        if (webView != null) {
-            root.removeView(webView);
-            webView.stopLoading();
-            webView.destroy();
-            webView = null;
+        if (pendingExportResult != null) {
+            pendingExportResult.complete(false);
+            pendingExportResult = null;
+        }
+        if (session != null) {
+            session.close();
+            session = null;
+        }
+        if (server != null) {
+            server.shutdown();
+            server = null;
         }
         super.onDestroy();
     }
