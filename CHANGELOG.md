@@ -11,6 +11,11 @@ the version in the corner).
   stabs towards Tumeken's Light, and turns gold when the next one is it.
 - A Linux version, by WarlockSyno: each release has an AppImage of the app beside the Windows zip.
 
+### Changed
+
+- The Bare Essentials Combat Achievement is gone: Armoury upgrades can't be undone, so most players
+  could never do it. The tiers' rewards need a few points fewer to match.
+
 ### Fixed
 
 - Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it

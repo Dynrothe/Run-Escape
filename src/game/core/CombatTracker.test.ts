@@ -103,7 +103,6 @@ describe("which runs it follows", () => {
         expect(tasks).not.toContain("objection");
         expect(tasks).not.toContain("hardened");
         expect(tasks).not.toContain("round_two");
-        expect(tasks).not.toContain("bare_essentials");
         // A boss fight has no visitors to rob you
         expect(tasks).toContain("stand_and_deliver");
         expect(ids(track(createSim("zachariah")).tasks)).not.toContain("stand_and_deliver");
