@@ -320,6 +320,10 @@ desktop build.
   so give a long one about twice what the release log says it takes
   (`gh run view <id> --log | grep "<test name>"`). 0.34.1's first build failed on a map check that
   had always taken most of its limit.
+- **The Windows runner's disk can be slow too.** A test that writes to disk can go from
+  milliseconds to seconds there while the Linux job stays fast: 0.38.0's first build failed
+  on the analytics viewer's loader, which synced a SQLite file to disk at every commit. Keep a
+  test's disk writes few, and unsynced when the file is a throwaway.
 - **"Exit code 1" with no failed test named** means an error with no stack in our code, which
   vitest's annotations leave out. `Timeout calling "onTaskUpdate"` is one: a worker went a minute
   without a turn of the event loop. `src/setupTests.ts` yields between tests so that a long file

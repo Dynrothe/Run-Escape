@@ -101,6 +101,9 @@ export function buildDatabase(dumps, path) {
     const prepared = dumps.map(({ name, sql }) => prepareDump(name, sql));
     const db = new DatabaseSync(path);
     try {
+        // A throwaway file, deleted if a build fails, so nothing waits on the disk: one commit,
+        // no syncs (they made each build seconds long on a busy CI runner)
+        db.exec("PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF; BEGIN");
         for (const name of readdirSync(migrations)
             .filter((n) => n.endsWith(".sql"))
             .sort()) {
@@ -111,7 +114,6 @@ export function buildDatabase(dumps, path) {
             .all()) {
             db.exec(`DROP TRIGGER "${name}"`);
         }
-        db.exec("BEGIN");
         for (const [i, statements] of prepared.entries()) {
             for (const statement of statements) {
                 try {
