@@ -236,12 +236,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                                                 foil={getCardFoils(save, card) > 0}
                                             />
                                         ) : (
-                                            <>
-                                                <CardBack size="small" />
-                                                <span className="ui-tcg-back-number">
-                                                    {cardNumber(card)}
-                                                </span>
-                                            </>
+                                            <CardBack size="small" card={card} />
                                         )}
                                     </button>
                                 );
@@ -567,22 +562,27 @@ export function CardFace({
     );
 }
 
-// The same plate as a face. The album puts its collector number below it.
+// A card face down: the deck's own back, on the same plate as a face. In the album, a card not
+// found yet shows its back with its number on it, so what's missing can be told apart.
 export function CardBack({
     size,
+    card,
     large = false,
 }: {
     size: Size;
+    card?: CardDef;
     // The bigger picture, where the back's shown large (the playmat's deck, scaled up)
     large?: boolean;
 }): JSX.Element {
     return (
         <span
-            className={`ui-tcg ui-tcg-${size} ui-tcg-back`}
+            className={`ui-tcg ui-tcg-${size} ui-tcg-back` + (card ? " ui-tcg-missing" : "")}
             style={{
                 backgroundImage: `url(${large || size === "big" ? cardBackLarge : cardBackSmall})`,
             }}
-        />
+        >
+            {card && <span className="ui-tcg-back-number">{cardNumber(card)}</span>}
+        </span>
     );
 }
 

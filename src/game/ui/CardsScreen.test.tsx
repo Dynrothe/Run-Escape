@@ -70,10 +70,13 @@ test("keeps a card not found face down, and shows a found one with its versions 
         CARDS.length - 1,
     );
     const missing = CARDS.find((card) => card.id !== scimitar.id)!;
-    const caption = screen.getByText(cardNumber(missing));
-    const back = caption.closest("button")!.querySelector(".ui-tcg-back");
-    expect(back).toHaveClass("ui-tcg", "ui-tcg-small");
-    expect(back).not.toContainElement(caption);
+    // A face's plate, its number laid on it: nothing in the slot beside it, so every slot is a
+    // card tall and the picture isn't squeezed
+    const number = screen.getByText(cardNumber(missing));
+    const slot = number.closest("button")!;
+    expect(slot.children).toHaveLength(1);
+    expect(slot.firstElementChild).toHaveClass("ui-tcg", "ui-tcg-small", "ui-tcg-back");
+    expect(slot.firstElementChild).toContainElement(number);
     fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${scimitar.name()}, `) }));
     expect(screen.getByRole("dialog", { name: scimitar.name() })).toHaveTextContent(
         "Yours: Common x3 and Rare x1",

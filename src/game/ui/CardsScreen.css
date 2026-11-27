@@ -43,16 +43,16 @@
     background: none;
     border: 1px solid transparent;
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+    justify-content: center;
 }
 
 /* A card: the printed card frame (ui/cards/card-front-*.webp, from the card generator's
    src/media/run-escape-card-front-frame.png), with the name, the picture's window, the type line,
    the text and the set's footer laid over it where the generator prints them (scripts/cards), in
    percentages of its 1073 x 1466 plate. The rarity is the type line's coloured word, never shown
-   by colour alone. */
+   by colour alone. A face-down card is the same plate with the back's picture
+   (ui/cards/card-back-*.webp), which scripts/cards/make-back.ts writes at the fronts' sizes, so
+   it fills the plate as a front does. */
 .ui-tcg {
     --card-rarity: #caba98;
     position: relative;
@@ -464,13 +464,20 @@
     }
 }
 
-/* A missing card's back and the collector number below it are both dimmed. */
-.ui-cards-slot[aria-disabled="true"] > * {
+/* In the album, a card not found yet: its back, darker, with its number */
+.ui-tcg-missing {
     opacity: 0.7;
 }
 
+/* On the back's plain cloth, level with a face's number, so it takes no room from the picture
+   and the card stays a face's size */
 .ui-tcg-back-number {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 87%;
     text-align: center;
+    font-family: "OSRS Small", sans-serif;
     font-size: 11px;
     color: #c8b48a;
 }

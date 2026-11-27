@@ -1821,8 +1821,9 @@ involved.
   the item drawn from its model at the card's size (`ItemIcon`'s `large`). A face-down card is a
   picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape:
   `scripts/cards/make-back.ts` fits it to the front's plate, at the fronts' sizes, so a card
-  has one outline face up and face down. In the album, a missing card's number sits below the
-  plate so the artwork takes the same space as a collected card. A pack opens on a playmat that
+  has one outline face up and face down. In the album, a missing card's number is laid on its
+  back's cloth, level with a face's, so it takes no room from the picture and every slot is a
+  card tall (a row with a gap the same height as one without). A pack opens on a playmat that
   fills the screen (`PackWindow`): its cards in a deck, each press
   dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`); the
   row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
