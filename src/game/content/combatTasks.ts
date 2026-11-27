@@ -170,16 +170,6 @@ export const COMBAT_TASKS: CombatTaskDef[] = [
         goal: { kind: "endlessRound", round: 3 },
     },
     {
-        id: "bare_essentials",
-        name: "Bare Essentials",
-        description:
-            "Beat Fremennik or a later campaign map with no Skills upgrades on your " +
-            "adventurer's page and nothing upgraded in the Armoury.",
-        tier: "elite",
-        type: "restriction",
-        goal: { kind: "win", maps: { campaignFrom: "fremennik" }, rules: { noUpgrades: true } },
-    },
-    {
         id: "hard_graft",
         name: "Hard Graft",
         description: "Beat every campaign map on hard mode.",

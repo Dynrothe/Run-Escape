@@ -78,8 +78,6 @@ export class CombatTracker {
     private failedNow: Watch[] = [];
     private over = false;
     private readonly teleportsAtStart: number;
-    // What the run started with, for noUpgrades
-    private readonly upgraded: boolean;
     // The adventurer's combat style, for beatWithEach
     private readonly style: CombatStyle;
 
@@ -105,9 +103,6 @@ export class CombatTracker {
     ) {
         const hero = sim.heroes[sim.focus];
         this.teleportsAtStart = sim.raidTeleportsLeft;
-        this.upgraded =
-            Object.values(hero.metaStats).some((value) => value !== 0) ||
-            Object.values(hero.armoury ?? {}).some((times) => times > 0);
         this.style = getCharacter(hero.characterId).style;
         this.watches = COMBAT_TASKS.filter(
             (task) =>
@@ -193,7 +188,6 @@ export class CombatTracker {
                     !sim.endless &&
                     (!goal.hard || sim.hard) &&
                     getGoalMaps(goal.maps).includes(sim.map.id) &&
-                    (!goal.rules?.noUpgrades || !this.upgraded) &&
                     (!goal.awakened || sim.awakened) &&
                     sim.remixes.length >= (goal.remixes ?? 0) &&
                     sim.invocationPoints >= (goal.points ?? 0) &&

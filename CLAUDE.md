@@ -20,7 +20,7 @@ go stale. Add anything that cost you time to work out.
 | Looking for                                            | Go to                                                                  |
 | ------------------------------------------------------ | ---------------------------------------------------------------------- |
 | How the code is laid out, scripts, URL flags, hosting  | `docs/DEVELOPMENT.md`                                                  |
-| The Windows app, its game updates, releases            | `docs/DEVELOPMENT.md`, Desktop                                         |
+| The Windows and Linux apps, game updates, releases     | `docs/DEVELOPMENT.md`, Desktop                                         |
 | The Android app, its bundled game and release signing  | `android/`, `scripts/android/`, `docs/DEVELOPMENT.md`, Android         |
 | The app's main process and update code                 | `desktop/`                                                             |
 | The app keeping to the website's build                 | `desktop/siteUpdate.ts`, `docs/DEVELOPMENT.md` (Following the website) |
@@ -117,6 +117,7 @@ go stale. Add anything that cost you time to work out.
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | Scenery left out of the title screen (its bushes)      | `GameClient.ts` (`TITLE_HIDDEN_LOCS`), `SdMapLoaderInput.hiddenLocs`   |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
+| A long special's count on its HUD slot (Tumeken's)     | `GameClient.getSpecialCounts`, `GameUi.tsx` (`SpecialCount`)           |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
 | Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
 | Touch screens: the stick, its buttons, phone layouts   | `docs/DEVELOPMENT.md`, Touch screens                                   |
@@ -218,6 +219,7 @@ bun run build && bun run slim-cache    # build for hosting (only when deploying)
 bun run serve              # serve the build, co-op's relay too (serve:singleplayer without)
 bun run desktop            # the Windows app, on that build
 bun run desktop:dist       # the app's zip, game zip and manifest, into release/
+bun run desktop:dist:linux # the same with the Linux AppImage (on Linux only)
 bun run tsx scripts/android/prepare-game.ts --dist dist  # that build, into the Android app
 cd android && ./gradlew test assembleDebug     # the Android app (Java 21 and Android SDK 36)
 ```

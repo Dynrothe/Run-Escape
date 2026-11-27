@@ -3,6 +3,26 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.38.0 - 2026-11-27
+
+### Added
+
+- A special attack counter, by Okaeri: the Keris partisan of the sun's slot on the HUD counts the
+  stabs towards Tumeken's Light, and turns gold when the next one is it.
+- A Linux version, by WarlockSyno: each release has an AppImage of the app beside the Windows zip.
+
+### Changed
+
+- The Bare Essentials Combat Achievement is gone: Armoury upgrades can't be undone, so most players
+  could never do it. The tiers' rewards need a few points fewer to match.
+
+### Fixed
+
+- Nylocas Vasilias's spit in the Theatre of Blood leaves gaps to step into at the distance it
+  fights from, on hard and expert too. Fixed by Okaeri.
+- Adventurers' boots no longer flicker white as they run, on slopes too. Fixed by trippy22.
+- Face-down cards in the album are now the same size as collected cards. Fixed by trippy22.
+
 ## 0.37.0 - 2026-11-26
 
 ### Added

@@ -14798,12 +14798,18 @@ export class Sim {
             (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
         // Lanes (BulletPatternDef.gapStep) are as they are, whatever the mode
         const lanes = pattern.shape === "wall" && pattern.gapStep !== undefined;
-        const count =
-            closed || lanes ? pattern.count : Math.round(pattern.count * this.bulletScale);
-        const arc = Math.min(
+        let count = closed || lanes ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        let arc = Math.min(
             Math.PI * 2,
             ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
         );
+        // A spread no wider than its maxArc: its bullets closer together instead
+        if (pattern.maxArc !== undefined && arc > pattern.maxArc) {
+            arc = pattern.maxArc;
+            if (pattern.count % 2 === 1 && count % 2 === 0) {
+                count--;
+            }
+        }
         return { count, arc };
     }
 
@@ -21344,10 +21350,10 @@ export class Sim {
         level: WeaponDef["levels"][number],
     ): SpecialAttackDef | undefined {
         const special = weapon.def.special;
-        if (!special) {
+        const every = this.specialEvery(weapon);
+        if (!special || every === undefined) {
             return undefined;
         }
-        const every = special.every * (this.invoked("overly_draining") ? 2 : 1);
         if (weapon.uses % every !== every - 1) {
             weapon.uses++;
             return undefined;
@@ -21357,6 +21363,13 @@ export class Sim {
         }
         weapon.uses++;
         return special;
+    }
+
+    // How many attacks a weapon's special comes every this run (Overly Draining doubles it), none
+    // without one. Its attacks towards the next are weapon.uses % this: the HUD reads it too.
+    specialEvery(weapon: WeaponState): number | undefined {
+        const special = weapon.def.special;
+        return special && special.every * (this.invoked("overly_draining") ? 2 : 1);
     }
 
     // Something a melee weapon at this level would hit

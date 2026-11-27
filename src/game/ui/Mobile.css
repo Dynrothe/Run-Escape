@@ -1151,6 +1151,16 @@
         inset: -2px 0 -6px;
     }
 
+    /* A counted special's attacks, read at a glance under the column's zoom */
+    .ui-slot-special-count {
+        font-size: 17px;
+        line-height: 15px;
+    }
+
+    .ui-slot-special-bar {
+        height: 4px;
+    }
+
     .ui-gear-slots,
     .ui-quest-tracker {
         display: none;

@@ -9,6 +9,7 @@ import { getMap } from "../content/maps";
 import { Rarity } from "../content/rarity";
 import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
+import { getWeapon } from "../content/weapons";
 import { CombatTracker } from "../core/CombatTracker";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { encodeCardCaps } from "../core/cardRuns";
@@ -35,6 +36,7 @@ import {
 } from "./DisplaySettings";
 import {
     GameClient,
+    SPECIAL_COUNTER_MIN,
     TICK_MS,
     cleanLoadout,
     getHpShare,
@@ -826,6 +828,79 @@ describe("the HUD", () => {
         expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
         updateHud(client);
         expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+    });
+
+    describe("a counted special's attacks", () => {
+        const SUN = "keris_partisan_of_the_sun";
+
+        // The focused hero holding only this weapon, a goblin that won't die in its reach
+        function armed(weaponId: string, focus?: number) {
+            const sim = createSim(focus);
+            sim.weapons = [];
+            sim.addWeapon(weaponId);
+            const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                x: sim.player.x + 1.5,
+                y: sim.player.y,
+            })!;
+            goblin.hp = goblin.maxHp = 1e6;
+            goblin.frozen = 1e6;
+            // One attack, standing still, the goblin put back in reach (each stab knocks it back)
+            const stab = () => {
+                goblin.x = sim.player.x + 1.5;
+                goblin.y = sim.player.y;
+                sim.weapons[0].cooldown = 0;
+                sim.player.invulnerable = 100;
+                sim.step(0, 0);
+                sim.takeEvents();
+            };
+            return { sim, stab };
+        }
+
+        test.each([undefined, 0, 1])(
+            "follow the sim's stabs up to Tumeken's Light, the local hero's own (focus %s)",
+            (focus) => {
+                const { sim, stab } = armed(SUN, focus);
+                const { client, store } = createClient(sim, false);
+                const every = getWeapon(SUN).special!.every;
+                // A teammate's keris, further on, isn't the one shown
+                const other = focus === undefined ? undefined : sim.heroes[1 - focus];
+                other?.weapons.splice(0, other.weapons.length, {
+                    ...sim.weapons[0],
+                    uses: 17,
+                });
+                updateHud(client, true);
+                expect(store.getNumbers()!.specials).toEqual({ [SUN]: { count: 0, every } });
+                for (let i = 1; i < every; i++) {
+                    stab();
+                    updateHud(client);
+                    expect(store.getNumbers()!.specials![SUN]).toEqual({ count: i, every });
+                }
+                // At every - 1 the HUD says it's next, and the next stab is the Light
+                sim.player.hp = 3;
+                stab();
+                expect(sim.player.hp).toBe(sim.player.maxHp);
+                updateHud(client);
+                expect(store.getNumbers()!.specials![SUN]).toEqual({ count: 0, every });
+            },
+        );
+
+        test("leave out a special that comes every few attacks, and count Overly Draining's", () => {
+            const short = armed("keris_partisan_of_corruption");
+            expect(getWeapon("keris_partisan_of_corruption").special!.every).toBeLessThan(
+                SPECIAL_COUNTER_MIN,
+            );
+            const { client, store } = createClient(short.sim, false);
+            updateHud(client, true);
+            expect(store.getNumbers()!.specials).toBeUndefined();
+
+            const { sim } = armed(SUN);
+            (sim as unknown as { invocations: string[] }).invocations = ["overly_draining"];
+            const drained = createClient(sim, false);
+            updateHud(drained.client, true);
+            expect(drained.store.getNumbers()!.specials![SUN].every).toBe(
+                getWeapon(SUN).special!.every * 2,
+            );
+        });
     });
 });
 
