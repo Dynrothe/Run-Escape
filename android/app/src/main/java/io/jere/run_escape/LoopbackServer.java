@@ -51,6 +51,7 @@ final class LoopbackServer extends Thread {
         boolean export(String name, String text);
     }
 
+    private final Context context;
     private final GamePathHandler games;
     private final RelayPolicy relayPolicy;
     private final ExportHandler exportHandler;
@@ -59,6 +60,7 @@ final class LoopbackServer extends Thread {
 
     LoopbackServer(Context context, GamePathHandler games, RelayPolicy relayPolicy,
                     ExportHandler exportHandler) throws IOException {
+        this.context = context;
         this.games = games;
         this.relayPolicy = relayPolicy;
         this.exportHandler = exportHandler;
@@ -118,12 +120,11 @@ final class LoopbackServer extends Thread {
     }
 
     private void handle(Socket client) {
+        String lastPath = null;
         try (Socket c = client) {
             InputStream rawIn = c.getInputStream();
-            // HTTP/1.1 keep-alive: GeckoView's connection pool expects to reuse connections: a
-            // server that closes every one (HTTP/1.0 "Connection: close") races its own eager
-            // speculative connections against in-flight writes, which showed up as intermittent
-            // broken-pipe failures on this server's larger responses.
+            // HTTP/1.1 keep-alive: GeckoView's connection pool expects to reuse connections
+            // rather than a fresh TCP connection per request (HTTP/1.0 "Connection: close").
             while (running) {
                 byte[] headerBytes = readHeaderBlock(rawIn);
                 if (headerBytes == null) return; // client closed the connection
@@ -134,6 +135,7 @@ final class LoopbackServer extends Thread {
                 if (parts.length < 2) return;
                 String method = parts[0];
                 String path = parts[1];
+                lastPath = path;
 
                 int contentLength = 0;
                 for (int i = 1; i < lines.length; i++) {
@@ -159,7 +161,7 @@ final class LoopbackServer extends Thread {
                 handleGet(path, out);
             }
         } catch (IOException e) {
-            Log.w(TAG, "request handling failed: " + e, e);
+            Log.w(TAG, "request handling failed for " + lastPath + ": " + e, e);
         }
     }
 
@@ -229,6 +231,14 @@ final class LoopbackServer extends Thread {
         if (mimeType == null) mimeType = guessMimeType(assetPath);
         Map<String, String> headers = new HashMap<>(isolationHeaders());
         if (response.getResponseHeaders() != null) headers.putAll(response.getResponseHeaders());
+        // The asset response's own Cache-Control (observed: "private, max-age=31536000", a full
+        // year) would otherwise win over isolationHeaders()'s "no-cache" above via the putAll
+        // just now - fine for hashed, immutable asset files, but index.html's own content is not
+        // static: it's rewritten per request (injectNativeBridge adds the native bridge shim and,
+        // when one is pending, a migrated save), so a long-lived cached copy of it would silently
+        // skip migrating a save that arrives on a later launch, or any future request-time
+        // rewrite. Re-assert no-cache for the document after the merge so it always wins.
+        if (assetPath.equals("game/index.html")) headers.put("Cache-Control", "no-cache");
         writeResponse(out, 200, mimeType, headers, body);
     }
 
@@ -242,15 +252,34 @@ final class LoopbackServer extends Thread {
                 + "fetch('" + EXPORT_PATH + "',{method:'POST',body:msg}).then(function(r){"
                 + "if(r.ok&&window.NativeDownloads.onmessage){window.NativeDownloads.onmessage({data:'saved'});}"
                 + "});}};</script>";
+        // A save migrated from the app's previous WebView-based releases (LegacySaveMigrator)
+        // waits here until the real game page actually loads, then is set only if this origin
+        // doesn't already have a save of its own - safe to run on every load, including repeats,
+        // since a key that's already present is left untouched either way.
+        String migratedSave = LegacySaveMigrator.pendingSave(context);
+        if (migratedSave != null) {
+            shim += "<script>if(!localStorage.getItem(" + JSONObject.quote(LegacySaveMigrator.SAVE_KEY)
+                    + ")){localStorage.setItem(" + JSONObject.quote(LegacySaveMigrator.SAVE_KEY) + ","
+                    + JSONObject.quote(migratedSave) + ");}</script>";
+            LegacySaveMigrator.clearPending(context);
+        }
         String page = new String(html, StandardCharsets.UTF_8);
         // Vite marks the bundle's own <script>/<link> tags crossorigin for real web deployments
         // (SRI, cross-origin error reporting). Everything here is served from one origin by this
-        // same loopback server, so it is never actually cross-origin - but GeckoView still runs
-        // the CORS-mode request path for a crossorigin-attributed tag, and that path has been
-        // observed closing the connection out from under this server's in-flight response for
-        // exactly these two tags (and no others) on this engine. Dropping the now-meaningless
-        // attribute avoids that path entirely.
+        // same loopback server, so it is never actually cross-origin, and keeping the now-
+        // meaningless attribute off avoids a CORS-mode fetch for no reason.
         page = page.replace(" crossorigin ", " ").replace(" crossorigin>", ">").replace(" crossorigin/>", "/>");
+        // Insert right after <head>, not right before </head>: a blocking inline <script> placed
+        // after the bundle's own deferred <script type=module> and <link rel=stylesheet> must
+        // wait on those per spec before it can run. Putting the shim first instead avoids that
+        // ordering entirely (the shim only ever defines window.NativeDownloads - it never
+        // touches the DOM, so running first changes nothing it depends on).
+        int headStart = page.indexOf("<head>");
+        if (headStart >= 0) {
+            int insertAt = headStart + "<head>".length();
+            return (page.substring(0, insertAt) + shim + page.substring(insertAt))
+                    .getBytes(StandardCharsets.UTF_8);
+        }
         int headEnd = page.indexOf("</head>");
         String withShim = headEnd >= 0
                 ? page.substring(0, headEnd) + shim + page.substring(headEnd)

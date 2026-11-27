@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -79,6 +80,13 @@ public final class MainActivity extends Activity {
     private boolean destroyed;
     private int diagnosticGeneration;
     private int navigationGeneration = -1;
+    // Once the diagnostic has passed and navigation to the real game has started, every further
+    // onTitleChange call belongs to the GAME's own page (its <title>Run Escape</title>, or any
+    // title the game sets later) - not to another diagnostic verdict. onTitleChange is a
+    // session-wide delegate, not scoped to the diagnostic page, so without this flag the game's
+    // own title change was falling through to the "diagnostic failed" branch and triggering the
+    // compatibility screen on every single launch, regardless of whether the game loaded fine.
+    private boolean pastDiagnostic;
     private AppUpdater updater;
     private SiteUpdater siteUpdater;
     private File siteGame;
@@ -135,6 +143,8 @@ public final class MainActivity extends Activity {
             } catch (RuntimeException exception) {
                 android.util.Log.w("SiteUpdater", "Not keeping to the website", exception);
             }
+
+            LegacySaveMigrator.attemptIfNeeded(this, games, handler);
 
             loadGame();
         } catch (Exception exception) {
@@ -201,6 +211,7 @@ public final class MainActivity extends Activity {
 
     private void showCompatibilityScreen(boolean retryAvailable) {
         diagnosticGeneration++;
+        pastDiagnostic = false;
         gameReady = false;
         if (destroyed || root == null) return;
         if (session != null) session.stop();
@@ -452,10 +463,11 @@ public final class MainActivity extends Activity {
             // a stray repeat title event re-triggering loadUri mid-load, cancelling the real
             // game page's still-in-flight subresource fetches). Each diagnostic attempt gets
             // one shot at starting the real game load, not more.
-            if (navigationGeneration == diagnosticGeneration) return;
+            if (pastDiagnostic || navigationGeneration == diagnosticGeneration) return;
             if ("passed".equals(title)) {
                 navigationGeneration = diagnosticGeneration;
                 diagnosticGeneration++;
+                pastDiagnostic = true;
                 awaitingGameLoad = true;
                 session.loadUri(gameOrigin + GAME_PATH);
             } else {
@@ -482,6 +494,8 @@ public final class MainActivity extends Activity {
 
         @Override
         public void onPageStop(GeckoSession session, boolean success) {
+            Log.i("MainActivity", "onPageStop success=" + success + " awaitingGameLoad=" + awaitingGameLoad
+                    + " destroyed=" + destroyed);
             if (destroyed || !awaitingGameLoad) return;
             awaitingGameLoad = false;
             if (!success) {
@@ -551,6 +565,9 @@ public final class MainActivity extends Activity {
 
         @Override
         public GeckoResult<String> onLoadError(GeckoSession session, String uri, WebRequestError error) {
+            Log.i("MainActivity", "onLoadError uri=" + uri + " error=" + error
+                    + " category=" + (error != null ? error.category : "?")
+                    + " code=" + (error != null ? error.code : "?"));
             if (gameOrigin != null && uri != null && uri.startsWith(gameOrigin)) {
                 showCompatibilityScreen(true);
             }
