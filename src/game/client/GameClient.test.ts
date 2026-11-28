@@ -34,6 +34,7 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
+import { GameAudio } from "./GameAudio";
 import {
     GameClient,
     SPECIAL_COUNTER_MIN,
@@ -47,17 +48,18 @@ import {
     partyLoadouts,
 } from "./GameClient";
 import { padHints } from "./GamePad";
+import { GameSounds } from "./GameSounds";
 import { GameStore, TeammateView } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
 import { UpMessage } from "./coop/protocol";
 
-function createSim(focus?: number): Sim {
+function createSim(focus?: number, mapId = "lumbridge"): Sim {
     const row = ".".repeat(72);
     return new Sim({
         grid: makeGrid(Array(72).fill(row), 1000, 1000),
-        mapId: "lumbridge",
+        mapId,
         characterId: "warrior",
         metaStats: emptyStats(),
         seed: 5,
@@ -1683,6 +1685,56 @@ test("Evolutionary registers on the third evolution and banks even if the run en
     expect(store.getSnapshot().result?.combatTasks).toEqual([
         expect.objectContaining({ name: "Evolutionary" }),
     ]);
+});
+
+test("Harvest can finish the Queen's second form and open the normal victory screen", () => {
+    const sim = createSim(undefined, "desert");
+    const { client, store, sync } = createClient(sim, false);
+    const audio = new GameAudio();
+    try {
+        Object.assign(client, {
+            sounds: new GameSounds(audio),
+            finishRun: GameClient.prototype["finishRun"],
+            persist() {},
+            coop: { setMe() {} },
+        });
+        sim.addWeapon("soulreaper_axe");
+        const near = { x: sim.player.x + 2, y: sim.player.y };
+        const boss = sim.spawnEnemy(getEnemy("kalphite_queen"), "finalBoss", near)!;
+        sim.damageEnemy(boss, boss.hp * 2, 0, near.x, near.y);
+        expect(boss.def.id).toBe("kalphite_queen_risen");
+        // The last swing is a Harvest. Its souls come from nearby kills.
+        for (let i = 0; i < 5; i++) {
+            const worker = sim.spawnEnemy(getEnemy("kalphite_worker"), "normal", near)!;
+            sim.damageEnemy(worker, worker.hp * 2, 0, near.x, near.y);
+        }
+        while (boss.hp > 100) {
+            sim.damageEnemy(boss, boss.hp / 2, 0, near.x, near.y);
+        }
+        expect(sim.runOver).toBe(false);
+        sim.takeEvents();
+        for (let tick = 0; tick < TICKS_PER_SECOND * 3 && !sim.runOver; tick++) {
+            if (sim.isChoosing()) {
+                sim.choose(0);
+            }
+            sim.step(0, 0);
+            const events = sim.takeEvents();
+            if (sim.runOver) {
+                expect(events).toContainEqual(expect.objectContaining({ type: "harvest" }));
+                expect(events).toContainEqual(
+                    expect.objectContaining({ type: "kill", enemyId: "kalphite_queen_risen" }),
+                );
+            }
+            client["handleEvents"](sim, events);
+        }
+        expect(sim.state).toBe("victory");
+        sync();
+        expect(store.getSnapshot().overlay).toBe("victory");
+        expect(store.getSnapshot().result?.victory).toBe(true);
+        expect(client.save.mapVictories.desert).toBe(1);
+    } finally {
+        audio.dispose();
+    }
 });
 
 describe("saving", () => {
