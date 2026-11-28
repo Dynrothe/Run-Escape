@@ -1,4 +1,4 @@
-import { ENEMIES, getEnemy } from "../content/enemies";
+import { ENEMIES, ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
@@ -192,8 +192,9 @@ export class GameSounds {
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });
                     break;
                 case "playerHit": {
-                    // A boss attack has its own sound (played when it was used)
-                    const sound = event.sound ?? getEnemy(event.enemyId).sounds.attack;
+                    // Harvest's HP cost and room hazards can hit without an attacking enemy.
+                    const sound =
+                        event.sound ?? ENEMY_BY_ID.get(event.enemyId)?.sounds.attack ?? -1;
                     audio.play(sound, { volume: 0.35, minGap: 150 });
                     // A miss (Trickster's) doesn't hurt
                     if (event.missed) {
